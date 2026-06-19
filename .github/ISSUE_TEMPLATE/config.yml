@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: mailto:ilia.volkov@outlook.com
+    about: Report a security vulnerability privately. See SECURITY.md.
+  - name: Question / discussion
+    url: https://github.com/VolkovIlia/semiflow/discussions
+    about: Open-ended questions, math help, design discussions.

@@ -1,0 +1,112 @@
+# ============================================================================
+# Local development tooling & runtime files (never committed to the public repo)
+# ============================================================================
+
+# Test logs and runtime logs (generated, never commit)
+.logs/
+tests/reports/
+*.log
+
+# Telemetry runtime data (generated, never commit)
+.telemetry/
+
+# Internal design notes, specs, research, reports (not part of the public release)
+.dev-docs/
+
+# Development reports and technical artifacts (DO NOT COMMIT)
+.dev-reports/
+
+# MCP configuration (project-specific, not committed)
+.mcp.json
+
+# Local AI/editor assistant config (not part of the public release)
+.claude/
+CLAUDE.md
+# cclsp MCP server config — generated, machine-local
+.cclsp.json
+
+# GitHub Copilot
+.github/agents/
+.github/chatmodes/
+.github/skills/
+.github/copilot-instructions.md
+.github/workflows/copilot-setup-steps.yml
+
+# OpenAI Codex
+.codex/
+AGENTS.md
+
+# Cursor
+.cursor/rules/
+
+# Pre-commit config (copied from submodule)
+.pre-commit-config.yaml
+
+# ============================================================================
+# Common Development Files
+# ============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# TypeScript
+*.tsbuildinfo
+
+# SQLite Databases (metrics data - never commit)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+/config/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup and temp files
+*.backup
+*.bak
+*.old
+*.v1
+*.new
+*.tmp
+*.temp
+
+# Rust / Cargo
+target/
+
+# Local AI/dev tooling (not part of the public release)
+deadlion-studio/
+.gitnexus
+
+# Generated bench/example fixtures (committed-binary blobs would exceed VCS hygiene)
+# v2.6 Wave C — latency_tail example writes deterministic GBM ticks here on first run
+crates/semiflow-core/examples/data/
+
+# Crate-level telemetry runtime data (generated, never commit)
+crates/semiflow-core/.telemetry/

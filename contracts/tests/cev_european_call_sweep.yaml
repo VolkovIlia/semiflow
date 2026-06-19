@@ -1,0 +1,441 @@
+# =============================================================================
+# REAL-WORLD BENCHMARK SWEEP — CEV European Call (Schroder 1989, parameter grid)
+# =============================================================================
+# Status:        ACCEPTED for v0.3.1 (hardening release; SemVer patch)
+# Authors:       ai-solutions-architect
+# Date:          2026-04-30
+# ADR:           docs/adr/0010-v0_3_1-cev-hardening.md
+# Crate version: semiflow-core 0.3.1+
+# Test type:     real-world closed-form oracle (parameter grid; numerical)
+# Authoritative: Larguinho-Dias-Braumann (Speed and Accuracy ..., 2009)
+#                eqs (11)-(12d), reproducing Schroder (1989) Journal of Finance.
+# Cross-link:    contracts/tests/cev_european_call.yaml — single-point bench
+#                shipped in v0.3.0; this contract sweeps the same oracle across
+#                a parameter grid (moneyness × maturity × vol × elasticity).
+# =============================================================================
+
+schema_version: "0.3.0"
+test_name:      cev_european_call_sweep
+suite:          real_world_benchmarks
+purpose: |
+  Validate v0.3.0 ζ-A DiffusionChernoff (variable-`a` self-adjoint, ADR-0008)
+  + RK2 DriftReactionChernoff under Strang composition against the Schroder
+  (1989) closed-form European call across a parameter grid covering the
+  regimes a desk actually quotes — moneyness, maturity, volatility, and CEV
+  elasticity. The sibling contract `cev_european_call.yaml` validates the
+  v0.3.0 implementation at ONE canonical point (S₀=100, σ₀=0.20, β=0.5,
+  T=1, K=100); this contract HARDENS that benchmark by exercising:
+
+    - moneyness K/S₀ ∈ {0.80, 0.90, 1.00, 1.10, 1.20}  (deep-OTM → deep-ITM)
+    - maturity T  ∈ {0.25, 1.0, 2.0}                   (short → long-dated)
+    - vol  σ₀     ∈ {0.15, 0.30, 0.50}                  (low → high)
+    - elasticity β_PDE ∈ {0.3, 0.5, 0.7}                (sub- → super-half)
+
+  The β≠0.5 axis is the FIRST closed-form validation of the ζ-A
+  τ²-correction polynomial in a regime where `a''(S) ≠ 0`. v0.3.0's single
+  point fixed β=0.5 ⇒ a''≡0, so the variable-`a''` term in ADR-0008's
+  τ²-correction had no empirical oracle. Closing that gap is the primary
+  motivation for v0.3.1 (see ADR-0010 §Context).
+
+# -----------------------------------------------------------------------------
+# 1. PDE specification (same as cev_european_call.yaml; β now varies)
+# -----------------------------------------------------------------------------
+pde:
+  operator:  "∂_τ u = ½·δ²·S^(2β)·u_SS + r·S·u_S − r·u"
+  forward_time_horizon: "τ ∈ [0, T] with T ∈ {0.25, 1.0, 2.0}"
+
+  domain:
+    S_min: 1.0
+    S_max: 200.0
+    rationale: |
+      Identical to cev_european_call.yaml. S_min=1 avoids the absorbing-
+      boundary degeneracy at S=0 for β<1; S_max=200 is far enough for
+      LinearExtrapolate to be exact to O(σ²·T) on the deep-ITM tail.
+      The boundary-stress contract (cev_boundary_stress.yaml) explores
+      varying S_max — this contract holds it fixed across the grid.
+
+  initial_condition: "u(0, S) = max(S − K, 0)"
+
+  boundary_conditions:
+    left:  "Dirichlet u(τ, S=1) = 0  (implicit via payoff = 0 at S=1)"
+    right: "BoundaryPolicy::LinearExtrapolate (ADR-0007)"
+
+# -----------------------------------------------------------------------------
+# 2. Parameter grid (full vs default set)
+# -----------------------------------------------------------------------------
+parameter_grid:
+  axes:
+    moneyness_K_over_S0: [0.80, 0.90, 1.00, 1.10, 1.20]
+    maturity_T:          [0.25, 1.0, 2.0]
+    sigma0:              [0.15, 0.30, 0.50]
+    beta_PDE:            [0.3, 0.5, 0.7]
+  fixed:
+    S0: 100.0
+    r:  0.05
+    q:  0.0
+
+  full_set:
+    description: "Cartesian product of all four axes"
+    combo_count: 135   # 5 × 3 × 3 × 3
+    gating: "Cargo feature `slow-tests` (NOT default-on)"
+    estimated_runtime: "~3 min on a modern x86 (135 × ~1.3s/combo)"
+    rationale: |
+      The full grid covers all desk-relevant regimes including long-dated
+      (T=2), high-vol (σ₀=0.5) tails. ~3 min runtime is too costly for
+      every-commit `cargo test`; gated behind `slow-tests` so CI nightly
+      and pre-release runs exercise the full set while daily dev stays
+      fast. No new dependencies added — feature flag is `slow-tests = []`.
+
+  default_set:
+    description: |
+      Representative subset chosen to cover all four axes while keeping
+      runtime <30s. Exact subset selection is left to the engineer
+      (see implementation_notes.default_set_selection below); the
+      contract REQUIRES that the subset includes at least:
+        - all 5 moneyness values at the canonical (T=1.0, σ₀=0.30, β=0.5)
+        - all 3 elasticities at the canonical (T=1.0, σ₀=0.30, K/S₀=1.0)
+        - all 3 vols at the canonical (T=1.0, β=0.5, K/S₀=1.0)
+        - both T={0.25, 1.0} at (σ₀=0.30, β=0.5, K/S₀=1.0)
+        - at least one β≠0.5 × T≠1.0 cross-axis combo (e.g. β=0.3, T=0.25)
+      Total: ~14-25 combos. The full β-axis at canonical (K, T, σ₀) is
+      mandatory because β≠0.5 is the missing-oracle regime.
+    combo_count: "≥14, target ~25"
+    gating: "always runs (default `cargo test`)"
+    estimated_runtime: "<30s on a modern x86"
+
+  derived_per_combo:
+    K:             "K = (K/S₀) · S₀"
+    delta_squared: "δ² = σ₀² · S₀^(2 − 2·β_PDE)"
+    delta:         "δ = sqrt(δ²)"
+    a:             "a(S) = ½ · δ² · S^(2·β_PDE)"
+    a_prime:       "a'(S) = δ²·β_PDE · S^(2·β_PDE − 1)"
+    a_double_prime: "a''(S) = δ²·β_PDE·(2·β_PDE − 1) · S^(2·β_PDE − 2)"
+    a_norm_bound:  "‖a‖_∞ over [1, 200] = ½·δ²·200^(2·β_PDE)"
+    b:             "b(S) = r·S − a'(S)"
+    c:             "c(S) = −r"
+
+# -----------------------------------------------------------------------------
+# 3. Solver setup (per combo; reused from v0.3.0 unchanged)
+# -----------------------------------------------------------------------------
+solver_setup:
+  grid: "Grid1D::new(1.0, 200.0, 512).unwrap().with_boundary(BoundaryPolicy::LinearExtrapolate).with_interp(InterpKind::CubicHermite)"
+
+  steps:
+    default: 256
+    long_maturity: 512    # T = 2.0  ⇒ keep τ ≤ T/n ≈ 4e-3
+    rationale: |
+      n=256 at T∈{0.25, 1.0} and n=512 at T=2.0 keeps τ ≤ 4e-3
+      throughout the grid, well below the variance-preserving stability
+      scaling for the worst-case `‖a‖_∞` (σ₀=0.5, β=0.7 ⇒ ‖a‖_∞ ≈ 1300
+      at S=200, giving stability bound τ ≤ dx²/(2·‖a‖_∞) ≈ 5.8e-5;
+      we keep ~70× margin to test Chernoff's unconditional L^∞-stability).
+
+  diffusion_chernoff: "DiffusionChernoff::new(a, a_prime, a_double_prime, a_norm_bound, grid)"
+  drift_reaction_chernoff: "DriftReactionChernoff::new(b, c, c_norm_bound, grid)"
+  splitting: "StrangSplit::new(diffusion, drift_reaction).step(τ, u)"
+
+# -----------------------------------------------------------------------------
+# 4. Reference oracle (Schroder 1989, generalised over the grid)
+# -----------------------------------------------------------------------------
+reference:
+  formula:        "Schroder (1989) eq 11-12, β_S = 2·β_PDE branch (β_S < 2)"
+  source:         "Same as cev_european_call.yaml §4 — see there for the full closed-form."
+  helper_signature: |
+    fn schroder_call(s0: f64, k: f64, r: f64, q: f64,
+                     sigma0: f64, beta_pde: f64, t: f64) -> f64
+  computation_strategy: |
+    Compute the oracle in-tree via a `noncentral_chi2_cdf` helper with
+    Poisson-weighted central χ² series (statrs::ChiSquared CDF). Reuse
+    the helper from tests/cev_european_call.rs but bump `j_max` from
+    100 → 200 (see implementation_notes.j_max_bump below). The helper
+    SELF-VALIDATES the oracle: there is no hard-coded reference price.
+
+  dev_dependencies: |
+    No new deps — `statrs = "0.18"` is already a [dev-dependencies] entry
+    from v0.3.0. Production dep count UNCHANGED at 2 (num-traits, libm).
+
+# -----------------------------------------------------------------------------
+# 5. Acceptance gates (3 sub-gates per combo, evaluated worst-case across grid)
+# -----------------------------------------------------------------------------
+acceptance_gates:
+
+  G_cev_sweep_A:
+    name:      "sup-norm error in strike-relative neighbourhood"
+    metric:    "max_{S ∈ [0.5K, 1.5K]} |u_PDE(T, S) − C_Schroder(0, S)|"
+    threshold: "5e-2 · max(price_atm, 1.0)"
+    domain:    "S ∈ [0.5·K, 1.5·K]  (interior; excludes BC-dominated edges)"
+    aggregation: "evaluated per combo; gate is `worst combo passes`"
+    rationale: |
+      Strike-relative window [0.5K, 1.5K] generalises the canonical
+      [50, 150] window from cev_european_call.yaml to non-ATM strikes.
+      Threshold scales with `price_atm` to allow proportional error on
+      high-vol/long-T combos where prices are ≫ 1; `max(price_atm, 1.0)`
+      floor prevents the deep-OTM regime (price ≪ 1) from collapsing the
+      threshold to noise. The 5e-2 multiplicative coefficient matches
+      the v0.3.0 G_real_world_1 absolute threshold at price≈1.
+
+  G_cev_sweep_B:
+    name:      "pointwise error at grid node nearest S₀"
+    metric:    "|u_PDE(T, S_{i_atm}) − C_Schroder(0, S_{i_atm})|"
+    threshold: "max(1e-2, 1e-3 · price_atm)"
+    grid_node_rule: "i_atm = ((S₀ − S_min) / dx).round() as usize"
+    rationale: |
+      The PDE solution and the oracle MUST be evaluated at the same grid
+      node — NOT at S=S₀ exactly (which lies between nodes for our dx ≈
+      0.389). This eliminates the off-grid interpolation error from the
+      pointwise gate, isolating the temporal-Chernoff error as the
+      dominant residual. The two-branch threshold respects the
+      v0.3.0 G_real_world_2 absolute floor (1e-2) and adds a relative
+      branch for high-price combos.
+
+  G_cev_sweep_C:
+    name:      "relative ATM error (high-quality regime only)"
+    metric:    "|u_PDE(T, S_{i_atm}) − C_Schroder(0, S_{i_atm})| / price_atm"
+    threshold: "5e-3"
+    activation_condition: "σ₀ ≥ 0.30  ∧  T ≥ 0.5"
+    informational_otherwise: true
+    rationale: |
+      A tighter relative gate (0.5%) is enforced ONLY in the regime where
+      the closed-form oracle is itself well-conditioned: σ₀ ≥ 0.30 (ncx2
+      noncentrality λ ≥ ~5, away from boundary-layer of the series), and
+      T ≥ 0.5 (extrinsic value > intrinsic kink residual). At σ₀=0.15 OR
+      T=0.25, the Schroder formula's noncentrality λ ∝ 1/(σ₀²·T) becomes
+      large (λ → 100+) and the Poisson series tail dominates oracle
+      precision; gate-C in those regimes prints the metric but does not
+      assert. **CRITICAL**: this gate is the primary β≠0.5 validation —
+      a τ²-correction-polynomial bug in `crates/semiflow-core/src/diffusion.rs`
+      would manifest here at β∈{0.3, 0.7} where a''≠0.
+
+  reporting: |
+    On any gate failure, the test prints the offending tuple
+    `(K/S₀, T, σ₀, β_PDE)` and the worst-case error before the assert,
+    so failures are localised — NOT a single opaque "sweep failed" line.
+    Recommended:  eprintln!("worst combo: K/S₀={:.2}, T={:.2}, σ₀={:.2}, β={:.2}, err={:.3e}", ...)
+
+# -----------------------------------------------------------------------------
+# 6. Implementation notes for the engineer
+# -----------------------------------------------------------------------------
+implementation_notes:
+
+  default_set_selection: |
+    Suggested default set (~22 combos, satisfies all "must include"
+    constraints from §2 default_set):
+      Block A (moneyness sweep, 5 combos):
+        K/S₀ ∈ {0.80, 0.90, 1.00, 1.10, 1.20}  @ (T=1.0, σ₀=0.30, β=0.5)
+      Block B (elasticity sweep, 3 combos):
+        β   ∈ {0.3, 0.5, 0.7}                  @ (T=1.0, σ₀=0.30, K/S₀=1.0)
+      Block C (vol sweep, 3 combos):
+        σ₀  ∈ {0.15, 0.30, 0.50}               @ (T=1.0, β=0.5, K/S₀=1.0)
+      Block D (maturity sweep, 2 combos new):
+        T   ∈ {0.25}                            @ (σ₀=0.30, β=0.5, K/S₀=1.0)
+        + 1 more @ (T=0.25, β=0.3, σ₀=0.30, K/S₀=1.0)  (β-T cross-axis)
+      Block E (β-T-K cross-axis, 4 combos):
+        (K/S₀, T, σ₀, β) ∈ {
+          (0.90, 0.25, 0.30, 0.7),
+          (1.10, 0.25, 0.30, 0.3),
+          (0.90, 1.00, 0.50, 0.7),
+          (1.10, 1.00, 0.50, 0.3),
+        }
+    Total: 5 + 3 + 3 + 2 + 4 = 17 combos. Engineer MAY expand to ~25 by
+    adding more cross-axis combos, but MUST satisfy the "must include"
+    constraints. Block B (β-axis at canonical) is the **β≠0.5 oracle
+    regime** and is non-negotiable.
+
+  full_set_helper: |
+    Gated build:
+      #[cfg(feature = "slow-tests")]
+      #[test]
+      fn cev_european_call_sweep_full() { ... iterate full Cartesian product ... }
+
+      #[test]
+      fn cev_european_call_sweep_default() { ... iterate default subset ... }
+
+  j_max_bump: |
+    Reuse the local `noncentral_chi2_cdf` helper from
+    `crates/semiflow-core/tests/cev_european_call.rs` BUT bump `j_max`
+    from 100 → 200. At T=2, σ₀=0.5, β=0.3 the noncentrality
+    `λ = 2·k·S₀^(2-β_S) · e^((r-q)·(2-β_S)·T)` grows large (~150-200);
+    100 terms can fall short of the 1e-12 early-exit. Fail-loud
+    `panic!("ncx2 series did not converge in 200 iters; bump j_max")`
+    if even 200 are insufficient — oracle accuracy is non-negotiable.
+    Decision: copy-paste-edit (~30 LoC) preferred over a
+    `tests/common/cev_helpers.rs` module — only two consumers; revisit
+    at three (suckless: don't generalise speculatively).
+
+  per_combo_helper: |
+    fn make_cev_combo_and_solve(
+        k_over_s0: f64, t: f64, sigma0: f64, beta_pde: f64,
+    ) -> (f64 /*price_pde_atm*/, f64 /*price_oracle_atm*/, f64 /*sup_err*/) {
+        let s0 = 100.0; let r = 0.05;
+        let k  = k_over_s0 * s0;
+        let delta_sq = sigma0.powi(2) * s0.powf(2.0 - 2.0 * beta_pde);
+        let half_d2 = 0.5 * delta_sq;
+        let two_b = 2.0 * beta_pde;
+        // 5-arg ζ-A constructor — Diff: a, a', a'', ‖a‖_∞, grid
+        let diffusion = DiffusionChernoff::new(
+            move |s: f64| half_d2 * s.powf(two_b),
+            move |s: f64| delta_sq * beta_pde * s.powf(two_b - 1.0),
+            move |s: f64| delta_sq * beta_pde * (two_b - 1.0) * s.powf(two_b - 2.0),
+            half_d2 * 200.0_f64.powf(two_b),
+            grid,
+        );
+        let drift = DriftReactionChernoff::new(
+            move |s: f64| r * s - delta_sq * beta_pde * s.powf(two_b - 1.0),
+            move |_: f64| -r,
+            r.abs(),
+            grid,
+        );
+        // n_steps: 256 default, 512 for T=2.0
+        let n = if t >= 1.5 { 512 } else { 256 };
+        // ... Strang loop, oracle eval at i_atm, sup-err over [0.5K, 1.5K] ...
+    }
+
+  test_files:
+    - "crates/semiflow-core/tests/cev_european_call_sweep.rs (~280 LoC)"
+  estimated_wall_clock:
+    default_set: "<30s (release)"
+    full_set:    "~3 min (release, with --features slow-tests)"
+
+# -----------------------------------------------------------------------------
+# 7. Risks and mitigations
+# -----------------------------------------------------------------------------
+risks:
+
+  R_combo_runtime:
+    risk:       "Default-set ~25 combos × 256 steps × 512 nodes ≈ 1G ops; full ≈ 5G ops"
+    impact:     "Default-set test exceeds 30s budget on slower CI runners"
+    mitigation: |
+      Feature flag `slow-tests` keeps the 135-combo full grid out of
+      default `cargo test`. If default still exceeds 30s on CI, fall
+      back: drop N from 512 → 384 (dx still ≈ 0.52, well below boundary-
+      layer scale). Engineer: profile before downgrading; the budget is
+      advisory, NOT a release-blocker.
+
+  R_β_off_canonical:
+    risk: |
+      First closed-form validation of ζ-A at β ≠ 0.5 (a''≠0). The
+      τ²-correction polynomial in `crates/semiflow-core/src/diffusion.rs`
+      uses `a''` symbolically (ADR-0008 §Decision) but had no empirical
+      oracle in v0.3.0 — β=0.5 ⇒ a''≡0 trivially zeroed the term.
+    impact: |
+      A latent bug in the τ²-correction polynomial would surface as
+      G_cev_sweep_C failure specifically at β∈{0.3, 0.7} — gate-C is the
+      relative-error gate where the τ²-correction matters most.
+    mitigation: |
+      Block B of the default set (β-axis at canonical T,σ₀,K) is
+      MANDATORY. If sweep-C fails at β≠0.5: triage path is
+      (a) real bug → ship as v0.3.1 patch in `diffusion.rs`, or
+      (b) edge-of-tolerance → document as known-limitation in
+      CHANGELOG, defer correction to v0.4.0 Magnus integrator.
+      ADR-0010 §Consequences makes both paths acceptable; deferral
+      DOES NOT alter the v0.3.1 release.
+
+  R_ncx2_truncation:
+    risk:       "Schroder Poisson series may need >100 terms at high T·σ"
+    impact:     "Oracle returns wrong value silently; gates fail with garbage"
+    mitigation: |
+      Bump local helper `j_max` 100 → 200. Panic on overflow (oracle
+      accuracy is non-negotiable; quietly returning a partial sum
+      would corrupt every gate downstream). Verified at λ=200 the
+      series early-exits in ~120 iters; 200 budget gives ~1.7× margin.
+
+  R_grid_offset_bias:
+    risk:       "ATM oracle vs PDE evaluated at different points (S₀ vs grid node)"
+    impact:     "Spurious error spike from off-grid interpolation, not Chernoff truncation"
+    mitigation: |
+      Both PDE and oracle MUST be evaluated at the SAME grid node:
+      `i_atm = ((S₀ − S_min) / dx).round() as usize`. Bake this into
+      `make_cev_combo_and_solve` and pass `s_atm = nodes[i_atm]` to
+      both `u_PDE.values[i_atm]` and `schroder_call(s_atm, K, ...)`.
+      Failure mode if violated: gate-B reports ~5e-3 baseline error
+      that has nothing to do with the solver.
+
+# -----------------------------------------------------------------------------
+# 8. Scope and acceptance for v0.3.1
+# -----------------------------------------------------------------------------
+acceptance: |
+  Default-set test (`cev_european_call_sweep_default`) MUST pass on
+  `cargo test --release`. Failure is a v0.3.1 release-blocker. The
+  full-set test (`cev_european_call_sweep_full`) MUST pass on
+  `cargo test --release --features slow-tests` for nightly CI / pre-
+  release verification but is not a daily-dev gate.
+
+out_of_scope:
+  - "American-style early-exercise (LCP) — deferred to v0.4.0+"
+  - "Greeks (Δ, Γ, Vega) — closed forms exist, not exercised by PDE oracle"
+  - "Stochastic vol (σ₀ → σ₀(t,S)) — requires 2D extension (v0.4.0+)"
+  - "β = 0 (Bachelier) and β = 1 (BS) limit cases — covered by existing
+     constant-`a` G1 / Strang gates"
+  - "Adaptive grid (variable dx) — would change Grid1D API; deferred to
+     v0.3.2 or v0.4.0 (ADR-0010 §Rationale)"
+
+# -----------------------------------------------------------------------------
+# 9. References
+# -----------------------------------------------------------------------------
+references:
+  - id:    "cev_european_call.yaml"
+    cite:  "contracts/tests/cev_european_call.yaml"
+    note:  "Single-point bench (v0.3.0); template for this contract's structure."
+  - id:    "Schroder1989"
+    cite:  "Schroder, M. (1989). Computing the Constant Elasticity of Variance Option Pricing Formula. Journal of Finance, 44(1), 211-219."
+  - id:    "Larguinho-Dias-Braumann2009"
+    cite:  "Larguinho, M., Dias, J. C., Braumann, C. A. (2009). Speed and Accuracy Comparison of Noncentral Chi-Square Distribution Methods for Option Pricing and Hedging under the CEV Model."
+    url:   "https://dspace.uevora.pt/rdpc/bitstream/10174/4635/1/SpeedAccuracyCEV_FFM%5B1%5D.pdf"
+  - id:    "ADR-0008"
+    cite:  "semiflow-core docs/adr/0008-self-adjoint-variable-a-api-break.md (ζ-A τ²-correction polynomial)"
+    note:  "The variable-a''-aware formula validated by this sweep at β∈{0.3, 0.7}."
+  - id:    "ADR-0009"
+    cite:  "semiflow-core docs/adr/0009-cev-real-world-benchmark.md"
+    note:  "v0.3.0 CEV bench at single point; this contract extends to a grid."
+  - id:    "ADR-0010"
+    cite:  "semiflow-core docs/adr/0010-v0_3_1-cev-hardening.md"
+    note:  "Decision record for v0.3.1 hardening (this contract + cev_boundary_stress.yaml)."
+
+# =============================================================================
+# Empirical validated regime (v0.3.1 ζ-A historical / v0.4.0 Magnus current)
+# =============================================================================
+# v0.3.1 ζ-A historical envelope (ADR-0010 Amendment 1, retained for context):
+#   σ < 0.50  AND  σ·T·β < 0.40  AND  lam_peak < 1400
+# Worst case in-regime: gates A/B/C pass with ≥ 10× margin. Out-of-regime
+# corners blew up to sup_err ≈ 1e85 due to the FD-on-f' / FD-on-f''' terms
+# in the ζ-A τ²-correction polynomial losing numerical stability
+# (ADR-0008 Amendment 2 §H1: the FD ceiling caps variable-a global rate at
+# O(τ¹) and amplifies cancellation noise at high σ·T·β).
+#
+# **v0.4.0 Magnus envelope (current — ADR-0011, this release)**:
+#
+#   σ < 0.70            — PDE stability: 3-point divergence-form stencil
+#                         is L^∞-stable under CFL τ < dx²/(2·‖a‖_∞);
+#                         empirical extension of the σ<0.50 ζ-A boundary
+#                         to σ<0.70 reflects the high-σ corners that
+#                         were FD-cancellation-dominated in ζ-A.
+#   σ·T·β < 0.80        — combined-magnitude corner: 2× wider than ζ-A's
+#                         0.40 threshold thanks to true variable-a O(τ²)
+#                         (Magnus avoids FD on f-derivatives entirely;
+#                         no per-step cancellation buildup).
+#   lam_peak < 1400     — oracle stability: REMOVED in v0.4.1 via log-space
+#                         ncx2_cdf (peak now ≲ 3500). The previous threshold
+#                         reflected an f64 underflow of exp(-λ/2) at λ/2 > 745;
+#                         lifted purely test-side.
+#
+# Status flip from v0.3.1 → v0.4.0 → v0.4.1:
+#   - PDE-side cells (σ ∈ [0.50, 0.70), σ·T·β ∈ [0.40, 0.80)): NOW PASS
+#     via TruncatedExpDiffusionChernoff. The high-corner CEV regime that
+#     blew up under ζ-A FD ceiling is in-regime under TruncatedExp.
+#   - Oracle-side ncx2 underflow at lam_peak ≥ 1400 cells: FIXED in v0.4.1.
+#     Rewritten as log-space Poisson recurrence (log P_j updated additively;
+#     exp applied only when log_p > -700). Now supports λ_peak ≲ 3500.
+#
+# Inside the v0.4.0 validated regime: all gates (A/B/C) pass with ≥10× margin.
+# Outside: tagged [OOR] in cev_sweep_full (slow-tests); NOT release-blocking.
+# Test selects between ζ-A (`DiffusionChernoff`) and TruncatedExp
+# (`TruncatedExpDiffusionChernoff`) via the test-side switch
+# `make_cev_combo_and_solve` parameter (Engineer Stage 6 wires this).
+# Default for v0.4.0 sweep: TruncatedExp. Comparison runs may A/B both.
+#
+# Reference: ADR-0010 Amendment 1 (v0.3.1 ζ-A envelope, retained as
+# historical context); ADR-0011 (v0.4.0 TruncatedExp integrator — this regime
+# extension).
+# =============================================================================
+# END OF CONTRACT
+# =============================================================================

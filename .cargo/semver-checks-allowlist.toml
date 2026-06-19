@@ -1,0 +1,35 @@
+# cargo-semver-checks allowlist for semiflow-core v2.0.0 (Wave 3, ADR-0043).
+#
+# These are INTENTIONAL breaking changes mandated by the Wave 3 MAJOR version
+# bump from v1.x to v2.0.0. Each entry documents the rationale.
+#
+# Reference: docs/adr/0043-state-trait-three-layer-split.md
+
+[package.semiflow-core]
+
+# Breaking: `Clone` removed as supertrait of `State<F>`.
+# Rationale: ADR-0043 §3 — clone-free zero-allocation Banach interface.
+# Migration: add explicit `+ Clone` bound where needed (see ADR-0043 §7).
+[[package.semiflow-core.allow]]
+lint = "trait_removed_supertrait"
+path = "pub trait State"
+
+# Breaking: `axpy` inherent method removed from `State<F>` (was trait method).
+# v1.x `axpy(&alpha, &x)` → v2.0 `axpy_into(alpha, &x)`.
+# Rationale: ADR-0043 §3.1 — signature aligned with in-place mutation contract.
+[[package.semiflow-core.allow]]
+lint = "trait_method_removed"
+path = "pub trait State::axpy"
+
+# Breaking: `scale` inherent method removed from `State<F>`.
+# v1.x `scale(&k)` → v2.0 `scale_into(k)`.
+[[package.semiflow-core.allow]]
+lint = "trait_method_removed"
+path = "pub trait State::scale"
+
+# Breaking: `zeroed_like` inherent method removed from `State<F>`.
+# v1.x `zeroed_like()` → v2.0 `zero_into()` (in-place) + caller-side `clone`.
+# Rationale: ADR-0043 §3.2 — eliminates mandatory allocation in trait contract.
+[[package.semiflow-core.allow]]
+lint = "trait_method_removed"
+path = "pub trait State::zeroed_like"

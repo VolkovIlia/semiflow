@@ -1,0 +1,46 @@
+name: Release Wheels
+
+# Trigger on version tags (v0.10.0, v0.11.0, …) or manual dispatch.
+# cibuildwheel is NOT run on every PR — see ci.yml py-build/py-smoke instead.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-wheels:
+    name: Build wheels — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # cibuildwheel uses the `maturin` build backend declared in pyproject.toml.
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23
+        with:
+          package-dir: crates/semiflow-py
+          output-dir: dist
+        env:
+          # Build only CPython 3.10–3.13; skip PyPy and 3.14-dev.
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          # Linux: manylinux_2_28 (glibc 2.28+) for broad compat.
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          # Ensure Rust toolchain is available inside cibuildwheel containers.
+          CIBW_BEFORE_ALL_LINUX: >
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable &&
+            source $HOME/.cargo/env
+          CIBW_ENVIRONMENT_LINUX: PATH="$HOME/.cargo/bin:$PATH"
+          # macOS: no extra setup needed; Rust installed above.
+          # Windows: no extra setup needed; dtolnay/rust-toolchain handles it.
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*.whl

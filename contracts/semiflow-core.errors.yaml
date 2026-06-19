@@ -1,0 +1,483 @@
+# semiflow-core — Error Taxonomy (v0.1.0)
+# Authoritative listing of every variant of `SemiflowError`. All fallible
+# library operations return `Result<T, SemiflowError>`. NO panics in library
+# code (suckless errors-as-values rule, guardrail #1).
+#
+# Variants are append-only across minor versions to preserve `non_exhaustive`
+# semantics for downstream callers.
+
+# v0.4.0 (ADR-0011, option ε — TruncatedExp integrator, ADDITIVE):
+# NEW VARIANT `CflViolated { tau, dx_squared, a_norm_bound }` returned by
+# `TruncatedExpDiffusionChernoff::apply` when the Courant-Friedrichs-Lewy stability
+# condition is violated:
+#
+#   tau · a_norm_bound >= dx_squared / 2.0       ⇒ CflViolated returned
+#   tau · a_norm_bound <  dx_squared / 2.0       ⇒ Ok(...) returned
+#
+# The CFL is **necessary for K=4 truncated power series convergence** in the
+# TruncatedExp integrator (BCOR 2009 §3.1: with `‖G‖ ≤ 4·‖a‖_∞ / dx²` from the
+# 3-point Laplacian eigenvalue bound, the truncated series at K=4 with
+# factorial weights converges in operator norm iff `τ·‖G‖ < 2`, giving the
+# `2·τ·‖a‖_∞ < dx²` requirement). Violation does NOT mean the result is
+# wrong silently — the implementation returns `Err(CflViolated)` BEFORE
+# any allocation (suckless errors-as-values, guardrail #1).
+#
+# This is a NEW failure mode introduced in v0.4.0; existing variants
+# (DomainViolation, GridUnderresolved, ConvergenceFailed, Unsupported) are
+# UNCHANGED. Adding `CflViolated` is non-breaking under `#[non_exhaustive]`.
+#
+# Caller-facing semantics: callers SHOULD use the (tau, dx_squared,
+# a_norm_bound) payload to drive adaptive step-size control:
+#
+#   match truncated_exp.apply(tau, &f) {
+#       Ok(g) => g,
+#       Err(SemiflowError::CflViolated { tau: t, dx_squared: dx2, a_norm_bound: a_inf }) => {
+#           let tau_safe = 0.45 * dx2 / a_inf;   // 90% CFL margin
+#           truncated_exp.apply(tau_safe, &f)?
+#       }
+#       Err(other) => return Err(other),
+#   }
+#
+# `DiffusionChernoff` (ζ-A, v0.3.0) does NOT emit CflViolated — its FD
+# discretization scheme has a different stability profile (unconditional
+# L^∞ stability via positive-weight K-factor + bounded τ²-correction
+# polynomial); ζ-A's regime envelope is encoded as soft validity
+# constraints in `cev_european_call_sweep.yaml` rather than a runtime
+# error.
+
+schema_version: "0.5.1"
+type_name: "SemiflowError"
+# v0.2.2 (ADR-0006 Amendment 5): DriftReactionChernoff::apply upgraded
+# to RK2 (midpoint + trapezoidal). NO new error variants. RK2 introduces
+# no new failure modes over the v0.2.1 closed form (one extra `b(·)`
+# evaluation at the half-step probe, one extra `c(·)` at the foot-point,
+# and one extra `f.sample(x_foot)` — all governed by existing boundary
+# policy and `fn(f64) -> f64` callable totality). The emission_table
+# entry for DriftReactionChernoff::apply (below) is unchanged.
+#
+# v0.3.0 (ADR-0008 + Amendment 1, option ζ): DiffusionChernoff::apply
+# rewritten as ζ-A formula = γ-A inner-Strang `D_γ = S(τ/2) ∘ K(τ;a) ∘ S(τ/2)`
+# baseline PLUS explicit τ²-correction polynomial in (a, a', a'', f',
+# f'', f''') with three caller-supplied closures. NO new error variants.
+# Caller-correctness handling for the three closures:
+#   - `(self.a_prime)(·)` calls (5 in γ-A baseline + 1 in ζ-A correction
+#     at `x`): governed by `fn(f64) -> f64` totality (caller responsibility
+#     for finite output); non-finite results propagate through the
+#     `x + s*a_prime(x)` arithmetic into `f.sample(NaN)` which surfaces
+#     as `DomainViolation` from `f.sample()` per existing v0.1.0
+#     boundary semantics.
+#   - `(self.a_double_prime)(x)` call (1 in ζ-A correction at `x`):
+#     ALSO caller-responsibility (soft-only — no runtime validation; the
+#     ζ correction's quality degrades silently on incorrect a''). A
+#     non-finite `a_double_prime(x)` propagates through the correction
+#     polynomial `τ² · (... + (a·a''/2)·f'' + (a'·a''/4)·f')` into
+#     `result.values[i]` and surfaces in downstream `f.norm_sup` /
+#     `validate_a_x` checks on the next iteration. Caller responsibility
+#     to return finite values everywhere.
+#   - `(self.a)(·)` calls (1 in γ-A K-factor at `x_pre`, 1 in ζ-A
+#     correction at `x`): the K-factor evaluation is validated by
+#     `validate_a_x` (existing `DomainViolation` for `a(·) ≤ 0` or
+#     non-finite). The correction's `a(x)` is NOT validated (only
+#     multiplies the τ²-correction polynomial; non-finite propagates
+#     harmlessly into `f.norm_sup` checks downstream).
+# The emission_table entry for DiffusionChernoff::apply (below) is
+# updated to reflect the ζ-A evaluation pattern: 2 `a` calls (at `x_pre`
+# and `x`), 6 `a_prime` calls (5 at K-arms + 1 at `x` for correction),
+# 1 `a_double_prime` call (at `x`), 9 `f.sample` calls (5 γ-A K-arms +
+# 4 ζ-stencil arms at `x ± Δ`, `x ± 2Δ`); was 1 `a` call at `x_i` in
+# v0.2.2.
+visibility: "pub"
+attribute: "#[non_exhaustive]"
+location: "crates/semiflow-core/src/error.rs"
+
+derive:
+  - Debug   # structured for logs / unit tests
+  - Clone   # cheap; carries only primitives + small String
+  # NOT Copy: variants carry String / Vec
+  # NOT PartialEq by default (f64 NaN semantics); custom impl if needed for tests
+  - thiserror::Error  # OPTIONAL — gated behind feature `thiserror`. Default off (no_std).
+
+# v0.1.0 implements Display by hand (no_std friendly) using core::fmt::Write.
+
+variants:
+
+  - name: DomainViolation
+    fields:
+      - name: what
+        type: "&'static str"
+        doc: "Static label for the violated invariant (caller-facing, stable)."
+      - name: value
+        type: f64
+        doc: "Offending numeric value. NaN/Inf permitted (it's the value itself)."
+    when: |
+      Caller passed an input that violates a documented precondition.
+      Examples:
+        - n == 0 in ChernoffSemigroup::new
+        - n < 4 in Grid1D::new (insufficient stencil for cubic Hermite)
+        - xmin >= xmax in Grid1D::new
+        - tau < 0 or tau is NaN/Inf in ChernoffFunction::apply
+        - any value in GridFn1D::values is NaN or Inf
+        - values.len() != grid.n in GridFn1D::new
+    display: '"domain violation: {what} (value = {value})"'
+    severity: critical
+    retriable: false
+
+  - name: GridUnderresolved
+    fields:
+      - name: suggested_n
+        type: usize
+        doc: "Recommended N to resolve the shift (heuristic, never < current N + 1)."
+      - name: shift_dx_ratio
+        type: f64
+        doc: "Ratio (max shift) / dx that triggered the warning. > 1.0 means under-resolved."
+    when: |
+      The Chernoff shift `2 sqrt(a(x) tau)` or `2 b(x) tau` exceeds half the
+      grid spacing dx, suggesting the grid is too coarse to accurately
+      represent the operation.
+
+      v0.1.0 POLICY: This is a SOFT signal. ShiftChernoff1D::apply does NOT
+      return this — it returns Ok(...) and the warning is delivered through
+      a separate `diagnostics()` method (Engineer to add only if it stays
+      within the file budget; otherwise defer to v0.2). v0.1.0 acceptance
+      tests do NOT trigger this case.
+    display: '"grid under-resolved: shift/dx = {shift_dx_ratio:.3}, suggested N >= {suggested_n}"'
+    severity: warning
+    retriable: true
+
+  - name: ConvergenceFailed
+    fields:
+      - name: last_residual
+        type: f64
+        doc: "Final residual norm of the iteration when the cap was hit."
+      - name: max_iter
+        type: usize
+        doc: "Iteration cap that was reached."
+    when: |
+      Reserved for v0.3+ resolvent / iterative quadrature. Listed now so the
+      enum's discriminant set is forward-stable: adding it later would NOT
+      be a breaking change (non_exhaustive), but pinning it now gives v0.1.0
+      QA a stable surface to mock against.
+
+      v0.1.0 NEVER constructs this variant.
+    display: '"convergence failed: last_residual = {last_residual:.3e}, max_iter = {max_iter}"'
+    severity: critical
+    retriable: true
+
+  - name: Unsupported
+    fields:
+      - name: feature
+        type: "&'static str"
+        doc: "Which optional feature is unsupported. Stable label."
+    when: |
+      A feature is declared in the public API but not implemented in this
+      build. As of v0.2.1 (ADR-0007) ALL four `BoundaryPolicy` variants
+      (`Reflect`, `ZeroExtend`, `Periodic`, `LinearExtrapolate`) are
+      implemented natively — `bc_index` is total and never returns
+      `Unsupported` for boundary dispatch.
+
+      Remaining emitter sites in v0.2.1:
+        - `InterpKind::Linear` when the `linear-interp` cargo feature is OFF
+          (compile-time gated; runtime constructable via `with_interp` and
+          fails on the first sample call).
+
+      Returning `Unsupported` (instead of compiling the enum variant out)
+      lets downstream crates inspect the enum at runtime and produce
+      informative errors.
+    display: '"feature not supported in this build: {feature}"'
+    severity: critical
+    retriable: false
+
+  - name: CflViolated
+    fields:
+      - name: tau
+        type: f64
+        doc: |
+          Caller-supplied Chernoff step that violated the CFL bound.
+          NaN/Inf disallowed (those would have been caught earlier as
+          `DomainViolation { what: "tau", value }`); the variant is
+          constructed only with finite, non-negative `tau`.
+      - name: dx_squared
+        type: f64
+        doc: |
+          `dx² = grid.dx() * grid.dx()` at the point of failure.
+          Carried for caller-side adaptive step-size control:
+          `tau_safe = 0.45 * dx_squared / a_norm_bound` is the
+          recommended retry value (90% CFL margin).
+      - name: a_norm_bound
+        type: f64
+        doc: |
+          The `a_norm_bound` field of the
+          `TruncatedExpDiffusionChernoff` instance whose `apply` failed.
+          Must be finite and `> 0`; if violated those preconditions
+          a `DomainViolation { what: "a_norm_bound", value }` is
+          returned instead.
+    when: |
+      `TruncatedExpDiffusionChernoff::apply` (v0.4.0, ADR-0011) returns this
+      variant when the Courant-Friedrichs-Lewy bound on the Chernoff
+      step is violated:
+
+        tau * a_norm_bound  >=  dx_squared / 2.0
+
+      i.e. equivalently `2 * tau * a_norm_bound  >=  dx_squared`.
+
+      The CFL is **necessary for K=4 truncated power series convergence**
+      (BCOR 2009 §3.1). With the 3-point divergence-form stencil
+      operator-norm bound `‖G‖ ≤ 4·‖a‖_∞ / dx²` (Strikwerda §6.4), and
+      the K=4 sufficient convergence condition `τ·‖G‖ < 2` (factorial
+      weights `[1, 1, 1/2, 1/6, 1/24]` cap the geometric tail), the
+      necessary inequality on `τ` is `τ < dx²/(2·‖a‖_∞)`. Violation
+      means the K=4 partial sum is no longer a valid approximation of
+      `exp(τ·G)f` — the partial-sum error grows unboundedly with τ.
+
+      Implementation MUST early-return on CFL violation BEFORE
+      allocating any working buffer (errors-as-values, suckless
+      guardrail #1). The check is the FIRST action of
+      `TruncatedExpDiffusionChernoff::apply` after the standard `tau` /
+      `a_norm_bound` finiteness checks (which return
+      `DomainViolation`).
+
+      `DiffusionChernoff::apply` (ζ-A, v0.3.0) does NOT return
+      `CflViolated` — its FD-based scheme has unconditional L^∞
+      stability via positive-weight K-factor; ζ-A's stability
+      envelope is encoded as soft validity constraints in
+      `contracts/tests/cev_european_call_sweep.yaml` rather than a
+      runtime error.
+
+      Caller use: typical pattern is adaptive step-size control:
+        match truncated_exp.apply(tau, &f) {
+            Ok(g) => g,
+            Err(SemiflowError::CflViolated { tau: t, dx_squared: dx2, a_norm_bound: a_inf }) => {
+                let tau_safe = 0.45 * dx2 / a_inf;     // 90% margin
+                truncated_exp.apply(tau_safe, &f)?
+            }
+            Err(other) => return Err(other),
+        }
+    display: '"CFL violated for TruncatedExp K=4: tau = {tau:.3e}, dx² = {dx_squared:.3e}, ||a||_∞ = {a_norm_bound:.3e} (need 2·tau·||a||_∞ < dx²)"'
+    severity: critical
+    retriable: true
+
+  # v0.6.0 (ADR-0014, AdaptivePI<C> semigroup-splitting integrator).
+  # Returned ONLY by `AdaptivePI<C>::evolve_adaptive` when the substep
+  # count reaches `max_substeps` without driving local-error err below
+  # tolerance. Runaway-protection signal — the PI controller's bounded
+  # multiplicative update rule guarantees that pathological cases
+  # (tolerance unreachable in floating-point regardless of τ) will
+  # eventually trip this hard cap. Reusing CflViolated for this would be
+  # incorrect (CFL is a per-step deterministic predicate; AdaptiveStepRejected
+  # is a controller convergence failure across many attempts).
+  - name: AdaptiveStepRejected
+    fields:
+      - name: last_tau
+        type: f64
+        doc: |
+          Final substep τ that the PI controller last attempted before
+          hitting the max_substeps cap. NaN/Inf disallowed (those would
+          have been caught earlier as DomainViolation propagated from
+          inner `func.apply`); constructed only with finite,
+          non-negative τ values.
+      - name: last_err
+        type: f64
+        doc: |
+          Final local-error estimator value `err_i` that exceeded
+          tol_i at the last substep. Useful for diagnosing why the
+          controller could not converge: if `last_err >> last_tau^p`
+          the inner `func` may be non-smooth in `u`; if `last_err`
+          is bounded but `last_tau ≈ 1e-15`, the tolerance is
+          unreachable in floating-point and the caller should relax
+          `tol_abs` or `tol_rel`.
+      - name: steps_attempted
+        type: usize
+        doc: |
+          Total number of substep ATTEMPTS (accepted + rejected). When
+          this hits `max_substeps`, the variant is returned.
+    when: |
+      `AdaptivePI<C>::evolve_adaptive` (v0.6.0, ADR-0014) returns this
+      variant when
+
+        steps_attempted >= self.max_substeps
+
+      with the PI controller's last-recorded `(last_tau, last_err)`
+      diagnostic pair. Default `max_substeps = 100_000` is generous
+      for stiff PDE problems with reasonable tolerances; tripping it
+      typically indicates one of:
+
+        (a) Tolerance set too tight for the floating-point precision
+            of the inner state representation (e.g., `tol_abs = 1e-15`
+            with f64 — sub-ε noise dominates the Richardson estimator).
+        (b) Inner `func` is non-smooth in `u` (e.g., a buggy kernel
+            that introduces discontinuities) — Richardson extrapolation
+            fails and the controller cannot find a stable step.
+        (c) `min_ratio` set too aggressively close to 1 — controller
+            cannot contract fast enough to escape an unfeasible region.
+        (d) Caller passed a finite but pathologically large `t` with
+            a stiff inner — total work simply exceeds the cap.
+
+      Implementation MUST construct this variant from the controller's
+      last-recorded `(τ_attempted, err_at_τ)` pair, NOT from the rolling
+      max or average. Errors-as-values, suckless guardrail #1.
+
+      `TruncatedExpDiffusionChernoff::apply`, `TruncatedExp4thDiffusionChernoff::apply`,
+      `DiffusionChernoff::apply`, `Diffusion4thChernoff::apply`, and
+      `DriftReactionChernoff::apply` do NOT emit this variant —
+      AdaptiveStepRejected is *unique to the AdaptivePI integrator*.
+
+      Caller use: typical pattern is to relax tolerance or hand off to
+      a robust fallback:
+
+        match pi.evolve_adaptive(t, &u0) {
+            Ok(outcome) => outcome.final_state,
+            Err(SemiflowError::AdaptiveStepRejected { last_tau, last_err, steps_attempted }) => {
+                // Diagnostics: log (τ, err, count) and either:
+                //   (a) increase tol_abs/tol_rel,
+                //   (b) increase max_substeps,
+                //   (c) fall back to fixed-step ChernoffSemigroup.
+                eprintln!("adaptive PI failed: τ={:.3e}, err={:.3e}, n={} substeps",
+                          last_tau, last_err, steps_attempted);
+                let fb = ChernoffSemigroup::new(pi.func, 10_000)?;
+                fb.evolve(t, &u0)?
+            }
+            Err(other) => return Err(other),
+        }
+    display: '"adaptive PI step rejected: last_tau = {last_tau:.3e}, last_err = {last_err:.3e}, steps_attempted = {steps_attempted}"'
+    severity: critical
+    retriable: true
+
+  # v2.1C (ADR-0051, MagnusGraphHeatChernoff Wave 2.1C).
+  # Returned by `MagnusGraphHeatChernoff::apply_into` and
+  # `MagnusGraphHeatChernoff::apply_into_at` when the Magnus series
+  # convergence-radius condition is violated:
+  #
+  #   rho_bar_max * tau >= π/2   (50% safety margin vs. theoretical π)
+  #
+  # Caller MUST reduce `τ` or supply a tighter `rho_bar_max` bound.
+  # The 50% safety margin is a NORMATIVE library policy (math.md §12.9).
+  - name: OutOfMagnusRadius
+    fields:
+      - name: tau
+        type: f64
+        doc: |
+          Caller-supplied Chernoff step that violated the convergence
+          radius. NaN/Inf disallowed (those would have been caught earlier
+          as `DomainViolation`); constructed only with finite, non-negative τ.
+      - name: rho_estimate
+        type: f64
+        doc: |
+          Caller-supplied peak Gershgorin spectral-radius estimate `ρ̄_max`
+          for `L_G(t)` over the step interval. The check is
+          `rho_estimate * tau >= π/2`. Caller is responsible for a tight
+          bound; the library does not search the time axis.
+    when: |
+      `MagnusGraphHeatChernoff::apply_into` (v2.1C, ADR-0051) returns this
+      variant when the Magnus convergence-radius check fails:
+
+        rho_bar_max * tau >= π/2
+
+      where `rho_bar_max` is the caller-supplied Gershgorin spectral-radius
+      estimate and `tau` is the requested Chernoff step. The theoretical
+      convergence bound is `∫₀^τ ‖L_G(s)‖₂ ds < π` (Blanes+ 2009 §3
+      Theorem 1); the library applies a 50% safety margin (`π/2` instead
+      of `π`) as NORMATIVE policy (math.md §12.9).
+
+      The check fires BEFORE any allocation (errors-as-values, suckless
+      guardrail #1). Caller use: reduce `τ` or supply a tighter bound.
+
+        match mc.apply_into_at(t_start, tau, &src, &mut dst, &mut pool) {
+            Ok(()) => {},
+            Err(SemiflowError::OutOfMagnusRadius { tau: t, rho_estimate: rho }) => {
+                let tau_safe = std::f64::consts::FRAC_PI_2 / rho * 0.9; // 90% of π/2
+                mc.apply_into_at(t_start, tau_safe, &src, &mut dst, &mut pool)?
+            }
+            Err(other) => return Err(other),
+        }
+
+      The variant is UNIQUE to `MagnusGraphHeatChernoff` — no other type
+      emits `OutOfMagnusRadius`.
+    display: '"Magnus convergence radius violated: rho_bar_max = {rho_estimate:.3e}, tau = {tau:.3e}, product = {:.3e} >= pi/2 (reduce tau or supply tighter rho_bar_max)"'
+    severity: critical
+    retriable: true
+
+# ---------------------------------------------------------------------------
+# Display impl pseudocode — Engineer guidance.
+# ---------------------------------------------------------------------------
+display_impl: |
+  impl core::fmt::Display for SemiflowError {
+      fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+          match self {
+              Self::DomainViolation { what, value } =>
+                  write!(f, "domain violation: {} (value = {})", what, value),
+              Self::GridUnderresolved { suggested_n, shift_dx_ratio } =>
+                  write!(f, "grid under-resolved: shift/dx = {:.3}, suggested N >= {}",
+                         shift_dx_ratio, suggested_n),
+              Self::ConvergenceFailed { last_residual, max_iter } =>
+                  write!(f, "convergence failed: last_residual = {:.3e}, max_iter = {}",
+                         last_residual, max_iter),
+              Self::Unsupported { feature } =>
+                  write!(f, "feature not supported in this build: {}", feature),
+              Self::CflViolated { tau, dx_squared, a_norm_bound } =>
+                  write!(f, "CFL violated for TruncatedExp K=4: tau = {:.3e}, dx² = {:.3e}, ||a||_∞ = {:.3e} (need 2·tau·||a||_∞ < dx²)",
+                         tau, dx_squared, a_norm_bound),
+              Self::AdaptiveStepRejected { last_tau, last_err, steps_attempted } =>
+                  write!(f, "adaptive PI step rejected: last_tau = {:.3e}, last_err = {:.3e}, steps_attempted = {}",
+                         last_tau, last_err, steps_attempted),
+              Self::OutOfMagnusRadius { tau, rho_estimate } =>
+                  write!(f, "Magnus convergence radius violated: rho_bar_max = {:.3e}, tau = {:.3e}, product = {:.3e} >= pi/2 (reduce tau or supply tighter rho_bar_max)",
+                         rho_estimate, tau, rho_estimate * tau),
+          }
+      }
+  }
+
+# ---------------------------------------------------------------------------
+# Stability invariants for downstream callers.
+# ---------------------------------------------------------------------------
+stability:
+  - "Adding new variants is allowed in any minor version (non_exhaustive)."
+  - "Removing variants is a major-version (1.0) break."
+  - "Adding fields to existing variants is a MAJOR break — variants are struct-like, not tuple-like, but downstream pattern-matches still see new fields."
+  - "Stable labels: the &'static str values for `what`, `feature` are part of the public API and grep-friendly."
+  - "v0.4.0: `CflViolated` added under `#[non_exhaustive]` (NON-BREAKING). Field shape `{ tau: f64, dx_squared: f64, a_norm_bound: f64 }` is part of the v0.4.0 public API; adding/removing fields would be a MAJOR break."
+  - "v0.6.0: `AdaptiveStepRejected` added under `#[non_exhaustive]` (NON-BREAKING). Field shape `{ last_tau: f64, last_err: f64, steps_attempted: usize }` is part of the v0.6.0 public API; adding/removing fields would be a MAJOR break. Emitted exclusively by `AdaptivePI<C>::evolve_adaptive`."
+  - "v2.1C (ADR-0051): `OutOfMagnusRadius` added under `#[non_exhaustive]` (NON-BREAKING). Field shape `{ tau: f64, rho_estimate: f64 }` is part of the v2.1C public API; adding/removing fields would be a MAJOR break. Emitted exclusively by `MagnusGraphHeatChernoff::apply_into` and `MagnusGraphHeatChernoff::apply_into_at`."
+
+# ---------------------------------------------------------------------------
+# Mapping: which contract method may emit which variant.
+# ---------------------------------------------------------------------------
+emission_table:
+  - method: "Grid1D::new"
+    emits: [DomainViolation]
+  - method: "GridFn1D::new"
+    emits: [DomainViolation]
+  - method: "ChernoffSemigroup::new"
+    emits: [DomainViolation]
+  - method: "ChernoffSemigroup::evolve"
+    emits: [DomainViolation]
+  - method: "ShiftChernoff1D::apply"
+    emits: [DomainViolation, Unsupported]   # Unsupported only via grid.interp dispatch (Linear without feature flag)
+  - method: "Grid1D::sample (via GridFn1D::sample)"
+    emits: [Unsupported]                     # v0.2.1: ONLY InterpKind::Linear without `linear-interp` feature; boundary dispatch is total
+
+  # v0.2.0 (ADR-0006) — operator splitting types.
+  # No NEW variants required: the L = A + B decomposition is encoded
+  # structurally via the type system (StrangSplit<D, R>), not as a runtime
+  # mismatch error.
+  - method: "DiffusionChernoff::apply"
+    emits: [DomainViolation, Unsupported]   # v0.3.0 (ADR-0008 Amendment 1, ζ-A): DomainViolation if a(x_pre) <= 0 (strict ellipticity AT the post-S(τ/2) γ-A K-factor evaluation point; was a(x_i) in v0.2.2); also if any of the 5 γ-A f.sample arguments is non-finite (caller-supplied a_prime returning non-finite); also if any of the 4 ζ-stencil f.sample arguments is non-finite (Δ = max(2·dx, √τ); should not happen for finite τ and finite f, since stencil arguments are `x ± Δ`, `x ± 2Δ`). a_double_prime non-finite propagates harmlessly through τ²-correction into result; surfaces only in downstream f.norm_sup checks. Unsupported only via f.sample under InterpKind::Linear without `linear-interp` feature flag.
+  - method: "TruncatedExpDiffusionChernoff::apply"
+    emits: [DomainViolation, CflViolated, Unsupported]   # v0.4.0 (ADR-0011, option ε — TruncatedExp K=4 sibling): NEW CflViolated when 2·tau·a_norm_bound >= dx_squared (necessary for K=4 truncated power series convergence; BCOR 2009 §3.1). DomainViolation if tau < 0 or NaN/Inf, if a_norm_bound is NaN/Inf or <= 0, if f contains NaN/Inf, or if a(x_i ± dx/2) <= 0 for any i (strict ellipticity AT half-grid-nodes — the 3-point divergence-form stencil's evaluation points). Unsupported only on the optional IP foot-point path (when with_drift_conjugation has been called) via f.sample under InterpKind::Linear without `linear-interp` feature flag.
+  - method: "DriftReactionChernoff::apply"
+    emits: [DomainViolation, Unsupported]   # v0.2.2 (RK2): unchanged from v0.2.1 — no new variants. DomainViolation for tau<0 / non-finite tau / non-finite f; Unsupported only via f.sample under InterpKind::Linear without `linear-interp` feature flag.
+  - method: "StrangSplit::apply"
+    emits: [DomainViolation, CflViolated, Unsupported]   # propagated from the inner D and R applies; StrangSplit itself does not introduce new error sources. v0.4.0: when D = TruncatedExpDiffusionChernoff, the inner D(τ/2) apply may emit CflViolated (with `tau = τ/2` since Strang halves the diffusion step); callers driving adaptive step-size MUST handle this from the Strang wrapper.
+
+  # v0.6.0 (ADR-0013, ADR-0014) — additive types, NO new error sources beyond AdaptiveStepRejected.
+  - method: "Diffusion4thChernoff::apply"
+    emits: [DomainViolation, Unsupported]   # v0.6.0 (ADR-0013, ζ⁴): same error surface as v0.5.0 ζ-A. NO CflViolated (γ-A K-factor is unconditionally L^∞-stable; ζ⁴ correction is bounded). DomainViolation if a(x_pre) ≤ 0 (γ-A K-factor strict-ellipticity check), if any of the 5 γ-A f.sample arguments is non-finite, OR if any of the 6 ζ⁴-stencil f.sample arguments at `x ± Δ`, `x ± 2Δ`, `x ± 3Δ` is non-finite (Δ = max(3·dx, τ^{3/4}); should not happen for finite τ and finite f). Unsupported only via f.sample under InterpKind::Linear without `linear-interp`. The 7-point Fornberg stencil shares boundary-policy dispatch with the 5-point ζ-A stencil — same totality contract.
+  - method: "TruncatedExp4thDiffusionChernoff::apply"
+    emits: [DomainViolation, CflViolated, Unsupported]   # v0.6.0 (ADR-0013, TruncatedExp⁴): same error surface as v0.4.0 TruncatedExp, with the new TIGHTER CFL `8·τ·a_norm_bound ≥ 3·dx²` ⇒ CflViolated. The CflViolated payload `{ tau, dx_squared, a_norm_bound }` is bit-equal to v0.4.0; downstream pattern-matchers cannot distinguish v0.4.0 vs v0.6.0 from the variant alone (which type's apply was called is the discriminator). DomainViolation if τ < 0/non-finite, if a_norm_bound ≤ 0/non-finite, if f contains NaN/Inf, OR if a(x_i ± k·dx/2) ≤ 0 for any (i, k ∈ {1, 3}) — strict-ellipticity at the FOUR half-grid sampling points (vs. v0.4.0's two). Unsupported only via the optional IP foot-point path under InterpKind::Linear without `linear-interp`.
+  - method: "AdaptivePI::evolve_adaptive"
+    emits: [DomainViolation, CflViolated, AdaptiveStepRejected, Unsupported]   # v0.6.0 (ADR-0014): NEW AdaptiveStepRejected at runaway cap. Inner `func.apply` errors propagate verbatim (DomainViolation if u0 contains NaN/Inf or τ < 0/non-finite — controller defaults to τ = t/100 initially; CflViolated if the inner is TruncatedExp or TruncatedExp⁴ and the controller's chosen τ exceeds the inner's CFL — the controller will retry with smaller τ, but the variant may surface for the first attempted full-step before contraction; Unsupported via inner f.sample). AdaptiveStepRejected ONLY when steps_attempted ≥ max_substeps (default 100_000).
+
+  # v2.1C (ADR-0051) — Magnus K=4 graph Laplacian type.
+  - method: "MagnusGraphHeatChernoff::apply_into"
+    emits: [DomainViolation, OutOfMagnusRadius]   # v2.1C (ADR-0051): OutOfMagnusRadius when rho_bar_max * tau >= π/2 (50% safety margin); DomainViolation if tau < 0 or non-finite, or if src signal has wrong node count. The convergence-radius check fires BEFORE any scratch allocation (errors-as-values).
+  - method: "MagnusGraphHeatChernoff::apply_into_at"
+    emits: [DomainViolation, OutOfMagnusRadius]   # Same as apply_into; additionally DomainViolation if t_start is non-finite.

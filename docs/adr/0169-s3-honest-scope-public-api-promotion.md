@@ -1,0 +1,19 @@
+# ADR-0169 — v9.2.0 promotes the five S³ POC solutions to an HONEST, boundary-as-type public API behind the `s3-poc` feature
+
+**Status:** ACCEPTED · **Date:** 2026-06-19 · **Branch:** `experiment/triz-s3-curse-escape`
+**Theme:** v9.2.0 — third S-curve (curse-of-dimensionality escape): controlled public exposure of the five solver-free S³ evolvers
+**Supersedes (status only, not the math):** the "experimental `pub(crate)` / POC-only" disposition of ADR-0164, ADR-0165, ADR-0166, ADR-0167, ADR-0168 — those five remain the NORMATIVE mathematical record; this ADR records that their capabilities are now reachable from a curated public surface.
+**Math:** `contracts/semiflow-core.math.md` §53 (new umbrella section, sub-§53.1–§53.5 referencing the existing ADR-0164–0168 derivations).
+**Source / TRIZ:** `.dev-docs/specs/v9_2_0_release_plan.md` §1 (contradiction resolution: "выжать максимум" ↔ "no overclaim").
+
+## Context
+
+The five S³ modules (`tt_drift_spectral`, `tt_dense_coupling`, `tt_varcoef_spectral`, `tt_nonsep_varcoef`, `tt_nonlinear_spectral`, commits 96e435a→62f7f7b) are `pub(crate)` free-function algorithm primitives, each proven exact-in-time or order-2 **only inside a precise class** and proven fail-loud **at a precise wall** (info-theoretic full-rank coupling / generic full-CP-rank coefficient / mode-mixing nonlinearity). They carry real library value but a naive promotion (raw public functions + doc warnings) would let a caller run an out-of-class operator and get a plausible-but-wrong answer — overclaim, which the whole anti-vacuous-gate arc forbids. The core contradiction is genuine: expose the maximum genuinely-usable surface AND make POC-mistaken-for-general-solver structurally impossible.
+
+## Decision
+
+Resolve the contradiction by **boundary-as-type**, not by compromise. v9.2.0 (additive MINOR, no breaking removal) promotes the capabilities through thin wrapper types whose `Result`-returning constructors consume *only* a closed in-class representation, so an out-of-class operator is **unconstructible** rather than merely discouraged — exactly the `CoupledTtChernoff::new` fail-loud-construction precedent of ADR-0162. The raw `pub(crate)` free functions stay private. The entire surface ships behind a non-default `s3-poc` cargo feature (super-system opt-in + docs.rs cfg badge), and every public item carries a NORMATIVE `## Proven boundary` rustdoc stanza naming the wall and citing the `g_s3_*` gate that proves it. The five `g_s3_*` gates remain RELEASE-BLOCKING under `slow-tests` (they are self-contained — they re-implement the algorithm locally — so feature-gating the library surface does not perturb them). Constitution v6.0.0 needs no change (all five files are <500 LoC and wrappers are thin), contracts bump additive-MINOR (traits 4.13.0→4.14.0, properties 4.14.0→4.15.0), and the five `s3-*-poc.contract.md` files gain a "v9.2.0 public-surface" addendum.
+
+## Consequences
+
+Inside each proven class the user gets 100% of the exact/order-2 capability with zero usability tax; outside it the misuse path is structurally absent (the type cannot express full-rank `a(x,y)`, a transcendental reaction, or generic full-rank coupling) — we expose **all** in-class capability and **no** out-of-class capability, which is a resolution, not a split. Public tokens: `S3DriftSpectralEvolver`, `S3DenseCouplingEvolver`, `S3VarCoefEvolver`, `S3NonSepVarCoefEvolver`, `S3BurgersColeHopf`, `S3ReactionDiffusion<F>` (all `#[cfg(feature = "s3-poc")]`, all `S3*`-namespaced, all carrying the proven-boundary stanza). No new dependency; `no_std + alloc`; generic over `F: SemiflowFloat`; Theorem-6 R2 honoured (no solver in any evolver). The honest negative results (dense-coupling info-theoretic wall, nonlinear mode-mixing wall) are documented public boundaries, not hidden. Next re-evaluation at v10.0.0.

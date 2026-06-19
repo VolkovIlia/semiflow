@@ -1,0 +1,42 @@
+{
+  "name": "@semiflow/wasm",
+  "version": "__VERSION__",
+  "description": "Rust-based Chernoff approximations of operator semigroups, compiled to WebAssembly (1D heat equation, unit-coefficient).",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VolkovIlia/semiflow.git"
+  },
+  "homepage": "https://github.com/VolkovIlia/semiflow",
+  "keywords": [
+    "webassembly",
+    "wasm",
+    "numerics",
+    "diffusion",
+    "pde",
+    "chernoff",
+    "operator-semigroup"
+  ],
+  "files": [
+    "web/",
+    "node/",
+    "package.json",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "main": "./node/semiflow_wasm.cjs",
+  "module": "./web/semiflow_wasm.js",
+  "types": "./web/semiflow_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./web/semiflow_wasm.d.ts",
+      "import": "./web/semiflow_wasm.js",
+      "require": "./node/semiflow_wasm.cjs"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

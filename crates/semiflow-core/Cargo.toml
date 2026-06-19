@@ -1,0 +1,102 @@
+[package]
+name = "semiflow-core"
+description = "Chernoff approximations of operator semigroups (Theorem 6 of Remizov 2025)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["math", "pde", "semigroup", "chernoff", "numerical"]
+categories = ["science", "mathematics", "no-std"]
+
+[features]
+default = ["simd"]  # ADR-0019: simd default-on; v2_compat removed at v4.0 (ADR-0084)
+std = []
+parallel = ["std"]               # ADR-0018: parallel Strang2D::apply via std::thread::scope (std-only)
+simd = ["std"]                   # ADR-0019: AVX2 + NEON intrinsics, scalar fallback elsewhere
+linear-interp = []
+diff-scipy = []  # gates Python-dependent test
+slow-tests = []  # gates the 135-combo full parameter sweep (cev_european_call_sweep_full)
+tracking-alloc = []
+s3-poc = []      # ADR-0169: S³ POC evolvers (off by default; boundary-as-type public surface)
+
+[dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }  # libm enables Float in no_std (ADR-0025)
+libm = { version = "0.2", default-features = false }  # for sqrt in no_std
+num-complex = { version = "0.4", default-features = false, features = ["libm"] }  # ADR-0079: SemiflowComplex v4.0 Wave A; dep count = 3/3 (constitution v1.8.0)
+
+[dev-dependencies]
+proptest = "=1.4.0"
+serde_json = "1.0"  # for golden-set parsing in tests only
+statrs = "0.18"     # central χ² CDF for Poisson-weighted noncentral χ² series (ADR-0009)
+criterion = { version = "0.5", features = ["html_reports"] }  # perf-commitment-v1_0_0 (S2.3)
+static_assertions = "1.1"  # compile-time Send+Sync gates (chernoff1d_parallel_bit_equal)
+allocation-counter = "0.8"  # ADR-0041 Wave 1: zero-alloc steady-state gate
+
+[[bench]]
+name = "heat_1d"
+harness = false
+
+[[bench]]
+name = "heat_2d"
+harness = false
+
+[[bench]]
+name = "advdiff_2d"
+harness = false
+
+[[bench]]
+name = "diffusion6_simd"
+harness = false
+
+[[bench]]
+name = "strang2d_parallel"
+harness = false
+required-features = ["parallel"]
+
+[[bench]]
+name = "strang3d_parallel"
+harness = false
+required-features = ["parallel"]
+
+[[bench]]
+name = "ns2d_aniso_parallel"
+harness = false
+required-features = ["parallel"]
+
+[[bench]]
+name = "graph_heat"
+harness = false
+
+[[bench]]
+name = "cache_phase4"
+harness = false
+
+[[bench]]
+name = "zeta_ladder"
+harness = false
+
+[[bench]]
+name = "new_kernels"
+harness = false
+
+[[bench]]
+name = "new_kernels2"
+harness = false
+
+[[bench]]
+name = "new_kernels3"
+harness = false
+
+[[bench]]
+name = "new_kernels4"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

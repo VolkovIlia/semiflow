@@ -1,0 +1,43 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "semiflow-pde"
+dynamic = ["version"]
+description = "PyO3 Python bindings for semiflow-core (1D heat, unit diffusion)"
+requires-python = ">=3.10,<3.15"
+dependencies = ["numpy >= 1.24"]
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Ilia Volkov", email = "ilia.volkov@outlook.com" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/VolkovIlia/semiflow"
+Repository = "https://github.com/VolkovIlia/semiflow"
+Documentation = "https://github.com/VolkovIlia/semiflow#readme"
+Issues = "https://github.com/VolkovIlia/semiflow/issues"
+
+[tool.maturin]
+# Use the shared binding-crate profile (panic = "unwind" required).
+profile = "release-ffi"
+# PyO3 stable ABI: one wheel covers Python 3.10–3.13.
+features = ["pyo3/extension-module"]
+module-name = "semiflow"
+# PEP 561: copy python/semiflow/ (stubs + py.typed) into the wheel.
+python-source = "python"
+# Strip debug symbols from the wheel for size.
+strip = true

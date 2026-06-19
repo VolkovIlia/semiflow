@@ -1,0 +1,1792 @@
+# semiflow-core — Tensor-product 2D extension (v0.5.0, ADR-0012, Phase 1).
+#
+# This file is NORMATIVE for the 2D struct schema. It introduces exactly
+# 5 new public types — `Axis`, `AxisLift<C>`, `Grid2D`, `GridFn2D`,
+# `Strang2D<X, Y>` — and adds NO new `SemiflowError` variants (shape
+# mismatches reuse `DomainViolation` from `semiflow-core.errors.yaml`).
+#
+# Phase 1 deliverable: contracts only, NO `src/` code. Phase 2 (next
+# agent) implements against this schema.
+#
+# Cross-references:
+#   - `semiflow-core.traits.yaml`   — `ChernoffFunction`, `State`, `Grid1D`,
+#                                     `GridFn1D`, `BoundaryPolicy`,
+#                                     `InterpKind`, `ShiftChernoff1D`,
+#                                     `DiffusionChernoff`,
+#                                     `TruncatedExpDiffusionChernoff`,
+#                                     `DriftReactionChernoff`, `StrangSplit`.
+#   - `semiflow-core.errors.yaml`   — `SemiflowError::DomainViolation` (reused).
+#   - `semiflow-core.math.md` §10   — Theorem 7 (per-axis order-2 lift),
+#                                     Lemma 10.2 (Y-independent reduction),
+#                                     §10.5 oracles.
+#   - `semiflow-core.properties.yaml` — three new properties (grid_fn_2d_*,
+#                                       axis_lift_*, strang2d_*).
+#   - `docs/adr/0012-tensor-product-2d.md` — architectural rationale.
+
+# Changelog
+#   0.5.0 → 0.6.0  (v0.6.0)  Diffusion4thChernoff lifts Strang2D order cap to 4
+#                            (forward-compat ceiling); see ADR-0013.
+#   0.6.0 → 0.7.0  (v0.7.0)  Adds NonSeparable2DChernoff (5-leg palindromic
+#                            splitter for L = Lx + Ly + c·∂x∂y); ADR-0016.
+#   0.7.0 → 0.7.1  (v0.8.0 Block B, this delta) ADDITIVE — amends Strang2D
+#                            with a `parallel` opt-in feature flag, thread-
+#                            safety clauses (Send + Sync bounds for inner X/Y),
+#                            min_rows_per_thread = 16 constant, and a
+#                            bit-equality contract: when feature `parallel`
+#                            is enabled, `Strang2D::apply` MAY use multiple
+#                            threads internally; output is **bit-equal to the
+#                            serial path across every thread count** under
+#                            the deterministic-reduction-order rule below.
+#                            No public type or method-signature changes; the
+#                            v0.5.0 regression-bit-equal gate (G3-2D) holds.
+#                            See ADR-0018.
+#   0.7.2 → 0.8.0  (v0.9.0 Block C, this delta) ADDITIVE — adds `Axis::Z`
+#                            variant (Option A, ADR-0024), and four new 3D
+#                            tensor-product types: `Grid3D`, `GridFn3D`,
+#                            `AxisLift3D<C>`, `Strang3D<X,Y,Z>`. No
+#                            existing 2D struct signatures altered. The 2D
+#                            `AxisLift<C>` acquires a `DomainViolation` guard
+#                            arm for `Axis::Z` (programmer error protection).
+#                            Schema bumps to 0.8.0 to record the v0.9.0 Block C
+#                            attestation. See ADR-0024.
+#   0.7.1 → 0.7.2  (v0.8.0 Block C, this delta) ADDITIVE — adds top-level
+#                            `simd` block describing a new scoped module
+#                            `src/simd/` housing AVX2 (`std::arch::x86_64`)
+#                            + NEON (`std::arch::aarch64`) intrinsics behind
+#                            a new opt-in `simd` Cargo feature defaulted ON
+#                            for x86_64/aarch64 and silently scalar-fallback
+#                            on every other arch. `#![forbid(unsafe_code)]`
+#                            stays at the crate root; `#[allow(unsafe_code)]`
+#                            is permitted ONLY at the head of `src/simd/mod.rs`.
+#                            The hot paths `Grid::sample` (cubic-Hermite),
+#                            `GridQuintic::sample` (quintic-Hermite), and the
+#                            7/9-pt FD stencils inside `Diffusion6thChernoff`
+#                            dispatch into the new `simd::SimdF64x4` trait
+#                            with NO public API change — vectorization is
+#                            internal. Determinism is TIGHT bit-equality vs
+#                            scalar (no FMA in vectorized hot paths); enforced
+#                            by `SIMD_BIT_EQUAL` (release-blocking). See
+#                            ADR-0019.
+
+schema_version: "0.8.0"
+crate: semiflow-core
+edition: "2021"
+no_std: true
+alloc: true
+license: "MIT OR Apache-2.0"
+msrv: "1.78"
+
+# ---------------------------------------------------------------------------
+# 1. Top-level invariants (numbered I-T1..I-T4 per the plan).
+# ---------------------------------------------------------------------------
+invariants:
+  - id: I-T1
+    name: "Row-major linear index"
+    statement: |
+      For a `Grid2D { x, y }` with `nx = x.n` and `ny = y.n`, the linear
+      index is `idx(i, j) = j * nx + i` for `i in [0, nx)`, `j in [0, ny)`.
+      x is the FAST axis (X-rows are contiguous in memory). This matches
+      C / NumPy "C-contiguous" convention.
+    enforced_by: "GridFn2D::idx, Grid2D::len"
+    test: "grid_fn_2d_axpy_separability (properties.yaml)"
+
+  - id: I-T2
+    name: "Minimum 2D grid size"
+    statement: |
+      `Grid2D::new(x, y)` requires `x.n >= 2 AND y.n >= 2`. Each axis
+      grid is independently validated by `Grid1D::new` (which already
+      requires `n >= 4` for the cubic-Hermite stencil); the 2D extension
+      relaxes this to `n >= 2` per axis ONLY for axes that will be
+      lifted by `AxisLift` of a Chernoff function whose interpolation
+      kernel does not need 4 nodes (currently NONE — practical
+      implementations should use `n >= 4` per axis to match the
+      `CubicHermite` requirement). The hard floor `n >= 2` is enforced
+      in `Grid2D::new` for forward compatibility (e.g. nearest-neighbour
+      interp in v0.6+).
+    enforced_by: "Grid2D::new"
+    error: "DomainViolation if x.n < 2 or y.n < 2"
+
+  - id: I-T3
+    name: "Storage length consistency"
+    statement: |
+      `GridFn2D` MUST satisfy `values.len() == grid.nx * grid.ny`,
+      where `grid.nx = grid.x.n`, `grid.ny = grid.y.n`. Violation is
+      `DomainViolation` returned from constructors and shape-checked by
+      every `apply` call (early return).
+    enforced_by: "GridFn2D::new, GridFn2D::axpy precondition, AxisLift::apply"
+    test: "grid_fn_2d_axpy_separability (properties.yaml)"
+
+  - id: I-T4
+    name: "Axis-lift 1D consistency"
+    statement: |
+      For `f: GridFn2D` with `f.values[idx(i, j)] = g(grid.x.x_at(i))`
+      independent of `j` (Y-independent input) and any 1D Chernoff
+      function `C: ChernoffFunction<S = GridFn1D>`:
+
+        `AxisLift::<C, Axis::X>::apply(τ, &f).unwrap().values[idx(i, j)]`
+        ==
+        `C.apply(τ, &row_j(f)).unwrap().values[i]`     for every j
+
+      where `row_j(f)` extracts the j-th X-row as `GridFn1D` on `grid.x`.
+      Equality is REQUIRED to hold pointwise modulo IEEE rearrangement
+      ≤ 16 ULP / node (1D `apply` is deterministic per row; row buffers
+      may be allocated/cleared in arbitrary order).
+
+      Symmetrically, `AxisLift::<C, Axis::Y>::apply(τ, &f)` on Y-independent
+      input acts as identity within the same FP envelope (Lemma 10.2,
+      math.md §10.4).
+    enforced_by: "AxisLift::apply per-axis dispatch"
+    test: "axis_lift_1d_consistency (properties.yaml)"
+
+# ---------------------------------------------------------------------------
+# 2. Enums.
+# ---------------------------------------------------------------------------
+enums:
+  - name: Axis
+    shape: enum
+    doc: |
+      Discriminator for the per-axis lift. Used as a phantom-style
+      runtime tag inside `AxisLift<C>`. v0.5.0 supports exactly 2D:
+      `Axis::X` lifts a 1D Chernoff function to act row-by-row at fixed
+      `j` (X is the fast axis); `Axis::Y` lifts column-by-column at
+      fixed `i`. v0.9.0 Block C (Option A) extends the same enum with
+      `Axis::Z` for use by `AxisLift3D` — the 2D `AxisLift<C>` returns
+      `DomainViolation` if `Axis::Z` is supplied (programmer error guard;
+      see `strang3d.rs` / ADR-0024).
+    variants:
+      - name: X
+        doc: "Lift acts row-wise: stride = 1, count = nx, repetitions = ny."
+      - name: Y
+        doc: "Lift acts column-wise: stride = nx, count = ny, repetitions = nx."
+      - name: Z
+        doc: |
+          Lift acts slab-wise in 3D: stride = nx·ny, count = nz,
+          repetitions = nx·ny. Valid ONLY inside `AxisLift3D`; supplying
+          `Axis::Z` to the 2D `AxisLift<C>` returns
+          `SemiflowError::DomainViolation` (v0.9.0, ADR-0024).
+    derives:
+      - Clone
+      - Copy
+      - Debug
+      - PartialEq
+      - Eq
+
+# ---------------------------------------------------------------------------
+# 3. Structs.
+# ---------------------------------------------------------------------------
+# v0.6.0 (ADR-0013): the structs below are UNCHANGED from v0.5.0 — no Rust
+# source edit is required to lift the v0.5.0 `Strang2D` to 4th-order spatial
+# (constant-a regime). The lift is achieved by:
+#   (a) Instantiating the existing `AxisLift<C>` adapter with C =
+#       `Diffusion4thChernoff` or `TruncatedExp4thDiffusionChernoff` (the new
+#       v0.6.0 sibling 1D Chernoff types defined in `traits.yaml`). The
+#       generic bounds `C: ChernoffFunction<S = GridFn1D> + Copy` are
+#       satisfied verbatim — `axis.rs` body is BIT-EQUAL to v0.5.0.
+#   (b) Lifting the `Strang2D::order()` cap from `min(ox, oy, 2)` to
+#       `min(ox, oy, 4)` (a one-character edit at `strang2d.rs:108`). With
+#       both inner Chernoff functions reporting `order() = 4`, the
+#       composite reports `order() = 4` (Theorem 7, math.md §10.3).
+#       Existing v0.5.0 inner types `DiffusionChernoff` and
+#       `TruncatedExpDiffusionChernoff` continue to report `order() = 2`, so
+#       `Strang2D<DiffusionChernoff, DiffusionChernoff>` reports
+#       `order() = 2` UNCHANGED. The cap lift only affects compositions
+#       of the new v0.6.0 types.
+#   (c) Updating the v0.5.0 unit test `strang2d.rs:153-155`
+#       `assert_eq!(s.order(), 2)` to a more general check that the
+#       reported order tracks `min(ox, oy, 4)` — Engineer's Phase 4 task.
+# Structurally, no `Grid2D`, `GridFn2D`, `AxisLift`, or `Strang2D` field
+# or method signature is altered. Schema bumps to 0.6.0 to record the
+# v0.6.0 ADR-0013 attestation, NOT to flag a struct-level breaking change.
+
+structs:
+  - name: Grid2D
+    shape: struct
+    doc: |
+      Rectangular tensor-product grid `[xmin, xmax] × [ymin, ymax]`. Owns
+      two `Grid1D` instances: each axis carries its own boundary policy
+      and interpolation kind independently (per ADR-0012 closed
+      decision: "per-axis BC — independent — each `Grid1D` carries its
+      own `BoundaryPolicy`").
+
+      `Grid2D` does NOT own values; values live in `GridFn2D`.
+
+      Storage convention (I-T1): row-major, `idx(i, j) = j * nx + i`,
+      x is the fast axis. Total cell count is `nx * ny`.
+    fields:
+      - name: x
+        type: Grid1D
+        doc: "Fast-axis grid. `nx = x.n`. Carries its own `BoundaryPolicy` and `InterpKind`."
+      - name: y
+        type: Grid1D
+        doc: "Slow-axis grid. `ny = y.n`. Independent BC and interp from `x`."
+    methods:
+      - name: new
+        signature: "fn new(x: Grid1D, y: Grid1D) -> Grid2D"
+        semantics: |
+          Constructor. Always succeeds — `x` and `y` are already validated
+          by `Grid1D::new` (which enforces `xmin < xmax`, `n >= 4`,
+          finite endpoints). Total order: `x.n >= 4 AND y.n >= 4` is
+          IMPLIED by the per-axis precondition; `Grid2D::new` itself
+          performs no further validation.
+        errors: []  # cannot fail given Grid1D preconditions
+
+      - name: nx
+        signature: "fn nx(&self) -> usize"
+        semantics: "Returns `self.x.n`. Convenience accessor."
+
+      - name: ny
+        signature: "fn ny(&self) -> usize"
+        semantics: "Returns `self.y.n`. Convenience accessor."
+
+      - name: len
+        signature: "fn len(&self) -> usize"
+        semantics: "Returns `self.x.n * self.y.n`. Used by `GridFn2D` shape checks (I-T3)."
+
+      - name: idx
+        signature: "fn idx(&self, i: usize, j: usize) -> usize"
+        semantics: |
+          Returns `j * self.x.n + i` (row-major linear index, I-T1).
+          Caller MUST ensure `i < self.x.n AND j < self.y.n` —
+          this method is `pub(crate)` for use by `GridFn2D` and
+          `AxisLift` only; callers outside the crate use `GridFn2D`
+          accessors. v0.5.0 prefers a `debug_assert!` over a Result
+          here (hot path); release builds skip the bounds check
+          (BLAS-axpy convention, ADR-0008 carried over).
+
+  - name: GridFn2D
+    shape: struct
+    doc: |
+      Concrete implementation of `State` for the 2D tensor-product grid.
+      Holds a single `Vec<f64>` of length `grid.nx * grid.ny`, indexed
+      by `idx(i, j) = j * nx + i` (I-T1). x is the fast axis.
+
+      Implements `State` axpy/scale/norm_sup/zeroed_like over the flat
+      `Vec` — all operations are O(nx * ny) with no branching on (i, j).
+    fields:
+      - name: values
+        type: "Vec<f64>"
+        doc: |
+          Flat row-major storage. Length MUST equal `grid.nx * grid.ny`
+          (I-T3). Single allocation; no `Vec<Vec<f64>>` (rejected in
+          ADR-0012 alternative (b)).
+      - name: grid
+        type: Grid2D
+        doc: "Geometry. Owned by value (cheap to clone — two Grid1D)."
+    implements:
+      - "State"
+    methods:
+      - name: new
+        signature: "fn new(grid: Grid2D, values: Vec<f64>) -> Result<Self, SemiflowError>"
+        semantics: "Constructor with shape validation."
+        errors:
+          - "DomainViolation if values.len() != grid.len()  (I-T3 violation)"
+          - "DomainViolation if any value is NaN or Inf"
+
+      - name: from_fn
+        signature: "fn from_fn<F: Fn(f64, f64) -> f64>(grid: Grid2D, f: F) -> Self"
+        semantics: |
+          Sample a closure at every grid node. Convenience for tests
+          and for `(10.7)`/`(10.8)` 2D oracles. Order of iteration is
+          row-major (j outer, i inner); calling with a non-deterministic
+          closure is caller error.
+
+      - name: from_separable
+        signature: "fn from_separable<G: Fn(f64) -> f64, H: Fn(f64) -> f64>(grid: Grid2D, g: G, h: H) -> Self"
+        semantics: |
+          Convenience for tensor-product initial data: samples
+          `f(x_i, y_j) = g(x_i) * h(y_j)`. Used by Theorem 7 oracles
+          and by `axis_lift_1d_consistency` and `strang2d_separable_order_2`
+          properties (where Y-independent input is `from_separable(g, |_| 1.0)`).
+
+      - name: row
+        signature: "fn row(&self, j: usize) -> GridFn1D"
+        semantics: |
+          Extract the j-th X-row as a `GridFn1D` on `self.grid.x`.
+          Allocates a new `Vec<f64>` of length `nx` and clones values
+          `self.values[j*nx..(j+1)*nx]` (contiguous slice — single
+          memcpy). Used by `AxisLift::<C, Axis::X>::apply`.
+
+          Engineer note: prefer `row_into(j, &mut buf)` if the caller can
+          reuse a buffer, but the simpler `row(j) -> GridFn1D` is the
+          contract surface — Phase 2 may add `row_into` as an
+          optimisation without changing the contract.
+
+      - name: col
+        signature: "fn col(&self, i: usize) -> GridFn1D"
+        semantics: |
+          Extract the i-th Y-column as a `GridFn1D` on `self.grid.y`.
+          Allocates a new `Vec<f64>` of length `ny` and gathers values
+          `self.values[idx(i, 0)], values[idx(i, 1)], ..., values[idx(i, ny-1)]`
+          (strided gather, NOT contiguous — y stride is `nx`). Used by
+          `AxisLift::<C, Axis::Y>::apply`.
+
+      - name: write_row
+        signature: "fn write_row(&mut self, j: usize, src: &GridFn1D) -> Result<(), SemiflowError>"
+        semantics: |
+          Overwrite the j-th X-row with `src.values`. Errors if
+          `src.values.len() != self.grid.nx` or `src.grid` does not
+          match `self.grid.x`. Single memcpy (contiguous write).
+
+      - name: write_col
+        signature: "fn write_col(&mut self, i: usize, src: &GridFn1D) -> Result<(), SemiflowError>"
+        semantics: |
+          Overwrite the i-th Y-column with `src.values`. Errors if
+          `src.values.len() != self.grid.ny` or `src.grid` does not
+          match `self.grid.y`. Strided scatter.
+
+      # State trait methods (axiom mapping per traits.yaml §1).
+      - name: axpy
+        signature: "fn axpy(&mut self, a: f64, x: &Self)"
+        semantics: |
+          `self.values[k] += a * x.values[k]` for k in 0..len. No
+          allocation. Shape-mismatch (`x.values.len() != self.values.len()`)
+          is `debug_assert!` in v0.5.0; production builds rely on the
+          construction-time `Grid2D` equality (caller responsibility,
+          mirrors `GridFn1D::axpy`).
+        preconditions:
+          - "self.grid and x.grid have identical Grid2D geometry (same nx, ny, xmin, ymin, xmax, ymax)"
+
+      - name: scale
+        signature: "fn scale(&mut self, k: f64)"
+        semantics: "self.values[i] *= k for all i. In-place."
+
+      - name: norm_sup
+        signature: "fn norm_sup(&self) -> f64"
+        semantics: "Returns max_i |self.values[i]| over the full Vec."
+        postconditions:
+          - "result >= 0.0"
+          - "result is NaN iff any self.values[i] is NaN"
+
+      - name: zeroed_like
+        signature: "fn zeroed_like(&self) -> Self"
+        semantics: |
+          Returns a structural clone with all values set to 0.0. Single
+          `Vec<f64>` allocation of length `nx * ny` (I-T1) — by design
+          NOT `Vec<Vec<f64>>` (rejected ADR-0012 alternative (b) which
+          would require `ny + 1` allocations).
+
+  - name: AxisLift
+    shape: "struct<C: ChernoffFunction<S = GridFn1D>>"
+    doc: |
+      Generic adapter that lifts a 1D Chernoff function `C` to act on
+      `GridFn2D` along a single axis. Reuses the existing 1D `C.apply`
+      verbatim — the entire reason for the `AxisLift` design (ADR-0012
+      §"Decision"): per-axis adapter avoids reimplementing every 1D
+      Chernoff for 2D.
+
+      Behaviour by axis:
+        - `axis = Axis::X`: applies `C.apply(τ, &row_j)` for each
+          j ∈ [0, ny). Output is the row-stacked `GridFn2D`.
+        - `axis = Axis::Y`: applies `C.apply(τ, &col_i)` for each
+          i ∈ [0, nx). Output is the column-stacked `GridFn2D`.
+
+      Implements `ChernoffFunction<S = GridFn2D>` so that:
+        - `Strang2D` can compose `AxisLift<X>` and `AxisLift<Y>` via
+          `ChernoffFunction::apply` directly;
+        - `ChernoffSemigroup<AxisLift<C>>` works (single-axis 2D
+          evolution, useful for unit tests of axis isolation).
+
+      Order/growth:
+        - `AxisLift::order() == C.order()`  (per-axis lift preserves
+          order on the lifted axis; the orthogonal axis is identity).
+        - `AxisLift::growth() == C.growth()` (constants act as
+          constants on the orthogonal axis; no amplification).
+
+      Boundary policies:
+        - `AxisLift<_, Axis::X>` uses `grid.x.boundary` and
+          `grid.x.interp` (per-row 1D `apply` already consults
+          `f.grid.boundary` and `f.grid.interp`). The `grid.y` BC and
+          interp are IRRELEVANT for the X-pass.
+        - `AxisLift<_, Axis::Y>` uses `grid.y.boundary` / `grid.y.interp`
+          symmetrically.
+
+      Per-axis CFL (TruncatedExp K=4 path, ADR-0011):
+        - For `C = TruncatedExpDiffusionChernoff`, the CFL check
+          `τ · ‖a‖_∞ < dx² / 2` happens INSIDE the 1D `apply` per row /
+          column. `dx` for X-pass is `grid.x.dx()`; for Y-pass is
+          `grid.y.dx()`. NO axis-coupling — Y has its own dx, its
+          own CFL.
+    fields:
+      - name: inner
+        type: C
+        doc: "The 1D Chernoff function being lifted. Must implement `ChernoffFunction<S = GridFn1D> + Copy`."
+      - name: axis
+        type: Axis
+        doc: "Which axis the lift acts on (X or Y). Determines stride/count."
+    implements:
+      - "ChernoffFunction (associated S = GridFn2D)"
+    methods:
+      - name: new
+        signature: "fn new(inner: C, axis: Axis) -> Self"
+        semantics: "Constructor. No validation — `inner` is already a valid `ChernoffFunction`."
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn2D) -> Result<GridFn2D, SemiflowError>"
+        semantics: |
+          For `axis = Axis::X`:
+            let mut out = f.zeroed_like();
+            for j in 0..f.grid.ny() {
+                let row_j = f.row(j);
+                let evolved = self.inner.apply(tau, &row_j)?;
+                out.write_row(j, &evolved)?;
+            }
+            return Ok(out);
+
+          For `axis = Axis::Y`: symmetrical with `col(i)` and `write_col(i, .)`.
+
+          Exactly `ny` (resp. `nx`) calls to `self.inner.apply`. Each
+          call allocates one `GridFn1D` for the row/column buffer and
+          one for the evolved result; Phase 2 MAY optimise to a single
+          shared buffer pair if the file budget allows, but the
+          contract surface above is the canonical reference.
+        preconditions:
+          - "tau is finite and >= 0.0"
+          - "f.norm_sup() is finite (no NaN/Inf in f.values)"
+          - "f.values.len() == f.grid.len() (I-T3)"
+        postconditions:
+          - "result.grid == f.grid (geometry preserved)"
+          - "result.values.len() == f.values.len()"
+          - "tau == 0.0 implies result is structurally identical to f modulo per-axis interp idempotence"
+          - "I-T4 holds (axis-lift 1D consistency on Y-independent input for X-pass; symmetrical for Y-pass)"
+        errors:
+          - "DomainViolation if tau < 0 or tau is NaN/Inf"
+          - "DomainViolation if f.values.len() != f.grid.len() (I-T3 detected on input)"
+          - "any error returned by self.inner.apply propagates (e.g. CflViolated for TruncatedExp)"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: "Returns `self.inner.order()`. Per-axis lift preserves the lifted axis's order."
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: |
+          Returns `self.inner.growth()`. The orthogonal axis acts as
+          identity (no amplification), so the 2D bound is the 1D bound
+          on the lifted axis. Strang2D combines two AxisLifts: total
+          growth bound `(M_x · M_y · M_x', ω_x/2 + ω_y + ω_x/2) =
+          (M_x² · M_y, ω_x + ω_y)` per `Strang2D::growth` below.
+
+  - name: Strang2D
+    shape: "struct<X: ChernoffFunction<S = GridFn1D> + Copy, Y: ChernoffFunction<S = GridFn1D> + Copy>"
+    doc: |
+      v0.5.0 palindromic Strang composition for tensor-product 2D
+      generators `L = L_x ⊗ I + I ⊗ L_y`:
+
+        Φ²ᴰ(τ) f = AxisLift<X>(τ/2) ∘ AxisLift<Y>(τ) ∘ AxisLift<X>(τ/2) f.
+
+      This is a **dedicated type, NOT a generic over `StrangSplit`**
+      (closed decision in ADR-0012 — generalising the existing
+      `StrangSplit<D, R>` to `S`-generic would touch stable v0.2.0+ 1D
+      code; `Strang2D` is a fresh tensor-product type that reuses the
+      `AxisLift` adapter twice).
+
+      Implements `ChernoffFunction<S = GridFn2D>` so it composes with
+      `ChernoffSemigroup<Strang2D<X, Y>>` for the iterated 2D Chernoff
+      approximation `(Φ²ᴰ(t/n))^n f` of `e^{tL} f`.
+
+      Order-2 result (math.md §10 Theorem 7): if `X.order() >= 2 AND
+      Y.order() >= 2` (i.e. both inner 1D Chernoff are order 2 — true
+      for `DiffusionChernoff` ζ-A and `TruncatedExpDiffusionChernoff` TruncatedExp
+      K=4), then global error `||(Φ²ᴰ(τ))^n f - e^{tL} f||_∞ = O(τ²)`
+      for `f ∈ C_c^∞(ℝ²)` and separable `L`. The order-2 lift is
+      "purely a per-axis inheritance" (math.md §10 Remark 10.1) — NO
+      additional commutator-cancellation budget required because
+      `[L_x ⊗ I, I ⊗ L_y] = 0` exactly on separable operators (math.md
+      §10 Step 1).
+
+      Reduction lemma (math.md §10.4, Lemma 10.2): for `f(x,y) = g(x)`
+      independent of y, `Strang2D::apply(τ, &f)` row-equals
+      `X.apply(τ, &g)` modulo IEEE rearrangement ≤ 16 ULP / node.
+      This is the `axis_lift_1d_consistency` property's invariant.
+    fields:
+      - name: x
+        type: "AxisLift<X>"
+        doc: "X-axis lift (`AxisLift::new(_, Axis::X)`). Applied at half-step on outer two."
+      - name: y
+        type: "AxisLift<Y>"
+        doc: "Y-axis lift (`AxisLift::new(_, Axis::Y)`). Applied at full step on middle."
+    implements:
+      - "ChernoffFunction (associated S = GridFn2D, order = min(X.order(), Y.order(), 2), growth = composed)"
+    methods:
+      - name: new
+        signature: "fn new(x_inner: X, y_inner: Y) -> Self"
+        semantics: |
+          Constructor:
+            Strang2D {
+              x: AxisLift::new(x_inner, Axis::X),
+              y: AxisLift::new(y_inner, Axis::Y),
+            }
+          No validation — `x_inner` and `y_inner` are already valid
+          `ChernoffFunction`s with their own validated grids.
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn2D) -> Result<GridFn2D, SemiflowError>"
+        semantics: |
+          Palindromic Strang2D sandwich:
+            half = tau / 2.0
+            f1 = self.x.apply(half, f)?       // AxisLift<X>(τ/2)
+            f2 = self.y.apply(tau, &f1)?      // AxisLift<Y>(τ)
+            f3 = self.x.apply(half, &f2)?     // AxisLift<X>(τ/2)
+            return Ok(f3)
+
+          Three intermediate `GridFn2D` allocations (f1, f2, f3) — Phase
+          2 MAY optimise to two buffers via swap if it stays within file
+          budget; the contract surface above is canonical.
+
+          Tensor-product cost per outer step:
+            - 2 × ny calls to X.apply  (the two AxisLift<X> half-steps)
+            - 1 × nx calls to Y.apply  (the AxisLift<Y> full-step)
+          Total: `2*ny + nx` 1D `apply` invocations per `Strang2D::apply`.
+        preconditions:
+          - "tau is finite and >= 0.0"
+          - "f.norm_sup() is finite"
+          - "f.values.len() == f.grid.len()"
+        postconditions:
+          - "result.grid == f.grid"
+          - "result.values.len() == f.values.len()"
+          - "tau == 0.0 implies result is structurally identical to f modulo per-axis interp"
+        errors:
+          - "DomainViolation propagated from any inner AxisLift::apply"
+          - "CflViolated propagated from inner TruncatedExp K=4 (ADR-0011) — per axis"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: |
+          Returns `min(X.order(), Y.order(), 4)`. The τ-axis cap of `4`
+          is a forward-compatibility ceiling for hypothetical
+          higher-τ-order inner functions; with the v0.6.0 inner set
+          (`ShiftChernoff1D`, `DiffusionChernoff`, `DriftReactionChernoff`,
+          `TruncatedExpDiffusionChernoff`, `Diffusion4thChernoff`,
+          `TruncatedExp4thDiffusionChernoff`, `StrangSplit<…>` — all τ-axis
+          order `2` per math.md §11.1 / §11.1.bis), `Strang2D` returns
+          `min(2, 2, 4) = 2`. This matches the type-level invariant
+          "order = 2 canonical Strang global order for separable L"
+          (Theorem 7, math.md §10) and the v0.5.0 unit test
+          `assert_eq!(s.order(), 2)`.
+
+          Cross-ref: `docs/audit-findings-v0_6_0.md` D1 — the v0.6.0
+          ADR-0013 cap lift `min(2) → min(4)` was motivated by an
+          incorrect reading of `Diffusion4thChernoff::order()` and
+          `TruncatedExp4thDiffusionChernoff::order()` as `4`; per v0.6.1
+          (math.md §11.1.bis) those return `2` and the cap of `4` is
+          retained purely as a forward-compatibility ceiling. Spatial
+          dx-axis accuracy `O(dx⁴)` (axis-wise) is independent and
+          observable only via G3⁴-2D, not `order()`.
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: |
+          Composed bound. With `self.x.growth() = (M_x, ω_x)` and
+          `self.y.growth() = (M_y, ω_y)`:
+            (M, ω) = (M_x · M_y · M_x, ω_x/2 + ω_y + ω_x/2)
+                   = (M_x² · M_y, ω_x + ω_y).
+          Per-step bound `||Φ²ᴰ(τ)|| ≤ M · exp(ω·τ)`. For the canonical
+          v0.5.0 case where both `X` and `Y` are `DiffusionChernoff`
+          (ζ-A) — `growth() = (1, 0)` — we get `(1·1·1, 0+0+0) =
+          (1, 0)`, i.e. unit-bounded per step (matches §9.6 1D bound
+          tensored to 2D).
+
+    # -------------------------------------------------------------------------
+    # v0.8.0 Block B (schema 0.7.1, ADR-0018) — parallel `apply` opt-in.
+    # Public method signatures are UNCHANGED; the parallelism is internal to
+    # `Strang2D::apply` and is gated entirely behind `cfg(feature = "parallel")`.
+    # When the feature is OFF (default), the implementation is byte-identical
+    # to the v0.7.0 serial path — guaranteeing no_std + alloc compile.
+    # -------------------------------------------------------------------------
+    feature_flags:
+      - name: parallel
+        default: false
+        gates: |
+          When enabled, `Strang2D::apply` MAY use `std::thread::scope`
+          to fan out the per-row X-pass and per-column Y-pass across
+          multiple OS threads. Implies `std` (the `std::thread` API is
+          unavailable in `no_std`). NOT in `default = []` per ROADMAP
+          v0.8.0 directive — opt-in only, so callers building
+          `--no-default-features` or pure-`no_std` consumers still see
+          the serial path. Recommended kernel: port the test-only
+          parallel kernel from `tests/heat_2d_oracle_4th.rs`
+          (`parallel_x_pass`, `parallel_y_pass`, `parallel_strang2d_step`)
+          into `src/strang2d.rs` private helpers.
+        target_dependency_count: 2  # (num-traits, libm) — UNCHANGED.
+                                    # NO rayon, NO crossbeam.
+
+    thread_safety:
+      send_sync_bounds: |
+        When `feature = "parallel"` is enabled, the implementation
+        spawns work into `std::thread::scope` closures that capture
+        `&self.x` and `&self.y` by shared reference and copy
+        per-thread `AxisLift<X>` / `AxisLift<Y>` instances (these
+        implement `Copy` per the v0.5.0 trait bound). The compiler
+        therefore requires:
+
+          X: ChernoffFunction<S = GridFn1D> + Copy + Send + Sync
+          Y: ChernoffFunction<S = GridFn1D> + Copy + Send + Sync
+
+        These additional `Send + Sync` bounds appear ONLY at the
+        `apply` call site behind `#[cfg(feature = "parallel")]`. The
+        `impl ChernoffFunction for Strang2D<X, Y>` block keeps its
+        v0.5.0 `Copy`-only bounds in the `feature = "parallel"`-OFF
+        branch — preserving v0.5.0 source-compatibility.
+
+        With the v0.7.0 inner set (`DiffusionChernoff`,
+        `Diffusion4thChernoff`, `Diffusion6thChernoff`,
+        `TruncatedExpDiffusionChernoff`,
+        `TruncatedExp4thDiffusionChernoff`, `DriftReactionChernoff`),
+        every type already auto-implements `Send + Sync` because all
+        fields are `f64` / `Grid1D` / `fn(f64) -> f64` pointers (no
+        interior mutability, no raw pointers). Engineer SHOULD add a
+        sanity-check `assert_impl_all!` test in
+        `tests/strang2d_parallel_bit_equal.rs` to catch a future
+        non-`Send` field landing.
+      shared_immutable: |
+        `&Strang2D` and `&AxisLift<C>` are read-only across all worker
+        threads. No interior mutability. Each thread allocates its own
+        per-row / per-column scratch `GridFn1D` — heap allocations are
+        non-overlapping by construction (`Vec::chunks_mut`).
+      disjoint_row_mutable: |
+        The output buffer is split via `Vec::chunks_mut` (X-pass:
+        contiguous row chunks; Y-pass: two-phase gather/scatter into a
+        column-major temp with `chunks_mut` on disjoint column
+        ranges). All mutable slices handed to worker threads are
+        provably non-overlapping at compile time — `chunks_mut`
+        returns `&mut [T]` slices the borrow checker proves disjoint.
+        NO `unsafe` is required (`#![forbid(unsafe_code)]` at the
+        crate root remains in force).
+
+    parallel_constants:
+      - name: MIN_ROWS_PER_THREAD
+        type: usize
+        value: 16
+        rationale: |
+          Minimum slab a worker thread receives. Below this, the
+          `std::thread::scope` spawn cost (~5–10 µs on modern x86_64)
+          dominates the 1D `apply` work and the parallel path becomes
+          slower than serial. At dx-coupled FD stencils with N=1600²,
+          16 contiguous rows = 16·1600 = 25 600 f64 ≈ 200 KB —
+          comfortably above L1 (32 KB) and into L2/L3 territory; spawn
+          overhead ≈ 0.2% of the row-strip work. Engineer MAY tune
+          (16/32/64) but MUST keep the constant `pub(crate) const` and
+          NOT expose it as a public knob. The fallback rule: if
+          `ny < 2 * MIN_ROWS_PER_THREAD`, the implementation MUST
+          short-circuit to the serial path (single-threaded fall-back
+          is bit-equal by construction).
+      - name: PARALLEL_THREAD_COUNT_RULE
+        type: "documentation-only"
+        rule: |
+          The implementation reads the worker count from
+          `std::thread::available_parallelism().map(NonZeroUsize::get)
+          .unwrap_or(1)`, capped from above by `ny / MIN_ROWS_PER_THREAD`
+          (at least one worker). NO env-var override (suckless: zero
+          configuration). NO rayon thread pool. NO global state.
+
+    parallel_correctness:
+      bit_equality_contract: |
+        For every `(τ, f)` and every worker count
+        `k ∈ {1, 2, 4, 8, ..., available_parallelism}`, the
+        `feature = "parallel"` build of `Strang2D::apply(τ, &f)` MUST
+        return a `GridFn2D` whose `values` Vec is **bit-identical**
+        (byte-for-byte `==`) to the serial v0.7.0 build's output —
+        including signed-zero, NaN bit-patterns, and subnormals. This
+        is achievable because:
+
+          1. Per-axis 1D `apply` calls are independent across rows
+             (X-pass) and across columns (Y-pass) — no inter-thread
+             reduction. Each row/column's scalar arithmetic is performed
+             by the SAME `AxisLift::apply` code path on the SAME f64
+             inputs, so IEEE-754 determinism gives bit-identical
+             per-row outputs regardless of which thread executed it.
+          2. The X-pass writes back to disjoint row ranges of a
+             contiguous `Vec<f64>` via `chunks_mut`. Final memory
+             layout is row-major identical to the serial implementation.
+          3. The Y-pass uses a two-phase gather/scatter through a
+             column-major temp buffer. Phase 1 is reduction-free
+             (per-column writes only). Phase 2 is per-row writes from
+             the disjoint temp columns — no associativity-sensitive
+             accumulation.
+
+        No floating-point reduction (sum, dot product, parallel
+        prefix) occurs anywhere on the per-step path; therefore there
+        is no thread-count-dependent FP rearrangement. The
+        bit-equality is a HARD contract enforced by the
+        STRANG2D_PARALLEL_BIT_EQUAL property gate.
+      determinism_strategy: |
+        - No reductions: every f64 written to the output buffer is the
+          result of a single-threaded 1D `apply` on a single row/column.
+        - No Rayon-style work-stealing: thread chunk assignment is
+          deterministic (chunk i → thread i, fixed `chunks_mut` order).
+        - No atomics on data: `Vec::chunks_mut` plus `thread::scope`
+          gives the borrow checker enough to prove non-overlap; no
+          `AtomicF64`, no fences, no `Ordering::Relaxed` shenanigans.
+        - Allocation order: each worker thread heap-allocates its own
+          per-row scratch; allocator order may differ between runs but
+          does NOT affect output bytes.
+
+    performance_targets:
+      - metric: speedup_8_threads_n_1600
+        target: ">= 6x vs serial v0.7.0 baseline"
+        baseline_doc: "docs/perf-baseline-v0_7_0.md (Block A)"
+        gate: STRANG2D_PARALLEL_SPEEDUP   # informational, not release-blocking
+        notes: |
+          Reference: tests/heat_2d_oracle_4th.rs reports ≈ 8× wallclock
+          reduction vs serial at N=1600 (16 min → 2 min). Production
+          path SHOULD match within 25%. Below 6× indicates allocator
+          contention, false sharing, or a stencil that didn't get
+          inlined — investigate before tagging v0.8.0.
+      - metric: speedup_thread_count_curve
+        target: "near-linear scaling 1 → available_parallelism"
+        notes: |
+          Documented in CHANGELOG.md at v0.8.0 ship time; not gated.
+
+  # ---------------------------------------------------------------------------
+  # v0.7.0 Block C: NonSeparable2DChernoff
+  # Reference: ADR-0016, math.md §10.7-bis.
+  # ---------------------------------------------------------------------------
+  - name: NonSeparable2DChernoff
+    shape: "struct<X: ChernoffFunction<S = GridFn1D> + Copy, Y: ChernoffFunction<S = GridFn1D> + Copy>"
+    doc: |
+      v0.7.0 palindromic 5-leg Strang splitting for non-separable 2D
+      generators `L = L_x ⊗ I + I ⊗ L_y + c(x,y)·∂_x∂_y`:
+
+        S_5(τ) f = X(τ/2) ∘ Y(τ/2) ∘ Φ_M(τ) ∘ Y(τ/2) ∘ X(τ/2) f
+
+      where `Φ_M(τ)` is the K=2 truncated-Taylor mixed leg:
+        `Φ_M(τ) f = f + τ·c(x,y)·(∂_x∂_y f) + (τ²/2)·c(x,y)²·(∂_x∂_y)² f`
+
+      and `∂_x∂_y f` is approximated by the centred 4-point cross-stencil:
+        `(∂_x∂_y f)[i,j] = (f[i+1,j+1] - f[i+1,j-1] - f[i-1,j+1] + f[i-1,j-1]) / (4·dx·dy)`
+
+      Implements `ChernoffFunction<S = GridFn2D>`.
+
+      Zero-c fast-path: if `c_norm_bound == 0.0`, the mixed leg Φ_M
+      is the identity and `S_5` reduces bit-exactly to `Strang2D`.
+      This is enforced by the P1 property (zero_c_equals_strang2d).
+
+      Order: `order() = 2` (τ-axis; Strang splitting + K=2 mixed leg,
+      both O(τ²)). Spatial convergence ≈ O(dx² + dy²) from the 4-point
+      stencil (G3_NS2D gate, slope ≤ -1.95).
+
+      CFL gate (ADR-0016 §3): `4·τ·‖c‖_∞ < dx·dy` MUST hold before
+      computing the mixed leg. If violated, `apply` returns
+      `SemiflowError::CflViolated` with field reuse:
+        - `dx_squared` carries `dx · dy` (cell area, square grid convention)
+        - `a_norm_bound` carries `‖c‖_∞`
+    fields:
+      - name: x
+        type: "AxisLift<X>"
+        doc: "X-axis lift (Axis::X). Applied at τ/2 on the outer two legs."
+      - name: y
+        type: "AxisLift<Y>"
+        doc: "Y-axis lift (Axis::Y). Applied at τ/2 on the inner two legs."
+      - name: c
+        type: "fn(f64, f64) -> f64"
+        doc: |
+          Coupling function `c(x, y)`. Must be a function pointer (not
+          a closure capturing state) to satisfy `Copy` — consistent with
+          the 1D Chernoff coefficient pattern (`a_fn: fn(f64) -> f64`).
+      - name: c_norm_bound
+        type: f64
+        doc: |
+          Upper bound on `‖c‖_∞`. Used for the CFL gate and `is_zero_c`
+          detection. Must satisfy `c_norm_bound >= 0.0`. Setting this to
+          `0.0` activates the Strang2D fast-path (bit-exact with Strang2D).
+      - name: grid
+        type: Grid2D
+        doc: |
+          Geometry. Owned by value. The cross-stencil needs `nx >= 2` and
+          `ny >= 2` to index `i±1`, `j±1` with periodic wrapping.
+    implements:
+      - "ChernoffFunction (associated S = GridFn2D)"
+    methods:
+      - name: new
+        signature: |
+          fn new(
+            x_inner: X,
+            y_inner: Y,
+            c: fn(f64, f64) -> f64,
+            c_norm_bound: f64,
+            grid: Grid2D,
+          ) -> Result<Self, SemiflowError>
+        semantics: |
+          Validates `c_norm_bound >= 0.0`; returns `DomainViolation` if
+          negative. Sets `is_zero_c = c_norm_bound == 0.0`. Wraps inners
+          in `AxisLift` with the correct axes.
+        errors:
+          - "DomainViolation if c_norm_bound < 0.0"
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn2D) -> Result<GridFn2D, SemiflowError>"
+        semantics: |
+          Zero-c fast path: if `self.is_zero_c`:
+            return palindromic Strang2D(τ) applied to f (bit-equal path)
+
+          Otherwise (c ≠ 0):
+            validate_cfl(tau, self.c_norm_bound, &self.grid)?;
+            half = tau / 2.0
+            f1 = self.x.apply(half, f)?
+            f2 = self.y.apply(half, &f1)?
+            f3 = mixed_taylor_step(self, tau, &f2)?
+            f4 = self.y.apply(half, &f3)?
+            return self.x.apply(half, &f4)
+
+          where `mixed_taylor_step` computes:
+            d_xy    = cross_stencil(&f2, &self.grid)
+            d_xy_xy = cross_stencil(&d_xy, &self.grid)
+            out[k] = f2[k] + tau * c(xi, yj) * d_xy[k]
+                            + 0.5 * tau² * c(xi, yj)² * d_xy_xy[k]
+        preconditions:
+          - "tau >= 0.0 and finite"
+          - "f.grid == self.grid"
+          - "f.values.len() == f.grid.len()"
+        postconditions:
+          - "result.grid == f.grid"
+          - "result.values.len() == f.values.len()"
+          - "c_norm_bound == 0.0 implies result is bit-exact with Strang2D applied to same f"
+        errors:
+          - "CflViolated if 4·tau·c_norm_bound >= grid.x.dx()·grid.y.dx()"
+          - "DomainViolation propagated from inner AxisLift::apply"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: |
+          Returns `2`. The palindromic Strang splitting contributes O(τ²)
+          and the K=2 Taylor expansion of the mixed leg also contributes
+          O(τ²); the global τ-error order is 2.
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: |
+          Returns composed bound from the five legs. For the canonical
+          case `x.growth() = y.growth() = (1, 0)` (DiffusionChernoff),
+          `growth() = (1, 0)`. Conservative bound — mixed leg is
+          treated as O(1) operator with growth `(1 + epsilon, 0)` for
+          infinitesimal epsilon; the contract returns `(1.0, 0.0)` for
+          the default diffusion inner choice.
+
+  # ---------------------------------------------------------------------------
+  # v0.9.0 Block B: NonSeparable2DAnisotropicChernoff
+  # Reference: ADR-0023, math.md §10.7-ter.
+  # Additive sibling of NonSeparable2DChernoff (v0.7.0). Fields parallel
+  # the v0.7.0 schema with beta/beta_norm_bound replacing c/c_norm_bound.
+  # ---------------------------------------------------------------------------
+  - name: NonSeparable2DAnisotropicChernoff
+    shape: "struct<X: ChernoffFunction<S = GridFn1D> + Copy, Y: ChernoffFunction<S = GridFn1D> + Copy>"
+    doc: |
+      v0.9.0 palindromic 5-leg Strang splitting for anisotropic non-separable
+      2D generators `L = L_x ⊗ I + I ⊗ L_y + β(x,y)·∂_x∂_y`:
+
+        S_5(τ) f = X(τ/2) ∘ Y(τ/2) ∘ Φ_{M_β}(τ) ∘ Y(τ/2) ∘ X(τ/2) f
+
+      where `Φ_{M_β}(τ)` is the K=2 truncated-Taylor mixed leg:
+        `Φ_{M_β}(τ) f = f + τ·(M_β f) + (τ²/2)·(M_β²f)`
+        `M_β f = β(x,y)·(∂_x∂_y f)` — pointwise β multiplier per node
+
+      and `∂_x∂_y f` is approximated by the centred 4-point cross-stencil:
+        `(∂_x∂_y f)[i,j] = (f[i+1,j+1] - f[i+1,j-1] - f[i-1,j+1] + f[i-1,j-1]) / (4·dx·dy)`
+
+      The stencil shape is identical to v0.7.0 `NonSeparable2DChernoff`;
+      only the scalar pointwise multiplier per node changes (β(x_i, y_j)
+      instead of constant c_val). See math.md §10.7-ter.10, ADR-0023.
+
+      Implements `ChernoffFunction<S = GridFn2D>`.
+
+      Zero-β fast-path: if `beta_norm_bound == 0.0`, the mixed leg Φ_{M_β}
+      is the identity and `S_5` reduces bit-exactly to `Strang2D`.
+
+      Order: `order() = 2` (τ-axis; Strang splitting + K=2 mixed leg,
+      both O(τ²)). Spatial convergence ≈ O(dx² + dy²) from the 4-point
+      stencil (G4_NS2D_aniso gate, slope ≤ -1.95).
+
+      CFL gate (eq. 10.7-ter.12): `4·τ·‖β‖_∞ < dx·dy` MUST hold. If
+      violated, `apply` returns `SemiflowError::CflViolated` with field reuse:
+        - `dx_squared` carries `dx · dy` (cell area, same as v0.7.0)
+        - `a_norm_bound` carries `‖β‖_∞` (third semantic field overload)
+    fields:
+      - name: x
+        type: "AxisLift<X>"
+        doc: "X-axis lift (Axis::X). Applied at τ/2 on the outer two legs."
+      - name: y
+        type: "AxisLift<Y>"
+        doc: "Y-axis lift (Axis::Y). Applied at τ/2 on the inner two legs."
+      - name: beta
+        type: "fn(f64, f64) -> f64"
+        doc: |
+          Anisotropic mixed coupling `β(x, y)`. Must be a function pointer
+          (not a closure) to satisfy `Copy` — consistent with the 1D Chernoff
+          and v0.7.0 NonSeparable2DChernoff coefficient pattern.
+      - name: beta_norm_bound
+        type: f64
+        doc: |
+          Upper bound on `‖β‖_∞`. Used for the CFL gate and `is_zero_beta`
+          detection. Must satisfy `beta_norm_bound >= 0.0`. Setting to `0.0`
+          activates the Strang2D fast-path (bit-exact with Strang2D).
+      - name: grid
+        type: Grid2D
+        doc: |
+          Geometry. Owned by value. The cross-stencil needs `nx >= 2` and
+          `ny >= 2` to index `i±1`, `j±1` with periodic wrapping.
+    implements:
+      - "ChernoffFunction (associated S = GridFn2D)"
+    methods:
+      - name: new
+        signature: |
+          fn new(
+            x_inner: X,
+            y_inner: Y,
+            beta: fn(f64, f64) -> f64,
+            beta_norm_bound: f64,
+            grid: Grid2D,
+          ) -> Result<Self, SemiflowError>
+        semantics: |
+          Validates `beta_norm_bound >= 0.0`; returns `DomainViolation` if
+          negative or non-finite. Sets `is_zero_beta = beta_norm_bound == 0.0`.
+          Wraps inners in `AxisLift` with the correct axes.
+        errors:
+          - "DomainViolation if beta_norm_bound < 0.0 or non-finite"
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn2D) -> Result<GridFn2D, SemiflowError>"
+        semantics: |
+          Zero-β fast path: if `self.is_zero_beta`:
+            return Strang2D(τ) applied to f (bit-equal path)
+
+          Otherwise (β ≠ 0):
+            validate_cfl_aniso(tau, self.beta_norm_bound, &self.grid)?;
+            half = tau / 2.0
+            f1 = self.x.apply(half, f)?
+            f2 = self.y.apply(half, &f1)?
+            f3 = phi_m_beta_step(self, tau, &f2)
+            f4 = self.y.apply(half, &f3)?
+            return self.x.apply(half, &f4)
+
+          where `phi_m_beta_step` computes:
+            d_xy    = M_β f2  = β(xi,yj)·cross_stencil(f2) at each node
+            d_xy2   = M_β²f2  = β(xi,yj)·cross_stencil(d_xy) at each node
+            out[k]  = f2[k] + tau * d_xy[k] + 0.5 * tau² * d_xy2[k]
+        errors:
+          - "CflViolated if 4·tau·beta_norm_bound >= grid.x.dx()·grid.y.dx()"
+          - "DomainViolation propagated from inner AxisLift::apply"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: "Returns `2` (τ-axis; see math.md §10.7-ter.5)."
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: |
+          Identical to NonSeparable2DChernoff::growth — combined bound
+          from the five legs. Mixed leg at θ=1/4 CFL: M_M ≈ 1.28.
+
+  # ---------------------------------------------------------------------------
+  # v0.9.0 Block C: 3D tensor-product types (ADR-0024)
+  # Reference: math.md §10.8.4 (Grid3D/GridFn3D), §10.8.5 (AxisLift3D),
+  #            §10.8.7 (Strang3D, 3D Gaussian oracle).
+  # ---------------------------------------------------------------------------
+
+  - name: Grid3D
+    shape: struct
+    doc: |
+      Cuboid tensor-product grid `[xmin, xmax] × [ymin, ymax] × [zmin, zmax]`.
+      Owns three `Grid1D` instances: each axis carries its own boundary policy
+      and interpolation kind independently (per-axis BC, ADR-0024).
+
+      `Grid3D` does NOT own values; values live in `GridFn3D`.
+
+      Storage convention (I-T1-3D): x-fastest row-major,
+      `idx(i, j, k) = k * nx * ny + j * nx + i`.
+      Strides: x → 1, y → nx, z → nx·ny. Total cell count is `nx * ny * nz`.
+    fields:
+      - name: x
+        type: Grid1D
+        doc: "Fast-axis grid. `nx = x.n`."
+      - name: y
+        type: Grid1D
+        doc: "Middle-axis grid. `ny = y.n`."
+      - name: z
+        type: Grid1D
+        doc: "Slow-axis grid. `nz = z.n`."
+    methods:
+      - name: new
+        signature: "fn new(x: Grid1D, y: Grid1D, z: Grid1D) -> Result<Self, SemiflowError>"
+        semantics: |
+          Constructor. Validates `x.n >= 2 AND y.n >= 2 AND z.n >= 2`.
+          In practice `Grid1D::new` requires `n >= 4`, so the per-axis
+          precondition is always implied; the `>= 2` floor is a forward-
+          compatibility safety floor (same pattern as `Grid2D::new`).
+        errors:
+          - "DomainViolation if x.n < 2 or y.n < 2 or z.n < 2"
+
+      - name: nx
+        signature: "fn nx(&self) -> usize"
+        semantics: "Returns `self.x.n`."
+
+      - name: ny
+        signature: "fn ny(&self) -> usize"
+        semantics: "Returns `self.y.n`."
+
+      - name: nz
+        signature: "fn nz(&self) -> usize"
+        semantics: "Returns `self.z.n`."
+
+      - name: len
+        signature: "fn len(&self) -> usize"
+        semantics: "Returns `self.x.n * self.y.n * self.z.n`."
+
+      - name: idx
+        signature: "fn idx(&self, i: usize, j: usize, k: usize) -> usize"
+        semantics: |
+          Returns `k * self.x.n * self.y.n + j * self.x.n + i` (I-T1-3D).
+          `pub(crate)` — callers outside the crate use `GridFn3D` accessors.
+          Debug builds assert bounds; release builds skip.
+        preconditions:
+          - "i < nx, j < ny, k < nz — violation is caller error"
+
+  - name: GridFn3D
+    shape: struct
+    doc: |
+      Concrete implementation of `State` for the 3D tensor-product grid.
+      Holds a single `Vec<f64>` of length `nx * ny * nz`, indexed by
+      `idx(i, j, k) = k * nx * ny + j * nx + i` (I-T1-3D). x is the
+      fastest axis.
+
+      Implements `State` axpy/scale/norm_sup/zeroed_like over the flat
+      `Vec` — all O(nx · ny · nz) with no branching on (i, j, k).
+    fields:
+      - name: values
+        type: "Vec<f64>"
+        doc: "Flat x-fastest storage. Length MUST equal `grid.nx * grid.ny * grid.nz`."
+      - name: grid
+        type: Grid3D
+        doc: "Geometry. Owned by value."
+    implements:
+      - "State"
+    methods:
+      - name: from_fn
+        signature: "fn from_fn<F: Fn(f64, f64, f64) -> f64>(grid: Grid3D, f: F) -> Self"
+        semantics: |
+          Sample a closure at every grid node. Iteration order:
+          k outer, j middle, i inner (x-fastest fill). Convenience for
+          tests and for the 3D Gaussian oracle (eq. 10.8.7).
+
+      # Per-axis pencil helpers (pub(crate)) for use by AxisLift3D.
+      - name: pencil_x
+        signature: "fn pencil_x(&self, j: usize, k: usize) -> GridFn1D"
+        semantics: |
+          Extract the (j, k)-th X-pencil as a `GridFn1D` on `self.grid.x`.
+          Values `self.values[k*nx*ny + j*nx + 0], ..., [k*nx*ny+j*nx+(nx-1)]`
+          — contiguous slice (single memcpy).
+        visibility: pub(crate)
+
+      - name: pencil_y
+        signature: "fn pencil_y(&self, i: usize, k: usize) -> GridFn1D"
+        semantics: |
+          Extract the (i, k)-th Y-pencil as a `GridFn1D` on `self.grid.y`.
+          Values gathered at stride `nx` (non-contiguous).
+        visibility: pub(crate)
+
+      - name: pencil_z
+        signature: "fn pencil_z(&self, i: usize, j: usize) -> GridFn1D"
+        semantics: |
+          Extract the (i, j)-th Z-pencil as a `GridFn1D` on `self.grid.z`.
+          Values gathered at stride `nx*ny` (non-contiguous).
+        visibility: pub(crate)
+
+      - name: write_pencil_x
+        signature: "fn write_pencil_x(&mut self, j: usize, k: usize, src: &GridFn1D)"
+        semantics: "Overwrite (j,k)-th X-pencil. Contiguous write."
+        visibility: pub(crate)
+
+      - name: write_pencil_y
+        signature: "fn write_pencil_y(&mut self, i: usize, k: usize, src: &GridFn1D)"
+        semantics: "Overwrite (i,k)-th Y-pencil. Strided scatter at stride nx."
+        visibility: pub(crate)
+
+      - name: write_pencil_z
+        signature: "fn write_pencil_z(&mut self, i: usize, j: usize, src: &GridFn1D)"
+        semantics: "Overwrite (i,j)-th Z-pencil. Strided scatter at stride nx*ny."
+        visibility: pub(crate)
+
+      # State trait methods.
+      - name: axpy
+        signature: "fn axpy(&mut self, a: f64, x: &Self)"
+        semantics: "`self.values[k] += a * x.values[k]` for all k. No allocation."
+
+      - name: scale
+        signature: "fn scale(&mut self, k: f64)"
+        semantics: "In-place element-wise scale."
+
+      - name: norm_sup
+        signature: "fn norm_sup(&self) -> f64"
+        semantics: "Returns max_k |self.values[k]|."
+
+      - name: zeroed_like
+        signature: "fn zeroed_like(&self) -> Self"
+        semantics: "Returns structural clone with all values 0.0."
+
+  - name: AxisLift3D
+    shape: "struct<C: ChernoffFunction<S = GridFn1D> + Copy>"
+    doc: |
+      Generic adapter that lifts a 1D Chernoff function `C` to act on
+      `GridFn3D` along a single axis (X, Y, or Z). Mirrors the 2D
+      `AxisLift<C>` design (ADR-0012) extended to 3D (ADR-0024).
+
+      Behaviour by axis:
+        - `Axis::X`: applies `C.apply(τ, &pencil_x(j,k))` for each
+          (j,k) ∈ [0,ny)×[0,nz). X-pencil is contiguous (stride 1).
+        - `Axis::Y`: applies `C.apply(τ, &pencil_y(i,k))` for each
+          (i,k) ∈ [0,nx)×[0,nz). Stride nx.
+        - `Axis::Z`: applies `C.apply(τ, &pencil_z(i,j))` for each
+          (i,j) ∈ [0,nx)×[0,ny). Stride nx*ny.
+
+      Implements `ChernoffFunction<S = GridFn3D>`.
+
+      `order()` and `growth()` delegate to the inner 1D function
+      (per-axis lift preserves order/growth, same as 2D AxisLift).
+    fields:
+      - name: inner
+        type: C
+        doc: "The 1D Chernoff function being lifted."
+      - name: axis
+        type: Axis
+        doc: "Which axis the lift acts on (X, Y, or Z). All three are valid."
+    implements:
+      - "ChernoffFunction (associated S = GridFn3D)"
+    methods:
+      - name: new
+        signature: "fn new(inner: C, axis: Axis) -> Self"
+        semantics: "Constructor. No validation."
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn3D) -> Result<GridFn3D, SemiflowError>"
+        semantics: |
+          For `Axis::X`:
+            let mut out = f.zeroed_like();
+            for k in 0..nz { for j in 0..ny {
+                let pencil = f.pencil_x(j, k);
+                let evolved = self.inner.apply(tau, &pencil)?;
+                out.write_pencil_x(j, k, &evolved);
+            }}
+            Ok(out)
+
+          For `Axis::Y` and `Axis::Z`: symmetrical with pencil_y / pencil_z
+          and write_pencil_y / write_pencil_z respectively.
+
+          Total 1D `apply` calls: ny·nz (X-pass), nx·nz (Y-pass), nx·ny (Z-pass).
+        preconditions:
+          - "tau >= 0.0 and finite"
+          - "f.values.len() == f.grid.len()"
+        errors:
+          - "DomainViolation if tau < 0 or tau is NaN/Inf"
+          - "any error from self.inner.apply propagates"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: "Returns `self.inner.order()`."
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: "Returns `self.inner.growth()`."
+
+  - name: Strang3D
+    shape: "struct<X: ChernoffFunction<S = GridFn1D> + Copy, Y: ChernoffFunction<S = GridFn1D> + Copy, Z: ChernoffFunction<S = GridFn1D> + Copy>"
+    doc: |
+      v0.9.0 palindromic 5-leg Strang composition for separable 3D
+      generators `L = L_x ⊗ I ⊗ I + I ⊗ L_y ⊗ I + I ⊗ I ⊗ L_z`
+      where `[L_x, L_y] = [L_x, L_z] = [L_y, L_z] = 0` (exact commutativity
+      — holds for separable constant-coefficient diffusion, ADR-0024):
+
+        Φ³ᴰ(τ) f = X(τ/2) ∘ Y(τ/2) ∘ Z(τ) ∘ Y(τ/2) ∘ X(τ/2) f.
+
+      This is Yoshida's Z2-symmetric composition (Lemma 10.1, math.md §10.8.7)
+      applied to three pairwise-commuting operators. The palindromic structure
+      guarantees global order-2 accuracy in τ (Theorem 7 lifted to 3D by
+      separability).
+
+      Implements `ChernoffFunction<S = GridFn3D>` — composes with
+      `ChernoffSemigroup<Strang3D<X,Y,Z>>` for the iterated 3D Chernoff
+      approximation `(Φ³ᴰ(t/n))^n f ≈ e^{tL} f`.
+
+      Order: `order() = min(X.order(), Y.order(), Z.order(), 4)`.
+      Growth: composed from the five legs (two X half-steps, two Y half-steps,
+      one Z full step).
+    fields:
+      - name: x
+        type: "AxisLift3D<X>"
+        doc: "X-axis lift. Applied at τ/2 on the outermost two legs."
+      - name: y
+        type: "AxisLift3D<Y>"
+        doc: "Y-axis lift. Applied at τ/2 on the inner two legs."
+      - name: z
+        type: "AxisLift3D<Z>"
+        doc: "Z-axis lift. Applied at τ on the central leg."
+    implements:
+      - "ChernoffFunction (associated S = GridFn3D, order = min(X.order(), Y.order(), Z.order(), 4))"
+    methods:
+      - name: new
+        signature: "fn new(x_inner: X, y_inner: Y, z_inner: Z) -> Self"
+        semantics: |
+          Constructor:
+            Strang3D {
+              x: AxisLift3D::new(x_inner, Axis::X),
+              y: AxisLift3D::new(y_inner, Axis::Y),
+              z: AxisLift3D::new(z_inner, Axis::Z),
+            }
+
+      - name: apply
+        signature: "fn apply(&self, tau: f64, f: &GridFn3D) -> Result<GridFn3D, SemiflowError>"
+        semantics: |
+          Palindromic 5-leg sandwich:
+            half = tau / 2.0
+            f1 = self.x.apply(half, f)?     // X(τ/2)
+            f2 = self.y.apply(half, &f1)?   // Y(τ/2)
+            f3 = self.z.apply(tau, &f2)?    // Z(τ)
+            f4 = self.y.apply(half, &f3)?   // Y(τ/2)
+            f5 = self.x.apply(half, &f4)?   // X(τ/2)
+            Ok(f5)
+
+          Five intermediate `GridFn3D` allocations.
+
+          Total 1D `apply` calls per outer step:
+            - 2 × ny·nz calls to X.apply (two X half-steps)
+            - 2 × nx·nz calls to Y.apply (two Y half-steps)
+            - 1 × nx·ny calls to Z.apply (one Z full step)
+        preconditions:
+          - "tau >= 0.0 and finite"
+          - "f.values.len() == f.grid.len()"
+        postconditions:
+          - "result.grid == f.grid"
+          - "result.values.len() == f.values.len()"
+        errors:
+          - "DomainViolation or CflViolated propagated from any inner AxisLift3D::apply"
+
+      - name: order
+        signature: "fn order(&self) -> u32"
+        semantics: "Returns `min(X.order(), Y.order(), Z.order(), 4)`."
+
+      - name: growth
+        signature: "fn growth(&self) -> (f64, f64)"
+        semantics: |
+          Composed bound from the five legs. With
+          `self.x.growth() = (Mx, ωx)`, `self.y.growth() = (My, ωy)`,
+          `self.z.growth() = (Mz, ωz)`:
+            (M, ω) = (Mx² · My² · Mz, ωx + ωy + ωz).
+          For the canonical v0.9.0 case `DiffusionChernoff` per axis
+          (`growth = (1, 0)`): `(1, 0)` — unit bounded.
+
+# ---------------------------------------------------------------------------
+# 4. Errors (no new variants; reuse from `semiflow-core.errors.yaml`).
+# ---------------------------------------------------------------------------
+errors:
+  emission_policy: "REUSE existing variants; NO new SemiflowError variants in v0.5.0/v0.7.0/v0.9.0."
+  reused:
+    - variant: "DomainViolation"
+      raised_by:
+        - "Grid2D::new        — IF x.n < 2 or y.n < 2 (I-T2)"
+        - "GridFn2D::new      — IF values.len() != grid.len() (I-T3)"
+        - "GridFn2D::new      — IF any value is NaN or Inf"
+        - "GridFn2D::write_row — IF src.values.len() != grid.x.n (shape mismatch)"
+        - "GridFn2D::write_col — IF src.values.len() != grid.y.n (shape mismatch)"
+        - "AxisLift::apply    — IF tau < 0, tau NaN/Inf, or f.values.len() != f.grid.len()"
+        - "AxisLift::apply    — IF axis == Axis::Z (2D guard, v0.9.0 Option A)"
+        - "Strang2D::apply    — propagated from inner AxisLift::apply"
+        - "NonSeparable2DChernoff::new — IF c_norm_bound < 0.0"
+        - "NonSeparable2DChernoff::apply — propagated from inner AxisLift::apply"
+        - "NonSeparable2DAnisotropicChernoff::new — IF beta_norm_bound < 0.0 or non-finite"
+        - "NonSeparable2DAnisotropicChernoff::apply — propagated from inner AxisLift::apply"
+        - "Grid3D::new        — IF x.n < 2 or y.n < 2 or z.n < 2 (v0.9.0)"
+        - "AxisLift3D::apply  — IF tau < 0, tau NaN/Inf, or f.values.len() != f.grid.len() (v0.9.0)"
+        - "Strang3D::apply    — propagated from inner AxisLift3D::apply (v0.9.0)"
+    - variant: "CflViolated"
+      raised_by:
+        - "AxisLift::apply    — propagated from inner TruncatedExp K=4 (ADR-0011) per axis"
+        - "Strang2D::apply    — propagated from AxisLift::apply"
+        - "NonSeparable2DChernoff::apply — IF 4·tau·c_norm_bound >= dx·dy (ADR-0016 §3)"
+        - "NonSeparable2DAnisotropicChernoff::apply — IF 4·tau·beta_norm_bound >= dx·dy (ADR-0023; third field overload: a_norm_bound = ‖β‖_∞)"
+        - "AxisLift3D::apply  — propagated from inner TruncatedExp K=4 per 3D axis (v0.9.0)"
+        - "Strang3D::apply    — propagated from inner AxisLift3D::apply (v0.9.0)"
+  no_new_variants_rationale: |
+    All v0.5.0/v0.7.0/v0.9.0 failure modes are either shape mismatches
+    (covered by `DomainViolation`) or per-axis CFL violations
+    (covered by the existing `CflViolated` from ADR-0011). The 3D
+    types Grid3D, GridFn3D, AxisLift3D, and Strang3D reuse the same two
+    variants without overloading any fields beyond their established
+    semantics. Adding a variant `Tensor3DShapeMismatch` would duplicate
+    `DomainViolation`'s semantics; rejected per ADR-0012/ADR-0024 closed
+    decision "no new SemiflowError variants".
+
+# ---------------------------------------------------------------------------
+# 5. Public API surface.
+# ---------------------------------------------------------------------------
+public_api:
+  total_additions: 11  # v0.5.0 added 5; v0.7.0 adds 1; v0.9.0 Block B adds 1; v0.9.0 Block C adds 4
+  enumerated:
+    - "Axis                              (enum, Variants: X, Y; Z added v0.9.0 Option A)  [v0.5.0+]"
+    - "AxisLift<C>                       (struct, generic over 1D ChernoffFunction)  [v0.5.0]"
+    - "Grid2D                            (struct, owns two Grid1D)               [v0.5.0]"
+    - "GridFn2D                          (struct, single Vec<f64> + Grid2D, impl State)  [v0.5.0]"
+    - "Strang2D<X, Y>                    (struct, generic over two 1D ChernoffFunction)  [v0.5.0]"
+    - "NonSeparable2DChernoff<X, Y>      (struct, 5-leg non-sep splitter, impl ChernoffFunction)  [v0.7.0]"
+    - "NonSeparable2DAnisotropicChernoff<X, Y>  (struct, anisotropic 5-leg splitter, impl ChernoffFunction)  [v0.9.0 Block B]"
+    - "Grid3D                            (struct, owns three Grid1D, x-fastest idx)  [v0.9.0 Block C]"
+    - "GridFn3D                          (struct, single Vec<f64> + Grid3D, impl State)  [v0.9.0 Block C]"
+    - "AxisLift3D<C>                     (struct, 3D per-axis pencil lift, impl ChernoffFunction<S=GridFn3D>)  [v0.9.0 Block C]"
+    - "Strang3D<X, Y, Z>                 (struct, 5-leg 3D palindromic Strang, impl ChernoffFunction<S=GridFn3D>)  [v0.9.0 Block C]"
+  unchanged:
+    - "Grid1D, GridFn1D, BoundaryPolicy, InterpKind                      (1D core untouched)"
+    - "ShiftChernoff1D, DiffusionChernoff, DriftReactionChernoff          (1D Chernoff untouched)"
+    - "TruncatedExpDiffusionChernoff                                            (ADR-0011 untouched)"
+    - "StrangSplit<D, R>                                                  (1D Strang untouched)"
+    - "ChernoffSemigroup<F>                                               (works with any F: ChernoffFunction)"
+    - "SemiflowError                                                       (no new variants)"
+
+# ---------------------------------------------------------------------------
+# 6. Modules.
+# ---------------------------------------------------------------------------
+modules:
+  - path: "semiflow_core::tensor"
+    file: "src/tensor/mod.rs"
+    public_items:
+      - Axis
+      - AxisLift
+      - Grid2D
+      - GridFn2D
+      - Strang2D
+    re_exported_at: "semiflow_core::"
+    notes: |
+      Phase 2 implementation goes in `src/tensor/`. Suggested file
+      decomposition (suckless ≤ 500 lines per file):
+        - `src/tensor/mod.rs`        — re-exports + Axis enum + Grid2D
+        - `src/tensor/grid_fn.rs`    — GridFn2D (impl State)
+        - `src/tensor/axis_lift.rs`  — AxisLift<C>
+        - `src/tensor/strang.rs`     — Strang2D<X, Y>
+      Engineer is free to consolidate if total LOC < 500.
+  - path: "semiflow_core::nonseparable2d"
+    file: "src/nonseparable2d.rs"
+    public_items:
+      - NonSeparable2DChernoff
+    re_exported_at: "semiflow_core::"
+    notes: |
+      v0.7.0 Block C. Single file; cross-stencil helpers are private.
+      Suckless target: ≤ 500 lines including tests.
+  - path: "semiflow_core::nonseparable2d_aniso"
+    file: "src/nonseparable2d_aniso.rs"
+    public_items:
+      - NonSeparable2DAnisotropicChernoff
+    re_exported_at: "semiflow_core::"
+    notes: |
+      v0.9.0 Block B. Additive sibling of nonseparable2d.rs. Single file;
+      bc2d_value and resolve_axis are duplicated (additive-sibling principle
+      — no shared private import from nonseparable2d.rs). Suckless target:
+      ≤ 500 lines including tests.
+
+  # v0.9.0 Block C — 3D tensor-product modules.
+  - path: "semiflow_core::grid3d"
+    file: "src/grid3d.rs"
+    public_items:
+      - Grid3D
+    re_exported_at: "semiflow_core::"
+    notes: |
+      v0.9.0 Block C (ADR-0024). Cuboid grid with x-fastest index
+      `idx(i,j,k) = k*nx*ny + j*nx + i`. No values; see grid_fn3d.rs.
+      Suckless target: ≤ 500 lines including unit tests.
+
+  - path: "semiflow_core::grid_fn3d"
+    file: "src/grid_fn3d.rs"
+    public_items:
+      - GridFn3D
+    re_exported_at: "semiflow_core::"
+    notes: |
+      v0.9.0 Block C. `State`-implementing 3D field. Per-axis pencil helpers
+      (`pencil_x`, `pencil_y`, `pencil_z`, `write_pencil_*`) are `pub(crate)`.
+      Suckless target: ≤ 500 lines including unit tests.
+
+  - path: "semiflow_core::strang3d"
+    file: "src/strang3d.rs"
+    public_items:
+      - AxisLift3D
+      - Strang3D
+    re_exported_at: "semiflow_core::"
+    notes: |
+      v0.9.0 Block C. `AxisLift3D<C>` lifts 1D Chernoff to 3D via pencils.
+      `Strang3D<X,Y,Z>` is the palindromic 5-leg X(τ/2)∘Y(τ/2)∘Z(τ)∘Y(τ/2)∘X(τ/2)
+      composition. Suckless target: ≤ 500 lines including unit tests.
+
+# ---------------------------------------------------------------------------
+# 7. Codegen (matches traits.yaml convention).
+# ---------------------------------------------------------------------------
+codegen:
+  command: "cargo build -p semiflow-core"
+  rust_target: "stable-1.78+"
+  features:
+    default: ["simd"]   # v0.8.0 Block C (ADR-0019): simd default-on for x86_64/aarch64.
+    optional:
+      - name: std
+        gates: "std-only diagnostics; not required for v0.5.0 contracts"
+      - name: parallel
+        # v0.8.0 Block B (ADR-0018) — opt-in multi-threaded Strang2D::apply.
+        gates: |
+          Multi-threaded `Strang2D::apply` via `std::thread::scope`.
+          Implies `std`. NOT in `default = []`. Adds NO new dependency
+          (uses stdlib only — MSRV 1.78 has stable `thread::scope`).
+          Enabling this feature adds `Send + Sync` bounds to the inner
+          `X` and `Y` types ONLY at the `apply` call site behind
+          `#[cfg(feature = "parallel")]`. Build matrix MUST cover:
+            - `cargo build --no-default-features`              (no_std + alloc)
+            - `cargo build --no-default-features --features std`
+            - `cargo build --features parallel`                (implies std)
+            - `cargo test  --features parallel,slow-tests`     (bit-equal gate)
+          Cross-ref: ADR-0018, properties.yaml gate STRANG2D_PARALLEL_BIT_EQUAL.
+      - name: simd
+        # v0.8.0 Block C (ADR-0019) — opt-in (default-ON) SIMD intrinsics.
+        gates: |
+          SIMD-vectorized hot paths via `std::arch::x86_64::*` (AVX2,
+          `__m256d`) and `std::arch::aarch64::*` (NEON, two
+          `float64x2_t` per lane-4). The feature is in `default` per
+          ROADMAP v0.8.0 item 2 ("default: on for x86_64/aarch64"); on
+          every other target the module compiles to a scalar fallback
+          (`src/simd/scalar.rs`, no `unsafe`). Implies `std` because
+          `std::arch::*` lives in std. The `#![forbid(unsafe_code)]`
+          crate-root attribute is UNCHANGED — the only `unsafe` in the
+          crate sits behind a single `#[allow(unsafe_code)]` at the
+          head of `src/simd/mod.rs`. Build matrix MUST cover:
+            - `cargo build  --no-default-features`             (no_std + alloc, scalar)
+            - `cargo build  --no-default-features --features std` (std, scalar)
+            - `cargo build  --features simd`                   (default; AVX2 or NEON)
+            - `cargo build  --features parallel,simd`          (combined; ROADMAP item 3)
+            - `cargo test   --features simd`                   (SIMD_BIT_EQUAL gate)
+            - `cargo test   --features parallel,simd,slow-tests`  (full)
+            - `cargo clippy --features parallel,simd -- -D warnings`
+          Cross-ref: ADR-0019, properties.yaml gates SIMD_BIT_EQUAL
+          (release-blocking) + SIMD_HERMITE_SPEEDUP / SIMD_COMBINED_SPEEDUP
+          (informational).
+  notes: |
+    No external codegen tools — the YAML schema is the single source of
+    truth and Rust source is hand-written by the next agent against
+    this schema. `cargo doc --no-deps -p semiflow-core` MUST continue to
+    build (Phase 1 adds NO Rust source; Phase 2 adds the new module).
+
+# ---------------------------------------------------------------------------
+# 7.5. SIMD module contract (v0.8.0 Block C, ADR-0019).
+# Schema 0.7.2 ADDITIVE — describes a new scoped module `src/simd/` housing
+# AVX2 + NEON intrinsics with a scalar fallback. NO public API change to
+# `Grid::sample` / `GridQuintic::sample` / `Diffusion6thChernoff::apply` —
+# vectorization is internal and dispatches via the (crate-private) trait
+# `simd::SimdF64x4`.
+# ---------------------------------------------------------------------------
+simd:
+  feature_flag: simd                # default-ON for x86_64/aarch64; scalar elsewhere.
+  unsafe_scope: |
+    The crate root `crates/semiflow-core/src/lib.rs` keeps
+    `#![forbid(unsafe_code)]` UNCHANGED (line 69). The single permitted
+    `unsafe`-allowing module is `crates/semiflow-core/src/simd/mod.rs`,
+    which begins with `#![allow(unsafe_code)]` (module scope, NOT
+    crate scope). The arch-specific impls in `src/simd/x86_64.rs` and
+    `src/simd/aarch64.rs` inherit that allowance via `pub(super) mod
+    x86_64;` / `pub(super) mod aarch64;` from `mod.rs`. The scalar
+    fallback `src/simd/scalar.rs` carries NO `unsafe`. Reviewer-suckless
+    audits exactly two files for the `unsafe` blast radius: `x86_64.rs`
+    and `aarch64.rs`. Every consumer (`grid.rs`, `grid_quintic.rs`,
+    `diffusion6.rs`) calls into `SimdF64x4` via safe Rust and is
+    bit-equal to its scalar self under the determinism contract below.
+
+  arch_dispatch:
+    mode: "compile-time (cfg)"
+    cfg_pattern: |
+      // src/simd/mod.rs (sketch)
+      #[cfg(target_arch = "x86_64")]
+      mod x86_64;
+      #[cfg(target_arch = "x86_64")]
+      pub(crate) use x86_64::F64x4Avx2 as F64x4;
+
+      #[cfg(target_arch = "aarch64")]
+      mod aarch64;
+      #[cfg(target_arch = "aarch64")]
+      pub(crate) use aarch64::F64x4Neon as F64x4;
+
+      #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+      mod scalar;
+      #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+      pub(crate) use scalar::F64x4Scalar as F64x4;
+    runtime_detection: |
+      EXPLICITLY DISABLED. `is_x86_feature_detected!` is NOT used —
+      the build matrix selects the target and a runtime branch would
+      (a) defeat inlining of the hot stencil loops and (b) inflate
+      `mod.rs` past the suckless ≤500-line budget. CI MUST set
+      `RUSTFLAGS="-C target-feature=+avx2"` for the x86_64 release
+      build (or build with `-C target-cpu=x86-64-v3`); aarch64 NEON
+      is mandatory baseline since ARMv8-A.
+
+  targets:
+    - arch: x86_64
+      isa: AVX2
+      lane_count: 4              # 4 × f64 = 256 bits = __m256d
+      register_type: __m256d
+      header: "core::arch::x86_64"
+      required_target_feature: "avx2"
+      file: "src/simd/x86_64.rs"
+      ulp_bound: 0               # bit-equal contract; no FMA used.
+    - arch: aarch64
+      isa: NEON (Advanced SIMD)
+      lane_count: 4              # 4 × f64 emulated by 2 × float64x2_t (128-bit each)
+      register_type: "(float64x2_t, float64x2_t)"
+      header: "core::arch::aarch64"
+      required_target_feature: "neon"   # baseline since ARMv8-A; no extra cfg.
+      file: "src/simd/aarch64.rs"
+      ulp_bound: 0               # bit-equal contract; no FMA used.
+    - arch: "* (other)"
+      isa: scalar
+      lane_count: 4              # 4 × f64 emulated by [f64; 4]
+      register_type: "[f64; 4]"
+      file: "src/simd/scalar.rs"
+      ulp_bound: 0               # by definition.
+      note: |
+        The scalar fallback is the canonical reference output. The
+        SIMD_BIT_EQUAL gate compares AVX2 / NEON bytes against this
+        path's bytes; mismatch is a release-blocking failure.
+
+  fallback:
+    rule: |
+      For arches without a dedicated impl (`#[cfg(not(any(target_arch
+      = "x86_64", target_arch = "aarch64")))]`), the trait
+      `SimdF64x4` is implemented by `F64x4Scalar` — a pure-`safe`
+      4-lane wrapper over `[f64; 4]`. All trait methods inline to
+      4 scalar f64 ops, preserving bit-equality with the
+      `--no-default-features` (simd-disabled) path by construction.
+    no_unsafe: true
+
+  trait_surface:
+    name: SimdF64x4
+    visibility: "pub(crate)"          # NEVER public — internal optimisation only.
+    location: "src/simd/mod.rs"
+    operations:
+      - sig: "fn splat(x: f64) -> Self"
+        purpose: "Broadcast a scalar to all 4 lanes (FD weight constants)."
+      - sig: "fn load_unaligned(src: &[f64; 4]) -> Self"
+        purpose: |
+          Read 4 contiguous f64s from a thin-slice. Unaligned because
+          `Vec<f64>` is only 8-byte-aligned; AVX2 `_mm256_loadu_pd`
+          and NEON `vld1q_f64` (×2) handle this in one cycle on
+          modern hardware.
+      - sig: "fn store_unaligned(self, dst: &mut [f64; 4])"
+        purpose: "Write back 4 contiguous f64s. Mirrors `load_unaligned`."
+      - sig: "fn add(self, rhs: Self) -> Self"
+        purpose: "Lane-wise add. NO FMA: lane-wise multiply and lane-wise add are SEPARATE rounding steps to preserve bit-equality with scalar `a*b + c*d`."
+      - sig: "fn sub(self, rhs: Self) -> Self"
+        purpose: "Lane-wise subtract."
+      - sig: "fn mul(self, rhs: Self) -> Self"
+        purpose: "Lane-wise multiply. Used in tandem with `add` to spell out non-FMA `a·b + c·d` reductions."
+      - sig: "fn horizontal_sum(self) -> f64"
+        purpose: |
+          Reduce 4 lanes to a single f64 via the deterministic
+          left-to-right order `((l0 + l1) + l2) + l3` — chosen to
+          match the scalar `acc += w[k] * f[k]` loop's accumulation
+          order EXACTLY. AVX2 implementation: two `_mm256_hadd_pd`
+          then a manual extract; NEON: `vaddvq_f64` over each half,
+          then scalar add. The horizontal-sum order is part of the
+          bit-equal contract — engineer MUST NOT reorder.
+    forbidden_operations: |
+      - **NO FMA** (`_mm256_fmadd_pd`, `_mm256_fnmadd_pd`,
+        `vfmaq_f64`, `vfmsq_f64`, etc.) — fuses two roundings into
+        one and breaks the SIMD_BIT_EQUAL contract.
+      - **NO horizontal pairs that change accumulation order**
+        (e.g. `_mm256_hadd_pd` is allowed only as a 4-to-2 step
+        whose final 2-to-1 add matches scalar `(l0+l1)+(l2+l3)`).
+      - **NO `_mm256_dp_pd`** (dot-product intrinsic) — internal
+        accumulation order is implementation-defined.
+      - **NO `target_feature` on individual functions** — the whole
+        module compiles under one cfg branch, no per-function
+        `#[target_feature(enable = "avx2")]` annotations (which would
+        require `unsafe fn` and inflate the module).
+
+  hot_paths:
+    - location: "src/grid.rs::cubic_hermite_at"
+      stencil: "4 control points × Catmull-Rom weights (s, s², s³ polynomial)"
+      vectorization_strategy: |
+        The Catmull-Rom kernel is a 4-point polynomial evaluation.
+        Vectorize across OUTPUT cells (the i-loop in
+        `Grid::sample` when called from `axis_lift::apply` over a
+        row): for each contiguous chunk of 4 output positions
+        sharing the same boundary policy + same s value chunk, load
+        4 copies of `(p_{-1}, p_0, p_1, p_2)` into 4-lane f64s and
+        compute `0.5 * (2·p_0 + (−p_{-1}+p_1)·s + (2p_{-1}−5p_0+
+        4p_1−p_2)·s² + (−p_{-1}+3p_0−3p_1+p_2)·s³)` lane-wise.
+        Tail: scalar fallback for the leftover ny mod 4 rows.
+        Speedup target: ≥ 2× single-thread on N=1600² (gate
+        SIMD_HERMITE_SPEEDUP, informational).
+    - location: "src/grid_quintic.rs::sample_quintic_1d"
+      stencil: |
+        6-point quintic-Hermite (a0/a1/a2/b0/b1/b2 polynomials) +
+        2 inner FD reductions (6-point `fd_scaled_prime`, 5-point
+        `fd_scaled_double_prime`) per endpoint = 4 FD calls.
+      vectorization_strategy: |
+        Same outer-loop strategy as cubic-Hermite — vectorize
+        across output cells. The inner 6-point FD reduction
+        `(-fm3 + 9fm2 - 45fm1 + 45fp1 - 9fp2 + fp3) / 60` is two
+        4-lane chunks: lanes (fm3, fm2, fm1, _) × weights
+        (-1, 9, -45, 0) plus lanes (fp1, fp2, fp3, _) × weights
+        (45, -9, 1, 0), horizontal-sum, scalar 1/60 multiply.
+        Tail: scalar `fd_scaled_double_prime` (5-point — odd
+        length, no clean 4-lane split worth the code).
+    - location: "src/diffusion6.rs::fd9"
+      stencil: "9-point Fornberg FD (offsets -4..+4)"
+      vectorization_strategy: |
+        Two 4-lane chunks + 1 scalar tail:
+          lane-block A: f[x-4·δ], f[x-3·δ], f[x-2·δ], f[x-1·δ]   × C[0..4]
+          lane-block B: f[x+1·δ], f[x+2·δ], f[x+3·δ], f[x+4·δ]   × C[5..9]
+          scalar tail: C[4] · f[x]                                (centre point, weight is 0
+                                                                   for C1_9 / C3_9, non-zero
+                                                                   for C2_9; engineer keeps
+                                                                   the scalar tail unconditional
+                                                                   for code uniformity).
+        Final scalar `(sumA + sumB + tail) / δ^deriv` matches the
+        v0.7.0 reference reduction order exactly. Note: `fd9` is
+        called inside `Diffusion6thChernoff::apply` where the
+        outer node-loop also benefits from vectorization, but
+        Phase-2 priority is the inner-stencil chunking — outer
+        node-loop SIMD is a Phase-3 follow-up if speedup is below
+        target.
+    - location: "src/diffusion6.rs::gamma6_a_baseline (K7-kernel)"
+      stencil: "7-point K-kernel weights × 7 sampled positions"
+      vectorization_strategy: |
+        The K7 kernel calls `f.sample()` SEVEN times, where each
+        `sample` recursively dispatches to the cubic / quintic
+        Hermite hot path — so vectorization happens INSIDE the
+        sample call (path 1 above), not at the K7 weighted sum.
+        The 7-position outer reduction stays scalar (weighted sum
+        of 7 f64 → scalar, no clean 4-lane split). This is the
+        primary reason the SIMD_HERMITE_SPEEDUP gate measures
+        `Grid::sample` (the inner kernel), not `K7` (the outer
+        weighted sum).
+
+  no_new_dependencies: true       # dep count stays at 2 (num-traits, libm).
+  no_simd_crates_allowed: |
+    Prohibited (suckless dep-count invariant): `wide`, `packed_simd`,
+    `safe_arch`, `simdeez`, `multiversion`. Only `core::arch::*` from
+    stdlib. `std::simd` (portable_simd) is also prohibited per ADR-0019
+    until it stabilizes (currently nightly).
+
+  determinism_contract:
+    bit_equality_strategy: |
+      The SIMD path produces a `Vec<f64>` byte-identical to the
+      `--no-default-features` (scalar) path's output for every input,
+      across {AVX2, NEON, scalar-fallback}. Achievable because:
+
+        1. All vectorized kernels are dense `Σᵢ wᵢ · vᵢ` reductions
+           where `wᵢ` and lane order are compile-time constants.
+        2. `mul` and `add` are SEPARATE intrinsics — no FMA, so each
+           multiply rounds to f64 and each add rounds to f64,
+           identical to scalar `a*b + c*d`.
+        3. `horizontal_sum` is a fixed left-to-right reduction
+           order matching the scalar accumulator loop.
+        4. Loads / stores are unaligned (`_mm256_loadu_pd` /
+           `vld1q_f64`) — same byte sequence as the scalar slice
+           access; no AVX2 broadcast or NEON splat that touches a
+           different memory subset.
+    enforced_by: SIMD_BIT_EQUAL    # release-blocking property gate.
+    composes_with_parallel: |
+      The SIMD bit-equal contract MUST hold INSIDE each parallel
+      worker thread (Block B). Combined gate `SIMD_BIT_EQUAL` runs
+      under `--features parallel,simd` and asserts byte-identical
+      output across {1, 2, 4, 8} threads × {scalar, AVX2/NEON}.
+      Since per-thread 1D `apply` calls are independent and the
+      SIMD impl is bit-equal lane-by-lane, the combined output is
+      byte-identical to the serial+scalar reference.
+
+  performance_targets:
+    - metric: SIMD_HERMITE_SPEEDUP
+      target: ">= 2x single-thread vs scalar Grid::sample at N=1600²"
+      gate: SIMD_HERMITE_SPEEDUP                # informational, warn-only.
+      baseline_doc: "docs/perf-baseline-v0_7_0.md"
+      severity: INFORMATIONAL
+      notes: |
+        Reference: AVX2 4-lane f64 throughput is ≈2.5–3.5× scalar
+        on Skylake / Zen 2 for FMA-free dense reductions; we accept
+        2× as the floor target after accounting for unaligned-load
+        cost and load-bound stencil patterns.
+    - metric: SIMD_COMBINED_SPEEDUP
+      target: ">= 5x vs v0.6.0 baseline at N=1600² heat 2D, --features parallel,simd"
+      gate: SIMD_COMBINED_SPEEDUP               # informational, warn-only.
+      baseline_doc: "docs/perf-baseline-v0_7_0.md"
+      severity: INFORMATIONAL
+      notes: |
+        ROADMAP v0.8.0 item 3 composite acceptance. Decomposition:
+        Block B parallel ≥ 6× (8 threads) × Block C SIMD ≥ 2×
+        (vectorized inner stencil) → multiplicative ≥ 12× peak,
+        but cache pressure and Amdahl's law collapse this to ≥ 5×
+        observed at N=1600². Below 5× indicates SIMD did not get
+        inlined inside the parallel kernel — investigate
+        `cargo asm` before tagging v0.8.0.
+
+  module_layout:
+    - file: "src/simd/mod.rs"
+      role: |
+        Trait definition (`SimdF64x4`), `#![allow(unsafe_code)]`
+        gate, scalar re-exports, cfg-based dispatch table. NO
+        unsafe code IN this file — the allowance exists so the
+        cfg-included child modules inherit it.
+      target_lines: "≤ 200"
+    - file: "src/simd/x86_64.rs"
+      role: |
+        `F64x4Avx2` newtype around `__m256d` with `unsafe { … }`
+        intrinsic blocks. EVERY public-from-mod method body is a
+        single `unsafe { intrinsic_call() }` — no logic. Carries a
+        `#[cfg(target_arch = "x86_64")]` gate.
+      target_lines: "≤ 200"
+    - file: "src/simd/aarch64.rs"
+      role: |
+        `F64x4Neon` newtype around `(float64x2_t, float64x2_t)`.
+        Same shape as `x86_64.rs` but using `vaddq_f64`,
+        `vsubq_f64`, `vmulq_f64`, `vld1q_f64`, `vst1q_f64`,
+        `vaddvq_f64`. Carries `#[cfg(target_arch = "aarch64")]`.
+      target_lines: "≤ 200"
+    - file: "src/simd/scalar.rs"
+      role: |
+        `F64x4Scalar` newtype around `[f64; 4]`. Pure safe Rust;
+        every method inlines to 4 scalar ops. Acts as the
+        canonical reference for the bit-equal gate AND the
+        fallback for arches that are neither x86_64 nor aarch64.
+      target_lines: "≤ 100"
+
+  suckless_check: |
+    Each file ≤ 500 lines (project guardrail). Functions ≤ 50
+    lines (intrinsic shims are typically 1–3 lines each — well
+    within budget). Engineer SHOULD validate with
+    `wc -l src/simd/*.rs` before opening the PR.
+
+# ---------------------------------------------------------------------------
+# 8. Out-of-scope (deferred behind separate ADRs).
+# ---------------------------------------------------------------------------
+out_of_scope:
+  - "Non-separable 2D operators with cross-derivatives ∂x∂y           → IMPLEMENTED in v0.7.0 as NonSeparable2DChernoff (ADR-0016)"
+  - "3D and higher tensor products                                    → v0.8+, separate ADR"
+  - "AMR / FFT / non-uniform 2D grids                                 → out of scope per ADR-0012"
+  - "Generic-over-Float (f32, complex)                                → ADR-0004 v0.1 monomorphic carryover"
+  - "rayon-parallel per-axis loops                                    → out of scope per ADR-0012; row/col loops are embarrassingly parallel and Phase 4+ may add"
+  # v0.6.0 (ADR-0013): 4th-order spatial in 2D is NO LONGER deferred.
+  # `AxisLift<Diffusion4thChernoff>` and `AxisLift<TruncatedExp4thDiffusionChernoff>`
+  # instantiate without `axis.rs` body changes (generic bounds satisfied);
+  # `Strang2D::order()` cap lifted from `min(2)` to `min(4)` (one-character
+  # edit at strang2d.rs:108). The previously-deferred line has been removed
+  # from this list.
+
+# ---------------------------------------------------------------------------
+# 9. Cross-reference index.
+# ---------------------------------------------------------------------------
+cross_references:
+  math:
+    - "math.md §10           — Theorem 7 (per-axis order-2 lift), Lemma 10.2 (Y-independent reduction)"
+    - "math.md §10.5         — 2D oracles (Gaussian heat, separable advection-diffusion)"
+    - "math.md §10.7-bis     — NonSeparable2DChernoff: palindromic 5-leg splitting, CFL, cross-stencil"
+    - "math.md §9.2.3.B:1463 — forward-reference to §10 (now anchored)"
+    - "math.md §9.4          — 1D Strang composition (used as black box per axis)"
+  adrs:
+    - "ADR-0006 — palindromic Strang symmetrization (1D template; 2D uses palindromic per-axis)"
+    - "ADR-0008 — ζ-A self-adjoint diffusion (lifted as `AxisLift<DiffusionChernoff>`)"
+    - "ADR-0011 — TruncatedExp integrator (lifted as `AxisLift<TruncatedExpDiffusionChernoff>`; per-axis CFL)"
+    - "ADR-0012 — tensor-product 2D extension (architectural rationale)"
+    - "ADR-0016 — NonSeparable2DChernoff Block C (5-leg splitting, K=2 mixed leg, CFL reuse)"
+    - "ADR-0018 — v0.8.0 Block B parallel Strang2D::apply (opt-in, std::thread::scope)"
+    - "ADR-0019 — v0.8.0 Block C SIMD intrinsics module (AVX2 + NEON, scalar fallback, bit-equal)"
+  contracts:
+    - "semiflow-core.traits.yaml      — `ChernoffFunction`, `State`, `Grid1D`, `GridFn1D`"
+    - "semiflow-core.errors.yaml      — `SemiflowError::DomainViolation` (reused), `CflViolated` (propagated)"
+    - "semiflow-core.properties.yaml  — properties for grid_fn_2d_*, axis_lift_*, strang2d_*, nonseparable2d_*"

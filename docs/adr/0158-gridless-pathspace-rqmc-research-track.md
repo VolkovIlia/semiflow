@@ -1,0 +1,22 @@
+# ADR-0158 — Path-space RQMC functional estimation (research-track, post–Shift C)
+
+**Status:** PROPOSED (research-track, NOT release-blocking) · **Date:** 2026-06-09 · **Branch:** `feat/v9.0.0-planning`
+**Theme:** v9.0.0+ research direction — escape the spatial-merge curse via low-discrepancy path-space functional estimation
+**Parent:** ADR-0155 (Amendment), ADR-0154 · **Math:** `contracts/semiflow-core.math.md` §50.5 / §50.7 / §50.8
+**Source:** TRIZ reframe of the §50.6 NO-GO outcome (2026-06-09)
+
+## Context
+
+The §50.6 `G_GRIDLESS_VARIANCE` go/no-go gate fired: deterministic-branching + spatial-merge reduction achieves only 1.417× MSE reduction vs MC at d=2 (fair CRN comparison, commit `f633cde`), below the pre-registered ≥2× threshold. The root cause is an INTRINSIC LIMIT: any spatial-merge reduction that holds `m` bins per axis requires a budget `P_cap ≈ m^d`, so the curse of dimensionality re-enters through the reduction grid (§50.7). Spatial merge is the wrong primitive for the headline claim. The one naive van-der-Corput path-space data point (grade C, research §5.3) lost to plain MC; proper path-space quasi-randomness is untested.
+
+## Decision
+
+PROPOSE a research-track investigation of **path-space RQMC functional estimation** as the candidate resolution to the spatial-merge curse. The TRIZ resolution of the §50.5 contradiction ("reduce particles AND keep all d-dim info") is to NOT represent the d-dim measure at all: instead estimate the target functional `⟨f, ρ_T⟩` directly by a low-discrepancy sum over the **branch-PATH space** of particle trajectories. A single trajectory of `n` steps in `d` dimensions is a point in the `n·d`-dimensional path space; with `P` quasi-random paths drawn via a **Sobol sequence + Brownian-bridge construction** over the `n·d` path dimensions, the estimator is `(1/P) Σ_i f(X_T^{(i)})` with cost `O(P·n·d)` — independent of any spatial bin geometry, dimension-free in cost, and governed by the path-space discrepancy of the Sobol sequence rather than by cell size. This is a generalization of the quasi-MC algorithms for diffusion equations (§50.8 grade-B reference) to the Chernoff product-formula setting. The nearest prior art is quasi-MC for Fokker-Planck time-splitting (§50.8); the Chernoff-specific path-law connection to Theorem 6 formula (6) is novel (no paper found, grade C).
+
+## Consequences
+
+RESEARCH-TRACK only: NOT release-blocking for v9.0.0 and NOT part of the NARROW `GridlessChernoff` ship (ADR-0155 Amendment). No code is written under this ADR; a future engineer implements and gates it in a subsequent minor or major release. The minimal experiment: implement `P` Sobol-scrambled paths over the `n·d` path-space dimensions using the existing `MeasureState<F,D>` + branching step, estimate `⟨f, ρ_T⟩`, and compare MSE to plain MC and to spatial-merge at equal `P`. Success criterion matches §50.5: MSE ratio ≥2× over MC at d≥4; if the path-space discrepancy structure does not yield ≥2×, the hypothesis is falsified at the path-space level and the grade-C assessment is confirmed. The §50.8 grade-B QMC-for-diffusion reference provides the algorithmic template; Sobol + Brownian-bridge is the standard construction. Dependency budget is unchanged (Override #1: ≤3 direct deps) — Sobol scrambling is implementable with `alloc` only (bitwise XOR digital shift). This ADR does not commit to a timeline; it records the contradiction-resolution reframe so the research direction is traceable and can be picked up in any future development wave.
+
+## Amendment 1 — scope clarification after TT-Chernoff ACCEPTED (ADR-0159) — 2026-06-10
+
+ADR-0159 (`TtChernoff`) resolves the high-d curse for the **linear diagonal-A (Gaussian)** class via the tensor-train carrier; the "high-d gridless = research-track only" posture of this ADR is SUPERSEDED for that slice. The residual scope of this ADR — the research-track direction it proposes — is narrowed to: (a) the **dense-correlation / non-Gaussian regime** where TT-rank is not algebraically capped (precision-matrix subdiagonal blocks with many slowly-decaying singular values, Rohrbach–Dolgov–Grasedyck–Scheichl §52.4), and (b) variable-coefficient / nonlinear generators for which neither the TT Gaussian rank cap nor the diagonal-A separability holds. For those regimes, path-space RQMC remains the only proposed candidate and this ADR's PROPOSED status stands unchanged.

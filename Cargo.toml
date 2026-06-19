@@ -1,0 +1,66 @@
+[workspace]
+resolver = "2"
+members = ["crates/semiflow-core", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+
+[workspace.package]
+version = "0.9.0-beta"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT OR Apache-2.0"
+authors = ["Ilia Volkov <ilia.volkov@outlook.com>"]
+repository = "https://github.com/VolkovIlia/semiflow"
+homepage = "https://github.com/VolkovIlia/semiflow"
+documentation = "https://docs.rs/semiflow-core"
+readme = "README.md"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+# v0.8.0 Block C: downgraded forbid→deny so src/simd/ can use #[allow(unsafe_code)].
+# Unsafe is still bounded to src/simd/{x86_64,aarch64}.rs by CI grep check.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+all = { level = "deny", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+# Optimised test profile: keeps debug assertions and symbols while enabling
+# opt-level=2 so numerical tests run 5–10× faster than debug mode.
+[profile.test]
+opt-level = 2
+debug = true
+
+# Max-optimise dependencies once; they are cached across test runs.
+[profile.test.package."*"]
+opt-level = 3
+
+[profile.bench]
+opt-level = 3
+debug = false
+lto = "thin"
+
+# FFI / binding-crate cdylib profile (semiflow-ffi, semiflow-py, future semiflow-wasm).
+# Inherits release but overrides panic = "unwind" so that
+# catch_unwind() is NOT a no-op (panic = "abort" in [profile.release] would
+# turn catch_unwind into a no-op, breaking the panic boundary across FFI/PyO3).
+[profile.release-ffi]
+inherits = "release"
+panic = "unwind"
+
+# WASM binary-size profile (D2, v0.13.0).
+# Targets <500 KB stripped WASM bundle per ADR-0028 Amendment 1 (panic=abort correct
+# for WASM — wasm-bindgen routes panics through __wbindgen_throw, no catch_unwind).
+# opt-level="z" prioritises code size over speed vs "s" (minimal perf difference for WASM).
+# lto=true and codegen-units=1 maximise cross-crate inlining (eliminates dead code).
+# strip=true removes DWARF debug sections that survive --release in wasm-bindgen output.
+[profile.release-wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

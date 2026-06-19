@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below. The mathematical method is based on the work listed under 'references'."
+type: software
+title: SemiFlow
+abstract: "A Rust library for solving linear evolution equations by Chernoff approximation of operator semigroups."
+version: 0.9.0-beta
+date-released: "2026-06-19"
+authors:
+  - family-names: Volkov
+    given-names: Ilia
+    email: ilia.volkov@outlook.com
+repository-code: https://github.com/VolkovIlia/semiflow
+url: https://github.com/VolkovIlia/semiflow
+license: MIT OR Apache-2.0
+references:
+  - type: article
+    authors:
+      - family-names: Remizov
+        given-names: I. D.
+    title: "Chernoff Approximations of the Solution of Linear ODE with Variable Coefficients"
+    journal: Vladikavkaz Mathematical Journal
+    volume: 27
+    issue: 4
+    start: 124
+    end: 135
+    year: 2025
+    doi: 10.46698/a3908-1212-5385-q

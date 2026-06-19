@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d018e95a20c7459a0aeb531996ecebb51e725adb18b99e5f5e8418bdaace4c05 # shrinks to mut u = GridFn1D { values: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.340145807508146e-5, 0.0, 0.0, 0.0, 0.0], grid: Grid1D { xmin: -1.0, xmax: 1.0, n: 24, boundary: Reflect, interp: CubicHermite } }, alpha = -3.6862076445744627

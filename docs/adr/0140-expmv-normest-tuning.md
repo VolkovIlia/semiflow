@@ -1,0 +1,8 @@
+# ADR-0140 — `expmv` 1-norm-estimator performance tuning (amends ADR-0121)
+
+- **Status**: Accepted — NO-GO; analytic bound retained unchanged
+- **Date**: 2026-06-08
+- **Decision-maker**: agentic-engineer (A-3 task)
+- **Amends**: ADR-0121 (§"No Higham–Tisseur estimator needed" rationale formalised)
+
+PRE-FLIGHT (`scripts/expmv_normest_preflight.py`, executed 2026-06-08) evaluated two candidates for replacing the conservative analytic bound `4·a_norm/dx²` in `DiffusionExpmvChernoff::new`: (1) the **exact banded 1-norm** (max absolute column-sum, provably ≥ true ‖A‖₁) and (2) the **Higham–Tisseur block `‖A^p‖_1^{1/p}` estimator** (Al-Mohy–Higham 2011, Algorithm 3.2 alpha_p path). Both were found marginal for the banded 3-point Neumann Laplacian: the analytic bound already over-estimates the exact 1-norm by only ≈0.036% (the column-sum structure of the divergence-form stencil makes `4·a_norm/dx²` near-tight), so no `(s,m)` pair changes across the full parameter grid (N∈{32,64,128}, variable `a(x)`, τ·‖A‖∈[20,100]) — **0% speedup**. The Higham–Tisseur estimator's `‖A^p‖^{1/p}` sequence decays only ≈0.03% per unit of p (the spectrum of the Neumann Laplacian is already near-flat in operator norm), yielding a best-case oracle speedup of 12.5% (s: 8→7 at τ‖A‖=62, m=18) — below the 15% threshold. The stochastic ONENORMEST procedure can under-estimate this already-marginal gain, risking under-scaling → per-step argument exceeding θ_m → backward error blow-up (fraud); the risk/complexity cost is not justified for 12.5% oracle upside. The accuracy gate `g_expmv_div_form_action_accuracy` measures sup_error = 7.45e-13 ≤ 1e-11 (PASS; no code change to `expmv.rs`). No code changes made; pre-flight script is the sole deliverable.

@@ -1,0 +1,26 @@
+# ADR-0147 — Holomorphic line-bundle sections O(k) → CP¹ (research register C-10)
+
+**Status:** PROPOSED — **OUT-OF-SCOPE close** (math GO on record) · **Date:** 2026-06-08
+**Wave-3 register:** C-10 (deferred from ADR-0129 §24.7-bis "holomorphic line-bundle SECTIONS remain deferred")
+**Pre-flight:** `scripts/line_bundle_cp1_preflight.py` 3/3 PASS · **Gate (if ever built):** `C10_LINE_BUNDLE_CP1`
+
+## Context
+
+ADR-0129 shipped the SCALAR Kähler heat backend on CP¹ (Fubini-Study, isometric to round S², reusing the MMRS-2023 R/12 scalar-curvature correction verbatim) and explicitly deferred holomorphic **line-bundle sections** — sections of O(k)→CP¹ evolved by a bundle/Bochner Laplacian with a curvature (Weitzenböck) term — as "requires separate math development." C-10 does that development and decides scope.
+
+## Decision
+
+**OUT-OF-SCOPE for the library, math GO on record.** Do NOT ship a `LineBundleChernoff<k>` backend. Rationale rests on one decisive fact developed here and confirmed symbolically: on the **homogeneous** base CP¹ the O(k) bundle Laplacian has a **closed-form spectrum**, so a Chernoff *approximation* of it carries zero information — the library is a tool for operator semigroups whose answer is NOT closed-form, and approximating an already-solved operator would be a demo, not a tool.
+
+**Math delta (genuinely new vs the scalar backend).** Sections of O(k) (Chern number / magnetic charge q = k, spin weight s = k/2) are NOT scalar functions; they carry a U(1) phase across chart transitions. The scalar Laplace-Beltrami operator is replaced by the **Bochner Laplacian** ∇*∇ of the Chern connection = the **magnetic (monopole) Laplacian** of charge q. Via CP¹ ≅ S² the eigensections are the **monopole / spin-weighted spherical harmonics** ₛY_{l,m} (Wu-Yang 1976; Kuwabara 1982; Eastwood-Singer). The **Bochner-Kodaira / Weitzenböck** identity Δ_B = 2□̄ + c(k)·𝟙 has a CONSTANT curvature term on the homogeneous CP¹ (constant O(k) curvature = k·ω_FS), so the bundle heat semigroup FACTORISES:
+`exp(-τ Δ_B) = e^{τ s²} · exp(-τ Δ_scalar) · Hol_{U(1)}` — i.e. the ALREADY-SHIPPED scalar Fubini-Study heat (ADR-0129) times a closed-form scalar reweight times a U(1) holonomy phase along the geodesic. Closed-form spectrum (unit S²): **λ_l(s) = l(l+1) − s²**, l = |s|, |s|+1, …, degeneracy 2l+1; ground level l=|s| has degeneracy 2|s|+1 = |k|+1 = dim H⁰(CP¹, O(k)) = the **holomorphic sections** (k≥0), the ∂̄-kernel / lowest Landau level. At s=0 this is the scalar spectrum l(l+1) exactly — so the bundle case generalises, never replaces, ADR-0129.
+
+**Pre-flight (sympy, 3/3 PASS).** (1) s=0 recovers the scalar S² spectrum l(l+1), degeneracy 2l+1; (2) ground-level degeneracy 2|s|+1 = k+1 = dim H⁰(CP¹,O(k)) for k=0..5 (holomorphic-section count, Riemann-Roch); (3) λ_l(s)−λ_l(0) = −s² is **l-independent** — a constant Casimir/Chern shift, confirming Δ_B = scalarΔ + const ⇒ the Chernoff tangent reduces to scalar-heat + reweight + U(1) phase with no new convergence theorem.
+
+**Scope verdict (TRIZ contradiction-scan applied — see below).** The only genuinely-new resource (complex-section state + U(1) connection holonomy on a curved bundle) is welded to the one worthless thing (approximating a closed-form-spectrum operator). Resolution = **separation in structure**: decline the welded `LineBundleChernoff` generator; record the math; gate any future GO on the case where the welding breaks — a **non-homogeneous magnetic field / variable connection** (or a graph Aharonov-Bohm flux on the shipped `QuantumSchrödingerChernoff`), where the spectrum is NOT closed-form and Chernoff approximation genuinely earns its place. This is OUT-OF-SCOPE *for the homogeneous closed-form case only*, not a blanket rejection of bundle methods. No `LineBundleChernoff<k>`, no `BundleConnection` trait, ZERO new code/deps now.
+
+## Consequences
+
+Capability gap "is line-bundle-section evolution tractable here?" is CLOSED — answer: mathematically yes (math GO on record, preflight green), but the homogeneous O(k)/CP¹ instance is a zero-information Chernoff target and is consciously declined. The complex-section machinery (`SemiflowComplex`, `QuantumSchrödingerChernoff`) remains the home for any future variable-connection/flux holonomy, which is the case worth approximating. §24.7-bis's deferral note should be updated to point here: "line-bundle sections researched in ADR-0147 — closed on the homogeneous case (closed-form monopole spectrum), reopenable only for variable connections."
+
+References: Wu-Yang 1976 (monopole harmonics); Kuwabara 1982 (spectrum of magnetic Laplacian on S²/CP¹); Eastwood-Singer (ð/ð̄ spin-weight ladder); MMRS 2023 *Math. Nachr.* Thm 1 (R/12, inherited via isometry); ADR-0129 (scalar Fubini-Study backend); ADR-0130 (`QuantumSchrödingerChernoff` complex-section state). Web: [Heat coefficients for magnetic Laplacians on Pⁿ(ℂ)](https://arxiv.org/pdf/2202.02160), [Monopole harmonics on CPⁿ⁻¹ (Bykov)](https://arxiv.org/pdf/2302.11691), [Landau levels on a compact manifold](https://arxiv.org/pdf/2012.14190), [Berezin-Toeplitz / higher Landau levels of the Bochner Laplacian](https://arxiv.org/pdf/2012.14198), [Spin-weighted spherical harmonics](https://en.wikipedia.org/wiki/Spin-weighted_spherical_harmonics).

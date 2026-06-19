@@ -1,0 +1,23 @@
+[package]
+name = "semiflow-ffi"
+description = "C ABI bindings for semiflow-core (experimental)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+semiflow-core = { path = "../semiflow-core", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+cbindgen = "=0.27"
+
+[lints]
+workspace = true

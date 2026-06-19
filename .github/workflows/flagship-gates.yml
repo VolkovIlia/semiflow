@@ -1,0 +1,225 @@
+name: Flagship Gates (RELEASE_BLOCKING)
+# ---------------------------------------------------------------------------
+# PURPOSE
+# -------
+# Runs the RELEASE_BLOCKING slow gates that cannot fit on GitHub-hosted runners
+# in the normal push/PR CI window.  Two lanes:
+#
+#   scheduled  — nightly (00:30 UTC) on ubuntu-latest.  Best-effort: if GitHub
+#                billing is paused the run simply never triggers.  Local/self-
+#                hosted runs remain the primary gate (see CONTRIBUTING.md).
+#
+#   workflow_dispatch — manual trigger for maintainer validation runs.
+#                       Supports an optional `runner` input to target a self-
+#                       hosted machine (e.g. the i7-12700K bench host).
+#
+# GATES COVERED
+# -------------
+# Pattern A  (#![cfg(feature="slow-tests")], no #[ignore])
+#   Runs via: cargo run -p xtask -- test-flagship
+#   G3⁶-2D         convergence_rate_6th_2d       (strang 6th-order 2-D slope)
+#   G4_NS2D_aniso  strang_nonseparable_aniso_slope (non-separable aniso slope)
+#   G5_3D          strang_3d_slope               (3-D tensor-product slope)
+#
+# Pattern B  (#[ignore], optional slow-tests feature)
+#   Runs via: cargo test --workspace --features parallel,simd,slow-tests
+#             --release -- --ignored --nocapture
+#   G17            g17_magnus6_slope             (MagnusGraph 6th-order)
+#   G18            g18_schrodinger_unitarity     (Schrödinger slope part)
+#   G_zeta4_TRUTHFUL_ORDER  zeta4_truthful_order  (ζ⁴ true-order gate)
+#   G_zeta4        zeta4_correction_slope        (ζ⁴ correction slope)
+#   G_zeta4_cheb   zeta4_correction_slope_cheb   (ζ⁴ Chebyshev variant)
+#   G_zeta6        zeta6_correction_slope        (ζ⁶ correction slope)
+#   G_zeta6_cheb   zeta6_correction_slope_cheb   (ζ⁶ Chebyshev variant)
+#   G_zeta8        zeta8_correction_slope        (ζ⁸ correction slope)
+#   G_DDIM (D=2-5) anisotropic_shift_nd_d{2..5}_slope  (d-D aniso gates)
+#   hormander_*    hormander_{engel,heisenberg,kolmogorov}_slope  (Hörmander)
+#   robin_heat_slope (Robin boundary order gate)
+#   subordinated_order1_slope  (subordinated semigroup)
+#
+# L-gate:
+#   L_CEV_PTICK  latency-gate (blocking per ADR-0069; requires bench hardware)
+#
+# RUNNER NOTES
+# ------------
+# GitHub-hosted ubuntu-latest runners have ~2 vCPU / 7 GB RAM.  Most Pattern A
+# flagship gates run 10-30 min on 12-core hardware; on hosted runners they may
+# take 60-120 min or hit the 6-h job limit.  The latency-gate (L_CEV_PTICK)
+# requires prod hardware to produce meaningful p99.9 measurements.
+#
+# If you run on a self-hosted i7-12700K runner, set the `runner` input to
+# `self-hosted` (or your runner label) when triggering workflow_dispatch.
+#
+# FAILURE SEMANTICS
+# -----------------
+# continue-on-error: false  →  a failing gate fails the job and the workflow.
+# This is intentional: these are RELEASE_BLOCKING gates.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # Nightly at 00:30 UTC (offset from midnight to avoid GitHub queue peak).
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label (e.g. ubuntu-latest or self-hosted)"
+        required: false
+        default: "ubuntu-latest"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pattern A: flagship slope gates (slow-tests feature, named test binaries)
+  # cargo run -p xtask -- test-flagship handles this cleanly.
+  # ---------------------------------------------------------------------------
+  flagship-slope-gates:
+    name: Flagship slope gates (G3⁶-2D, G4_NS2D_aniso, G5_3D)
+    # Use the runner input when dispatch; fall back to ubuntu-latest for schedule.
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: Run flagship slope gates
+        # test-flagship wraps: RUSTFLAGS="-C target-cpu=native"
+        #   cargo test --workspace --features parallel,simd,slow-tests --release
+        #   --test convergence_rate_6th_2d
+        #   --test strang_nonseparable_aniso_slope
+        #   --test strang_3d_slope
+        #   --no-fail-fast -- --nocapture
+        run: cargo run -p xtask -- test-flagship
+        env:
+          # Ensure RUSTFLAGS propagates correctly even if xtask sets it internally.
+          RUSTFLAGS: "-C target-cpu=native"
+
+  # ---------------------------------------------------------------------------
+  # Pattern A (continued): d-D anisotropic shift gates (D=2..5)
+  # These are #![cfg(feature="slow-tests")] at file level; no #[ignore].
+  # ---------------------------------------------------------------------------
+  anisotropic-ddim-gates:
+    name: d-D anisotropic slope gates (G_DDIM D=2-5)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run G_DDIM gates (D=2, D=3, D=4, D=5)
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test anisotropic_shift_nd_d2_slope \
+            --test anisotropic_shift_nd_d3_slope \
+            --test anisotropic_shift_nd_d4_slope \
+            --test anisotropic_shift_nd_d5_slope \
+            --no-fail-fast -- --nocapture
+
+  # ---------------------------------------------------------------------------
+  # Pattern B: ignored gates — need BOTH --features slow-tests AND -- --ignored.
+  # Grouped by concern so a failure identifies the culprit area.
+  # ---------------------------------------------------------------------------
+
+  zeta-truthful-order-gates:
+    name: ζ truthful-order gates (zeta4/6/8 RELEASE_BLOCKING)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run ζ truthful-order and correction-slope gates
+        # These tests carry #[ignore] so -- --ignored is required in addition to
+        # --features slow-tests (which may be needed for type-level compilation).
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test zeta4_truthful_order \
+            --test zeta4_correction_slope \
+            --test zeta4_correction_slope_cheb \
+            --test zeta6_correction_slope \
+            --test zeta6_correction_slope_cheb \
+            --test zeta8_correction_slope \
+            --no-fail-fast -- --ignored --nocapture
+
+  magnus-schrodinger-gates:
+    name: Magnus6 + Schrödinger slope gates (G17, G18)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run G17 (MagnusGraph 6th-order) and G18 (Schrödinger slope)
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test g17_magnus6_slope \
+            --test g18_schrodinger_unitarity \
+            --no-fail-fast -- --ignored --nocapture
+
+  hormander-quantum-gates:
+    name: Hörmander + quantum graph slope gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Hörmander (Engel, Heisenberg, Kolmogorov) and quantum-graph gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test hormander_engel_slope \
+            --test hormander_heisenberg_slope \
+            --test hormander_kolmogorov_slope \
+            --test quantum_graph_eigenmode \
+            --no-fail-fast -- --ignored --nocapture
+
+  misc-slow-gates:
+    name: Remaining slow gates (Robin, subordinated, resolvent)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Robin boundary, subordinated, and resolvent slope gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test robin_heat_slope \
+            --test subordinated_order1_slope \
+            --no-fail-fast -- --ignored --nocapture
+
+  # ---------------------------------------------------------------------------
+  # L-gate: latency floor (L_CEV_PTICK — RELEASE_BLOCKING, ADR-0069).
+  #
+  # NOTE: meaningful p99.9 measurements require dedicated prod hardware
+  # (i7-12700K or equivalent with governor=performance).  On a GitHub-hosted
+  # runner the bench output is valid but the absolute floor values are calibrated
+  # for the self-hosted machine — the gate will emit L-GATE WARN (no matching
+  # profile) rather than a hard failure, which is the correct advisory behaviour
+  # for a hosted runner.  To run the blocking check, trigger with runner=self-hosted.
+  # ---------------------------------------------------------------------------
+  latency-gate:
+    name: L-gate (L_CEV_PTICK latency floor, ADR-0069)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary (required by latency-gate bench invocation)
+        run: cargo build --release -p semiflow-core
+        env:
+          RUSTFLAGS: "-C target-cpu=native"
+      - name: Run latency gate (L_CEV_PTICK)
+        # On hosted runners: emits L-GATE WARN (no i7-12700K profile match) and
+        # exits 0 — advisory behaviour is correct per latency_gate.rs is_advisory().
+        # On self-hosted i7-12700K: runs with advisory=false, exits 1 on breach.
+        run: cargo run -p xtask -- latency-gate --all
+        env:
+          RUSTFLAGS: "-C target-cpu=native"

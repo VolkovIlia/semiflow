@@ -1,0 +1,25 @@
+# semver.yml — Public API compatibility gate for semiflow-core.
+#
+# Runs cargo-semver-checks against the previous published version to detect
+# accidental breaking changes.  Intentional breaks are allowlisted in
+# .cargo/semver-checks-allowlist.toml (ADR-0043 §3).
+#
+# Scope: semiflow-core only.  semiflow-ffi / semiflow-py / semiflow-wasm are
+# non-stable bindings (ADR-0028) and are excluded.
+name: Semver
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  semver-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-semver-checks
+      - run: cargo semver-checks check-release -p semiflow-core

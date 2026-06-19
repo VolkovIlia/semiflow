@@ -1,0 +1,11 @@
+# ADR-0011 — v0.4.0 Magnus integrator (option ε, sibling type to ζ-A)
+
+**Status**: Accepted
+**Date**: 2026-04-30
+**Authors**: ai-solutions-architect
+**Supersedes**: none. Implements ADR-0008 Amendment 2 §"option ε — Magnus integrator (deferred to v0.4.0)".
+**Cross-refs**: ADR-0008 (ζ-A), ADR-0010 (v0.3.1 CEV hardening), `contracts/semiflow-core.math.md` §9.2.3.C, `contracts/tests/cev_european_call_sweep.yaml`.
+
+Adopt the interaction-picture truncated-exp order-2 integrator (option ε per ADR-0008 Amendment 2) as a sibling type `MagnusDiffusionChernoff` (renamed to `TruncatedExpDiffusionChernoff` in v0.7.0; see Amendment 1 below), reusing the v0.3.0 5-arg `(a, a', a'', a_norm, grid)` API verbatim plus an optional builder-set `b_for_conjugation` (`with_drift_conjugation(b)`). One truncated-exp step is `M(τ) = exp(τ · A_self^I(τ/2))` evaluated as a degree-4 truncated operator power series via the discrete 3-point divergence-form stencil at grid spacing dx; this avoids the ζ-A FD-on-f ceiling (ADR-0008 Am. 2 §H1) and lifts variable-a global rate from O(τ¹) to O(τ²) (Theorem 6 + HLW §III.4 + BCOR 2009 Theorem 3). CFL `τ < dx²/(2·‖a‖_∞)` is necessary for K=4 series convergence and is reported as a new typed error variant `SemiflowError::CflViolated{tau, dx_squared, a_norm_bound}` returned BEFORE allocation. Alternatives considered and rejected: (i) FFT-spectral exp (log-linear cost, breaks no_std core constraint); (ii) v0.6.0 a''' input (delivers same order at higher API churn); (iii) replacing ζ-A in place (regression risk for the constant-a callers — sibling type costs nothing and preserves bit-equal v0.2.2). ζ-A is retained as constant-time-per-node fall-back (math.md §9.2.3.C "Retention"). Flagship validation: property `truncated_exp_variable_zeta_liouville_oracle_slope` (slope ≤ -1.95 over n ∈ {32,64,128,256,512} on the (1+γx)² Liouville oracle) — the gate that ζ-A demonstrably cannot pass.
+
+**Amendment 1 (v0.7.0, 2026-05-02, audit D2)**: The type `MagnusDiffusionChernoff` shipped in v0.4.0 implements a **truncated Taylor series** `Σ_{k=0..4} (τᵏ/k!) Gᵏ`, NOT the genuine Magnus expansion (Magnus 1954) with nested commutators. The name was corrected to `TruncatedExpDiffusionChernoff` in v0.7.0 (clean break, no deprecation alias). The algorithm, CFL, and all API invariants are unchanged. See `docs/audit-findings-v0_6_0.md` D2.

@@ -1,0 +1,143 @@
+name: Nightly diff-scipy
+on:
+  schedule: [{ cron: "0 5 * * *" }]
+  workflow_dispatch:
+
+jobs:
+  diff-scipy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.78
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install scipy numpy
+      - run: cargo test --release -p semiflow-core --features diff-scipy --test diff_scipy
+
+  bench-regression:
+    name: Bench regression check (>5% fails)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: bench-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: bench-${{ runner.os }}-
+
+      - name: Run criterion benchmarks (JSON output)
+        # criterion emits one line per sample to stderr; the machine-readable
+        # summary we need is the "criterion" message-format line on stdout.
+        # We run with --message-format=json and capture the output, then
+        # also save the human-readable criterion HTML via the default run.
+        # NOTE: Until baseline-v1_0_0.json is populated by the maintainer,
+        # all median_ns values are null and the comparison step is a no-op
+        # (the Python script skips null entries and exits 0).
+        run: |
+          cargo bench --workspace 2>&1 | tee bench-output.txt
+        env:
+          RUSTFLAGS: "-C target-cpu=native"
+
+      - name: Extract criterion medians and check regressions
+        run: |
+          python3 - << 'PYEOF'
+          import json
+          import re
+          import sys
+
+          BASELINE_PATH = "docs/perf/baseline-v1_0_0.json"
+          BENCH_OUTPUT_PATH = "bench-output.txt"
+          THRESHOLD_DEFAULT = 5.0  # percent
+
+          # Load baseline
+          with open(BASELINE_PATH) as f:
+              baseline = json.load(f)
+
+          threshold = baseline.get("regression_threshold_pct", THRESHOLD_DEFAULT)
+
+          # Map bench names to baseline entries (strip crate prefix for matching)
+          # criterion reports: "test bench_name ... bench: N ns/iter (+/- M)"
+          # We parse the human-readable criterion output line.
+          # Pattern: "heat_1d/n=100/N=1000  time:   [lo  med  hi]"
+          # criterion 0.5 stdout format (one line per bench):
+          #   <name>  time:   [<lo> <med> <hi>]
+          median_pattern = re.compile(
+              r"^(.+?)\s+time:\s+\[.*?\s+([\d.]+)\s+(ns|µs|ms|s)\s+.*\]",
+              re.MULTILINE,
+          )
+
+          SCALE = {"ns": 1.0, "µs": 1_000.0, "ms": 1_000_000.0, "s": 1_000_000_000.0}
+
+          # Read bench output
+          with open(BENCH_OUTPUT_PATH) as f:
+              text = f.read()
+
+          measured: dict[str, float] = {}
+          for m in median_pattern.finditer(text):
+              name = m.group(1).strip()
+              value_ns = float(m.group(2)) * SCALE[m.group(3)]
+              measured[name] = value_ns
+
+          failures: list[str] = []
+          skipped: list[str] = []
+          checked: list[str] = []
+
+          for key, entry in baseline["benches"].items():
+              median_base = entry.get("median_ns")
+              if median_base is None:
+                  skipped.append(f"  SKIP {key} (baseline not yet populated)")
+                  continue
+
+              # Find the matching measured bench by suffix
+              short = key.split("::")[-1]
+              match = None
+              for name, val in measured.items():
+                  if short in name:
+                      match = (name, val)
+                      break
+
+              if match is None:
+                  failures.append(f"  MISSING {key} — not found in bench output")
+                  continue
+
+              name, val = match
+              pct = (val - median_base) / median_base * 100.0
+              if pct > threshold:
+                  failures.append(
+                      f"  REGRESSION {key}: {val:.0f} ns vs baseline {median_base:.0f} ns "
+                      f"(+{pct:.1f}% > {threshold}% threshold)"
+                  )
+              else:
+                  checked.append(
+                      f"  OK        {key}: {val:.0f} ns vs baseline {median_base:.0f} ns "
+                      f"({pct:+.1f}%)"
+                  )
+
+          print("=== Bench regression summary ===")
+          for line in skipped:
+              print(line)
+          for line in checked:
+              print(line)
+          for line in failures:
+              print(line)
+
+          if failures:
+              print(f"\nFAIL: {len(failures)} bench(es) regressed beyond {threshold}%.")
+              sys.exit(1)
+          elif skipped and not checked:
+              print("\nNOTE: baseline not yet populated — skipping regression check.")
+          else:
+              print(f"\nPASS: no regressions beyond {threshold}%.")
+          PYEOF
+
+      - name: Upload bench output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-output
+          path: bench-output.txt
+          retention-days: 30

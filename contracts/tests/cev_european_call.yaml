@@ -1,0 +1,513 @@
+# =============================================================================
+# REAL-WORLD BENCHMARK TEST CONTRACT — CEV European Call (Schroder 1989)
+# =============================================================================
+# Status:        ACCEPTED for v0.3.0 (real-world validation gate)
+# Authors:       ai-solutions-architect
+# Date:          2026-04-30
+# ADR:           docs/adr/0009-cev-real-world-benchmark.md
+# Crate version: semiflow-core 0.3.0+
+# Test type:     real-world closed-form oracle (NOT a sympy gate; numerical)
+# Authoritative: Larguinho-Dias-Braumann (Speed and Accuracy ..., 2009)
+#                eqs (11)-(12d), reproducing Schroder (1989) Journal of Finance.
+#                Cross-checked with Wikipedia CEV (SDE convention) and
+#                QuantLib analyticcevengine.cpp (parameter mapping).
+# =============================================================================
+
+schema_version: "0.3.0"
+test_name:      cev_european_call
+suite:          real_world_benchmarks
+purpose: |
+  Validate v0.3.0 ζ-A DiffusionChernoff (variable-`a` self-adjoint, ADR-0008)
+  + RK2 DriftReactionChernoff (variable-`b`, ADR-0006 Am 5) under Strang
+  composition (ADR-0006) against the Schroder (1989) closed-form European
+  call price on the Constant-Elasticity-of-Variance (CEV) PDE. This is the
+  first real-world benchmark for the library: every prior gate (G1-G7,
+  Z_const-a, Z_τ¹, Z_τ², Strang G3, RK2 Z_drift) was either constant-coefficient
+  or sympy-symbolic. CEV exercises:
+    - variable diffusion `a(S) = ½·δ²·S^(2β)` (β=0.5 → linear in S)
+    - variable drift     `b(S) = r·S − a'(S)`  (compensated, ADR-0008 §"Decision")
+    - constant reaction  `c(S) = −r`
+  Convergence ceiling per ADR-0008 Amendment 2: **global O(τ¹) for variable-`a`**
+  (FD on `f', f'', f'''` introduces a O(h²) → O(τ¹) cap under the variance-
+  preserving scaling `n ∝ N²`). The G_real_world_3 slope gate respects this
+  ceiling.
+
+# -----------------------------------------------------------------------------
+# 1. PDE specification (Cox-Ross 1976 / Wikipedia CEV convention)
+# -----------------------------------------------------------------------------
+pde:
+  # FORWARD-TIME convention (the library's `apply(τ, ·)` is forward-time).
+  # The financial-time-to-expiry mapping is `τ_PDE = T - t_calendar`; payoff
+  # is the INITIAL condition at τ=0.
+  operator:    "∂_τ u = ½·δ²·S^(2β)·u_SS + r·S·u_S − r·u"
+  forward_time_horizon: "τ ∈ [0, T] with T = 1.0"
+
+  # Domain truncation. The natural CEV domain is [0, ∞). For β < 1 the origin
+  # is an **absorbing boundary** (mass-at-zero, arXiv:2011.00557); we truncate
+  # well above it (S=1) to avoid the singular behaviour while keeping the
+  # region of interest [50, 150] far from both edges.
+  domain:
+    S_min: 1.0
+    S_max: 200.0
+    rationale: |
+      - S_min = 1.0  (NOT 0) — avoids the absorbing-boundary degeneracy of CEV
+        for β < 1 (a(0) = 0 ⇒ generator is non-uniformly elliptic). The
+        Schroder formula is valid at S=0 only as a limit; FD discretization
+        breaks down. S=1 is 49 grid units below the strike-neighbourhood
+        evaluation domain [50, 150].
+      - S_max = 200 = 2K — far enough that the deep-ITM call (u ≈ S − K·e^(-rT))
+        is well-approximated by LinearExtrapolate without contaminating the
+        evaluation region.
+
+  initial_condition: "u(0, S) = max(S − K, 0)"   # plain-vanilla call payoff
+
+  boundary_conditions:
+    left:  "Dirichlet u(τ, S=1) = 0"
+    right: "LinearExtrapolate (BoundaryPolicy::LinearExtrapolate, ADR-0007)"
+    rationale: |
+      Left BC: at S=1 the call is far OTM (deep money, but small gamma);
+      Dirichlet 0 is correct to ~1e-12 for our (S, K, σ, T) — the actual
+      OTM price at S=1 is ≈ 9.1e-12 by the formula.
+      Right BC: at S=200 the option behaves linearly in S (intrinsic value
+      dominates extrinsic); LinearExtrapolate is exact for this asymptotic
+      regime up to O(σ²·T) corrections, which are < 1e-3 at S=200.
+
+# -----------------------------------------------------------------------------
+# 2. Test instance parameters
+# -----------------------------------------------------------------------------
+parameters:
+  S0:     100.0    # initial spot (= node-of-interest for G_real_world_2)
+  K:      100.0    # strike (ATM)
+  r:      0.05     # risk-free rate (5% p.a.)
+  sigma0: 0.30     # SPOT-NORMALIZED volatility (= lognormal-equivalent vol at S₀)
+  beta:   0.5      # CEV elasticity exponent (square-root model, half-way to BS)
+  T:      1.0      # time to maturity (1 year)
+
+  # Convention note (CRITICAL — verified against QuantLib + FER + Wikipedia):
+  # `sigma0 = 0.30` is the SPOT-NORMALIZED ("instantaneous lognormal-equivalent")
+  # volatility, i.e. Var(dS/S)|_{S=S₀} = sigma0². The literal SDE coefficient
+  # is `δ = sigma0 · S₀^(1-β) = 0.30 · 100^0.5 = 3.0`, so the SDE in
+  # Itô form is `dS = 3·S^0.5·dW + 0.05·S·dt`. The PDE uses `δ²` directly:
+  # `δ² = sigma0² · S₀^(2-2β) = 9.0`. This matches the academic convention
+  # used by Schroder (1989), Cox (1975), QuantLib's analytic CEV engine,
+  # and the R FER package — the price for a "literal `dS = sigma·S^β·dW`"
+  # interpretation with `sigma=0.30` would be ≈ 4.94, NOT 14.24.
+
+  derived:
+    delta_squared: 9.0   # = sigma0² · S₀^(2-2β) = 0.09 · 100 = 9.0
+    delta:         3.0   # = sqrt(9.0)
+    r_minus_q:     0.05  # q = 0 (no dividends)
+
+# -----------------------------------------------------------------------------
+# 3. Solver setup (Strang ζ-A diffusion + RK2 drift, v0.3.0)
+# -----------------------------------------------------------------------------
+solver_setup:
+  # Spatial grid: 512 nodes on [1, 200] uniform. dx = 199/511 ≈ 0.389.
+  # Strike-neighbourhood [50, 150] is sampled by ~258 nodes; coarse enough to
+  # exercise variable-`a` FD truncation, fine enough that boundary layer is
+  # 49 dx-widths from S=1.
+  grid: "Grid1D::new(1.0, 200.0, 512).unwrap().with_boundary(BoundaryPolicy::LinearExtrapolate).with_interp(InterpKind::CubicHermite)"
+  # Boundary-policy note: LinearExtrapolate is set ONCE on the grid (it
+  # applies to the right end). The left Dirichlet-0 is enforced by the
+  # initial condition itself (max(1 - 100, 0) = 0) and remains 0 under the
+  # ζ-A + RK2 step because both shifted samples u(x_pre) at x_pre near
+  # S=1 evaluate the left boundary via the same LinearExtrapolate (the
+  # natural call-option payoff has zero left-boundary slope, so
+  # LinearExtrapolate produces values ≈ 0 there).
+
+  steps: 256
+  steps_rationale: |
+    n = 256 gives τ = T/n ≈ 3.9e-3, well below the variance-preserving
+    stability scaling `τ ≤ dx² / (2·a_max)` = 0.389² / (2·9·200^1) ≈ 4e-5.
+    The 100× margin is intentional: it tests Chernoff's *unconditional*
+    L^∞-stability (M, ω) = (1, 0) for ζ-A and (1, |c|) for RK2.
+
+  diffusion_chernoff:
+    # a(S) = ½·δ²·S^(2β) = ½·9·S^1 = 4.5·S
+    a:                 "|S| 4.5_f64 * S"
+    # a'(S) = ½·δ²·2β·S^(2β-1) = 9β·S^(2β-1) = 9·0.5·S^0 = 4.5
+    a_prime:           "|_| 4.5_f64"
+    # a''(S) = 9β(2β-1)·S^(2β-2) = 9·0.5·0·S^(-1) = 0
+    a_double_prime:    "|_| 0.0_f64"
+    a_norm_bound:      "4.5_f64 * 200.0_f64"   # = 900.0; ‖a‖_∞ over [1, 200]
+
+  drift_reaction_chernoff:
+    # b(S) = r·S − a'(S) = 0.05·S − 4.5  (compensated drift, ADR-0008 self-adjoint)
+    # NOTE for engineer: the −a'(S) = −4.5 term is the "self-adjoint compensation"
+    # required by ADR-0008 §Decision. The PDE  ½δ²·S^(2β)·u_SS + r·S·u_S − r·u
+    # has  A_self f = ∂_S(a·∂_S f) = ½δ²·S^(2β)·u_SS + a'·u_S, so the residual
+    # drift  b_PDE − a' = r·S − a'(S)  goes into the RK2 step.
+    b:                 "|S| 0.05_f64 * S - 4.5_f64"
+    # c(S) = -r = -0.05
+    c:                 "|_| -0.05_f64"
+    c_norm_bound:      "0.05_f64"
+
+  splitting:
+    method: "StrangSplit::new(diffusion, drift_reaction).step(τ, u)"
+    rationale: |
+      Strang composition Φ(τ) = D(τ/2) ∘ R(τ) ∘ D(τ/2) preserves global
+      O(τ²) only when both legs are local-O(τ³). For variable-`a`, ζ-A
+      gives local-O(τ³) sympy-proven (ADR-0008 G_τ²); for variable-`b`,
+      RK2 gives local-O(τ³) by Hairer-Lubich-Wanner (ADR-0006 Am 5).
+      Per Amendment 2 of ADR-0008, FD-on-`f',f'',f'''` introduces a
+      O(h²)/O(τ¹) cap under variance-preserving scaling — this is the
+      **G_real_world_3 ceiling**.
+
+# -----------------------------------------------------------------------------
+# 4. Reference solution (Schroder 1989)
+# -----------------------------------------------------------------------------
+reference:
+  # The full closed-form (Larguinho-Dias-Braumann eq 11-12, β < 2 branch).
+  # In our convention task β = β_PDE/2 → Schroder β_S = 2·β_PDE = 1.0
+  # (Larguinho's "β" satisfies SDE coeff S^(β/2); ours has SDE coeff S^β,
+  # so β_Schroder = 2·β_task. β_task=0.5 → β_S=1 → square-root model.)
+  formula: |
+    For β_S < 2 (our case: β_S = 1):
+
+      C = S₀·e^(-q·τ)·Q(2y; 2 + 2/(2-β_S), 2x)
+        − K·e^(-r·τ)·[1 − Q(2x; 2/(2-β_S), 2y)]
+
+    where Q(w; v, λ) is the COMPLEMENTARY noncentral χ² CDF (sf), and:
+
+      k    = 2(r-q) / [δ²·(2-β_S)·(e^((r-q)·(2-β_S)·τ) − 1)]
+      x    = k · S₀^(2-β_S) · e^((r-q)·(2-β_S)·τ)
+      y    = k · K^(2-β_S)
+      δ²   = σ₀² · S₀^(2-β_S)              [spot-normalized]
+
+  # Specialized for our test instance (β_S = 1, q = 0):
+  closed_form_specialization:
+    beta_S: 1.0
+    expon:  "(r-q)·(2-β_S)·τ = 0.05·1·1 = 0.05"
+    e_expon:        1.0512710963760241   # = e^0.05
+    delta_squared:  9.0
+    k:              "2·0.05 / [9.0·1·(e^0.05 − 1)] = 0.10 / 0.4614398671 ≈ 0.21671298"
+    x:              "k · 100^1 · e^0.05 = 0.21671298 · 100 · 1.0512710964 ≈ 22.78241"
+    y:              "k · 100^1 = 21.67130"
+    df1:            "2 + 2/1 = 4.0"
+    df2:            "2/1 = 2.0"
+    Q1_arg:         "2y = 43.34260"
+    Q2_arg:         "2x = 45.56482"
+    lambda1:        "2x = 45.56482"   # noncentrality for Q1
+    lambda2:        "2y = 43.34260"   # noncentrality for Q2
+
+  expected_price:        14.2421     # SCHRODER PRICE (Convention B, spot-normalized)
+  expected_price_uncert: 0.001       # ±1e-3 from ncx2 series truncation; far below the
+                                     # PDE-vs-formula gate threshold (5e-2) below.
+
+  # NOTE on knowledge-fetcher's 13.70:
+  # ----------------------------------
+  # The earlier reference report (.dev-docs/reports/CEV_OPTION_PRICING_REFERENCES.md)
+  # cited 13.70 ± 0.01 as "academic consensus". Independent recomputation by the
+  # architect via Larguinho/Dias eq (11-12d) + scipy.stats.ncx2 yields **14.2421**
+  # under the spot-normalized convention used by QuantLib + FER. The 13.70 figure
+  # is plausibly a typo / different-parameterization artefact in a secondary
+  # source; we adopt 14.2421 as the canonical reference and recompute it
+  # programmatically in the test (single source of truth: the formula itself).
+
+  computation_strategy: |
+    The test computes `expected_price` in-tree via the helper
+    `noncentral_chi2_cdf(w, v, lambda)` (ADR-0009 Decision: Option I,
+    Poisson-weighted central χ² series). This makes the test
+    SELF-VALIDATING — if the formula is wrong, the gate will catch the
+    discrepancy regardless of any hardcoded value. The figure 14.2421
+    above is INFORMATIONAL only, not a hard-coded oracle.
+
+# -----------------------------------------------------------------------------
+# 5. Acceptance gates
+# -----------------------------------------------------------------------------
+acceptance_gates:
+
+  G_real_world_1:
+    name:      "sup-norm error in strike neighbourhood"
+    metric:    "max_{S ∈ [50, 150]} |u_PDE(T, S) − C_Schroder(0, S)|"
+    domain:    "S ∈ [50, 150]  (interior; excludes edge regions where BC dominates)"
+    threshold: 5e-2            # < 0.5% of strike, half-cent absolute
+    sampling:  "every 5th grid node in [50, 150] (~ 25 sample points)"
+    rationale: |
+      Half-cent absolute precision matches typical option-quote tick size.
+      The strike-neighbourhood [50, 150] is 50% to 150% of moneyness — the
+      regime where derivative practitioners actually price options. Edge
+      regions (S < 20, S > 180) are excluded because LinearExtrapolate
+      asymptotic error grows there; the PDE solution at S=200 differs from
+      the formula by ~5e-3 (well within tolerance, but informational rather
+      than gating).
+
+  G_real_world_2:
+    name:      "pointwise ATM accuracy at S₀"
+    metric:    "|u_PDE(T, S=100) − C_Schroder(0, S=100)|"
+    threshold: 1e-2            # 1 cent absolute at the ATM strike
+    rationale: |
+      The ATM point is the most economically important and the most
+      numerically delicate (kink in payoff at S=K). 1e-2 is half the ncx2
+      series truncation budget (2e-2), leaving headroom for the dominant
+      PDE-discretization error. If this gate fails the kink-handling logic
+      (cubic Hermite + LinearExtrapolate) is suspect.
+
+  G_real_world_3:
+    name:      "convergence rate (refinement in n only)"
+    metric:    "log-log slope of sup-norm error vs τ = T/n"
+    sweep_n:   [64, 128, 256, 512]
+    fixed_N:   512
+    threshold: "slope ≤ -0.95"   # global O(τ¹) ceiling, with 5% slack for finite-n
+                                 # constants and FD-on-derivatives noise
+    domain:    "S ∈ [50, 150] (same as G1 for consistency)"
+    rationale: |
+      Per ADR-0008 Amendment 2: the variable-`a` ζ-A formula has local
+      O(τ³) sympy-proven, but the GLOBAL convergence in the temporal
+      refinement (n → ∞ at fixed N) is capped at O(τ¹) because the
+      finite-difference reconstruction of `f', f'', f'''` introduces a
+      O(h²) error that, under the variance-preserving stability scaling
+      `n ∝ N²`, dominates as O(τ¹). Demanding slope ≤ -1.0 strict would
+      fail on legitimate constants (the empirical slopes in
+      ADR-0008 Am 2 §6.2 are -0.97 to -1.05 across the same n-sweep on
+      a synthetic variable-`a` instance). The 5% slack matches that
+      literature-internal observation.
+    note: |
+      We do NOT include grid refinement (N-sweep) in this gate because
+      the PDE has a non-smooth initial condition (kink at S=K), which
+      degrades grid-refinement convergence to O(N^{-1.5}) regardless
+      of the Chernoff order — see G7-strang amendment notes. The
+      n-sweep at fixed N isolates the temporal-Chernoff error.
+
+# -----------------------------------------------------------------------------
+# 6. Implementation notes for the engineer
+# -----------------------------------------------------------------------------
+implementation_notes:
+
+  noncentral_chi2_cdf:
+    strategy: "Poisson-weighted central χ² (Larguinho eq 3 / Schroder eq 'series')"
+    formula: |
+      F(w; v, λ) = Σ_{j=0}^∞  [e^(-λ/2) · (λ/2)^j / j!] · F_central(w; v + 2j)
+                = Σ_{j=0}^∞  Poisson(j; λ/2) · χ²_central_CDF(w, v + 2j)
+    truncation: |
+      For our test instance (λ ≈ 45):
+        - Poisson mean is 22.5
+        - Poisson std is sqrt(22.5) ≈ 4.7
+        - 99.9999% of mass is within mean ± 5σ ≈ [0, 47]
+        - Verified at j_max = 80, error < 1e-12 (architect spot-check)
+        - Verified at j_max = 49, error < 1e-13 (the loop early-exits when
+          the term magnitude drops below 1e-12)
+      Recommended `j_max = 100` with early-exit at term < 1e-12. This
+      gives ~3× safety margin over the verified-converged j=49.
+    central_chi2: "statrs::distribution::ChiSquared::new(v).unwrap().cdf(w)"
+    error_handling: |
+      If j_max=100 is reached without early-exit, return Err with context;
+      this never triggers under our parameters (λ < 50) but signals trouble
+      if a future test extends to long maturities where λ grows ∝ T.
+
+  reference_helper: |
+    Place the helper in `tests/cev_european_call.rs` itself (not in src/);
+    it is purely test-only code. Suggested signature:
+
+      fn noncentral_chi2_cdf(w: f64, v: f64, lam: f64) -> f64 {
+          let half_lam = lam / 2.0;
+          let cd = ChiSquared::new(v).expect("v > 0");
+          let mut sum = 0.0;
+          let mut log_pj = -half_lam;       // ln P(j=0)
+          let mut pj = log_pj.exp();
+          for j in 0..100 {
+              let cdf_j = ChiSquared::new(v + 2.0 * j as f64).unwrap().cdf(w);
+              let term = pj * cdf_j;
+              sum += term;
+              if term.abs() < 1e-12 && j > 5 { break; }
+              pj *= half_lam / (j as f64 + 1.0);
+          }
+          sum
+      }
+
+  schroder_helper: |
+    Compose the formula straightforwardly:
+
+      fn schroder_call(s0: f64, k: f64, r: f64, q: f64, sigma0: f64,
+                       beta_pde: f64, t: f64) -> f64 {
+          let beta_s = 2.0 * beta_pde;
+          assert!(beta_s < 2.0, "BS limit not implemented");
+          let delta_sq = sigma0.powi(2) * s0.powf(2.0 - beta_s);
+          let expon = (r - q) * (2.0 - beta_s) * t;
+          let k_param = 2.0 * (r - q) / (delta_sq * (2.0 - beta_s) * (expon.exp() - 1.0));
+          let x = k_param * s0.powf(2.0 - beta_s) * expon.exp();
+          let y = k_param * k.powf(2.0 - beta_s);
+          let df1 = 2.0 + 2.0 / (2.0 - beta_s);
+          let df2 = 2.0 / (2.0 - beta_s);
+          let q1 = 1.0 - noncentral_chi2_cdf(2.0 * y, df1, 2.0 * x);
+          let q2 = 1.0 - noncentral_chi2_cdf(2.0 * x, df2, 2.0 * y);
+          s0 * (-q * t).exp() * q1 - k * (-r * t).exp() * (1.0 - q2)
+      }
+
+  test_skeleton: |
+    #[test]
+    fn cev_european_call_real_world() {
+        let grid = Grid1D::new(1.0, 200.0, 512)
+            .unwrap()
+            .with_boundary(BoundaryPolicy::LinearExtrapolate)
+            .with_interp(InterpKind::CubicHermite);
+
+        let diffusion = DiffusionChernoff::new(
+            |s| 4.5 * s,           // a(S) = ½·δ²·S = 4.5·S
+            |_| 4.5,               // a'(S) = 4.5
+            |_| 0.0,               // a''(S) = 0  (β=0.5 ⇒ a is linear)
+            4.5 * 200.0,           // a_norm_bound = 900
+            grid,
+        );
+        let drift = DriftReactionChernoff::new(
+            |s| 0.05 * s - 4.5,    // b_compensated = r·S − a'
+            |_| -0.05,             // c = −r
+            0.05,                  // c_norm_bound = |r|
+            grid,
+        );
+        let strang = StrangSplit::new(diffusion, drift);
+
+        // Initial condition: payoff
+        let nodes = grid.nodes();
+        let u0_values: Vec<f64> = nodes.iter().map(|&s| (s - 100.0).max(0.0)).collect();
+        let mut u = GridFn1D::from_values(grid, u0_values);
+
+        let n = 256;
+        let tau = 1.0 / n as f64;
+        for _ in 0..n {
+            u = strang.step(tau, &u).expect("Strang step");
+        }
+
+        // G_real_world_2: pointwise ATM
+        let i_atm = ((100.0 - 1.0) / (199.0 / 511.0)).round() as usize;
+        let pde_atm = u.values[i_atm];
+        let ref_atm = schroder_call(100.0, 100.0, 0.05, 0.0, 0.30, 0.5, 1.0);
+        assert!((pde_atm - ref_atm).abs() < 1e-2, "G_real_world_2: |{pde_atm} − {ref_atm}| ≥ 1e-2");
+
+        // G_real_world_1: sup-norm in [50, 150]
+        let mut max_err = 0.0_f64;
+        for &s in nodes.iter().filter(|&&s| (50.0..=150.0).contains(&s)).step_by(5) {
+            let i = ((s - 1.0) / (199.0 / 511.0)).round() as usize;
+            let ref_s = schroder_call(s, 100.0, 0.05, 0.0, 0.30, 0.5, 1.0);
+            max_err = max_err.max((u.values[i] - ref_s).abs());
+        }
+        assert!(max_err < 5e-2, "G_real_world_1: sup-error {max_err} ≥ 5e-2");
+    }
+
+    #[test]
+    fn cev_european_call_convergence_rate() {
+        // Run the time-step sweep at fixed N=512.
+        let mut rows = Vec::new();
+        for &n in &[64u32, 128, 256, 512] {
+            let err = run_cev_at_n(n);
+            rows.push((n, err));
+        }
+        // Linear regression on log-log: slope = Σ(log n − log n̄)(log e − log ē) / Σ(log n − log n̄)²
+        // Sign convention: error decreases with n, so slope on (log n, log err) is negative.
+        // We need slope ≤ -0.95.  (Helper omitted here; standard pattern from
+        // tests/convergence_rate_strang.rs.)
+        let slope = log_log_slope(&rows);
+        assert!(slope <= -0.95, "G_real_world_3: slope = {slope} > -0.95");
+    }
+
+  test_file: "crates/semiflow-core/tests/cev_european_call.rs"
+  estimated_loc: "~150 (test) + ~40 (noncentral_chi2_cdf helper) + ~30 (schroder_call helper) = ~220 LoC"
+  estimated_wall_clock: "~5-30 s on a modern x86 (256 steps × 512 nodes × Strang × 2 helpers)"
+
+# -----------------------------------------------------------------------------
+# 7. Dependency budget
+# -----------------------------------------------------------------------------
+dev_dependencies_added:
+  - crate:    "statrs"
+    version:  "0.18"
+    location: "[dev-dependencies]"
+    purpose:  "Central χ² CDF for the Poisson-weighted noncentral χ² helper"
+    suckless_impact: |
+      Production dep count UNCHANGED at 2 (num-traits, libm). The G7
+      "≤ 10 deps per crate" budget is a PRODUCTION constraint; dev-deps
+      are not subject to it (test code is excluded from shipping artefact).
+    license_check: "statrs is MIT (compatible with our MIT OR Apache-2.0)"
+
+# -----------------------------------------------------------------------------
+# 8. Risks and mitigations
+# -----------------------------------------------------------------------------
+risks:
+
+  R_ref_precision:
+    risk:       "Reference price has only ±1e-3 precision (ncx2 series truncation)"
+    impact:     "Could erode G_real_world_2's 1e-2 budget to 9e-3 effective"
+    mitigation: |
+      `j_max=100` gives error < 1e-12 (verified). The 1e-3 figure is the
+      *paper-cited* uncertainty on the closed-form value; our in-tree helper
+      is far more precise. We adopt 14.2421 (computed) as the truth, not
+      13.70 (cited) — see "NOTE on 13.70" above.
+
+  R_boundary_kink:
+    risk:       "Strike-kink at S=K creates non-smooth IC; cubic Hermite may overshoot"
+    impact:     "Could spike error at S=K beyond 1e-2 if Catmull-Rom variant is used"
+    mitigation: |
+      ADR-0005 (cubic Hermite default) chose Catmull-Rom for smooth-region
+      benefits but allows linear fallback near kinks. The G_real_world_2
+      gate is at S=K=100 EXACTLY, so the kink is pinned to a grid node
+      (dx = 199/511, with N=512 grid the value 100 lands at index ≈ 254.4
+      — between two nodes). We accept the off-grid evaluation; the
+      diffusion smooths the kink within the first time step.
+
+  R_left_boundary:
+    risk:       "S=1 truncation may leak diffusion mass via LinearExtrapolate"
+    impact:     "Could pollute solution at small-S, shifting G_real_world_1 max-err"
+    mitigation: |
+      At S=1, the call value is ≈ 9.1e-12 (deep OTM). The leak rate is
+      bounded by `dx · |a(S=1)| · (boundary slope) · τ = 0.389·4.5·O(1e-12)·1 ≈ 1.8e-12`
+      per step, totalling O(5e-10) over 256 steps — negligible compared
+      to the 5e-2 G1 threshold. (The Dirichlet-style fix would be to
+      use BoundaryPolicy::Periodic = NO; we do NOT change the right
+      LinearExtrapolate.)
+
+  R_convention_drift:
+    risk:       "If a future change interprets sigma0 as 'literal SDE coeff' (Convention A), price drops to 4.94 and ALL gates fail"
+    impact:     "Test breakage on a clean rerun; misleading 'CEV is broken' diagnosis"
+    mitigation: |
+      The contract's `derived` block makes `delta_squared = 9.0` explicit,
+      and the `parameters.sigma0` doc comment defines it as "spot-normalized".
+      The test's `schroder_call` helper uses `delta_sq = sigma0² · S₀^(2-β_S)`
+      explicitly (NOT just `sigma0²`). Engineer must port BOTH the helper
+      and the diffusion `a()` closure consistently.
+
+# -----------------------------------------------------------------------------
+# 9. Scope and acceptance for v0.3.0
+# -----------------------------------------------------------------------------
+acceptance: |
+  All three gates (G_real_world_1, _2, _3) MUST pass on `cargo test --release`.
+  Failure is a v0.3.0 release-blocker. Passing converts CEV to the canonical
+  real-world benchmark for all subsequent versions.
+out_of_scope:
+  - "American-style early-exercise option (requires LCP, not in v0.3.0)"
+  - "Greeks (Delta, Gamma, Vega) — closed forms exist but unrelated to PDE oracle"
+  - "Variable σ₀ (CEV with stochastic vol) — requires 2D extension (v0.4.0+)"
+  - "β = 0 (Bachelier limit) and β = 1 (BS limit) — pure-constant `a` regimes,
+     covered by existing G1/Strang gates"
+
+# -----------------------------------------------------------------------------
+# 10. References
+# -----------------------------------------------------------------------------
+references:
+  - id:    "Schroder1989"
+    cite:  "Schroder, M. (1989). Computing the Constant Elasticity of Variance Option Pricing Formula. Journal of Finance, 44(1), 211-219."
+    url:   "https://onlinelibrary.wiley.com/doi/10.1111/j.1540-6261.1989.tb02414.x"
+    note:  "Primary source (paywalled); formula reproduced via Larguinho-Dias-Braumann."
+  - id:    "Larguinho-Dias-Braumann2009"
+    cite:  "Larguinho, M., Dias, J. C., Braumann, C. A. (2009). Speed and Accuracy Comparison of Noncentral Chi-Square Distribution Methods for Option Pricing and Hedging under the CEV Model."
+    url:   "https://dspace.uevora.pt/rdpc/bitstream/10174/4635/1/SpeedAccuracyCEV_FFM%5B1%5D.pdf"
+    note:  "OPEN ACCESS. Quotes Schroder eq (11)-(12d) verbatim — the formula authority used in this contract."
+  - id:    "Cox1975"
+    cite:  "Cox, J. C. (1975). Notes on Option Pricing I: Constant Elasticity of Variance Diffusions. Working paper, Stanford."
+    note:  "Originating CEV paper; notation differs (uses β-1 where Schroder uses β)."
+  - id:    "QuantLib_AnalyticCEVEngine"
+    cite:  "QuantLib v1.16+, ql/pricingengines/vanilla/analyticcevengine.cpp"
+    url:   "https://github.com/lballabio/QuantLib"
+    note:  "Cross-check for parameter mapping (uses spot-normalized convention; matches ours)."
+  - id:    "Wikipedia_CEV"
+    cite:  "Wikipedia: Constant Elasticity of Variance Model"
+    url:   "https://en.wikipedia.org/wiki/Constant_elasticity_of_variance_model"
+    note:  "SDE convention `dS = μS dt + σ·S^γ·dW` matches our PDE convention (γ ↔ β)."
+  - id:    "ADR-0008"
+    cite:  "semiflow-core docs/adr/0008-self-adjoint-variable-a-api-break.md (ζ-A Amendment 1, FD-cap Amendment 2)"
+    note:  "v0.3.0 ζ-A formula and the global O(τ¹) variable-`a` ceiling that drives G_real_world_3."
+  - id:    "ADR-0009"
+    cite:  "semiflow-core docs/adr/0009-cev-real-world-benchmark.md"
+    note:  "Decision record for THIS contract; covers noncentral χ² implementation choice (Option I) and reference-price recomputation."
+
+# =============================================================================
+# END OF CONTRACT
+# =============================================================================

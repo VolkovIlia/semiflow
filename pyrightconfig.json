@@ -1,0 +1,6 @@
+{
+  "extraPaths": ["crates/semiflow-py/python", "scripts"],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard",
+  "exclude": ["**/target/**"]
+}

@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version = "0.0.0"  # internal, never published
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+walkdir = "2.5"
+anyhow = "1.0"
+cbindgen = "=0.27"

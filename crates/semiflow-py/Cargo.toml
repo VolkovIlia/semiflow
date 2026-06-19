@@ -1,0 +1,34 @@
+[package]
+name = "semiflow-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "PyO3 Python bindings for semiflow-core (1D heat, unit diffusion)"
+publish = false  # wheel distribution only; not on crates.io
+
+[lib]
+name = "semiflow"   # MUST be the Python import name (snake_case)
+crate-type = ["cdylib"]
+
+[dependencies]
+semiflow-core = { path = "../semiflow-core", default-features = false, features = ["std"] }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
+numpy = "0.28"  # MUST match pyo3 major version
+tracing = "0.1"  # Wave 5 (ADR-0045): zero-copy fallback warn
+
+[dev-dependencies]
+# Compile-time Send + Sync assertions (ADR-0031): zero runtime overhead.
+static_assertions = "1"
+# Criterion benchmarks for `py-bench` xtask subcommand.
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "evolve_bench"
+harness = false
+
+[lints]
+workspace = true

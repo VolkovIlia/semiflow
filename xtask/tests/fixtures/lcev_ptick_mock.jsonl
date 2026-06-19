@@ -1,0 +1,4 @@
+{"gate":"L_CEV_PTICK","metric":"p50","value_ns":23}
+{"gate":"L_CEV_PTICK","metric":"p99","value_ns":31}
+{"gate":"L_CEV_PTICK","metric":"p99.9","value_ns":45}
+{"gate":"L_CEV_PTICK","metric":"p99.99","value_ns":187}

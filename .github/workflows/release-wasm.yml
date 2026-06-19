@@ -1,0 +1,104 @@
+name: Release WASM (npm)
+
+# Trigger on version tags (v0.11.0, v0.12.0, …) or manual dispatch for dry-runs.
+# npm publish is NOT run on every PR — see ci.yml for wasm-build/wasm-test instead.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # required for npm --provenance (SLSA attestation)
+
+jobs:
+  publish:
+    name: Publish @semiflow/wasm to npmjs.org
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + wasm32)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Set up Node 20 (npmjs.org scope @semiflow)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@semiflow"
+
+      # Guard 1: tag version must match workspace Cargo.toml version.
+      # Strips the leading 'v' from the git tag and compares to the
+      # [workspace.package] version field.  Fails fast on mismatch to
+      # prevent accidental re-publish of a stale version.
+      - name: Guard 1 — verify tag matches workspace version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO_VER=$(grep -A5 '\[workspace\.package\]' Cargo.toml | grep '^version' | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Tag version:   $TAG"
+          echo "Cargo version: $CARGO_VER"
+          if [ "$TAG" != "$CARGO_VER" ]; then
+            echo "ERROR: tag '$GITHUB_REF_NAME' does not match Cargo.toml version '$CARGO_VER'"
+            exit 1
+          fi
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      # Assemble dist/npm/ — runs wasm-pack for both targets (WITH TypeScript
+      # declarations) and renders package.json from the template.
+      - name: Assemble npm package (cargo xtask wasm-pack-npm)
+        run: cargo run -p xtask -- wasm-pack-npm
+
+      # Guard 2: idempotency — reject if this exact version is already on npm.
+      # Prevents duplicate publish when a tag workflow is re-run or a tag is
+      # re-pushed.  Does NOT use --force.
+      - name: Guard 2 — idempotency check (reject duplicate version)
+        run: |
+          VER=$(node -e "const p=require('./dist/npm/package.json'); process.stdout.write(p.version)")
+          echo "Checking npm for @semiflow/wasm@$VER ..."
+          if npm view "@semiflow/wasm@$VER" version 2>/dev/null; then
+            echo "ERROR: @semiflow/wasm@$VER already exists on npm; not re-publishing."
+            exit 1
+          fi
+          echo "OK — version $VER not yet published."
+
+      # Pack + dry-install verification: build the tarball, install it in a
+      # scratch directory, and confirm that require('@semiflow/wasm').Heat1D
+      # resolves.  Catches missing files before the publish step.
+      - name: Pack and dry-install verification
+        run: |
+          cd dist/npm
+          npm pack
+          TARBALL=$(ls semiflow-wasm-*.tgz | head -1)
+          echo "Packed: $TARBALL"
+
+          SCRATCH=$(mktemp -d)
+          cd "$SCRATCH"
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE/dist/npm/$TARBALL"
+          node -e "
+            const r = require('@semiflow/wasm');
+            if (typeof r.Heat1D !== 'function') {
+              console.error('Heat1D is not a function:', typeof r.Heat1D);
+              process.exit(1);
+            }
+            console.log('dry-install OK: Heat1D =>', typeof r.Heat1D);
+          "
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Publish to npmjs.org (with SLSA provenance)
+        run: npm publish --access public --provenance
+        working-directory: dist/npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
