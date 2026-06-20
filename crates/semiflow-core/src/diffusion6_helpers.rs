@@ -3,36 +3,14 @@
 //! Declared as `#[path = "diffusion6_helpers.rs"] mod helpers_f64;` inside
 //! `diffusion6.rs` — this file is a child of that module, so `super::` works.
 
-use crate::{error::SemiflowError, grid_fn::GridFn1D};
+use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
 #[cfg(feature = "simd")]
 use crate::simd::{F64x4, SimdF64x4};
 
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
 
-/// Validate `tau`: must be finite and non-negative (f64).
-#[inline]
-pub(super) fn validate_tau_f64(tau: f64) -> Result<(), SemiflowError> {
-    if !tau.is_finite() || tau < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "tau must be finite and >= 0",
-            value: tau,
-        });
-    }
-    Ok(())
-}
-
-/// Validate `a(x_pre) ≥ 0` and finite (strict ellipticity for `sqrt`).
-#[inline]
-pub(super) fn validate_a_x_f64(a_x: f64, x: f64) -> Result<(), SemiflowError> {
-    if !a_x.is_finite() || a_x < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "a(x) must be finite and >= 0 (strict ellipticity required for sqrt)",
-            value: x,
-        });
-    }
-    Ok(())
-}
+pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
 
 /// γ⁶-A baseline: `D_γ⁶(τ) = S(τ/2) ∘ K7(τ;a) ∘ S(τ/2)` (f64, SIMD path).
 #[inline]

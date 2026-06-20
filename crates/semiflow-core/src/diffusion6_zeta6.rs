@@ -75,6 +75,7 @@ use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion4_zeta4::Diffusion4thZeta4Chernoff,
     diffusion4_zeta4_stencil_ho::apply_jet_iter_6th,
+    diffusion_zeta_common::validate_tau_f64,
     error::SemiflowError,
     float::SemiflowFloat,
     grid::Grid1D,
@@ -208,22 +209,6 @@ impl<F: SemiflowFloat> Diffusion6thZeta6Chernoff<F> {
 }
 
 // ---------------------------------------------------------------------------
-// Private helper: validate tau (f64)
-// ---------------------------------------------------------------------------
-
-/// Validate tau: finite, non-negative (f64).
-#[inline]
-fn validate_tau(tau: f64) -> Result<(), SemiflowError> {
-    if !tau.is_finite() || tau < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "tau must be finite and >= 0",
-            value: tau,
-        });
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // ChernoffFunction impl
 // ---------------------------------------------------------------------------
 
@@ -279,7 +264,7 @@ impl ChernoffFunction<f64> for Diffusion6thZeta6Chernoff<f64> {
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
-        validate_tau(tau)?;
+        validate_tau_f64(tau)?;
 
         let n = src.values.len();
         let tau_half = tau / 2.0;

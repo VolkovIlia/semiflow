@@ -3,33 +3,11 @@
 //! Declared as `#[path = "diffusion4_helpers.rs"] mod helpers_f64;` inside
 //! `diffusion4.rs` — this file is a child of that module, so `super::` works.
 
-use crate::{error::SemiflowError, grid_fn::GridFn1D};
+use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
 use super::{Diffusion4thChernoff, C1, C2, C3, W0, W1, W2};
 
-/// Validate `tau`: must be finite and non-negative (f64).
-#[inline]
-pub(super) fn validate_tau_f64(tau: f64) -> Result<(), SemiflowError> {
-    if !tau.is_finite() || tau < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "tau must be finite and >= 0",
-            value: tau,
-        });
-    }
-    Ok(())
-}
-
-/// Validate `a(x_pre) ≥ 0` and finite (strict ellipticity for `sqrt`).
-#[inline]
-pub(super) fn validate_a_x_f64(a_x: f64, x: f64) -> Result<(), SemiflowError> {
-    if !a_x.is_finite() || a_x < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "a(x) must be finite and >= 0 (strict ellipticity required for sqrt)",
-            value: x,
-        });
-    }
-    Ok(())
-}
+pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
 
 /// γ-A inner-Strang baseline: `D_γ(τ) = S(τ/2) ∘ K(τ;a) ∘ S(τ/2)`.
 ///
