@@ -135,13 +135,14 @@ impl MeasureState {
                 "MeasureState.marginal: axis must be < 1 for D=1 build",
             ));
         }
-        let diracs = self.inner.diracs();
-        let n = diracs.len();
+        let n = self.inner.n_diracs();
         let pos_out = js_sys::Float64Array::new_with_length(n as u32);
         let wt_out = js_sys::Float64Array::new_with_length(n as u32);
-        for (i, (pos, w)) in diracs.iter().enumerate() {
-            pos_out.set_index(i as u32, pos[axis]);
-            wt_out.set_index(i as u32, *w);
+        // D=1 monomorphic build: use flat buffer API (axis validated above).
+        let (pos_v, wt_v) = self.inner.to_flat_buffers_d1();
+        for i in 0..n {
+            pos_out.set_index(i as u32, pos_v[i]);
+            wt_out.set_index(i as u32, wt_v[i]);
         }
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"positions".into(), &pos_out)?;

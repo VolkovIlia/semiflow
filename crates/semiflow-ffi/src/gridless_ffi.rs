@@ -211,19 +211,18 @@ pub unsafe extern "C" fn smf_measurestate_marginal(
     }
     catch_panic!({
         let ms = unsafe { &*state.cast::<MeasureState<f64, 1>>() };
-        let diracs = ms.diracs();
-        let n = diracs.len();
+        let n = ms.n_diracs();
         if cap < n {
             // Signal required size for retry.
             unsafe { *out_n = n };
             return SemiflowStatus::GridMismatch;
         }
-        let pos_sl = unsafe { std::slice::from_raw_parts_mut(out_pos, cap) };
-        let wt_sl = unsafe { std::slice::from_raw_parts_mut(out_wt, cap) };
-        for (i, (pos, w)) in diracs.iter().enumerate() {
-            pos_sl[i] = pos[axis];
-            wt_sl[i] = *w;
-        }
+        // D=1 monomorphic build: axis is validated above; use flat buffer API.
+        let (pos_v, wt_v) = ms.to_flat_buffers_d1();
+        let pos_sl = unsafe { std::slice::from_raw_parts_mut(out_pos, n) };
+        let wt_sl = unsafe { std::slice::from_raw_parts_mut(out_wt, n) };
+        pos_sl.copy_from_slice(&pos_v);
+        wt_sl.copy_from_slice(&wt_v);
         unsafe { *out_n = n };
         SemiflowStatus::Ok
     })

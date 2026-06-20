@@ -18,10 +18,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Engel), graph family (4th-order, Magnus-6, VarCoef, Quantum, Strang),
   sparse-grid SmolyakD6, Adjoint, AdaptivePI, and ComplexTripleJump/PointEval.
 - **S³ carrier surface stabilised** (ADR-0171): `TtState/TtEvolver`,
-  `TtCoupledEvolver`, and `GridlessEvolver/MeasureState` are now reachable
-  from C via the opaque carrier-handle ABI; the `s3-poc` cargo feature that
+  `TtCoupledEvolver`, and `GridlessEvolver/MeasureState` are now exposed
+  across all three binding layers — `semiflow-ffi` (C opaque-handle ABI),
+  `semiflow-py` (PyO3), and `semiflow-wasm` (wasm-bindgen) — and are covered
+  by dedicated smoke tests (`crates/semiflow-ffi/tests/ffi_s3_smoke.rs` and
+  `crates/semiflow-wasm/tests/s3_smoke.rs`).  The `s3-poc` cargo feature that
   previously guarded the six S³ POC evolvers is retired — those types are now
   part of the default core API.
+  Exported C symbols: `smf_ttstate_new_separable`, `smf_ttstate_free`,
+  `smf_ttstate_ndim`, `smf_ttstate_n_j`, `smf_ttstate_peak_rank`,
+  `smf_ttstate_storage_size`, `smf_ttstate_inner_separable`,
+  `smf_tt_evolver_new`, `smf_tt_evolver_evolve`, `smf_tt_evolver_free`
+  (`SmfTtState`, `SmfTtEvolver`); `smf_tt_coupled_new`,
+  `smf_tt_coupled_evolve`, `smf_tt_coupled_free` (`SmfTtCoupledEvolver`);
+  `smf_measurestate_new`, `smf_measurestate_free`, `smf_measurestate_n_diracs`,
+  `smf_measurestate_total_variation`, `smf_measurestate_second_moment`,
+  `smf_measurestate_marginal`, `smf_gridless_new`, `smf_gridless_apply`,
+  `smf_gridless_evolve`, `smf_gridless_free` (`SmfMeasureState`,
+  `SmfGridlessEvolver`).  WASM JS types: `TtState`, `TtEvolver`,
+  `TtCoupledEvolver`, `MeasureState`, `GridlessEvolver`.
 - **WASM `full` cargo feature**: the default/"lite" WASM build stays small
   (≈ 768 KB raw, baseline 1D + graph engines); `--features full` enables all
   heavy-grid, multi-dimensional, and hypoelliptic engines (≈ 1.4 MB raw).
@@ -33,7 +48,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and
 `GraphAdjoint` dense read-back remain PyO3-only deferrals (closures and
 dense-matrix read-back are not expressible in a stable C / WASM ABI without
-additional design work).  S³ WASM exposure is deferred to a follow-up release.
+additional design work).
 
 Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI contract).
 

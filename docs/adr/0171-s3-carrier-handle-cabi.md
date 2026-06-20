@@ -1,9 +1,16 @@
 # ADR-0171 — S³ non-grid engines get an opaque carrier-handle C-ABI; ragged arrays flatten as data+offsets; Py/WASM mirror it
 
-**Status:** ACCEPTED · **Date:** 2026-06-19 · **Branch:** `experiment/triz-s3-curse-escape`
+**Status:** IMPLEMENTED · **Date:** 2026-06-19 · **Wired:** 2026-06-20 · **Branch:** `experiment/triz-s3-curse-escape`
 **Theme:** v9.2.0 — binding surface for the three S³ non-grid carriers (TtState/TtChernoff, CoupledTtChernoff, GridlessChernoff/MeasureState)
 **Cross-refs:** ADR-0028 (FFI/PyO3/WASM split — C ABI is the canonical source, Py/WASM mirror; opaque-handle + `SemiflowStatus` + `catch_panic!` baseline), ADR-0076 (additive `_v3` binding surface), ADR-0162 (`CoupledTtChernoff` fail-loud construction), ADR-0169 (boundary-as-type S³ public scope).
 **Contract:** `contracts/semiflow-ffi.s3-carrier-handle.yaml`.
+**Implementation note (2026-06-20):** FFI and WASM wiring is complete.
+`crates/semiflow-ffi/src/lib.rs` declares the `tt_ffi`, `tt_coupled_ffi`, and
+`gridless_ffi` modules unconditionally; `crates/semiflow-wasm/src/lib.rs` mirrors
+them with wasm-bindgen JS classes (`TtState`, `TtEvolver`, `TtCoupledEvolver`,
+`MeasureState`, `GridlessEvolver`).  PyO3 wiring was already present.
+Smoke tests: `crates/semiflow-ffi/tests/ffi_s3_smoke.rs` and
+`crates/semiflow-wasm/tests/s3_smoke.rs`.
 
 ## Decision
 
