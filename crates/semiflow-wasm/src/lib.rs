@@ -59,6 +59,11 @@ mod state;
 mod v3;
 mod wentzell_wasm;
 
+#[cfg(feature = "full")]
+mod diffusion_hi_wasm;
+#[cfg(feature = "full")]
+mod diffusion_extra_wasm;
+
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
 pub use graph_wasm_hi::GraphHeat6;
@@ -69,6 +74,13 @@ pub use reverse_ad_wasm::ReverseHeat1D;
 pub use state::Heat1D;
 pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
 pub use wentzell_wasm::{GammaFamily, WentzellV8};
+
+#[cfg(feature = "full")]
+pub use diffusion_hi_wasm::{Heat1D4th, Heat1D6th, Heat1DZeta4, Heat1DZeta6, Heat1DZeta8};
+#[cfg(feature = "full")]
+pub use diffusion_extra_wasm::{
+    DriftReaction1D, Shift1D, Strang1D, TruncatedExp1D, TruncatedExp4th1D,
+};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///
