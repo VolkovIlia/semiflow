@@ -126,26 +126,11 @@ pub fn canonical_reverse_ad_core() -> (f64, f64) {
 }
 
 // ---------------------------------------------------------------------------
-// K-vector canonical reference (Phase 3 — K>1 gradient, 0-ULP parity)
+// K>1 fail-loud fixture (ADR-0172 — K=1-only scope)
 // ---------------------------------------------------------------------------
 
-/// K for the K-vector smoke (must match across all binding sub-tests).
-pub const K_VEC: usize = 4;
-
-/// Run `value_and_grad` with a K-vector `theta = [THETA; K_VEC]` and return
-/// `(value, grad_vec)`. This is the golden pair for sub-test 4 (K-vector parity).
-#[must_use]
-pub fn canonical_reverse_ad_kvec() -> (f64, Vec<f64>) {
-    let rc = build_canonical_rc();
-    let grid = Grid1D::<f64>::new(X_MIN, X_MAX, N_GRID)
-        .expect("grid valid")
-        .with_interp(InterpKind::CubicHermite);
-    let u0_fn = GridFn1D::new(grid, make_u0()).expect("u0 valid");
-    let target_fn = GridFn1D::new(grid, make_target()).expect("target valid");
-    let theta = vec![THETA; K_VEC];
-    rc.value_and_grad(TAU, N_STEPS, &u0_fn, &target_fn, &theta)
-        .expect("value_and_grad K-vec ok")
-}
+/// K for the fail-loud check (K>1 must return Err per ADR-0172).
+pub const K_VEC: usize = 2;
 
 // ---------------------------------------------------------------------------
 // Test: core golden (RELEASE_BLOCKING)
@@ -261,78 +246,42 @@ fn g_binding_reverse_ad_parity_grad_fd_anchor() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-test 4 (K-vector) — golden + determinism (RELEASE_BLOCKING, Phase 3)
+// Sub-test 4 (K>1 fail-loud) — ADR-0172 K=1-only scope (RELEASE_BLOCKING)
 // ---------------------------------------------------------------------------
 
-/// Core golden for K-vector case: two identical runs must be 0-ULP.
+/// K>1 must return `Err(SemiflowError::UnsupportedOperation)` (ADR-0172).
+///
+/// Replaces the former broadcast-equality test that masked the bug:
+/// the old test asserted all K grad components equal the K=1 scalar,
+/// which passed precisely BECAUSE of the degenerate broadcast (all slots
+/// computed from the same single-θ dual kernel, so they are identical by
+/// construction — not by genuine multi-parameter correctness).
+///
+/// The broadcast is the correct answer to an ill-posed question. The fix
+/// (ADR-0172) makes the ill-posedness explicit by failing loudly at the
+/// boundary.
 #[test]
-fn g_binding_reverse_ad_parity_kvec_core_golden() {
-    let (value, grad_vec) = canonical_reverse_ad_kvec();
+fn g_binding_reverse_ad_parity_kvec_fails_loud() {
+    use semiflow_core::SemiflowError;
+
+    let rc = build_canonical_rc();
+    let grid = Grid1D::<f64>::new(X_MIN, X_MAX, N_GRID)
+        .expect("grid valid")
+        .with_interp(InterpKind::CubicHermite);
+    let u0_fn = GridFn1D::new(grid, make_u0()).expect("u0 valid");
+    let target_fn = GridFn1D::new(grid, make_target()).expect("target valid");
+
+    // K=2 (K_VEC): must return Err, not silently broadcast.
+    let theta_k2 = vec![THETA; K_VEC]; // K_VEC = 2
+    let result = rc.value_and_grad(TAU, N_STEPS, &u0_fn, &target_fn, &theta_k2);
 
     assert!(
-        value.is_finite() && value > 0.0,
-        "G_BINDING_REVERSE_AD_PARITY (kvec): value = {value:.6e} must be finite and > 0"
+        matches!(result, Err(SemiflowError::UnsupportedOperation { .. })),
+        "G_BINDING_REVERSE_AD_PARITY (kvec fail-loud, K={K_VEC}): \
+         expected Err(UnsupportedOperation), got {result:?}"
     );
-    assert_eq!(
-        grad_vec.len(),
-        K_VEC,
-        "G_BINDING_REVERSE_AD_PARITY (kvec): grad_vec len {}, expected {K_VEC}",
-        grad_vec.len()
-    );
-    for (p, &g) in grad_vec.iter().enumerate() {
-        assert!(
-            g.is_finite(),
-            "G_BINDING_REVERSE_AD_PARITY (kvec): grad[{p}] = {g:.6e} must be finite"
-        );
-    }
-
     println!(
-        "G_BINDING_REVERSE_AD_PARITY (kvec golden, K={K_VEC}):\n\
-         config: θ={THETA}×{K_VEC}, N={N_GRID}, n_steps={N_STEPS}, τ={TAU}\n\
-         value      = {value:.16e}\n\
-         grad_vec   = {grad_vec:?}\n\
-         NOTE: sub-tests 2 (PyO3) and 3 (WASM) K-vec must match bit-exactly (0 ULP)."
-    );
-}
-
-/// K-vector determinism: two identical runs must be 0 ULP.
-#[test]
-fn g_binding_reverse_ad_parity_kvec_determinism_0ulp() {
-    let (va, ga) = canonical_reverse_ad_kvec();
-    let (vb, gb) = canonical_reverse_ad_kvec();
-
-    let v_ulp = (va.to_bits() as i64 - vb.to_bits() as i64).unsigned_abs();
-    for (p, (a, b)) in ga.iter().zip(gb.iter()).enumerate() {
-        let ulp = (a.to_bits() as i64 - b.to_bits() as i64).unsigned_abs();
-        assert_eq!(
-            ulp, 0,
-            "G_BINDING_REVERSE_AD_PARITY (kvec determinism): grad[{p}] ULP={ulp}"
-        );
-    }
-    assert_eq!(
-        v_ulp, 0,
-        "G_BINDING_REVERSE_AD_PARITY (kvec determinism): value ULP={v_ulp}"
-    );
-    println!("G_BINDING_REVERSE_AD_PARITY (kvec determinism): value ULP=0 grad ULP=0 ✓");
-}
-
-/// K-vector vs K=1: all K grad components must equal the K=1 scalar gradient
-/// (same θ seed, same backward sweep — just accumulated K times).
-#[test]
-fn g_binding_reverse_ad_parity_kvec_vs_k1_0ulp() {
-    let (_, grad_k1) = canonical_reverse_ad_core();
-    let (_, grad_kv) = canonical_reverse_ad_kvec();
-
-    for (p, &g) in grad_kv.iter().enumerate() {
-        let ulp = (g.to_bits() as i64 - grad_k1.to_bits() as i64).unsigned_abs();
-        assert_eq!(
-            ulp, 0,
-            "G_BINDING_REVERSE_AD_PARITY (kvec vs k1): grad_vec[{p}]={g:.16e} \
-             vs k1={grad_k1:.16e} ULP={ulp} (expected 0)"
-        );
-    }
-    println!(
-        "G_BINDING_REVERSE_AD_PARITY (kvec vs k1, K={K_VEC}): all {K_VEC} \
-         components 0-ULP vs K=1 scalar ✓"
+        "G_BINDING_REVERSE_AD_PARITY (kvec fail-loud, K={K_VEC}): \
+         K>1 correctly returns Err(UnsupportedOperation) per ADR-0172 ✓"
     );
 }

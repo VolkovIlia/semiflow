@@ -157,14 +157,21 @@ fn g_binding_reverse_ad_parity_sub2_pyo3_vs_core_0ulp() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-test 4 (PyO3 K-vector, 0-ULP) — Phase 3 extension
+// Sub-test 4 (PyO3 K>1 fail-loud) — ADR-0172 K=1-only scope
 // ---------------------------------------------------------------------------
 
-/// K for K-vector smoke (mirrors `binding_reverse_ad_parity.rs` `K_VEC`).
-const K_VEC: usize = 4;
+/// K for fail-loud check (K>1 must return Err per ADR-0172).
+const K_VEC: usize = 2;
 
-/// Reconstruct K-vector `(value, grad_vec)` via the inline `PyO3` arithmetic path.
-fn run_kvec_inline(theta: f64) -> (f64, Vec<f64>) {
+/// Sub-test 4: `PyO3` K>1 must return `Err(SemiflowError::UnsupportedOperation)`.
+///
+/// Replaces the former broadcast-equality tests that masked the degenerate-broadcast
+/// bug (ADR-0172). Both the `_vs_k1_0ulp` and `_determinism_0ulp` tests have been
+/// merged into this single fail-loud gate.
+#[test]
+fn g_binding_reverse_ad_parity_sub4_pyo3_kvec_fails_loud() {
+    use semiflow_core::SemiflowError;
+
     let grid_f64 = Grid1D::<f64>::new(X_MIN, X_MAX, N_GRID)
         .unwrap()
         .with_interp(InterpKind::CubicHermite);
@@ -173,17 +180,17 @@ fn run_kvec_inline(theta: f64) -> (f64, Vec<f64>) {
             .unwrap()
             .with_interp(InterpKind::CubicHermite);
     let kernel_f64 = DiffusionChernoff::with_closure(
-        move |_: f64| theta,
+        move |_: f64| THETA,
         |_: f64| 0.0_f64,
         |_: f64| 0.0_f64,
-        theta,
+        THETA,
         grid_f64,
     );
     let kernel_dual = DiffusionChernoff::<Dual<f64>>::with_closure(
-        move |_: Dual<f64>| Dual::variable(theta),
+        move |_: Dual<f64>| Dual::variable(THETA),
         |_: Dual<f64>| Dual::constant(0.0_f64),
         |_: Dual<f64>| Dual::constant(0.0_f64),
-        theta,
+        THETA,
         grid_dual,
     );
     let rc = ReverseChernoff::new(kernel_f64, kernel_dual, CheckpointSchedule::sqrt_n(N_STEPS));
@@ -196,49 +203,18 @@ fn run_kvec_inline(theta: f64) -> (f64, Vec<f64>) {
         .collect();
     let u0_fn = GridFn1D::new(grid_f64, u0_vals).unwrap();
     let target_fn = GridFn1D::new(grid_f64, vec![0.0_f64; N_GRID]).unwrap();
-    let theta_v = vec![theta; K_VEC];
-    rc.value_and_grad(TAU, N_STEPS, &u0_fn, &target_fn, &theta_v)
-        .unwrap()
-}
 
-/// Sub-test 4: `PyO3` K-vector 0-ULP vs K=1 scalar (same arithmetic, same backward sweep).
-#[test]
-fn g_binding_reverse_ad_parity_sub4_pyo3_kvec_vs_k1_0ulp() {
-    let (_, grad_k1) = run_reverse_ad_inline(THETA);
-    let (_, grad_kv) = run_kvec_inline(THETA);
-    assert_eq!(
-        grad_kv.len(),
-        K_VEC,
-        "PyO3 kvec: grad_vec len {} != K_VEC={K_VEC}",
-        grad_kv.len()
-    );
-    for (p, &g) in grad_kv.iter().enumerate() {
-        let ulp = (g.to_bits() as i64 - grad_k1.to_bits() as i64).unsigned_abs();
-        assert_eq!(
-            ulp, 0,
-            "G_BINDING_REVERSE_AD_PARITY sub-test 4 (PyO3 kvec): \
-             grad_vec[{p}]={g:.16e} vs k1={grad_k1:.16e} ULP={ulp} (expected 0)"
-        );
-    }
-    println!(
-        "G_BINDING_REVERSE_AD_PARITY sub-test 4 (PyO3 kvec vs k1, K={K_VEC}): \
-         all {K_VEC} components 0-ULP ✓"
-    );
-}
+    // K=2: must return Err, not silently broadcast.
+    let theta_k2 = vec![THETA; K_VEC];
+    let result = rc.value_and_grad(TAU, N_STEPS, &u0_fn, &target_fn, &theta_k2);
 
-/// Sub-test 4: `PyO3` K-vector determinism (two runs, 0 ULP).
-#[test]
-fn g_binding_reverse_ad_parity_sub4_pyo3_kvec_determinism_0ulp() {
-    let (va, ga) = run_kvec_inline(THETA);
-    let (vb, gb) = run_kvec_inline(THETA);
-    let v_ulp = (va.to_bits() as i64 - vb.to_bits() as i64).unsigned_abs();
-    assert_eq!(v_ulp, 0, "PyO3 kvec determinism: value ULP={v_ulp}");
-    for (p, (a, b)) in ga.iter().zip(gb.iter()).enumerate() {
-        let ulp = (a.to_bits() as i64 - b.to_bits() as i64).unsigned_abs();
-        assert_eq!(ulp, 0, "PyO3 kvec determinism: grad[{p}] ULP={ulp}");
-    }
+    assert!(
+        matches!(result, Err(SemiflowError::UnsupportedOperation { .. })),
+        "G_BINDING_REVERSE_AD_PARITY sub-test 4 (PyO3 kvec fail-loud, K={K_VEC}): \
+         expected Err(UnsupportedOperation), got {result:?}"
+    );
     println!(
-        "G_BINDING_REVERSE_AD_PARITY sub-test 4 (PyO3 kvec determinism, K={K_VEC}): \
-         value + {K_VEC} grad components 0-ULP ✓"
+        "G_BINDING_REVERSE_AD_PARITY sub-test 4 (PyO3 kvec fail-loud, K={K_VEC}): \
+         K>1 correctly returns Err(UnsupportedOperation) per ADR-0172 ✓"
     );
 }
