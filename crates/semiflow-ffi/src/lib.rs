@@ -198,6 +198,43 @@ pub use hypoelliptic_engel_ffi::{
     smf_hypo_engel_size, smf_hypo_engel_free, SmfHypoEngel,
 };
 
+// Round 10 — graph-heat family parity (GraphHeat4th, MagnusGraphHeat6, VarCoefGraphHeat)
+pub mod graph_heat_extra_ffi;
+pub mod graph_vc_ghc_ffi;
+pub use graph_heat_extra_ffi::{
+    smf_ghc4_new, smf_ghc4_apply_into, smf_ghc4_current, smf_ghc4_drop, SmfGhc4,
+    smf_mghc6_new, smf_mghc6_apply_into, smf_mghc6_current, smf_mghc6_drop, SmfMghc6,
+};
+pub use graph_vc_ghc_ffi::{
+    smf_vc_ghc_new, smf_vc_ghc_apply_into, smf_vc_ghc_current, smf_vc_ghc_drop, SmfVcGhc,
+};
+
+// Round 11 — niche engines (QuantumGraphHeat, StrangGraph, ComplexTripleJump, PointEval)
+pub mod quantum_graph_ffi;
+pub mod strang_graph_ffi;
+pub mod carnot_ffi;
+pub mod point_eval_ffi;
+pub use quantum_graph_ffi::{
+    smf_qgraph_path, smf_qgraph_star, smf_qgraph_from_edges,
+    smf_qgraph_n_edges, smf_qgraph_n_per_edge, smf_qgraph_total_len, smf_qgraph_drop,
+    SmfQuantumGraph,
+    smf_qgheat_new, smf_qgheat_set_state, smf_qgheat_evolve,
+    smf_qgheat_values, smf_qgheat_size, smf_qgheat_drop, SmfQuantumGraphHeat,
+};
+pub use strang_graph_ffi::{
+    smf_strang_graph_path_new, smf_strang_graph_cycle_new,
+    smf_strang_graph_evolve, smf_strang_graph_n_nodes, smf_strang_graph_order,
+    smf_strang_graph_drop, SmfStrangGraph,
+};
+pub use carnot_ffi::{
+    smf_carnot_ctj_new, smf_carnot_ctj_apply_real, smf_carnot_ctj_size,
+    smf_carnot_ctj_verify_gamma_star, smf_carnot_ctj_drop, SmfCarnotCtj,
+};
+pub use point_eval_ffi::{
+    smf_point_eval_new, smf_point_eval_eval_at, smf_point_eval_size,
+    smf_point_eval_drop, SmfPointEval,
+};
+
 // Round 9 — obstacle, adjoint, and adaptive-stepping engines
 pub mod obstacle_ffi;
 pub mod adjoint_ffi;

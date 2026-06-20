@@ -512,6 +512,80 @@ typedef struct {
 } SmfHypoEngel;
 
 /**
+ * Opaque handle to a `GraphHeat4thChernoff<f64>` state.
+ *
+ * Allocate with `smf_ghc4_new`, free with `smf_ghc4_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfGhc4;
+
+/**
+ * Opaque handle to a `MagnusGraphHeat6thChernoff<f64>` state.
+ *
+ * Allocate with `smf_mghc6_new`, free with `smf_mghc6_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMghc6;
+
+/**
+ * Opaque handle to a `VarCoefGraphHeatChernoff<f64>` state.
+ *
+ * Allocate with `smf_vc_ghc_new`, free with `smf_vc_ghc_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfVcGhc;
+
+/**
+ * Opaque handle to a `QuantumGraph<f64>`.
+ *
+ * Allocate with `smf_qgraph_*`; free with `smf_qgraph_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfQuantumGraph;
+
+/**
+ * Opaque handle to a `QuantumGraphHeatChernoff` evolver state.
+ *
+ * Allocate with `smf_qgheat_new`; free with `smf_qgheat_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfQuantumGraphHeat;
+
+/**
+ * Opaque handle to a `StrangSplitGraph<GraphHeatChernoff, GraphHeatChernoff, f64>`.
+ *
+ * Allocate with `smf_strang_graph_path_new` / `smf_strang_graph_cycle_new`;
+ * free with `smf_strang_graph_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfStrangGraph;
+
+/**
+ * Opaque handle to a `ComplexTripleJump` evolver (filiform-N5, D=5 fixed).
+ *
+ * Allocate with `smf_carnot_ctj_new`; free with `smf_carnot_ctj_drop`.
+ * Only `apply_real` is exposed — no complex buffer crossing (ADR-0138).
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfCarnotCtj;
+
+/**
+ * Opaque handle for 1-D unit-diffusion `PointEval`.
+ *
+ * Allocate with `smf_point_eval_new`; free with `smf_point_eval_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfPointEval;
+
+/**
  * Opaque handle to a 1-D obstacle Chernoff evolver.
  *
  * Obtained from `smf_obstacle1d_new`; free with `smf_obstacle1d_free`.
@@ -3866,6 +3940,469 @@ uintptr_t smf_hypo_engel_size(const SmfHypoEngel *ev);
  * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
  */
 void smf_hypo_engel_free(SmfHypoEngel *ev);
+
+/**
+ * Construct a `GraphHeat4thChernoff` (order-4) state.
+ *
+ * Solves `∂ₜu = −L_G u` via the order-4 Taylor–Padé kernel.
+ *
+ * ## Preconditions
+ * - `graph`, `init_sig`, `out` non-null.
+ *
+ * ## Return values
+ * - `Ok` (0), `NullPtr` (5), `Panic` (99).
+ *
+ * ## Ownership
+ * Caller owns `*out`; free with `smf_ghc4_drop`.
+ *
+ * # Safety
+ * All pointers must come from this crate's constructors and be valid.
+ */
+SemiflowStatus smf_ghc4_new(const SmfGraph *graph, const SmfGraphSig *init_sig, SmfGhc4 **out);
+
+/**
+ * Advance the `GraphHeat4` state by `tau` using `n_steps` Chernoff steps.
+ *
+ * Reconstructs the kernel from the stored `Arc<Laplacian>` (Arc bump only).
+ *
+ * ## Return values
+ * `Ok` (0), `NullPtr` (5), `OutOfDomain` (3), `Panic` (99).
+ *
+ * # Safety
+ * `state` must be a valid non-null pointer from `smf_ghc4_new`.
+ */
+SemiflowStatus smf_ghc4_apply_into(SmfGhc4 *state, double tau, uint32_t n_steps);
+
+/**
+ * Copy current `GraphHeat4` signal values into `buf`.
+ *
+ * ## Return values
+ * `Ok` (0), `NullPtr` (5), `GridMismatch` (1), `Panic` (99).
+ *
+ * # Safety
+ * `state` from `smf_ghc4_new`; `buf` valid for `buf_len` f64 writes.
+ */
+SemiflowStatus smf_ghc4_current(const SmfGhc4 *state, double *buf, uint32_t buf_len);
+
+/**
+ * Free a `SmfGhc4` handle. Null-safe.
+ *
+ * # Safety
+ * `state` must be null or a pointer from `smf_ghc4_new` not yet freed.
+ */
+void smf_ghc4_drop(SmfGhc4 *state);
+
+/**
+ * Construct a `MagnusGraphHeat6thChernoff` (K=6) state.
+ *
+ * Solves `∂ₜu = −L_G(t) u` using sixth-order GL₆ three-point Magnus.
+ *
+ * ## Callback contract (`lap_at_t_fn`)
+ * Identical to `smf_mghc_new`: the C callback writes a freshly allocated
+ * `SmfGraph` to `*out_graph`; Rust takes ownership immediately.
+ *
+ * ## Preconditions
+ * - `graph`, `init_sig`, `out` non-null; `lap_at_t_fn` non-null.
+ * - `rho_bar_max > 0` and finite.
+ *
+ * ## Return values
+ * - `Ok` (0), `NullPtr` (5), `OutOfDomain` (3), `Panic` (99).
+ *
+ * ## Ownership
+ * Caller owns `*out`; free with `smf_mghc6_drop`.
+ *
+ * # Safety
+ * - `graph`, `init_sig`, `out` must be valid non-null pointers.
+ * - `lap_at_t_fn` and `user_data` must remain valid until `smf_mghc6_drop`.
+ */
+SemiflowStatus smf_mghc6_new(const SmfGraph *graph,
+                             const SmfGraphSig *init_sig,
+                             Option_SmfLapAtTFn lap_at_t_fn,
+                             void *user_data,
+                             double rho_bar_max,
+                             int32_t convergence_radius_check,
+                             SmfMghc6 **out);
+
+/**
+ * Advance the Magnus K=6 state by `tau` using `n_steps` sub-steps.
+ *
+ * Each sub-step calls `lap_at_t_fn` three times (GL₆ abscissas).
+ * The internal time cursor advances by `tau` on success.
+ *
+ * ## Return values
+ * `Ok`(0), `NullPtr`(5), `OutOfDomain`(3), `ConvergenceFailed`(7), `Panic`(99).
+ *
+ * # Safety
+ * `state` must be a valid non-null pointer from `smf_mghc6_new`.
+ */
+SemiflowStatus smf_mghc6_apply_into(SmfMghc6 *state, double tau, uint32_t n_steps);
+
+/**
+ * Copy current Magnus K=6 signal values into `buf`.
+ *
+ * ## Return values
+ * `Ok` (0), `NullPtr` (5), `GridMismatch` (1), `Panic` (99).
+ *
+ * # Safety
+ * `state` from `smf_mghc6_new`; `buf` valid for `buf_len` f64 writes.
+ */
+SemiflowStatus smf_mghc6_current(const SmfMghc6 *state, double *buf, uint32_t buf_len);
+
+/**
+ * Free a `SmfMghc6` handle. Null-safe.
+ *
+ * # Safety
+ * `state` must be null or a pointer from `smf_mghc6_new` not yet freed.
+ */
+void smf_mghc6_drop(SmfMghc6 *state);
+
+/**
+ * Construct a `VarCoefGraphHeatChernoff` (order-2, variable-coefficient) state.
+ *
+ * Solves `∂ₜu = −L_a u`, `L_a = A^{1/2} L_G A^{1/2}`, `A = diag(a)`.
+ *
+ * ## Preconditions
+ * - `graph`, `init_sig`, `a_vals`, `out` non-null.
+ * - `a_len == n_nodes`.
+ * - All `a_vals[i] > 0` and finite; `rho_bar > 0` and finite.
+ *
+ * ## Return values
+ * - `Ok` (0), `NullPtr` (5), `OutOfDomain` (3), `GridMismatch` (1), `Panic` (99).
+ *
+ * ## Ownership
+ * Caller owns `*out`; free with `smf_vc_ghc_drop`.
+ *
+ * # Safety
+ * - `graph`, `init_sig`, `out` must be valid non-null pointers.
+ * - `a_vals` must be valid for `a_len` f64 reads for the duration of the call.
+ */
+SemiflowStatus smf_vc_ghc_new(const SmfGraph *graph,
+                              const SmfGraphSig *init_sig,
+                              const double *a_vals,
+                              uint32_t a_len,
+                              double rho_bar,
+                              SmfVcGhc **out);
+
+/**
+ * Advance the var-coef graph heat state by `tau` using `n_steps` Chernoff steps.
+ *
+ * Reconstructs the kernel from stored graph + `a` + `rho_bar` each call
+ * (Laplacian assembly is `O(E)` — proportional to edge count, fast in practice).
+ *
+ * ## Return values
+ * `Ok` (0), `NullPtr` (5), `OutOfDomain` (3), `Panic` (99).
+ *
+ * # Safety
+ * `state` must be a valid non-null pointer from `smf_vc_ghc_new`.
+ */
+SemiflowStatus smf_vc_ghc_apply_into(SmfVcGhc *state, double tau, uint32_t n_steps);
+
+/**
+ * Copy current var-coef graph heat signal values into `buf`.
+ *
+ * ## Return values
+ * `Ok` (0), `NullPtr` (5), `GridMismatch` (1), `Panic` (99).
+ *
+ * # Safety
+ * `state` from `smf_vc_ghc_new`; `buf` valid for `buf_len` f64 writes.
+ */
+SemiflowStatus smf_vc_ghc_current(const SmfVcGhc *state, double *buf, uint32_t buf_len);
+
+/**
+ * Free a `SmfVcGhc` handle. Null-safe.
+ *
+ * # Safety
+ * `state` must be null or a pointer from `smf_vc_ghc_new` not yet freed.
+ */
+void smf_vc_ghc_drop(SmfVcGhc *state);
+
+/**
+ * Build a path graph `P_{n_edges+1}` and write the handle to `*out`.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfQuantumGraph`.
+ */
+SemiflowStatus smf_qgraph_path(uintptr_t n_edges,
+                               double edge_length,
+                               uintptr_t n_grid,
+                               SmfQuantumGraph **out);
+
+/**
+ * Build a star graph (1 hub + `n_arms` leaves) and write handle to `*out`.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfQuantumGraph`.
+ */
+SemiflowStatus smf_qgraph_star(uintptr_t n_arms,
+                               double edge_length,
+                               uintptr_t n_grid,
+                               SmfQuantumGraph **out);
+
+/**
+ * Build from explicit edge triplets `[vertex_a, vertex_b, edge_length, ...]`.
+ *
+ * `edges` must be a pointer to `n_triplets * 3` `f64` values.
+ *
+ * # Safety
+ * `edges` must point to `n_triplets * 3` readable `f64`s.
+ * `out` must be a valid writable `*mut *mut SmfQuantumGraph`.
+ */
+SemiflowStatus smf_qgraph_from_edges(const double *edges,
+                                     uintptr_t n_triplets,
+                                     uintptr_t n_grid,
+                                     SmfQuantumGraph **out);
+
+/**
+ * Return number of edges; 0 if null.
+ *
+ * # Safety
+ * `g` must be null or a live pointer from `smf_qgraph_*`.
+ */
+uintptr_t smf_qgraph_n_edges(const SmfQuantumGraph *g);
+
+/**
+ * Return grid points per edge; 0 if null.
+ *
+ * # Safety
+ * `g` must be null or a live pointer from `smf_qgraph_*`.
+ */
+uintptr_t smf_qgraph_n_per_edge(const SmfQuantumGraph *g);
+
+/**
+ * Return sum of all edge lengths; 0.0 if null.
+ *
+ * # Safety
+ * `g` must be null or a live pointer from `smf_qgraph_*`.
+ */
+double smf_qgraph_total_len(const SmfQuantumGraph *g);
+
+/**
+ * Free a `SmfQuantumGraph`. Null-safe.
+ *
+ * # Safety
+ * `g` must be null or a live pointer from `smf_qgraph_*` not yet freed.
+ */
+void smf_qgraph_drop(SmfQuantumGraph *g);
+
+/**
+ * Construct a `QuantumGraphHeat` evolver from a `SmfQuantumGraph`.
+ *
+ * # Safety
+ * `qgraph` and `out` must be non-null valid pointers.
+ */
+SemiflowStatus smf_qgheat_new(const SmfQuantumGraph *qgraph, SmfQuantumGraphHeat **out);
+
+/**
+ * Set initial state from a flat `f64` buffer.
+ *
+ * `len` must equal `n_edges * n_per_edge`.
+ *
+ * # Safety
+ * `ev` live from `smf_qgheat_new`; `u0` points to `len` readable `f64`s.
+ */
+SemiflowStatus smf_qgheat_set_state(SmfQuantumGraphHeat *ev, const double *u0, uintptr_t len);
+
+/**
+ * Advance state by time `t` using `n_steps` Chernoff iterations.
+ *
+ * `t` must be finite and >= 0; `n_steps` >= 1.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_qgheat_new`.
+ */
+SemiflowStatus smf_qgheat_evolve(SmfQuantumGraphHeat *ev, double t, uintptr_t n_steps);
+
+/**
+ * Copy current signal to `dst` (flat `f64`, length `n_edges * n_per_edge`).
+ *
+ * # Safety
+ * `ev` live from `smf_qgheat_new`; `dst` valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_qgheat_values(const SmfQuantumGraphHeat *ev, double *dst, uintptr_t dst_len);
+
+/**
+ * Return total grid nodes (`n_edges * n_per_edge`); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_qgheat_new`.
+ */
+uintptr_t smf_qgheat_size(const SmfQuantumGraphHeat *ev);
+
+/**
+ * Free a `SmfQuantumGraphHeat`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_qgheat_new` not yet freed.
+ */
+void smf_qgheat_drop(SmfQuantumGraphHeat *ev);
+
+/**
+ * Build a path-graph palindromic Strang split from `SmfGraph`.
+ *
+ * Requires `n_nodes >= 2` in the graph.
+ *
+ * # Safety
+ * `graph` and `out` must be non-null valid pointers.
+ */
+SemiflowStatus smf_strang_graph_path_new(const SmfGraph *graph, SmfStrangGraph **out);
+
+/**
+ * Build a cycle-graph palindromic Strang split from `SmfGraph`.
+ *
+ * Requires `n_nodes >= 4` and `n_nodes % 2 == 0`.
+ *
+ * # Safety
+ * `graph` and `out` must be non-null valid pointers.
+ */
+SemiflowStatus smf_strang_graph_cycle_new(const SmfGraph *graph, SmfStrangGraph **out);
+
+/**
+ * Evolve initial signal `f0` to time `t_final` with `n_steps` Strang steps.
+ *
+ * `f0` is a flat `f64` array of length `n_nodes`.
+ * On success `dst` receives the evolved signal (length `n_nodes`).
+ *
+ * # Safety
+ * `ev` live from constructor; `f0` readable `f0_len` f64s;
+ * `dst` writable `dst_len` f64s.
+ */
+SemiflowStatus smf_strang_graph_evolve(const SmfStrangGraph *ev,
+                                       double t_final,
+                                       uint32_t n_steps,
+                                       const double *f0,
+                                       uintptr_t f0_len,
+                                       double *dst,
+                                       uintptr_t dst_len);
+
+/**
+ * Return node count; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from a constructor.
+ */
+uintptr_t smf_strang_graph_n_nodes(const SmfStrangGraph *ev);
+
+/**
+ * Return approximation order (2 when commutativity holds, 1 otherwise); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from a constructor.
+ */
+uint32_t smf_strang_graph_order(const SmfStrangGraph *ev);
+
+/**
+ * Free a `SmfStrangGraph`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from a constructor not yet freed.
+ */
+void smf_strang_graph_drop(SmfStrangGraph *ev);
+
+/**
+ * Construct a `ComplexTripleJump` evolver.
+ *
+ * Parameters:
+ * - `domain_lo`: lower bound of each axis (finite, same for all 5 axes).
+ * - `domain_hi`: upper bound (`> domain_lo`).
+ * - `n_per_axis`: grid nodes per axis (`>= 4`).
+ * - `out`: receives the handle on success.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfCarnotCtj`.
+ */
+SemiflowStatus smf_carnot_ctj_new(double domain_lo,
+                                  double domain_hi,
+                                  uintptr_t n_per_axis,
+                                  SmfCarnotCtj **out);
+
+/**
+ * Apply one order-4 complex triple-jump step; write real projection to `dst`.
+ *
+ * `u0` is a flat `f64` array of length `n_per_axis^5` (real input).
+ * `dst` receives the real projection `Re(Ψ(τ)f)`; must be length `n_per_axis^5`.
+ * `tau >= 0`, finite.
+ *
+ * # Safety
+ * `ev` live from `smf_carnot_ctj_new`;
+ * `u0` readable `u0_len` f64s; `dst` writable `dst_len` f64s.
+ */
+SemiflowStatus smf_carnot_ctj_apply_real(const SmfCarnotCtj *ev,
+                                         double tau,
+                                         const double *u0,
+                                         uintptr_t u0_len,
+                                         double *dst,
+                                         uintptr_t dst_len);
+
+/**
+ * Return `n_per_axis^5`; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_carnot_ctj_new`.
+ */
+uintptr_t smf_carnot_ctj_size(const SmfCarnotCtj *ev);
+
+/**
+ * Verify γ⋆ satisfies the cubic `2γ³ + (1−2γ)³ = 0` with Re > 0.
+ *
+ * Returns 1 on pass, 0 on failure.
+ */
+int32_t smf_carnot_ctj_verify_gamma_star(void);
+
+/**
+ * Free a `SmfCarnotCtj`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_carnot_ctj_new` not yet freed.
+ */
+void smf_carnot_ctj_drop(SmfCarnotCtj *ev);
+
+/**
+ * Construct a `PointEval` with 1-D unit diffusion (`a ≡ 1`).
+ *
+ * Parameters:
+ * - `xmin`, `xmax`: grid boundaries (finite, `xmin < xmax`).
+ * - `n`: number of grid nodes (`>= 4`).
+ * - `out`: receives handle on success.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfPointEval`.
+ */
+SemiflowStatus smf_point_eval_new(double xmin, double xmax, uintptr_t n, SmfPointEval **out);
+
+/**
+ * Evaluate `(F(τ))^{n_steps} u0` at point `x`.
+ *
+ * `u0` is a flat `f64` array of length `n`.
+ * Returns the scalar approximation at `x` through `*out_val`.
+ * `n_steps >= 1`, `tau >= 0` and finite.
+ *
+ * # Safety
+ * `ev` live from `smf_point_eval_new`;
+ * `u0` readable `u0_len` f64s; `out_val` writable f64 pointer.
+ */
+SemiflowStatus smf_point_eval_eval_at(const SmfPointEval *ev,
+                                      double tau,
+                                      const double *u0,
+                                      uintptr_t u0_len,
+                                      double x,
+                                      uint32_t n_steps,
+                                      double *out_val);
+
+/**
+ * Return grid node count `n`; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_point_eval_new`.
+ */
+uintptr_t smf_point_eval_size(const SmfPointEval *ev);
+
+/**
+ * Free a `SmfPointEval`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_point_eval_new` not yet freed.
+ */
+void smf_point_eval_drop(SmfPointEval *ev);
 
 /**
  * Allocate a 1-D obstacle Chernoff evolver.

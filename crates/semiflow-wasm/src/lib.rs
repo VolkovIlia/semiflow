@@ -93,6 +93,18 @@ mod obstacle_wasm;
 mod adjoint_wasm;
 #[cfg(feature = "full")]
 mod adaptive_wasm;
+#[cfg(feature = "full")]
+mod graph_heat_extra_wasm;
+#[cfg(feature = "full")]
+mod graph_magnus_wasm;
+#[cfg(feature = "full")]
+mod quantum_graph_wasm;
+#[cfg(feature = "full")]
+mod strang_graph_wasm;
+#[cfg(feature = "full")]
+mod carnot_wasm;
+#[cfg(feature = "full")]
+mod point_eval_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -143,6 +155,20 @@ pub use obstacle_wasm::ObstacleChernoffWasm;
 pub use adjoint_wasm::Adjoint1D;
 #[cfg(feature = "full")]
 pub use adaptive_wasm::AdaptivePI1D;
+#[cfg(feature = "full")]
+pub use graph_heat_extra_wasm::{GraphHeat4thWasm, VarCoefGraphHeatWasm};
+#[cfg(feature = "full")]
+pub use graph_magnus_wasm::{
+    MagnusGraphHeatWasm, MagnusGraphHeat6Wasm, VarCoefMagnusGraphWasm,
+};
+#[cfg(feature = "full")]
+pub use quantum_graph_wasm::{QuantumGraphWasm, QuantumGraphHeatWasm};
+#[cfg(feature = "full")]
+pub use strang_graph_wasm::StrangGraphWasm;
+#[cfg(feature = "full")]
+pub use carnot_wasm::ComplexTripleJumpWasm;
+#[cfg(feature = "full")]
+pub use point_eval_wasm::PointEvalWasm;
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///
