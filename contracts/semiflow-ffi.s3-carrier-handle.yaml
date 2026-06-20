@@ -1,0 +1,539 @@
+# semiflow-ffi — S³ carrier-handle C-ABI surface (v9.2.0, ADR-0171).
+#
+# NORMATIVE contract for the C-ABI exposure of the three v9 "S³" non-grid
+# engines whose state does NOT fit the `&[f64]`-buffer ChernoffFunction shape
+# used by the grid evolvers (`smf_evolver_*_v3`):
+#
+#   1. TtState<f64> / TtChernoff<f64>          — tensor-train carrier (NEVER materialised)
+#   2. CoupledTtChernoff<f64>                   — TT + CouplingTopology
+#   3. GridlessChernoff<f64, D> / MeasureState  — weighted-Dirac particle carrier
+#
+# Phase 1 deliverable: CONTRACT ONLY, no `src/` code. The Engineer implements
+# the `extern "C"` bodies against this schema in a later stage, following the
+# carrier-handle pattern established by `crates/semiflow-ffi/src/{v3,wentzell_ffi}.rs`.
+#
+# This file is DATA (well-formed YAML). It is consumed by humans + the
+# artifact-consistency checker; there is no codegen step for the C ABI itself
+# (cbindgen reads the Rust source, not this YAML — see build-run note).
+#
+# Cross-references:
+#   - crates/semiflow-core/src/tt_chernoff.rs   — TtState, TtChernoff
+#   - crates/semiflow-core/src/tt_coupled.rs    — CoupledTtChernoff, CouplingTopology
+#   - crates/semiflow-core/src/tt_core.rs       — TtCore (rank/storage internals)
+#   - crates/semiflow-core/src/gridless.rs      — GridlessChernoff
+#   - crates/semiflow-core/src/gridless_reduce.rs — ParticleReduction
+#   - crates/semiflow-core/src/adjoint_fp.rs    — MeasureState
+#   - crates/semiflow-ffi/src/status.rs         — SemiflowStatus (REUSED verbatim)
+#   - crates/semiflow-ffi/src/v3.rs             — opaque-handle + catch_panic precedent
+#   - crates/semiflow-ffi/src/wentzell_ffi.rs   — flattened-schedule ABI precedent
+#   - docs/adr/0028-ffi-pyo3-wasm-v0_10.md      — opaque-handle / panic-boundary baseline
+#   - docs/adr/0162-…, 0169-…                   — CoupledTtChernoff fail-loud, S³ scope
+#   - docs/adr/0171-s3-carrier-handle-cabi.md   — THIS contract's rationale
+
+schema_version: "9.2.0"
+crate: semiflow-ffi
+edition: "2021"
+abi: "C"
+panic_boundary: "catch_panic! on every extern \"C\" fn; build under [profile.release-ffi] (panic=unwind)"
+status_enum: "SemiflowStatus (reused verbatim from crates/semiflow-ffi/src/status.rs — NO new variants)"
+float: "f64 only (binding layer is monomorphic; core remains generic over F)"
+
+# ===========================================================================
+# 0. Carrier-handle convention (NORMATIVE — applies to every type below)
+# ===========================================================================
+conventions:
+  - id: C-1
+    name: "Opaque carrier handle"
+    statement: |
+      Each engine/state is exposed as a zero-sized `#[repr(C)] struct Smf*
+      { _private: [u8; 0] }` returned as `*mut Smf*`. The real data is a
+      `Box<…Inner>` whose raw pointer is cast to the opaque type. The C caller
+      MUST NOT dereference or heap-allocate the struct. This mirrors
+      `SmfEvolverV3` (v3.rs:78) and `SmfWentzellEvolverV3` (wentzell_ffi.rs:64).
+      The full d-dimensional tensor / 3^d particle blow-up is NEVER materialised
+      across the ABI — only the carrier (TT cores / Dirac list) lives behind the
+      handle, and only scalar/marginal projections cross out. This IS the
+      curse-escape; no entry point returns or accepts a dense `n^d` buffer.
+
+  - id: C-2
+    name: "Ragged-array flattening (data + offsets)"
+    statement: |
+      C has no ragged arrays. Any nested `Vec<Vec<f64>>` (per-axis separable
+      slices / per-axis functionals) crosses the ABI as THREE arguments:
+        data:    *const f64   — all axis slices concatenated, axis 0 first.
+        offsets: *const usize — length `n_axes + 1`; offsets[0] == 0,
+                                offsets[n_axes] == total f64 count.
+                                Axis j occupies data[offsets[j] .. offsets[j+1]];
+                                its length is offsets[j+1] - offsets[j] == n_j.
+        n_axes:  usize        — number of axes (d). Equals offsets length - 1.
+      This is the prefix-sum (CSR-style) convention. It is the SAME shape the
+      caller would build for a CSR row-pointer. The kernel reconstructs
+      `Vec<Vec<f64>>` by slicing `data` at the offsets. Rationale: a single
+      flat buffer + an offsets array is allocation-free on the caller side and
+      unambiguous; it generalises ragged axes (different n_j per axis), which a
+      fixed `n_axes * stride` matrix cannot.
+
+  - id: C-3
+    name: "Ownership / lifetime"
+    statement: |
+      Constructors (`*_new*`) allocate and TRANSFER ownership to the caller as
+      `*mut Smf*`; the caller owns it until the matching `*_free` is called.
+      `*_free` is null-safe and idempotent-by-contract (do not double-free).
+      All other `*const Smf*` / `*mut Smf*` args BORROW for the call duration
+      only. All `*const f64` / `*const usize` input buffers and `*mut f64`
+      output buffers are CALLER-OWNED for the call duration; the kernel copies
+      what it needs and never retains a borrowed pointer past return.
+
+  - id: C-4
+    name: "Errors as status codes, never panics"
+    statement: |
+      Every fn returns `SemiflowStatus` (Ok=0 …). Null-check required pointers
+      BEFORE entering `catch_panic!` (→ NullPtr=5). A caught Rust panic →
+      Panic=99. Domain/shape violations map through `SemiflowStatus::from(&err)`.
+      A `CoupledTtChernoff::new` fail-loud assertion (drift b≠0, non-adjacent
+      pair, non-SPD block — see tt_coupled.rs:127/141) is PRE-CHECKED in the
+      binding and surfaced as `OutOfDomain=3` (NOT allowed to panic).
+
+  - id: C-5
+    name: "Out-parameter handle pattern"
+    statement: |
+      Constructors take a trailing `out_handle: *mut *mut Smf*` and write the
+      fresh handle on success only; on error `*out_handle` is left unchanged.
+      The function's return value is the `SemiflowStatus`. This matches
+      `smf_evolver_new_heat_1d_unit_v3` (v3.rs:127).
+
+# ===========================================================================
+# 1. Opaque handle types
+# ===========================================================================
+handles:
+  - name: SmfTtState
+    repr: "#[repr(C)] struct SmfTtState { _private: [u8; 0] }"
+    inner: "Box<TtState<f64>>"
+    doc: "Carrier: tensor-train cores. The d-dim tensor is never materialised."
+  - name: SmfTtEvolver
+    repr: "#[repr(C)] struct SmfTtEvolver { _private: [u8; 0] }"
+    inner: "Box<TtChernoff<f64>>"
+    doc: "Separable diagonal-A TT-Chernoff evolver (constant a, b, scalar c)."
+  - name: SmfTtCoupledEvolver
+    repr: "#[repr(C)] struct SmfTtCoupledEvolver { _private: [u8; 0] }"
+    inner: "Box<CoupledTtChernoff<f64>>"
+    doc: "Cross-axis TT-Chernoff evolver carrying a CouplingTopology."
+  - name: SmfMeasureState
+    repr: "#[repr(C)] struct SmfMeasureState { _private: [u8; 0] }"
+    inner: "Box<MeasureState<f64, D>>  // D fixed per build; v9.2.0 ABI ships D = 1..=3 monomorphic siblings"
+    doc: "Carrier: weighted-Dirac particle ensemble. 3^d blow-up bounded by reduction; never materialised dense."
+  - name: SmfGridlessEvolver
+    repr: "#[repr(C)] struct SmfGridlessEvolver { _private: [u8; 0] }"
+    inner: "Box<GridlessChernoff<f64, D>>"
+    doc: "Gridless particle-ensemble Chernoff evolver (diagonal A, scalar c, ParticleReduction)."
+
+# ===========================================================================
+# 2. C-visible plain structs / enum tags (returned/passed by value)
+# ===========================================================================
+value_types:
+  - name: SmfCouplingTag
+    repr: "#[repr(C)] enum SmfCouplingTag { None = 0, Tridiagonal = 1, Pairs = 2 }"
+    doc: |
+      ABI discriminator for `CouplingTopology<f64>` (tt_coupled.rs:46).
+      Crossed as a `u32`/`i32` tag alongside flattened pair data (see C-2-style
+      flattening for `Pairs`). See `smf_tt_coupled_new`.
+
+# ===========================================================================
+# 3. smf_ttstate_*  — TT carrier build / inspect / read-out / free
+# ===========================================================================
+functions:
+  - name: smf_ttstate_new_separable
+    group: ttstate
+    signature: |
+      unsafe extern "C" fn smf_ttstate_new_separable(
+          data:        *const f64,    // C-2: concatenated per-axis slices
+          offsets:     *const usize,  // C-2: length n_axes + 1, prefix sums
+          n_axes:      usize,         // = d
+          out_state:   *mut *mut SmfTtState,
+      ) -> SemiflowStatus
+    maps_to: "TtState::<f64>::rank1_separable(slices: Vec<Vec<f64>>)  (tt_chernoff.rs:88)"
+    ownership: |
+      `data` / `offsets` borrowed for the call (C-3). On Ok, `*out_state` owns a
+      fresh handle (C-3). The kernel slices `data` per `offsets` into
+      `Vec<Vec<f64>>` then calls `rank1_separable`.
+    errors:
+      - "NullPtr (5)   — data, offsets, or out_state is null."
+      - "GridMismatch (1) — n_axes == 0, offsets[0] != 0, offsets non-monotone, or any n_j == 0."
+      - "NanInf (2)    — any data[k] is NaN/Inf."
+      - "Panic (99)    — caught panic."
+    notes: |
+      Result is a rank-1 separable TT (each core 1×n_j×1). This is the only
+      construction path on the ABI (the common diagonal-A initial condition);
+      arbitrary-rank import is deferred (see ADR-0171 out-of-scope).
+
+  - name: smf_ttstate_free
+    group: ttstate
+    signature: "unsafe extern \"C\" fn smf_ttstate_free(state: *mut SmfTtState)"
+    maps_to: "drop(Box<TtState<f64>>)"
+    ownership: "Consumes the handle. Null-safe (no-op on null). Do not reuse after."
+    errors: ["(none — returns void; wraps drop in catch_unwind like smf_evolver_free_v3)"]
+
+  - name: smf_ttstate_ndim
+    group: ttstate
+    signature: "unsafe extern \"C\" fn smf_ttstate_ndim(state: *const SmfTtState) -> usize"
+    maps_to: "TtState::ndim()  (tt_chernoff.rs:58)"
+    ownership: "Borrows. Returns 0 if state is null (diagnostic-style, mirrors smf_evolver_size_v3)."
+    errors: ["(none — 0 sentinel on null)"]
+
+  - name: smf_ttstate_n_j
+    group: ttstate
+    signature: |
+      unsafe extern "C" fn smf_ttstate_n_j(
+          state: *const SmfTtState, axis: usize, out_n: *mut usize,
+      ) -> SemiflowStatus
+    maps_to: "TtState::n_j(j)  (tt_chernoff.rs:64)"
+    ownership: "Borrows. Writes mode size of `axis` into `*out_n` on Ok."
+    errors:
+      - "NullPtr (5)    — state or out_n null."
+      - "OutOfDomain (3) — axis >= ndim."
+      - "Panic (99)."
+
+  - name: smf_ttstate_peak_rank
+    group: ttstate
+    signature: "unsafe extern \"C\" fn smf_ttstate_peak_rank(state: *const SmfTtState) -> usize"
+    maps_to: "TtState::peak_rank()  (tt_chernoff.rs:70)"
+    ownership: "Borrows. 0 if null. Diagnostic: confirms curse-escape (poly-in-d rank)."
+    errors: ["(none — 0 sentinel on null)"]
+
+  - name: smf_ttstate_storage_size
+    group: ttstate
+    signature: "unsafe extern \"C\" fn smf_ttstate_storage_size(state: *const SmfTtState) -> usize"
+    maps_to: "TtState::storage_size()  (tt_chernoff.rs:76)"
+    ownership: "Borrows. 0 if null. Diagnostic: total stored scalars O(d·n·r²)."
+    errors: ["(none — 0 sentinel on null)"]
+
+  - name: smf_ttstate_inner_separable
+    group: ttstate
+    signature: |
+      unsafe extern "C" fn smf_ttstate_inner_separable(
+          state:    *const SmfTtState,
+          data:     *const f64,    // C-2: concatenated per-axis functionals f_j
+          offsets:  *const usize,  // C-2: length n_axes + 1
+          n_axes:   usize,
+          out_value: *mut f64,
+      ) -> SemiflowStatus
+    maps_to: "TtState::inner_separable(functionals: &[Vec<f64>]) -> f64  (tt_chernoff.rs:116)"
+    ownership: |
+      Borrows state + buffers. Writes the scalar projection ⟨f, u⟩ into
+      `*out_value` on Ok. This is the ONLY value read-out — a scalar, never the
+      dense tensor (C-1 curse-escape preserved).
+    errors:
+      - "NullPtr (5)    — any of state, data, offsets, out_value null."
+      - "GridMismatch (1) — n_axes != ndim, or any functional length != n_j (the core asserts; binding pre-checks → GridMismatch instead of Panic)."
+      - "NanInf (2)     — any functional value NaN/Inf."
+      - "Panic (99)."
+
+# ===========================================================================
+# 4. smf_tt_evolver_*  — separable TT-Chernoff evolver
+# ===========================================================================
+  - name: smf_tt_evolver_new
+    group: tt_evolver
+    signature: |
+      unsafe extern "C" fn smf_tt_evolver_new(
+          a:         *const f64,    // per-axis diffusion, length n_axes
+          b:         *const f64,    // per-axis drift,     length n_axes
+          c:         f64,           // scalar reaction
+          dom_min:   *const f64,    // per-axis x_min,     length n_axes
+          dom_max:   *const f64,    // per-axis x_max,     length n_axes
+          n_axes:    usize,
+          eps_round: f64,           // TT-rounding tolerance
+          out_ev:    *mut *mut SmfTtEvolver,
+      ) -> SemiflowStatus
+    maps_to: "TtChernoff::new(a, b, c, domain: Vec<(f64,f64)>, eps_round)  (tt_chernoff.rs:193)"
+    ownership: |
+      All input arrays borrowed for the call; zipped into `Vec<(x_min,x_max)>`.
+      On Ok, `*out_ev` owns the handle (C-3).
+    errors:
+      - "NullPtr (5)    — a, b, dom_min, dom_max, or out_ev null."
+      - "GridMismatch (1) — n_axes == 0 (core asserts b.len()==a.len()==domain.len(); binding builds all to n_axes so lengths are consistent by construction)."
+      - "NanInf (2)     — any a/b/dom/c/eps_round non-finite; any a_j < 0; dom_min_j >= dom_max_j."
+      - "Panic (99)."
+
+  - name: smf_tt_evolver_evolve
+    group: tt_evolver
+    signature: |
+      unsafe extern "C" fn smf_tt_evolver_evolve(
+          ev:      *const SmfTtEvolver,
+          state:   *mut SmfTtState,   // mutated in place
+          t_final: f64,
+          n_steps: usize,
+      ) -> SemiflowStatus
+    maps_to: "TtChernoff::evolve(t_final, n_steps, &mut state)  (tt_chernoff.rs:238)"
+    ownership: |
+      `ev` borrowed; `state` BORROWED MUTABLY and advanced in place (the carrier
+      is updated behind its handle — no buffer copied out). Chainable: call
+      again to continue. Read results via smf_ttstate_inner_separable.
+    errors:
+      - "NullPtr (5)    — ev or state null."
+      - "OutOfDomain (3) — n_steps == 0 (core asserts n_steps>=1; binding pre-checks), or t_final non-finite/negative, or ev.ndim() != state.ndim()."
+      - "Panic (99)."
+
+  - name: smf_tt_evolver_free
+    group: tt_evolver
+    signature: "unsafe extern \"C\" fn smf_tt_evolver_free(ev: *mut SmfTtEvolver)"
+    maps_to: "drop(Box<TtChernoff<f64>>)"
+    ownership: "Consumes handle. Null-safe."
+    errors: ["(none — void, catch_unwind-wrapped drop)"]
+
+# ===========================================================================
+# 5. smf_tt_coupled_*  — cross-axis TT-Chernoff evolver + CouplingTopology
+# ===========================================================================
+  - name: smf_tt_coupled_new
+    group: tt_coupled
+    signature: |
+      unsafe extern "C" fn smf_tt_coupled_new(
+          a:           *const f64,    // per-axis diffusion, length n_axes
+          b:           *const f64,    // per-axis drift,     length n_axes  (MUST be all 0 in v9.1.0)
+          c:           f64,           // scalar reaction
+          coupling_tag: u32,          // SmfCouplingTag: 0=None, 1=Tridiagonal, 2=Pairs
+          tridiag_rho: f64,           // used iff tag==Tridiagonal
+          pairs_jk:    *const usize,  // tag==Pairs: flattened (j,k) ints, length 2*n_pairs (j0,k0,j1,k1,…)
+          pairs_rho:   *const f64,    // tag==Pairs: per-pair rho,         length n_pairs
+          n_pairs:     usize,         // tag==Pairs: number of (j,k,rho) triples; else ignored
+          dom_min:     *const f64,    // per-axis x_min, length n_axes
+          dom_max:     *const f64,    // per-axis x_max, length n_axes
+          n_axes:      usize,
+          eps_round:   f64,
+          out_ev:      *mut *mut SmfTtCoupledEvolver,
+      ) -> SemiflowStatus
+    maps_to: "CoupledTtChernoff::new(a, b, c, CouplingTopology, domain, eps_round)  (tt_coupled.rs:114)"
+    coupling_flattening: |
+      CouplingTopology<f64> (tt_coupled.rs:46) crosses as TAG + FLATTENED PAIRS:
+        tag == 0 (None)        → CouplingTopology::None; pairs_jk/pairs_rho/n_pairs ignored.
+        tag == 1 (Tridiagonal) → CouplingTopology::Tridiagonal(tridiag_rho).
+        tag == 2 (Pairs)       → CouplingTopology::Pairs(vec of (jk[2i], jk[2i+1], rho[i]) for i in 0..n_pairs).
+                                 pairs_jk holds 2*n_pairs usize laid out (j0,k0, j1,k1, …);
+                                 pairs_rho holds n_pairs f64. (Two parallel arrays, not interleaved,
+                                 because usize and f64 cannot share one typed buffer.)
+    ownership: "Input arrays borrowed for the call. On Ok, `*out_ev` owns the handle."
+    errors:
+      - "NullPtr (5)    — a, b, dom_min, dom_max, out_ev null; or (tag==Pairs) pairs_jk/pairs_rho null."
+      - "GridMismatch (1) — n_axes == 0; or (tag==Pairs) any j>=n_axes or k>=n_axes."
+      - "NanInf (2)     — any a/b/dom/c/rho/eps_round non-finite; any a_j < 0; dom_min_j >= dom_max_j."
+      - "OutOfDomain (3) — v9.1.0 FAIL-LOUD walls pre-checked (NOT panicked): any b_j != 0 (drift deferred, tt_coupled.rs:127); any pair with |k-j| != 1 (non-adjacent deferred, tt_coupled.rs:141); any pair block not SPD (|rho| too large, det = a_j·a_k − rho²·a_j·a_k ≤ 0). See ADR-0162."
+      - "Panic (99)."
+
+  - name: smf_tt_coupled_evolve
+    group: tt_coupled
+    signature: |
+      unsafe extern "C" fn smf_tt_coupled_evolve(
+          ev:      *const SmfTtCoupledEvolver,
+          state:   *mut SmfTtState,
+          t_final: f64,
+          n_steps: usize,
+      ) -> SemiflowStatus
+    maps_to: "CoupledTtChernoff::evolve(t_final, n_steps, &mut state)  (tt_coupled.rs:237)"
+    ownership: "Same as smf_tt_evolver_evolve: state advanced in place behind its handle."
+    errors:
+      - "NullPtr (5)    — ev or state null."
+      - "OutOfDomain (3) — n_steps == 0, t_final non-finite/negative, or ev.ndim() != state.ndim()."
+      - "ConvergenceFailed (7) / OutOfDomain (3) — runtime SPD violation in a pair block (binding catches the documented panic via catch_panic! → mapped; pre-check in `_new` makes this unreachable for static rho)."
+      - "Panic (99)."
+    notes: "Reuses SmfTtState — the coupled evolver advances the SAME carrier type as the separable one (Gate C: tag==None is bit-identical to smf_tt_evolver_evolve)."
+
+  - name: smf_tt_coupled_free
+    group: tt_coupled
+    signature: "unsafe extern \"C\" fn smf_tt_coupled_free(ev: *mut SmfTtCoupledEvolver)"
+    maps_to: "drop(Box<CoupledTtChernoff<f64>>)"
+    ownership: "Consumes handle. Null-safe."
+    errors: ["(none — void, catch_unwind-wrapped drop)"]
+
+# ===========================================================================
+# 6. smf_measurestate_*  — particle carrier build / inspect / read-out / free
+# ===========================================================================
+#  Particle flattening: each Dirac is (D position floats + 1 weight float).
+#  Across the ABI a particle list of `n_part` Diracs crosses as TWO buffers:
+#     positions: *const f64  — length n_part * D, row-major (particle i axis j = positions[i*D + j])
+#     weights:   *const f64  — length n_part
+#  (Position stride D is FIXED by the handle's build dimension; not ragged.)
+  - name: smf_measurestate_new
+    group: measurestate
+    signature: |
+      unsafe extern "C" fn smf_measurestate_new(
+          positions: *const f64,    // length n_part * D, row-major
+          weights:   *const f64,    // length n_part
+          n_part:    usize,
+          dim:       usize,         // D — MUST equal the build's compiled D
+          out_state: *mut *mut SmfMeasureState,
+      ) -> SemiflowStatus
+    maps_to: "MeasureState::<f64,D>::from_particles(&[([f64;D], f64)])  (adjoint_fp.rs:102)"
+    ownership: |
+      Buffers borrowed; reassembled into `&[([f64;D], f64)]` then copied into
+      the state. On Ok, `*out_state` owns the handle. For n_part==1 the kernel
+      MAY use `MeasureState::dirac` (adjoint_fp.rs:66) — equivalent.
+    errors:
+      - "NullPtr (5)    — positions, weights, or out_state null."
+      - "Unsupported (8) — dim != compiled D for this build (v9.2.0 ships D=1,2,3 monomorphic siblings)."
+      - "GridMismatch (1) — n_part == 0."
+      - "NanInf (2)     — any position/weight NaN/Inf."
+      - "Panic (99)."
+
+  - name: smf_measurestate_n_diracs
+    group: measurestate
+    signature: "unsafe extern \"C\" fn smf_measurestate_n_diracs(state: *const SmfMeasureState) -> usize"
+    maps_to: "MeasureState::n_diracs()  (adjoint_fp.rs:151)"
+    ownership: "Borrows. 0 if null. Diagnostic: confirms reduction caps the 3^d blow-up."
+    errors: ["(none — 0 sentinel on null)"]
+
+  - name: smf_measurestate_total_variation
+    group: measurestate
+    signature: |
+      unsafe extern "C" fn smf_measurestate_total_variation(
+          state: *const SmfMeasureState, out_tv: *mut f64,
+      ) -> SemiflowStatus
+    maps_to: "MeasureState::total_variation()  (adjoint_fp.rs:111)"
+    ownership: "Borrows. Writes ‖ρ‖_TV (total mass observable) into `*out_tv`."
+    errors: ["NullPtr (5) — state or out_tv null.", "Panic (99)."]
+
+  - name: smf_measurestate_second_moment
+    group: measurestate
+    signature: |
+      unsafe extern "C" fn smf_measurestate_second_moment(
+          state: *const SmfMeasureState, out_m2: *mut f64,
+      ) -> SemiflowStatus
+    maps_to: "MeasureState::second_moment()  (adjoint_fp.rs:122)"
+    ownership: "Borrows. Writes ⟨x²,ρ⟩ (spread observable) into `*out_m2`."
+    errors: ["NullPtr (5) — state or out_m2 null.", "Panic (99)."]
+
+  - name: smf_measurestate_marginal
+    group: measurestate
+    signature: |
+      unsafe extern "C" fn smf_measurestate_marginal(
+          state:    *const SmfMeasureState,
+          out_pos:  *mut f64,   // length >= n_diracs; positions on `axis`
+          out_wt:   *mut f64,   // length >= n_diracs; weights
+          cap:      usize,      // capacity of out_pos/out_wt
+          axis:     usize,      // which coordinate to project onto
+          out_n:    *mut usize, // number of (pos,wt) pairs written
+      ) -> SemiflowStatus
+    maps_to: "Particle read-out: project each Dirac onto `axis` → (positions[i][axis], weights[i]). Built on as_diracs_slice (adjoint_fp.rs:181, crate-private → exposed via a thin pub read accessor the Engineer adds, or via to_flat_buffers_d1 for D=1)."
+    ownership: |
+      Borrows state. Writes the 1-D marginal particle list (position on `axis`,
+      weight) into caller-owned out_pos/out_wt; writes the count into `*out_n`.
+      This is the particle analogue of the grid `values` read-out — a SPARSE
+      marginal, never a dense grid (C-1 curse-escape preserved).
+    errors:
+      - "NullPtr (5)    — state, out_pos, out_wt, or out_n null."
+      - "OutOfDomain (3) — axis >= D."
+      - "GridMismatch (1) — cap < n_diracs (insufficient buffer; out_n set to required size for retry)."
+      - "Panic (99)."
+
+  - name: smf_measurestate_free
+    group: measurestate
+    signature: "unsafe extern \"C\" fn smf_measurestate_free(state: *mut SmfMeasureState)"
+    maps_to: "drop(Box<MeasureState<f64,D>>)"
+    ownership: "Consumes handle. Null-safe."
+    errors: ["(none — void, catch_unwind-wrapped drop)"]
+
+# ===========================================================================
+# 7. smf_gridless_*  — gridless particle-ensemble Chernoff evolver
+# ===========================================================================
+  - name: smf_gridless_new
+    group: gridless
+    signature: |
+      unsafe extern "C" fn smf_gridless_new(
+          a:            *const f64,   // per-axis diffusion, length dim
+          b:            *const f64,   // per-axis drift,     length dim
+          c:            f64,          // scalar reaction
+          dim:          usize,        // D — MUST equal compiled D
+          reduction_tag: u32,         // 0 = WeightedVoronoi, 1 = GaussianBackground
+          voronoi_cap:  usize,        // used iff tag==WeightedVoronoi; must be >= 1
+          out_ev:       *mut *mut SmfGridlessEvolver,
+      ) -> SemiflowStatus
+    maps_to: "GridlessChernoff::<f64,D>::new([f64;D] a, [f64;D] b, c, ParticleReduction)  (gridless.rs:63)"
+    reduction_flattening: |
+      ParticleReduction (gridless_reduce.rs:21) crosses as TAG + scalar field:
+        tag == 0 → ParticleReduction::WeightedVoronoi { cap: voronoi_cap }.
+        tag == 1 → ParticleReduction::GaussianBackground (pass-through stub).
+    ownership: "a, b borrowed; copied into [f64;D]. On Ok, `*out_ev` owns the handle."
+    errors:
+      - "NullPtr (5)    — a, b, or out_ev null."
+      - "Unsupported (8) — dim != compiled D."
+      - "OutOfDomain (3) — reduction_tag==0 and voronoi_cap == 0; or unknown reduction_tag."
+      - "NanInf (2)     — any a/b/c non-finite; any a_j < 0 (validated at apply per gridless.rs:162, pre-checked here)."
+      - "Panic (99)."
+
+  - name: smf_gridless_apply
+    group: gridless
+    signature: |
+      unsafe extern "C" fn smf_gridless_apply(
+          ev:    *const SmfGridlessEvolver,
+          tau:   f64,
+          src:   *const SmfMeasureState,
+          dst:   *mut SmfMeasureState,   // overwritten with one Chernoff step result
+      ) -> SemiflowStatus
+    maps_to: "GridlessChernoff::apply_into(tau, src, dst, scratch)  (gridless.rs:117, ChernoffFunction)"
+    ownership: |
+      `ev`, `src` borrowed; `dst` borrowed mutably and OVERWRITTEN with the
+      single-step push-forward. Caller pre-allocates `dst` via
+      smf_measurestate_new (any contents). A fresh ScratchPool is created
+      internally per call (mirrors smf_evolver_evolve_into_v3, v3.rs:208).
+    errors:
+      - "NullPtr (5)    — ev, src, or dst null."
+      - "OutOfDomain (3) — tau non-finite or < 0; src.dim() != ev.dim()."
+      - "Panic (99)."
+
+  - name: smf_gridless_evolve
+    group: gridless
+    signature: |
+      unsafe extern "C" fn smf_gridless_evolve(
+          ev:      *const SmfGridlessEvolver,
+          t_final: f64,
+          n_steps: usize,
+          state:   *mut SmfMeasureState,   // advanced in place over n_steps
+      ) -> SemiflowStatus
+    maps_to: "n_steps × apply_into with tau = t_final / n_steps, ping-ponging the state (binding-level loop; core exposes single-step apply_into only)."
+    ownership: |
+      `ev` borrowed; `state` advanced in place behind its handle (the binding
+      ping-pongs two internal MeasureState buffers and leaves the result in
+      `state`). Convenience wrapper over smf_gridless_apply.
+    errors:
+      - "NullPtr (5)    — ev or state null."
+      - "OutOfDomain (3) — n_steps == 0; t_final non-finite/negative; state.dim() != ev.dim()."
+      - "Panic (99)."
+
+  - name: smf_gridless_free
+    group: gridless
+    signature: "unsafe extern \"C\" fn smf_gridless_free(ev: *mut SmfGridlessEvolver)"
+    maps_to: "drop(Box<GridlessChernoff<f64,D>>)"
+    ownership: "Consumes handle. Null-safe."
+    errors: ["(none — void, catch_unwind-wrapped drop)"]
+
+# ===========================================================================
+# 8. Mirror obligation (Py / WASM)
+# ===========================================================================
+mirror:
+  statement: |
+    Per ADR-0028 the C/FFI layer is the canonical C-ABI source; semiflow-py
+    (PyO3) and semiflow-wasm (wasm-bindgen) MIRROR this surface 1:1 with the
+    idiomatic shape of each host:
+      - PyO3:  ragged slices arrive as `list[list[float]]` / numpy ragged →
+               flattened inside the #[pymethods] body to the same (data,offsets)
+               call into core; handles become pyclasses (SmfTtState→TtState1D etc.);
+               readouts return float / numpy arrays. GIL released during the pure
+               Rust sweep (ADR-0031 three-phase).
+      - WASM:  slices arrive as `Float64Array` + `Uint32Array` offsets; handles
+               become JS classes; errors as Result<_, JsValue> (ADR-0028 Amdt 1).
+    NO host invents a divergent API; all three expose the SAME carrier-handle
+    operations (new / evolve|apply / inspect / readout / free) with the SAME
+    flattening convention (C-2 / particle two-buffer / coupling tag+pairs).
+  parity_gate: |
+    A future RELEASE-BLOCKING parity gate (analogue of G_BINDING_GREEKS_PARITY,
+    ADR-0028 Amdt 2) SHOULD assert that a TT inner_separable scalar and a
+    gridless marginal are byte-identical (0 ULP) across core ↔ FFI ↔ PyO3 ↔ WASM.
+    Declaration deferred to the implementation stage.
+
+# ===========================================================================
+# 9. Out of scope (v9.2.0 ABI — honest non-goals)
+# ===========================================================================
+out_of_scope:
+  - "Arbitrary-rank TtState import (only rank-1 separable construction on the ABI)."
+  - "Variable / off-diagonal A, variable rho(x), nonlinear reaction — RESEARCH-TRACK in core; not constructible across this ABI (boundary-as-type, ADR-0169)."
+  - "Dynamic D for MeasureState/Gridless — v9.2.0 ships fixed D=1,2,3 monomorphic builds; runtime-D is deferred."
+  - "Coupled drift b != 0 and non-adjacent pairs — fail-loud at construction (ADR-0162), surfaced as OutOfDomain."
+  - "Materialising the dense n^d tensor or the full 3^d particle tree across the ABI — FORBIDDEN by C-1 (this is the curse-escape)."
