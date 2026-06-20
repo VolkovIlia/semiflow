@@ -25,6 +25,8 @@
 //! Feature gate: `slow-tests`. Both sub-tests MUST pass.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // n, n_steps ≤ 1024, well within 2^52
+#![allow(clippy::doc_markdown)]        // math notation in doc comments (K_N, n_Chernoff, etc.)
 
 use semiflow_core::{
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff},
@@ -59,8 +61,6 @@ const N_SWEEP: [usize; 4] = [16, 32, 64, 128];
 /// Derived as ∫_0^∞ K_N(x, y; T) · exp(-y²) dy where K_N is the image-method
 /// kernel K(x,y;T) + K(x,-y;T); both Gaussian integrals combine to this form.
 /// Verified symbolically by T22N check.
-// T_FINAL = 0.1; x ≤ GRID_MAX = 10. No precision loss risk for this domain.
-#[allow(clippy::cast_precision_loss)]
 fn oracle(t: f64, x: f64) -> f64 {
     let denom = 1.0 + 4.0 * t;
     (-x * x / denom).exp() / denom.sqrt()
@@ -89,8 +89,6 @@ fn build_wrapper(
 
 /// Evolve the reflected-heat wrapper for `n_steps` steps and return sup-norm
 /// error vs the analytical oracle on the interior nodes.
-// n ≤ 128, n_steps ≤ 128. Cast from usize to f64 is safe.
-#[allow(clippy::cast_precision_loss)]
 fn sup_error_at(n_spatial: usize, n_steps: usize) -> f64 {
     let tau = T_FINAL / n_steps as f64;
 
@@ -120,8 +118,6 @@ fn sup_error_at(n_spatial: usize, n_steps: usize) -> f64 {
 // OLS log-log slope: log(err) vs log(n)
 // ---------------------------------------------------------------------------
 
-// n ≤ 128 — well within f64 mantissa; cast is safe.
-#[allow(clippy::cast_precision_loss)]
 fn ols_slope(n_values: &[usize], errs: &[f64]) -> f64 {
     let m = n_values.len() as f64;
     // Use log(n) as x-axis: as n grows, err shrinks, giving negative slope.

@@ -1,32 +1,32 @@
 //! G23 — `KillingChernoff` Dirichlet convergence slope.
 //!
-//! Gate (properties.yaml, `RELEASE_BLOCKING)`:
+//! Gate (properties.yaml, `RELEASE_BLOCKING`):
 //!   Sweep N ∈ {8, 16, 32, 64} at T = 0.05, `n_steps` = 100 · N.
-//!   OLS slope of `log(sup_err)` vs log(N) ≤ −0.95.
+//!   OLS slope of `log(sup_err)` vs `log(N)` ≤ −0.95.
 //!
 //! ## Interpretation of "`n_steps` = 100"
 //!
 //! The spec phrase "`n_steps` = 100" is interpreted as 100 temporal sub-steps
 //! per spatial mesh node, so `n_steps_total` = 100 · N. This keeps the
-//! Gaussian-shift width h0 = 2√(a · τ) = 2√(a · T / (100N)) sub-grid
-//! (h0 / dx < 1 for N ≥ 8 at T = 0.05, a = 0.5), entering the spatial
-//! asymptotic regime where the killing commutator error is O(dx) = O(1/N).
+//! Gaussian-shift width `h0` = 2√(a · τ) = 2√(a · T / (100N)) sub-grid
+//! (`h0` / `dx` < 1 for N ≥ 8 at T = 0.05, a = 0.5), entering the spatial
+//! asymptotic regime where the killing commutator error is O(`dx`) = O(1/N).
 //!
-//! When h0 > dx (coarser temporal resolution), the near-boundary error
-//! saturates at O(h0) = O(√τ) (constant with N), masking spatial
+//! When `h0` > `dx` (coarser temporal resolution), the near-boundary error
+//! saturates at O(`h0`) = O(√τ) (constant with N), masking spatial
 //! convergence and giving positive OLS slope. The 100 × N schedule keeps
-//! h0/dx ≤ 0.25 for all N in the sweep.
+//! `h0`/`dx` ≤ 0.25 for all N in the sweep.
 //!
 //! ## Setup
 //!
 //! Operator: `KillingChernoff<DiffusionChernoff(a=0.5), BoxRegion([0.0], [1.0])>`.
-//! Oracle:   `u(t, x) = Σ_{k=1..8} a_k · sin(kπx) · exp(−(kπ)²·t/2)`.
+//! Oracle:   `u(t, x)` = Σ_{k=1..8} `a_k` · sin(kπx) · exp(−(kπ)²·t/2).
 //! IC:       `u(0, x)` = oracle at t=0 = Σ `a_k` sin(kπx).
 //!
 //! ## Mathematical basis
 //!
-//! Butko 2018 §3.2 — the killing commutator [L, `𝟙_R`] contributes an
-//! irreducible O(τ) residual per step (O(dx) globally when τ ∝ 1/N).
+//! Butko 2018 §3.2 — the killing commutator `[L, 𝟙_R]` contributes an
+//! irreducible O(τ) residual per step (O(`dx`) globally when τ ∝ 1/N).
 //! Inner `DiffusionChernoff` has order 2; post-multiply masking caps global
 //! convergence at order 1 (slope ≈ −1.0; gate at −0.95 gives 5% margin).
 //!
@@ -48,10 +48,10 @@ use semiflow_core::{
 const SLOPE_GATE: f64 = -0.95;
 
 /// Spatial grid sizes to sweep (N ∈ {8, 16, 32, 64}).
-/// These values satisfy h0/dx < 1 at n_steps = 100·N (sub-grid regime).
+/// These values satisfy `h0`/`dx` < 1 at `n_steps` = 100·N (sub-grid regime).
 const N_SPATIAL: [usize; 4] = [8, 16, 32, 64];
-/// Temporal sub-steps per spatial node: n_steps_total = N_STEPS_PER_NODE · N.
-/// τ = T / (N_STEPS_PER_NODE · N) → decreases with N.
+/// Temporal sub-steps per spatial node: `n_steps_total` = `N_STEPS_PER_NODE` · N.
+/// τ = T / (`N_STEPS_PER_NODE` · N) → decreases with N.
 const N_STEPS_PER_NODE: usize = 100;
 /// Fixed final time.
 const T_FINAL: f64 = 0.05;
@@ -69,7 +69,7 @@ const AMPS: [f64; 8] = [0.5, -0.3, 0.2, 0.15, -0.1, 0.08, -0.05, 0.04];
 
 /// Exact solution for the absorbing-boundary heat equation on (0,1).
 ///
-/// `u(0, x)` = Σ a_k sin(kπx); `u(t, 0) = u(t, 1) = 0` for all t.
+/// `u(0, x)` = Σ `a_k` sin(kπx); `u(t, 0)` = `u(t, 1)` = 0 for all t.
 // k ∈ 1..=8 (loop bound 8) — within i32 and f64 mantissa; casts are safe.
 #[allow(clippy::cast_precision_loss)]
 fn oracle(t: f64, x: f64) -> f64 {
@@ -90,7 +90,7 @@ fn oracle(t: f64, x: f64) -> f64 {
 /// Evolve the killing operator for `n_steps_per_node * n` temporal steps
 /// and return sup-norm error vs oracle.
 ///
-/// τ = T / n_steps_total = T / (N_STEPS_PER_NODE · n), which ensures
+/// τ = T / `n_steps_total` = T / (`N_STEPS_PER_NODE` · n), which ensures
 /// h0 = 2√(a · τ) < dx = 1/(n-1) (sub-grid regime) for n ≥ 8.
 // n ≤ 64, n_steps ≤ 6400 — well within f64 mantissa range; casts are safe.
 #[allow(clippy::cast_precision_loss)]
@@ -158,16 +158,17 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 // G23 gate
 // ---------------------------------------------------------------------------
 
-/// G23 — KillingChernoff Dirichlet convergence slope ≤ −0.95.
+/// G23 — `KillingChernoff` Dirichlet convergence slope ≤ −0.95.
 ///
 /// Verifies that `KillingChernoff<DiffusionChernoff, BoxRegion>` approximates the
 /// absorbing-boundary heat semigroup with first-order convergence (slope ≈ −1).
 ///
-/// N is swept as the spatial grid size; n_steps = 100 · N ensures the Chernoff
-/// step width h0 = 2√(a · τ) stays sub-grid (h0 < dx). In this regime the
-/// killing commutator error is O(dx) = O(1/N), giving slope ≈ −1.0.
+/// N is swept as the spatial grid size; `n_steps` = 100 · N ensures the Chernoff
+/// step width `h0` = 2√(a · τ) stays sub-grid (`h0` < `dx`). In this regime the
+/// killing commutator error is O(`dx`) = O(1/N), giving slope ≈ −1.0.
 /// The −0.95 gate provides 5% margin against the Butko 2018 §3.2 asymptote −1.0.
 #[test]
+#[allow(clippy::cast_precision_loss)]
 fn g23_dirichlet_killing_slope() {
     let mut errs = Vec::with_capacity(N_SPATIAL.len());
     for &n in &N_SPATIAL {

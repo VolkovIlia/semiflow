@@ -8,6 +8,10 @@
 //! Probe runs n∈{256..2048} valid for all step sizes.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // PCG u128→u64 bitwise truncation; intentional bit extraction
+#![allow(clippy::cast_precision_loss)]      // u32/usize→f64 for arithmetic; values ≤ 8192 ≤ 2^52
+#![allow(clippy::cast_lossless)]            // u32→f64 widening, always exact for u32
+#![allow(clippy::needless_range_loop)]      // index loops do index-cross arithmetic (matrix ops)
 
 use semiflow_core::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
@@ -90,7 +94,7 @@ fn gen_sym<const M: usize>(rng: &mut Pcg64) -> [[f64; M]; M] {
 }
 
 fn make_kernel(n: usize) -> MatrixDiffusionChernoff<f64, M> {
-    const SEED: u128 = 0xC0FFEE_BABE_DEAD_BEEF;
+    const SEED: u128 = 0x00C0_FFEE_BABE_DEAD_BEEF;
     let mut rng = Pcg64::new(SEED);
     // Skip M=2 draws to get M=3 specific matrices (advance past M=2 draws).
     for _ in 0..6 {
@@ -142,7 +146,7 @@ fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
     err
 }
 
-/// OLS slope of (ln n_i, ln err_i): negative for convergence (err ∝ n^slope → slope < 0).
+/// OLS slope of (ln `n_i`, ln `err_i`): negative for convergence (err ∝ n^slope → slope < 0).
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
     let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();

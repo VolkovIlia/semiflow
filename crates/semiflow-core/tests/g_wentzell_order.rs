@@ -25,6 +25,10 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)]   // usize→f64 in tau/OLS; n_steps ≤ 512 ≤ 2^52
+#![allow(clippy::cast_possible_truncation)] // f64→usize probe index: .round() positive
+#![allow(clippy::cast_sign_loss)]        // f64→usize probe index: .round() result ≥ 0
+#![allow(clippy::too_many_lines)]        // g_wentzell_order is a single cohesive gate (51 lines)
 
 use semiflow_core::{
     diffusion::DiffusionChernoff,
@@ -92,7 +96,7 @@ fn probe_index(grid: &Grid1D<f64>) -> usize {
 }
 
 #[test]
-#[ignore] // RELEASE_BLOCKING slow-test — run with `-- --include-ignored`
+#[ignore = "RELEASE_BLOCKING slow-test; run with: cargo run -p xtask -- test-flagship"]
 fn g_wentzell_order() {
     let grid = Grid1D::new(0.0_f64, DOMAIN_MAX, N_SPATIAL).unwrap();
     // Initial datum: smooth, non-zero on interior, zero at boundary.

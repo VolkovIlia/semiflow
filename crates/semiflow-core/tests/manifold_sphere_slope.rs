@@ -68,24 +68,24 @@ fn initial_datum(theta: f64, phi: f64) -> f64 {
     y00(theta, phi) + y10(theta, phi) + y11(theta, phi) + y20(theta, phi)
 }
 
-/// Oracle for BASE sub-test: eigenmode decay via λ_ℓ = -ℓ(ℓ+1) (heat on S²).
-///   Y_{0,0}: λ=0  → no decay.
-///   Y_{1,0}, Y_{1,1}: λ=-2 → exp(-2t).
-///   Y_{2,0}: λ=-6 → exp(-6t).
+/// Oracle for BASE sub-test: eigenmode decay via `λ_ℓ` = -ℓ(ℓ+1) (heat on `S²`).
+///   `Y_{0,0}`: λ=0  → no decay.
+///   `Y_{1,0}`, `Y_{1,1}`: λ=-2 → exp(-2t).
+///   `Y_{2,0}`: λ=-6 → exp(-6t).
 fn oracle(t: f64, theta: f64, phi: f64) -> f64 {
     y00(theta, phi)
         + (y10(theta, phi) + y11(theta, phi)) * (-2.0 * t).exp()
         + y20(theta, phi) * (-6.0 * t).exp()
 }
 
-/// Oracle for CORRECTED sub-test: effective generator Δ_{S²} + R/12.
+/// Oracle for CORRECTED sub-test: effective generator `Δ_{S²}` + R/12.
 ///
-/// The outer [1+τR/12] correction in formula (24.1) shifts the effective generator
-/// from Δ_{S²} to Δ_{S²} + R/12. For unit S² (R = 2): shift = 1/6.
-/// Modified eigenvalues: λ_ℓ^{eff} = -ℓ(ℓ+1) + R/12 = -ℓ(ℓ+1) + 1/6.
-///   Y_{0,0}: λ^{eff}=+1/6 → exp(+t/6)  (slight growth).
-///   Y_{1,0}, Y_{1,1}: λ^{eff}=-11/6 → exp(-11t/6).
-///   Y_{2,0}: λ^{eff}=-35/6 → exp(-35t/6).
+/// The outer `[1+τR/12]` correction in formula (24.1) shifts the effective generator
+/// from `Δ_{S²}` to `Δ_{S²}` + R/12. For unit `S²` (R = 2): shift = 1/6.
+/// Modified eigenvalues: `λ_ℓ^{eff}` = -ℓ(ℓ+1) + R/12 = -ℓ(ℓ+1) + 1/6.
+///   `Y_{0,0}`: `λ^{eff}`=+1/6 → exp(+t/6)  (slight growth).
+///   `Y_{1,0}`, `Y_{1,1}`: `λ^{eff}`=-11/6 → exp(-11t/6).
+///   `Y_{2,0}`: `λ^{eff}`=-35/6 → exp(-35t/6).
 ///
 /// Comparing corrected output to this oracle isolates the SPATIAL bilinear error,
 /// which converges at O(h²), giving OLS slope ≈ -2.
@@ -98,7 +98,7 @@ fn oracle_r12(t: f64, theta: f64, phi: f64) -> f64 {
 
 // ─── Chart grid construction ──────────────────────────────────────────────────
 
-/// Build a (θ, φ) chart grid for S² with n_theta × n_phi nodes.
+/// Build a (θ, φ) chart grid for S² with `n_theta` × `n_phi` nodes.
 ///
 /// θ ∈ [ε, π−ε] (avoid poles); φ ∈ [0, 2π].
 fn build_chart_grid(n_theta: usize, n_phi: usize) -> Grid2D<f64> {
@@ -110,14 +110,14 @@ fn build_chart_grid(n_theta: usize, n_phi: usize) -> Grid2D<f64> {
 
 // ─── Sup-norm error helper ────────────────────────────────────────────────────
 
-/// Run N_CHERNOFF Chernoff steps on an n_chart × 2n_chart grid; return sup-norm error.
+/// Run `N_CHERNOFF` Chernoff steps on an `n_chart` × `2n_chart` grid; return sup-norm error.
 ///
-/// n_Chernoff = 40 (τ = 0.00125) is fixed; n_chart controls spatial resolution.
+/// `n_Chernoff` = 40 (τ = 0.00125) is fixed; `n_chart` controls spatial resolution.
 /// This measures spatial convergence: err ≈ O(τ^p) + O(h²).
 /// - BASE (p=1):       err ≈ O(τ) + C/n².  OLS slope gate -0.95.
-/// - CORRECTED (p=2):  effective generator is Δ+R/12; oracle_fn = oracle_r12.
+/// - CORRECTED (p=2):  effective generator is Δ+R/12; `oracle_fn` = `oracle_r12`.
 ///   With τ=0.00125, temporal floor O(Tτ)≈6.25e-5 lies below bilinear O(h²)≈1e-4
-///   at n=128. Comparing to oracle_r12 isolates spatial bilinear error → slope ≈ -2.
+///   at n=128. Comparing to `oracle_r12` isolates spatial bilinear error → slope ≈ -2.
 ///
 /// Error evaluated only on the mid-band (skip MARGIN rows near each pole boundary)
 /// to remove O(h) clamping artefacts from the excluded pole cap.
@@ -186,9 +186,9 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 
 // ─── G26 sub-test 1: BASE (no R/12) ──────────────────────────────────────────
 
-/// G26(1) — base ManifoldChernoff (no curvature correction) slope ≤ -0.95.
+/// G26(1) — base `ManifoldChernoff` (no curvature correction) slope ≤ -0.95.
 ///
-/// n_Chernoff=40 fixed (τ=0.00125); n_chart ∈ {16,32,64,128} sweeps h.
+/// `n_Chernoff`=40 fixed (τ=0.00125); `n_chart` ∈ {16,32,64,128} sweeps h.
 /// Without R/12, Chernoff error O(τ) acts as floor; spatial O(h²)
 /// dominates for coarse grids. OLS slope in [-2, -1]; gate -0.95 satisfied.
 /// Oracle: exact heat semigroup exp(TΔ_{S²}) with eigenvalues -ℓ(ℓ+1).
@@ -210,11 +210,11 @@ fn g26_sphere_s2_order_one_base() {
 
 // ─── G26 sub-test 2: WITH R/12 CORRECTION ────────────────────────────────────
 
-/// G26(2) — curvature-corrected ManifoldChernoff slope ≤ -1.95.
+/// G26(2) — curvature-corrected `ManifoldChernoff` slope ≤ -1.95.
 ///
-/// n_Chernoff=40 fixed (τ=0.00125); n_chart ∈ {16,32,64,128} sweeps h.
+/// `n_Chernoff`=40 fixed (τ=0.00125); `n_chart` ∈ {16,32,64,128} sweeps h.
 /// With the outer [1+τR/12] correction, the effective generator is Δ_{S²}+R/12.
-/// Oracle oracle_r12 accounts for the R/12 shift in the generator eigenvalues,
+/// `oracle_r12` accounts for the R/12 shift in the generator eigenvalues,
 /// so the residual measures only SPATIAL (bilinear) error: err ≈ O(h²) → slope ≈ -2.
 /// Gate -1.95 gives 2.5% margin vs the -2.0 bilinear spatial convergence.
 #[test]

@@ -24,6 +24,7 @@
 //! Feature gate: `slow-tests`. Marked `#[ignore]` so test-flagship picks it up.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::too_many_lines)] // evaluate_backend covers all 5 λ modes inline
 
 use semiflow_core::{
     drift_reaction::DriftReactionChernoff,
@@ -51,8 +52,8 @@ const N_GRID: usize = 4;
 const X_MIN: f64 = 0.0;
 const X_MAX: f64 = 1.0;
 
-/// Run N_STEPS of SubordinatedChernoff with constant-reaction base c≡−lam.
-/// Uses N_GRID=4 node grid; IC f≡1; returns value at node 0 after N_STEPS.
+/// Run `N_STEPS` of `SubordinatedChernoff` with constant-reaction base c≡−lam.
+/// Uses `N_GRID`=4 node grid; IC f≡1; returns value at node 0 after `N_STEPS`.
 #[allow(clippy::cast_precision_loss)]
 fn run_n_steps<S: LevySubordinator<f64> + Copy>(
     sub: S,
@@ -147,7 +148,7 @@ where
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_subord_order1_slope_3backends() {
     println!("\nG_SUBORD_ORDER1 — 5-λ correct-limit + accuracy gate (ADR-0103 Amendment 1)");
     println!("Setup: DriftReaction c≡−λ, f≡1, T=1, n=128 steps, N_GRID={N_GRID}");
@@ -189,10 +190,10 @@ fn g_subord_order1_slope_3backends() {
     println!(
         "  → IG: [{n_ig}/5 modes] [{}]{}\n",
         if pass_ig { "PASS" } else { "FAIL" },
-        if !pass_ig {
-            " — KNOWN-FAILING (Pinsky 1986 s^{-3/2} singularity, deferred)"
-        } else {
+        if pass_ig {
             ""
+        } else {
+            " — KNOWN-FAILING (Pinsky 1986 s^{-3/2} singularity, deferred)"
         },
     );
 

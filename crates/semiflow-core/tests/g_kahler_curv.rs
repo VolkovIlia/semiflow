@@ -36,6 +36,9 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)]  // usize→f64 in OLS; n ≤ 256 ≤ 2^52
+#![allow(clippy::similar_names)]        // nx_c/nx_f/ny_c are math index names
+#![allow(clippy::manual_range_contains)] // `r2 < MIN || r2 > MAX` exclusion is clearer
 
 use semiflow_core::{
     ChernoffFunction, FubiniStudyCp1, Grid1D, Grid2D, GridFn2D, ManifoldChernoff, ScratchPool,
@@ -51,7 +54,7 @@ const L: f64 = 3.0;
 /// Annular Gaussian: exp(−8·(r−R0)²) concentrated at r ≈ R0.
 const R0: f64 = 2.0;
 const KAPPA: f64 = 8.0;
-/// Annular evaluation band: r² ∈ [R_EVAL_MIN², R_EVAL_MAX²].
+/// Annular evaluation band: r² ∈ [`R_EVAL_MIN_SQ`, `R_EVAL_MAX_SQ`].
 /// At r=R0=2: GH max displacement (0.357) < L-R0 = 1 → boundary-safe.
 /// Inner limit 1.0 avoids the near-origin pre-asymptotic regime.
 const R_EVAL_MIN_SQ: f64 = 1.0;
@@ -72,7 +75,7 @@ fn build_grid(n: usize) -> Grid2D<f64> {
     Grid2D::new(axis, axis)
 }
 
-/// Run N_CHERNOFF Chernoff steps; return final GridFn2D.
+/// Run `N_CHERNOFF` Chernoff steps; return final `GridFn2D`.
 fn run_to_t(n: usize) -> GridFn2D<f64> {
     let tau = T_HORIZON / N_CHERNOFF as f64;
     let grid = build_grid(n);
@@ -90,9 +93,9 @@ fn run_to_t(n: usize) -> GridFn2D<f64> {
     u
 }
 
-/// Self-convergence error: sup_{annular band} |u_n − u_{2n−1}| at matching nodes.
+/// Self-convergence error: sup_{annular band} |`u_n` − u_{2n−1}| at matching nodes.
 ///
-/// Co-aligned grids: Grid1D::new(−L, L, n)[i] = −L + i·2L/(n−1).
+/// Co-aligned grids: `Grid1D::new(−L, L, n)[i]` = −L + i·2L/(n−1).
 ///   Fine (2n−1): −L + 2i·2L/(2(n−1)) = −L + i·2L/(n−1) = Coarse[i]. ✓
 #[allow(clippy::cast_precision_loss)]
 fn self_conv_error(n: usize) -> f64 {
@@ -142,14 +145,14 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 
 // ─── G_KAHLER_CURV ────────────────────────────────────────────────────────────
 
-/// G_KAHLER_CURV — curvature-corrected ManifoldChernoff<FubiniStudyCp1> slope ≤ −1.95.
+/// `G_KAHLER_CURV` — curvature-corrected `ManifoldChernoff`<`FubiniStudyCp1`> slope ≤ −1.95.
 ///
 /// Self-convergence in annular belt r ∈ [1, 2] on n ∈ {32, 64, 128, 256}.
 /// OLS slope in log(err) vs log(n). Gate: slope ≤ −1.95.
 ///
 /// A slope steeper than ≈ −2.3 signals measurement artefact; investigate.
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_kahler_curv() {
     let mut errs = Vec::with_capacity(N_CHART_SWEEP.len());
     for &n in &N_CHART_SWEEP {

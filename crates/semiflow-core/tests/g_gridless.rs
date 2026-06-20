@@ -61,6 +61,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::needless_range_loop)]
 
 use semiflow_core::{
     ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
@@ -128,7 +133,7 @@ fn inv_normal(p: f64) -> f64 {
         -3.969_683_028_665_376e1,
         2.209_460_984_245_205e2,
         -2.759_285_104_469_687e2,
-        1.383_577_518_672_690e2,
+        1.383_577_518_672_69e2,
         -3.066_479_806_614_716e1,
         2.506_628_277_459_239,
     ];
@@ -202,7 +207,7 @@ fn sample_variance(xs: &[f64]) -> f64 {
 
 // ── Macro: run gridless at compile-time d, anisotropic a_j, ξ_j ─────────────
 
-/// Run n_steps of GridlessChernoff::<f64, D> with anisotropic a_j, return ensemble.
+/// Run `n_steps` of `GridlessChernoff::<f64, D>` with anisotropic `a_j`, return ensemble.
 macro_rules! run_aniso {
     ($d:literal, $n:expr, $t:expr, $cap:expr) => {{
         let mut a_arr = [0.0f64; $d];
@@ -251,7 +256,7 @@ const N_STEPS_DIM: u32 = 32;
 /// Full evidence sweep including high-d.  {2, 3, 4, 6, 8, 10}.
 const DIMS: [usize; 6] = [2, 3, 4, 6, 8, 10];
 
-/// Validated envelope: only d=2 achieves accuracy < ACC_GATE within CAP_LADDER at
+/// Validated envelope: only d=2 achieves accuracy < `ACC_GATE` within `CAP_LADDER` at
 /// affordable budget.  d=3 requires cap=8192 (8× blowup, O(m^d) curse entering).
 /// d≥4: all fail — accuracy collapses (err 9.75e-2 … 7.05e-1).
 const VALIDATED_DIMS: [usize; 1] = [2];
@@ -261,7 +266,7 @@ const ACC_GATE: f64 = 5e-3;
 /// Cap ladder for the accuracy search.
 const CAP_LADDER: [usize; 7] = [256, 512, 1024, 2048, 4096, 8192, 16384];
 
-/// Check accuracy at one cap; returns (estimate, error, passes_gate).
+/// Check accuracy at one cap; returns (estimate, error, `passes_gate`).
 macro_rules! check_acc {
     ($d:literal, $cap:expr) => {{
         let rho = run_aniso!($d, N_STEPS_DIM, T_TOTAL, $cap);
@@ -273,7 +278,7 @@ macro_rules! check_acc {
 }
 
 /// Find smallest cap on the ladder that holds accuracy for this d.
-/// Returns (found_cap, est_at_cap, err_at_cap); found_cap=0 if none pass.
+/// Returns (`found_cap`, `est_at_cap`, `err_at_cap`); `found_cap`=0 if none pass.
 macro_rules! find_pcap {
     ($d:literal) => {{
         let mut found_cap: usize = 0;
@@ -293,7 +298,7 @@ macro_rules! find_pcap {
 }
 
 /// Per-axis second-moment check after one step (anti-D1, §4.4b).
-/// Blocking anti-regression — assert on all dims in VALIDATED_DIMS.
+/// Blocking anti-regression — assert on all dims in `VALIDATED_DIMS`.
 macro_rules! check_per_axis_spread {
     ($d:literal, $axes:expr) => {{
         let rho = run_aniso!($d, 1, 0.1, 4096);
@@ -309,22 +314,22 @@ macro_rules! check_per_axis_spread {
     }};
 }
 
-/// G_GRIDLESS_DIM_SCALING: genuinely d-dimensional anisotropic heat gate.
+/// `G_GRIDLESS_DIM_SCALING`: genuinely d-dimensional anisotropic heat gate.
 ///
 /// ## Structure
 ///
-/// **Blocking asserts** (VALIDATED_DIMS = {2}):
+/// **Blocking asserts** (`VALIDATED_DIMS` = {2}):
 /// - Accuracy err < 5e-3 at d=2 with cap=1024.
 /// - Anti-regression §4.4a: five φ̂(d) across the full evidence sweep not all equal.
 /// - Anti-regression §4.4b: per-axis second moment nonzero on all validated dims.
 ///
-/// **Non-blocking evidence sweep** (all DIMS = {2,3,4,6,8,10}):
-/// - Prints accuracy, P_cap, cost, 3^d curse, and OLS slope for the record.
+/// **Non-blocking evidence sweep** (all `DIMS` = {2,3,4,6,8,10}):
+/// - Prints accuracy, `P_cap`, cost, 3^d curse, and OLS slope for the record.
 /// - High-d collapse (err 9.75e-2…7.05e-1 for d≥4) is printed as the INTRINSIC
 ///   LIMIT: spatial-merge reduction costs O(m^d) in the reduction grid, so the
 ///   curse re-enters through the reducer. This is a documented, publication-worthy
 ///   negative+reframe result — NOT a code bug.
-/// - The slope metric is PRINTED (not asserted) because beyond d_acc_max=2 the
+/// - The slope metric is PRINTED (not asserted) because beyond `d_acc_max`=2 the
 ///   cost is intrinsically O(m^d) and no slope ≤ 1.1 is achievable.
 ///
 /// ## TRIZ-framing
@@ -334,7 +339,7 @@ macro_rules! check_per_axis_spread {
 /// spatial-merge reduction. The spatial-merge approach succeeds at d=2 and is a valid
 /// correct low-d tool; high-d belongs to a research-track path (see ADR-0155 amendment).
 #[test]
-#[ignore]
+#[ignore = "slow gate: runs multi-dim cap-ladder sweep (~minutes); use --ignored --nocapture"]
 fn g_gridless_dim_scaling() {
     println!(
         "\nG_GRIDLESS_DIM_SCALING: anisotropic a_j=0.5*(1+0.1j), xi_j=1/(1+0.05j), \
@@ -391,8 +396,8 @@ fn g_gridless_dim_scaling() {
 
     // ── §4.4a Anti-regression (blocking): five φ̂(d) not all equal ─────────────
     // Use the full 6-dim sweep; if all equal it means dimensional collapse regression.
-    let est_min = ests.iter().cloned().fold(f64::INFINITY, f64::min);
-    let est_max = ests.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let est_min = ests.iter().copied().fold(f64::INFINITY, f64::min);
+    let est_max = ests.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let est_spread = est_max - est_min;
     println!(
         "\nG_GRIDLESS_DIM_SCALING: §4.4a est spread (max-min) = {est_spread:.4e} (must > 1e-9)"
@@ -416,14 +421,13 @@ fn g_gridless_dim_scaling() {
             .iter()
             .position(|&x| x == d)
             .expect("validated dim must be in DIMS");
-        if pcaps[i] == 0 {
-            panic!(
-                "G_GRIDLESS_DIM_SCALING: (i) FAIL d={d} (validated envelope): \
+        assert!(
+            pcaps[i] != 0,
+            "G_GRIDLESS_DIM_SCALING: (i) FAIL d={d} (validated envelope): \
                  no cap in ladder {CAP_LADDER:?} holds accuracy < {ACC_GATE:.1e}. \
                  Best err={:.3e}. The d=2 envelope regressed — investigate gridless.rs.",
-                errs[i]
-            );
-        }
+            errs[i]
+        );
         assert!(
             errs[i] < ACC_GATE,
             "G_GRIDLESS_DIM_SCALING: (i) FAIL d={d}: err={:.3e} >= {ACC_GATE:.1e}",
@@ -536,8 +540,8 @@ const D_VAR: usize = 4; // original representative dimension (§5.6)
 const D_VAR_ENVELOPE: usize = 2; // validated-envelope dimension (only d=2 is accurate)
 const EPSILON_IC: f64 = 1e-3; // IC spread: particles at ε·z_i ≈ δ_0
 
-/// Build a P-particle quantization of δ_0 by placing particles at `ε·z_i`.
-/// Returns the shared {z_i} cloud (needed by MC estimator too).
+/// Build a P-particle quantization of `δ_0` by placing particles at `ε·z_i`.
+/// Returns the shared `{z_i}` cloud (needed by MC estimator too).
 fn build_delta0_ensemble_and_cloud(
     lcg: &mut Lcg64,
     eps: f64,
@@ -573,7 +577,7 @@ fn shared_truth() -> f64 {
     product_closed_form(D_VAR, T_VAR)
 }
 
-/// Deterministic gridless estimate: evolve the shared δ_0 ensemble, apply functional.
+/// Deterministic gridless estimate: evolve the shared `δ_0` ensemble, apply functional.
 fn det_estimate(ic: MeasureState<f64, D_VAR>, cap: usize) -> f64 {
     let mut a_arr = [0.0f64; D_VAR];
     let b_arr = [0.0f64; D_VAR];
@@ -599,7 +603,7 @@ fn det_estimate(ic: MeasureState<f64, D_VAR>, cap: usize) -> f64 {
     rho.pair(|pos: &[f64; D_VAR]| shared_functional(pos))
 }
 
-/// MC Euler-Maruyama estimate: evolve the same {z_i} initial cloud as P random walks.
+/// MC Euler-Maruyama estimate: evolve the same `{z_i}` initial cloud as P random walks.
 ///
 /// Each path starts at `ε·z_i` (same as det estimator). Then driven by fresh
 /// Gaussian increments (continue same LCG stream per §5.2).
@@ -631,7 +635,7 @@ fn mc_estimate(cloud: &[[f64; D_VAR]], lcg: &mut Lcg64, eps: f64) -> f64 {
 
 /// QMC (van-der-Corput) estimate: Gaussian terminal positions via VDC quantile.
 ///
-/// Each path endpoint: X_T,j = √(2 a_j T) · Φ⁻¹(VDC(offset+i+1)) on axis j.
+/// Each path endpoint: `X_T,j` = √(2 `a_j` T) · Φ⁻¹(VDC(offset+i+1)) on axis j.
 /// Uses independent VDC sequences per axis via different prime-base spacing.
 fn qmc_estimate(offset: u64) -> f64 {
     let sigma_t: [f64; D_VAR] = {
@@ -654,7 +658,7 @@ fn qmc_estimate(offset: u64) -> f64 {
     sum / P_CRN as f64
 }
 
-/// G_GRIDLESS_VARIANCE: shared-CRN comparison (§5.2) — anti-gaming invariant only.
+/// `G_GRIDLESS_VARIANCE`: shared-CRN comparison (§5.2) — anti-gaming invariant only.
 ///
 /// ## What this test ASSERTS (ADR-0160)
 ///
@@ -672,12 +676,12 @@ fn qmc_estimate(offset: u64) -> f64 {
 ///
 /// - d=2 (envelope):  MSE_det=1.25e-4, MSE_mc=1.77e-4, ratio=1.417× (NO-GO < 2×).
 /// - d=3 (outside):   MSE_det=4.95e-4, MSE_mc=2.14e-4, ratio=0.433× (det LOSES).
-/// - d=4 (D_VAR):     MSE_det=4.47e-2, MSE_mc=1.25e-4, ratio=0.003× (severe bias).
+/// - d=4 (`D_VAR`):     MSE_det=4.47e-2, MSE_mc=1.25e-4, ratio=0.003× (severe bias).
 ///
 /// All estimators consume the SAME budget P, SAME functional, SAME truth.
 /// Det and MC share the SAME z-cloud per replication (§5.5 constraint 4).
 #[test]
-#[ignore]
+#[ignore = "slow gate: shared-CRN variance comparison (§5.2), R=64 replications; use --ignored --nocapture"]
 fn g_gridless_variance() {
     println!(
         "\nG_GRIDLESS_VARIANCE: d={D_VAR} (original §5.6 representative dim), \
@@ -804,9 +808,9 @@ fn g_gridless_variance() {
 /// - This is the TRIZ ФП contradiction: the curse cannot be escaped by spatial merge
 ///   at d≥3; only a path-space approach (e.g., path-space RQMC) resolves it.
 ///
-/// Empirical evidence summary (cap ladder {256..16384}, T=1, n_steps=32):
+/// Empirical evidence summary (cap ladder {256..16384}, T=1, `n_steps`=32):
 ///
-/// | d  | best_err      | P_cap   | status                        |
+/// | d  | `best_err`    | `P_cap` | status                        |
 /// |----|---------------|---------|-------------------------------|
 /// |  2 | 1.197e-3      |    1024 | VALIDATED ENVELOPE            |
 /// |  3 | 1.430e-3      |    8192 | 8× blowup, curse entering     |

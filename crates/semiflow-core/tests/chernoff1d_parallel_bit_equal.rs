@@ -133,7 +133,7 @@ fn assert_bit_equal(
     }
 }
 
-/// Run the full (N × n_steps × thread_count) matrix for one operator.
+/// Run the full (N × `n_steps` × `thread_count`) matrix for one operator.
 ///
 /// `tau` is operator-specific: use `TAU` for most types, `TAU_TEXP` for
 /// `TruncatedExp*` variants (their CFL condition requires tiny τ at fine grids).

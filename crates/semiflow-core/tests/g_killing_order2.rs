@@ -66,18 +66,18 @@ use semiflow_core::{
 // Gate constants (normative — do NOT relax without ADR + properties.yaml bump)
 // ---------------------------------------------------------------------------
 
-/// OLS slope gate for `G_KILLING_ORDER2` (RELEASE_BLOCKING, ADR-0126).
+/// OLS slope gate for `G_KILLING_ORDER2` (`RELEASE_BLOCKING`, ADR-0126).
 const SLOPE_GATE: f64 = -1.95;
 
-/// Grid domain half-width.  exp(-L²) < 2e-28 for L=8 → negligible at boundary.
+/// Grid domain half-width.  `exp(-L²)` < 2e-28 for L=8 → negligible at boundary.
 const L_DOMAIN: f64 = 8.0;
 
-/// Grid size. dx = 16/49999 ≈ 3.2e-4; spatial floor O(dx²) ≈ 1e-7.
+/// Grid size. `dx` = 16/49999 ≈ 3.2e-4; spatial floor `O(dx²)` ≈ 1e-7.
 const N_NODES: usize = 50_000;
 
-/// Interior measurement zone: only measure error for |x| ≤ MEAS_HALF.
-/// Nodes beyond MEAS_HALF are unaffected by 3·h₀ boundary artefacts.
-/// 3·h₀ ≈ 0.47 at n=64, T=0.25, a=0.5 → MEAS_HALF = 6 leaves 2 units margin.
+/// Interior measurement zone: only measure error for |x| ≤ `MEAS_HALF`.
+/// Nodes beyond `MEAS_HALF` are unaffected by `3·h₀` boundary artefacts.
+/// `3·h₀` ≈ 0.47 at n=64, T=0.25, a=0.5 → `MEAS_HALF` = 6 leaves 2 units margin.
 const MEAS_HALF: f64 = 6.0;
 
 /// Final integration time.
@@ -123,6 +123,7 @@ fn build_kernel(
 }
 
 /// Evolve `n_steps` Chernoff steps and return the grid function.
+#[allow(clippy::cast_precision_loss)]
 fn evolve(n_steps: usize) -> (Grid1D<f64>, GridFn1D<f64>) {
     let grid = Grid1D::new(-L_DOMAIN, L_DOMAIN, N_NODES)
         .unwrap()
@@ -183,7 +184,7 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 // G_KILLING_ORDER2 gate
 // ---------------------------------------------------------------------------
 
-/// G_KILLING_ORDER2 — `Killing2ndChernoff` order-2 convergence gate (ADR-0126).
+/// `G_KILLING_ORDER2` — `Killing2ndChernoff` order-2 convergence gate (ADR-0126).
 ///
 /// Problem: `∂_t u = 0.5 ∂_xx u − 0.5 u`, IC `exp(−x²)`, `T = 0.25`.
 /// Exact oracle: `exp(−κ₀T) · (1+4aT)^{-1/2} · exp(−x²/(1+4aT))`.
@@ -191,11 +192,12 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 ///
 /// Sweep n ∈ {64, 128, 256, 512, 1024, 2048}: OLS slope ≤ −1.95 confirms order-2.
 ///
-/// The [L, κ] ≠ 0 case (variable κ) is covered by the pre-flight sympy check
-/// (scripts/verify_killing_order2_preflight.py); this gate verifies the
+/// The `[L, κ]` ≠ 0 case (variable κ) is covered by the pre-flight sympy check
+/// (`scripts/verify_killing_order2_preflight.py`); this gate verifies the
 /// implementation produces the correct numbers.
 #[test]
-#[ignore]
+#[ignore = "slow: full N_SWEEP convergence sweep; run with --features slow-tests --ignored"]
+#[allow(clippy::cast_precision_loss)]
 fn g_killing_order2_slope() {
     let mut errs = Vec::with_capacity(N_SWEEP.len());
 

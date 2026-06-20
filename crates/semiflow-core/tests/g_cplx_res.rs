@@ -106,10 +106,10 @@ fn rejects_nan_lambda() {
 // Main gate — slow-tests
 // ---------------------------------------------------------------------------
 
-/// G_CPLX_RES (RELEASE_BLOCKING): residual ≤ 1e-3 at canonical datum λ=1+1i.
+/// `G_CPLX_RES` (`RELEASE_BLOCKING`): residual ≤ 1e-3 at canonical datum λ=1+1i.
 #[test]
 #[cfg(feature = "slow-tests")]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_res_canonical() {
     let res = make_resolvent();
     let g = gaussian_g();
@@ -129,7 +129,7 @@ fn g_cplx_res_canonical() {
 /// Additional complex λ values — all should satisfy residual ≤ 1e-3.
 #[test]
 #[cfg(feature = "slow-tests")]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_res_multiple_lambda() {
     let res = make_resolvent();
     let g = gaussian_g();

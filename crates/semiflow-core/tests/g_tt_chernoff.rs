@@ -37,6 +37,11 @@
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)] // f64→usize floor: .round() ≥ 0 guaranteed
+#![allow(clippy::cast_sign_loss)]           // f64→usize floor: result ≥ 0 guaranteed
+#![allow(clippy::similar_names)]            // mode_fwd/mode_bwd are paired math vars
+#![allow(clippy::needless_range_loop)]      // index arithmetic uses cross-index Kronecker
+#![allow(clippy::items_after_statements)]   // use TtCore inside fn after let statements
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -61,7 +66,7 @@ const ALPHA_L: f64 = 0.8; // rank-1 perturbation for Regime L
 // §B — Reference computation via discrete 1D kernel
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Per-axis diffusion coefficient: a_j = 0.5 + 0.1·j
+/// Per-axis diffusion coefficient: `a_j` = 0.5 + 0.1·j
 fn diffusion_coeff(j: usize) -> f64 {
     0.5 + 0.1 * j as f64
 }
@@ -80,7 +85,7 @@ fn gaussian_ic(n: usize) -> Vec<f64> {
         .collect()
 }
 
-/// Test functional for axis j: f_j(x) = exp(-α_j·x²) (no dx — plain dot product).
+/// Test functional for axis j: `f_j(x)` = exp(-α_j·x²) (no dx — plain dot product).
 fn test_functional(j: usize, n: usize) -> Vec<f64> {
     let alpha = 0.1 / (j as f64 + 1.0);
     let dx = (X_MAX - X_MIN) / (n as f64 - 1.0);
@@ -94,7 +99,7 @@ fn test_functional(j: usize, n: usize) -> Vec<f64> {
 
 /// Compute the "reference" 1D inner product by running the DISCRETE Chernoff kernel
 /// directly on a 1D vector (same kernel as TT, so comparison is exact).
-/// Returns ⟨f_j, K^n * u₀_j⟩ where K is the ¼-½-¼ shift kernel.
+/// Returns ⟨`f_j`, K^n * `u₀_j`⟩ where K is the ¼-½-¼ shift kernel.
 fn discrete_1d_reference(j: usize, n: usize) -> f64 {
     let dx = (X_MAX - X_MIN) / (n as f64 - 1.0);
     let a_j = diffusion_coeff(j);
@@ -150,14 +155,14 @@ fn build_state_regime_l(d: usize) -> TtState<f64> {
 
 /// Build a Regime H (dense Cauchy-correlated) TT initial state.
 ///
-/// IC: u₀(x) = ⊗_j g_j(x_j) where g_j is a slightly perturbed Gaussian
+/// IC: u₀(x) = ⊗_j `g_j(x_j)` where `g_j` is a slightly perturbed Gaussian
 /// at different scales to create a non-trivial multi-mode structure.
 /// Then add a rank-1 cross-mode coupling to force r > 1.
 ///
 /// Implementation: construct a rank-2 state by combining:
 ///   u₀ = s1 ⊗ s1 ⊗ … ⊗ s1  (rank-1 part)
 ///     + ε · c1 ⊗ c2 ⊗ … ⊗ cd  (rank-1 correction, ε=0.5)
-/// where s1 = exp(-x²/2), c_j = exp(-(x-μ_j)²/2), μ_j varying per axis.
+/// where s1 = exp(-x²/2), `c_j` = exp(-(x-μ_j)²/2), `μ_j` varying per axis.
 /// This gives a rank-2 TT state that is a genuine superposition.
 fn build_state_regime_h(d: usize) -> TtState<f64> {
     let dx = (X_MAX - X_MIN) / (N_GRID as f64 - 1.0);
@@ -236,7 +241,7 @@ fn run_tt_chernoff(d: usize, state: &mut TtState<f64>) {
 
 /// Compute functional error vs discrete 1D reference (Regime L).
 /// The reference runs the SAME discrete kernel per-axis — exact comparison.
-/// Returns |⟨f, u_TT⟩ - ⟨f, u_ref⟩| / |⟨f, u_ref⟩|.
+/// Returns |⟨f, `u_TT`⟩ - ⟨f, `u_ref`⟩| / |⟨f, `u_ref`⟩|.
 fn functional_error_regime_l(d: usize, state: &TtState<f64>) -> f64 {
     let fns: Vec<Vec<f64>> = (0..d).map(|j| test_functional(j, N_GRID)).collect();
     let tt_val = state.inner_separable(&fns);
@@ -249,7 +254,7 @@ fn functional_error_regime_l(d: usize, state: &TtState<f64>) -> f64 {
 
 /// Compute functional error for Regime H.
 /// The Regime H state is a superposition of two rank-1 states, so its
-/// exact functional is the sum: ⟨f, u_H⟩ = ⟨f, u_base⟩ + eps·⟨f, u_shifted⟩.
+/// exact functional is the sum: ⟨f, `u_H`⟩ = ⟨f, `u_base`⟩ + eps·⟨f, `u_shifted`⟩.
 /// Both components evolve independently (linear equation), so we can compute
 /// the reference by running the 1D discrete kernel for each shifted IC separately.
 fn functional_error_regime_h(d: usize, state: &TtState<f64>) -> f64 {
@@ -334,7 +339,7 @@ fn rank_growth_slope(d_vals: &[usize], ranks: &[usize]) -> f64 {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore]
+#[ignore = "slow P1 curse-escape gate across d∈{4,6,8,10}; run with: cargo run -p xtask -- test-flagship"]
 fn g_tt_chernoff_dimscaling() {
     println!();
     println!("{}", "═".repeat(72));
@@ -343,7 +348,7 @@ fn g_tt_chernoff_dimscaling() {
     println!();
     println!("Evolving: ∂_t u = Σ_j a_j ∂²_{{x_j}} u,  a_j=0.5+0.1j,  T={T_FINAL}");
     println!("Grid: n={N_GRID} per axis,  domain=[{X_MIN},{X_MAX}]^d,  eps_round={EPS_ROUND}");
-    println!("Steps: n_steps={N_STEPS},  d ∈ {:?}", D_LIST);
+    println!("Steps: n_steps={N_STEPS},  d ∈ {D_LIST:?}");
     println!("Accuracy gate: |err_rel| < {ACC_GATE}");
     println!();
     println!("HONEST FRAMING: Both regimes escape the exponential curse.");
@@ -389,7 +394,7 @@ fn g_tt_chernoff_dimscaling() {
         acc_pass_l.push(pass);
     }
 
-    let slope_l = rank_growth_slope(&D_LIST.to_vec(), &ranks_l);
+    let slope_l = rank_growth_slope(&D_LIST, &ranks_l);
     let all_acc_l = acc_pass_l.iter().all(|&p| p);
     println!();
     println!("  Regime L rank-vs-d:");
@@ -448,7 +453,7 @@ fn g_tt_chernoff_dimscaling() {
         acc_pass_h.push(pass);
     }
 
-    let slope_h = rank_growth_slope(&D_LIST.to_vec(), &ranks_h);
+    let slope_h = rank_growth_slope(&D_LIST, &ranks_h);
     let all_acc_h = acc_pass_h.iter().all(|&p| p);
     println!();
     println!("  Regime H rank-vs-d:");

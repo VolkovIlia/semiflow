@@ -39,6 +39,7 @@
 //! Gated: `#[cfg(feature = "slow-tests")]`
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // f64→f32: diagnostic sweep, small test values
 
 use semiflow_core::{
     chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
@@ -176,7 +177,7 @@ fn self_conv_3d_f32(n: usize) -> f64 {
 
 // --- shared regime-map printer ------------------------------------------------
 
-/// Print per-N self_err and consecutive log-log segment slopes for `errs`.
+/// Print per-N `self_err` and consecutive log-log segment slopes for `errs`.
 #[allow(clippy::cast_precision_loss)]
 fn print_regime_map(tag: &str, errs: &[f64]) {
     println!("--- {tag} f32 regime map (T={T_FINAL}, n_steps={N_STEPS}, a={DIFFUSION_A}) ---");

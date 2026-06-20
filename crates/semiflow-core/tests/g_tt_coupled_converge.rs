@@ -31,6 +31,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)] // usize→u32 for .pow(): d ≤ 4, n ≤ 13 in test
+#![allow(clippy::cast_possible_wrap)]       // u32→i32 for .powi(): scaling factor ≤ 30
+#![allow(clippy::many_single_char_names)]   // n, d, r, a, s, etc. are standard math variable names
+#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic (Kronecker)
+#![allow(clippy::unreadable_literal)]       // LCG/expm coefficients are mathematical identifiers
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -50,7 +55,7 @@ const EXACTNESS_GATE: f64 = 1e-12;
 /// d=3 parameters: ρ=0.6 (SPD: |ρ|<1/√2≈0.707 ✓; interior c=a/2, |ρ|<0.707 ✓)
 const RHO3: f64 = 0.6;
 const A3: [f64; 3] = [0.8, 0.6, 0.4];
-/// n∈{9,11,13}, n_steps so τ≈0.35·dx² (τ-only sweep NOT included — §10.3 forbidden)
+/// n∈{9,11,13}, `n_steps` so τ≈0.35·dx² (τ-only sweep NOT included — §10.3 forbidden)
 const N3: [usize; 3] = [9, 11, 13];
 const STEPS3: [usize; 3] = [9, 14, 20]; // n=13: 20 steps → h/dx≈1.073, frac≈0.073 >0.05 ✓
 
@@ -101,7 +106,7 @@ fn mat_norm_inf_local(a: &[f64], m: usize) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// LU factorize a_lu in-place; returns pivot vector. Does NOT apply to RHS.
+/// LU factorize `a_lu` in-place; returns pivot vector. Does NOT apply to RHS.
 fn lu_factor(a_lu: &mut [f64], m: usize) -> Vec<usize> {
     let mut piv: Vec<usize> = (0..m).collect();
     for col in 0..m {
@@ -162,7 +167,7 @@ fn lu_solve_factored(a_lu: &[f64], piv: &[usize], b: &mut [f64], m: usize) {
     }
 }
 
-/// Local Padé[6/6] + scaling-squaring expm (independent of tt_dense_expm).
+/// Local Padé[6/6] + scaling-squaring expm (independent of `tt_dense_expm`).
 fn expm_local(a: &[f64], m: usize) -> Vec<f64> {
     let norm = mat_norm_inf_local(a, m);
     let mut s = 0u32;
@@ -274,7 +279,7 @@ fn add_cross(l: &mut [f64], d: usize, j: usize, k: usize, n: usize, coeff: f64) 
     }
 }
 
-/// Assemble dense n^d × n^d generator L_h (independent reference).
+/// Assemble dense n^d × n^d generator `L_h` (independent reference).
 fn build_l_full(d: usize, n: usize, dx: f64, a: &[f64], rho: f64) -> Vec<f64> {
     let tot = n.pow(d as u32);
     let mut l = vec![0.0f64; tot * tot];
@@ -432,8 +437,7 @@ fn run_exactness(d: usize, grids: &[usize], steps: &[usize], a: &[f64], rho: f64
         let dx = (X_MAX - X_MIN) / (n as f64 - 1.0);
         let tau = T / ns as f64;
         println!(
-            "  {:>5} | {:>5} | {:.4e} | {:.4} | {:>6} | {:.4e}   | {ok}",
-            n, ns, tau, hd, pk, err
+            "  {n:>5} | {ns:>5} | {tau:.4e} | {hd:.4} | {pk:>6} | {err:.4e}   | {ok}"
         );
 
         // Anti-vacuity: h/dx non-integer (frac>0.05)
@@ -461,7 +465,7 @@ fn run_exactness(d: usize, grids: &[usize], steps: &[usize], a: &[f64], rho: f64
 // §G — G_TT_COUPLED_EXACT (RELEASE_BLOCKING exactness gate)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// G_TT_COUPLED_EXACT — P4' exactness gate (RELEASE_BLOCKING).
+/// `G_TT_COUPLED_EXACT` — P4' exactness gate (`RELEASE_BLOCKING`).
 ///
 /// Proves `CoupledTtChernoff` (spectral pair factor P3'') is machine-exact
 /// for the constant-coefficient correlated-Gaussian class at d∈{3,4}.
@@ -486,9 +490,9 @@ fn run_exactness(d: usize, grids: &[usize], steps: &[usize], a: &[f64], rho: f64
 /// P3'' (spectral FFT-diagonal apply, solver-free) is now implemented
 /// (`tt_spectral.rs`, `tt_coupled_pair.rs`). The d=2 self-check confirms
 /// rel-L2 ≤ 1e-10 (`tt_coupled::tests::d2_exactness_self_check`). This gate
-/// is the full d∈{3,4} confirmation. It is RELEASE_BLOCKING.
+/// is the full d∈{3,4} confirmation. It is `RELEASE_BLOCKING`.
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow dense-expm exactness gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_tt_coupled_converge() {
     let bar = "═".repeat(72);
     println!("\n{bar}");
@@ -566,7 +570,7 @@ fn strip_test_items(src: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Audit: coupling production path must NOT call lu_solve_inplace or dense_expm.
+/// Audit: coupling production path must NOT call `lu_solve_inplace` or `dense_expm`.
 ///
 /// Reads `tt_coupled_pair.rs`, `tt_spectral.rs`, `tt_coupled.rs` source files,
 /// strips `#[cfg(test)]` blocks, and asserts no forbidden solver call remains.

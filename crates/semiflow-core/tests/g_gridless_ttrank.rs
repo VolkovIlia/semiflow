@@ -130,7 +130,7 @@ fn eye(d: usize) -> Vec<f64> {
 }
 
 /// Gauss-Jordan inversion of a d×d matrix.
-/// Panics if the matrix is singular (shouldn't happen for our PD Σ_T).
+/// Panics if the matrix is singular (shouldn't happen for our PD `Σ_T`).
 fn invert(a: &[f64], d: usize) -> Vec<f64> {
     let mut aug = vec![0.0f64; d * 2 * d];
     for i in 0..d {
@@ -197,7 +197,7 @@ fn invert(a: &[f64], d: usize) -> Vec<f64> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Extract off-diagonal block of `full` (d×d):
-/// rows 0..row_end, cols col_start..d  →  block of shape (row_end) × (d-col_start).
+/// rows 0..row_end, cols col_start..d  →  block of shape `(row_end)` × `(d-col_start)`.
 fn extract_block(full: &[f64], d: usize, row_end: usize, col_start: usize) -> Vec<f64> {
     let nr = row_end;
     let nc = d - col_start;
@@ -211,7 +211,7 @@ fn extract_block(full: &[f64], d: usize, row_end: usize, col_start: usize) -> Ve
 }
 
 /// One-sided Jacobi on the Gram matrix to get squared singular values and optionally
-/// eigenvectors. Returns (singular_values_desc, eigenvector_matrix V) where
+/// eigenvectors. Returns (`singular_values_desc`, `eigenvector_matrix` V) where
 /// G = Bᵀ·B = V·diag(σ²)·Vᵀ. If `with_vectors=false`, V is empty.
 fn jacobi_gram(b: &[f64], nr: usize, nc: usize, with_vectors: bool) -> (Vec<f64>, Vec<f64>) {
     if nr == 0 || nc == 0 {
@@ -348,7 +348,7 @@ fn diffusion_coeff(j: usize) -> f64 {
     0.5 + 0.1 * j as f64
 }
 
-/// Build Σ_T for Regime L: Σ_0 = I + α·(1/d)·J (J = ones matrix), then add 2T·A.
+/// Build `Σ_T` for Regime L: `Σ_0` = I + α·(1/d)·J (J = ones matrix), then add 2T·A.
 fn sigma_t_regime_l(d: usize) -> Vec<f64> {
     let mut s = eye(d);
     let alpha_per_entry = ALPHA_L / d as f64; // (v·vᵀ)[i,j] = (1/√d)² = 1/d
@@ -365,13 +365,13 @@ fn sigma_t_regime_l(d: usize) -> Vec<f64> {
     s
 }
 
-/// Build Σ_T for Regime H: Σ_0[i,j] = 1/(1+|i-j|), then add 2T·A.
+/// Build `Σ_T` for Regime H: `Σ_0`[i,j] = 1/(1+|i-j|), then add 2T·A.
 /// The Cauchy kernel gives a genuinely full-rank precision matrix.
 fn sigma_t_regime_h(d: usize) -> Vec<f64> {
     let mut s = vec![0.0f64; d * d];
     for i in 0..d {
         for j in 0..d {
-            let diff = if i >= j { i - j } else { j - i };
+            let diff = i.abs_diff(j);
             mat_set(&mut s, d, i, j, 1.0 / (1.0 + diff as f64));
         }
     }
@@ -405,7 +405,7 @@ fn sigma_t_regime_h(d: usize) -> Vec<f64> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Rank-r approximation of B (nr × nc) via Jacobi SVD with eigenvector accumulation.
-/// Returns B_r (same shape), the best rank-r approximation to B.
+/// Returns `B_r` (same shape), the best rank-r approximation to B.
 fn rank_r_approx_block(b: &[f64], nr: usize, nc: usize, r: usize) -> Vec<f64> {
     if r == 0 {
         return vec![0.0f64; nr * nc];
@@ -436,7 +436,7 @@ fn rank_r_approx_block(b: &[f64], nr: usize, nc: usize, r: usize) -> Vec<f64> {
     b_r
 }
 
-/// Build Λ_r: off-diagonal blocks of Λ replaced by rank-`target_rank` approximations.
+/// Build `Λ_r`: off-diagonal blocks of Λ replaced by rank-`target_rank` approximations.
 fn precision_rank_approx(lambda: &[f64], d: usize, target_rank: usize) -> Vec<f64> {
     let mut lam_r = lambda.to_vec();
     for k in 1..d {
@@ -470,7 +470,7 @@ fn quadratic_form(x: &[f64], m: &[f64], d: usize) -> f64 {
 }
 
 /// Density functional accuracy at the measured peak rank.
-/// Error = |exp(-½ xᵀ Λ x) - exp(-½ xᵀ Λ_r x)|  at x = (1,-1,1,-1,…)/√d.
+/// Error = |exp(-½ xᵀ Λ x) - exp(-½ xᵀ `Λ_r` x)|  at x = (1,-1,1,-1,…)/√d.
 fn density_accuracy_at_rank(lambda: &[f64], d: usize, peak_rank: usize) -> f64 {
     let scale = 1.0 / libm::sqrt(d as f64);
     let x: Vec<f64> = (0..d)
@@ -545,7 +545,7 @@ fn measure_regime(d: usize, sigma_t: &[f64]) -> RankResult {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore]
+#[ignore = "slow P3 rank prototype; run with: cargo run -p xtask -- test-flagship"]
 fn g_gridless_ttrank() {
     println!();
     println!("{}", "═".repeat(72));
@@ -578,7 +578,7 @@ fn g_gridless_ttrank() {
     for &d in &D_LIST {
         let sigma_t = sigma_t_regime_l(d);
         let res = measure_regime(d, &sigma_t);
-        let sr_str: Vec<String> = res.split_ranks.iter().map(|r| r.to_string()).collect();
+        let sr_str: Vec<String> = res.split_ranks.iter().map(std::string::ToString::to_string).collect();
         println!(
             "  {:>2} | {:>6} | {:47} | {:9.3e} | {}",
             res.d,
@@ -627,7 +627,7 @@ fn g_gridless_ttrank() {
     for &d in &D_LIST {
         let sigma_t = sigma_t_regime_h(d);
         let res = measure_regime(d, &sigma_t);
-        let sr_str: Vec<String> = res.split_ranks.iter().map(|r| r.to_string()).collect();
+        let sr_str: Vec<String> = res.split_ranks.iter().map(std::string::ToString::to_string).collect();
         println!(
             "  {:>2} | {:>6} | {:47} | {:9.3e} | {}",
             res.d,

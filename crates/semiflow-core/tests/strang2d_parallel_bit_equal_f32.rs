@@ -108,6 +108,7 @@ fn _send_sync_check() {
 /// Returns the final `GridFn2D::values` as `Vec<f32>`.
 // n_steps ≤ 4 — within f32 mantissa range.
 #[allow(clippy::cast_precision_loss)]
+#[allow(clippy::needless_pass_by_value)]
 fn run_with_threads(
     phi2d: Strang2D<WrapDiff<f32>, WrapDiff<f32>, f32>,
     f0: &GridFn2D<f32>,
@@ -137,7 +138,7 @@ fn make_initial(grid: Grid2D<f32>) -> GridFn2D<f32> {
 // DiffusionChernoff<f32> sweep
 // ---------------------------------------------------------------------------
 
-/// `GF1_2D_F32_BIT_EQUAL`: parallel Strang2D<f32> is bit-identical to serial
+/// `GF1_2D_F32_BIT_EQUAL`: parallel `Strang2D<f32>` is bit-identical to serial
 /// for `N ∈ {64, 128}`, `n_steps ∈ {1, 4}`, `thread_count ∈ {2, 4, 8}`.
 ///
 /// ADR-0018 bit-equality contract, extended to f32 (ADR-0045 §5.3).

@@ -25,16 +25,16 @@ use semiflow_core::{
 // Gate constants — do NOT relax without ADR + properties.yaml bump.
 // ---------------------------------------------------------------------------
 
-/// G_RES_RES gate budget (RELEASE_BLOCKING per ADR-0083).
+/// `G_RES_RES` gate budget (`RELEASE_BLOCKING` per ADR-0083).
 const RESIDUAL_BUDGET: f64 = 1e-3;
 
-/// Chernoff truncation level per G_RES_RES canonical spec.
+/// Chernoff truncation level per `G_RES_RES` canonical spec.
 const N_CHERNOFF: usize = 64;
 
-/// Spatial grid size per G_RES_RES canonical spec.
+/// Spatial grid size per `G_RES_RES` canonical spec.
 const N_SPATIAL: usize = 512;
 
-/// λ value per G_RES_RES canonical spec.
+/// λ value per `G_RES_RES` canonical spec.
 const LAMBDA: f64 = 1.0;
 
 /// Domain half-width.
@@ -44,13 +44,13 @@ const DOMAIN_L: f64 = 5.0;
 // G_RES_RES — main gate test
 // ---------------------------------------------------------------------------
 
-/// G_RES_RES — resolvent residual ≤ 1e-3 (RELEASE_BLOCKING, ADR-0083).
+/// `G_RES_RES` — resolvent residual ≤ 1e-3 (`RELEASE_BLOCKING`, ADR-0083).
 ///
 /// Canonical inputs: unit diffusion (a=1), λ=1.0, n=64, N=512, Gaussian IC
 /// f(x) = exp(-x²) on [-5, 5].
 ///
 /// The `LaplaceChernoffResolventResidual::verify_residual` method computes
-/// ‖(λI − ∂_xx) R̃_n(λ) f − f‖_∞ via 3-point central differences on interior
+/// ‖(λI − ∂_xx) `R̃_n(λ)` f − f‖_∞ via 3-point central differences on interior
 /// nodes. Empirically: residual ≈ 1.57e-4 ≪ gate 1e-3.
 #[test]
 fn g_res_res_unit_diffusion_lambda_1_gaussian() {

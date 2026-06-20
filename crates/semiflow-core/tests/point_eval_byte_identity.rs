@@ -35,7 +35,7 @@ const N: u32 = 64;
 // Full-grid path helpers
 // ---------------------------------------------------------------------------
 
-/// Full-grid path for 1-D kernels: run apply_into n times, then sample at x.
+/// Full-grid path for 1-D kernels: run `apply_into` n times, then sample at x.
 fn full_grid_1d<C>(kernel: &C, tau: f64, src: &GridFn1D<f64>, n: u32, x: f64) -> f64
 where
     C: ChernoffFunction<f64, S = GridFn1D<f64>>,
@@ -50,7 +50,7 @@ where
     cur.sample(x).unwrap()
 }
 
-/// Full-grid path for 2-D kernels: run apply_into n times, then bilinear at (cx, cy).
+/// Full-grid path for 2-D kernels: run `apply_into` n times, then bilinear at (cx, cy).
 fn full_grid_2d<C>(kernel: &C, tau: f64, src: &GridFn2D<f64>, n: u32, cx: f64, cy: f64) -> f64
 where
     C: ChernoffFunction<f64, S = GridFn2D<f64>>,
@@ -74,7 +74,7 @@ where
 // Backend A — DiffusionChernoff<f64>
 // ---------------------------------------------------------------------------
 
-/// G_POINTEVAL sub-test 1: DiffusionChernoff byte-identity.
+/// `G_POINTEVAL` sub-test 1: `DiffusionChernoff` byte-identity.
 ///
 /// Setup: variable-a kernel `a(x) = 1 + 0.5·tanh²(x)`, IC `exp(-x²)`.
 /// Grid: [-10, 10] × 512 nodes (math §31.4 Backend A spec).
@@ -103,7 +103,7 @@ fn g_pointeval_byte_identity_diffusion() {
         grid,
     };
 
-    let tau = T / N as f64;
+    let tau = T / f64::from(N);
     // Query at grid centre (x = 0.0 — midpoint of [-10, 10]).
     let x_query = 0.0_f64;
     let x_slice = [x_query];
@@ -114,9 +114,7 @@ fn g_pointeval_byte_identity_diffusion() {
     assert_eq!(
         pe_val.to_bits(),
         fg_val.to_bits(),
-        "G_POINTEVAL Backend A: eval_at {:.16e} != full_grid {:.16e}",
-        pe_val,
-        fg_val,
+        "G_POINTEVAL Backend A: eval_at {pe_val:.16e} != full_grid {fg_val:.16e}",
     );
 }
 
@@ -124,7 +122,7 @@ fn g_pointeval_byte_identity_diffusion() {
 // Backend B — ShiftChernoff1D<f64>
 // ---------------------------------------------------------------------------
 
-/// G_POINTEVAL sub-test 2: ShiftChernoff1D byte-identity.
+/// `G_POINTEVAL` sub-test 2: `ShiftChernoff1D` byte-identity.
 ///
 /// Setup: constant-a unit diffusion `a=1, b=0, c=0`, IC `exp(-x²)`.
 /// Grid: [-10, 10] × 512 nodes.
@@ -149,7 +147,7 @@ fn g_pointeval_byte_identity_shift1d() {
         grid,
     };
 
-    let tau = T / N as f64;
+    let tau = T / f64::from(N);
     let x_query = 0.0_f64;
     let x_slice = [x_query];
 
@@ -159,9 +157,7 @@ fn g_pointeval_byte_identity_shift1d() {
     assert_eq!(
         pe_val.to_bits(),
         fg_val.to_bits(),
-        "G_POINTEVAL Backend B: eval_at {:.16e} != full_grid {:.16e}",
-        pe_val,
-        fg_val,
+        "G_POINTEVAL Backend B: eval_at {pe_val:.16e} != full_grid {fg_val:.16e}",
     );
 }
 
@@ -169,11 +165,11 @@ fn g_pointeval_byte_identity_shift1d() {
 // Backend C — ManifoldChernoff<Sphere2<f64>, f64>
 // ---------------------------------------------------------------------------
 
-/// G_POINTEVAL sub-test 3: ManifoldChernoff (Sphere2) byte-identity.
+/// `G_POINTEVAL` sub-test 3: `ManifoldChernoff` (`Sphere2`) byte-identity.
 ///
-/// Setup: unit sphere, IC = Y_{0,0} (constant function), order-2 correction.
+/// Setup: unit sphere, IC = Y(0,0) (constant function), order-2 correction.
 /// Grid: 32×64 (θ,φ) chart (smaller than G26 — faster; byte-identity only).
-/// Query: chart centre (θ_mid, φ_mid).
+/// Query: chart centre (theta\_mid, phi\_mid).
 #[test]
 fn g_pointeval_byte_identity_manifold_sphere2() {
     use core::f64::consts::PI;
@@ -189,7 +185,7 @@ fn g_pointeval_byte_identity_manifold_sphere2() {
     // IC: constant function (Y_{0,0} up to normalisation).
     let src = GridFn2D::from_fn(grid, |_theta, _phi| 1.0_f64);
 
-    let tau = T / N as f64;
+    let tau = T / f64::from(N);
     // Query at chart centre: mid θ, mid φ.
     let theta_mid = g_theta.x_at(g_theta.n / 2);
     let phi_mid = g_phi.x_at(g_phi.n / 2);
@@ -201,9 +197,7 @@ fn g_pointeval_byte_identity_manifold_sphere2() {
     assert_eq!(
         pe_val.to_bits(),
         fg_val.to_bits(),
-        "G_POINTEVAL Backend C: eval_at {:.16e} != full_grid {:.16e}",
-        pe_val,
-        fg_val,
+        "G_POINTEVAL Backend C: eval_at {pe_val:.16e} != full_grid {fg_val:.16e}",
     );
 }
 
@@ -211,9 +205,9 @@ fn g_pointeval_byte_identity_manifold_sphere2() {
 // Backend D — HypoellipticChernoff<f64, 2, 1> (Kolmogorov)
 // ---------------------------------------------------------------------------
 
-/// G_POINTEVAL sub-test 4: HypoellipticChernoff (Kolmogorov) byte-identity.
+/// `G_POINTEVAL` sub-test 4: `HypoellipticChernoff` (Kolmogorov) byte-identity.
 ///
-/// Setup: Kolmogorov phase-space L = v·∂_x + ½∂²_v, IC = Gaussian.
+/// Setup: Kolmogorov phase-space L = v·∂x + ½∂²v, IC = Gaussian.
 /// Grid: 64×64 on [-3,3]² (smaller than G28/G29 — faster; byte-identity only).
 /// Query: phase-space centre (x=0, v=0).
 #[test]
@@ -230,7 +224,7 @@ fn g_pointeval_byte_identity_hypoelliptic_kolmogorov() {
 
     let src = GridFn2D::from_fn(grid, |x, v| (-(x * x + v * v) * 0.5).exp());
 
-    let tau = T / N as f64;
+    let tau = T / f64::from(N);
     let x_mid = gx.x_at(gx.n / 2);
     let v_mid = gv.x_at(gv.n / 2);
     let x_query = [x_mid, v_mid];
@@ -241,9 +235,7 @@ fn g_pointeval_byte_identity_hypoelliptic_kolmogorov() {
     assert_eq!(
         pe_val.to_bits(),
         fg_val.to_bits(),
-        "G_POINTEVAL Backend D: eval_at {:.16e} != full_grid {:.16e}",
-        pe_val,
-        fg_val,
+        "G_POINTEVAL Backend D: eval_at {pe_val:.16e} != full_grid {fg_val:.16e}",
     );
 }
 
@@ -251,14 +243,14 @@ fn g_pointeval_byte_identity_hypoelliptic_kolmogorov() {
 // Backend E — AnisotropicShiftChernoffND<f64, 2>
 // ---------------------------------------------------------------------------
 
-/// G_POINTEVAL sub-test 5: AnisotropicShiftChernoffND D=2 byte-identity.
+/// `G_POINTEVAL` sub-test 5: `AnisotropicShiftChernoffND` D=2 byte-identity.
 ///
 /// Setup: anisotropic 2-D kernel `A = I + 0.25·tanh(x₀+x₁)·off-diag`, b=0, c=0.
 /// Grid: 32×32 on [-5,5]² (small — byte-identity only, not convergence).
 /// Query: grid centre (0.0, 0.0).
 ///
-/// Byte-identity holds by Proposition 31.1: eval_at is defined as apply_into^n
-/// followed by GridFnND::sample, identical to the full-grid path.
+/// Byte-identity holds by Proposition 31.1: `eval_at` is defined as `apply_into`^n
+/// followed by `GridFnND::sample`, identical to the full-grid path.
 #[test]
 fn g_pointeval_byte_identity_anisotropic_shift_nd() {
     use semiflow_core::{
@@ -290,7 +282,7 @@ fn g_pointeval_byte_identity_anisotropic_shift_nd() {
         (-x[0] * x[0] - x[1] * x[1]).exp()
     });
 
-    let tau = T / N as f64;
+    let tau = T / f64::from(N);
     // Query at grid centre.
     let x_query = [0.0_f64, 0.0_f64];
 
@@ -309,8 +301,6 @@ fn g_pointeval_byte_identity_anisotropic_shift_nd() {
     assert_eq!(
         pe_val.to_bits(),
         fg_val.to_bits(),
-        "G_POINTEVAL Backend E: eval_at {:.16e} != full_grid {:.16e}",
-        pe_val,
-        fg_val,
+        "G_POINTEVAL Backend E: eval_at {pe_val:.16e} != full_grid {fg_val:.16e}",
     );
 }

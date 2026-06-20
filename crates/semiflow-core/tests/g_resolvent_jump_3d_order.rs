@@ -25,6 +25,7 @@
 //! Same G24 convention as `G_RESOLVENT_JUMP_ORDER` (§47.5) and `G_RESOLVENT_JUMP_2D_ORDER`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS/sweep; values ≤ 40 ≤ 2^52
 
 use semiflow_core::{Grid1D, Grid3D, GridFn3D, ResolventJumpChernoff3D};
 
@@ -44,7 +45,7 @@ const L: f64 = 5.0;
 /// Large horizon (§47.5 convention).
 const T_SLOPE: f64 = 100.0;
 
-/// Contour-node sweep (mirrors G_RESOLVENT_JUMP_ORDER M_SWEEP).
+/// Contour-node sweep (mirrors `G_RESOLVENT_JUMP_ORDER` `M_SWEEP`).
 const M_SWEEP: [usize; 5] = [6, 8, 10, 12, 14];
 
 /// High-M reference for self-convergence anchor.
@@ -64,7 +65,6 @@ fn run_jump(grid: Grid3D<f64>, m: usize, t: f64, g: &GridFn3D<f64>) -> GridFn3D<
     rj.jump(t, g).unwrap()
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
     let m = xs.len() as f64;
     let lx: Vec<f64> = xs.iter().map(|&v| v.ln()).collect();
@@ -92,12 +92,12 @@ fn sup_err(a: &GridFn3D<f64>, b: &GridFn3D<f64>) -> f64 {
 // G_RESOLVENT_JUMP_3D_ORDER gate
 // ---------------------------------------------------------------------------
 
-/// G_RESOLVENT_JUMP_3D_ORDER — slope ≥ +1.95 (RELEASE_BLOCKING, ADR-0148).
+/// `G_RESOLVENT_JUMP_3D_ORDER` — slope ≥ +1.95 (`RELEASE_BLOCKING`, ADR-0148).
 ///
-/// Self-convergence: reference at M_ref=40, probe at M ∈ {6,8,10,12,14}.
-/// Mirrors G_RESOLVENT_JUMP_ORDER design (§47.5) but for the 3D banded LHP solve.
+/// Self-convergence: reference at `M_ref=40`, probe at M ∈ {6,8,10,12,14}.
+/// Mirrors `G_RESOLVENT_JUMP_ORDER` design (§47.5) but for the 3D banded LHP solve.
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_resolvent_jump_3d_order() {
     let grid = make_grid();
     let g = GridFn3D::from_fn(grid, |x: f64, y: f64, z: f64| {

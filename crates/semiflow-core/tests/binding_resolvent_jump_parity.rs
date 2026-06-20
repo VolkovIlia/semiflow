@@ -49,10 +49,10 @@ const N: usize = 64;
 const M_NODES: usize = 16;
 /// Large time step (the whole point of F2 — single big jump).
 const T: f64 = 0.5;
-/// High-M reference for self-convergence anchor (mirrors G_RESOLVENT_JUMP_ORDER).
+/// High-M reference for self-convergence anchor (mirrors `G_RESOLVENT_JUMP_ORDER`).
 #[cfg(feature = "slow-tests")]
 const M_REF: usize = 40;
-/// Accuracy gate: ‖jump_M16 − jump_M40‖∞ ≤ 1e-3 (M=16 vs M_ref=40 self-convergence).
+/// Accuracy gate: ‖`jump_M16` − `jump_M40`‖∞ ≤ 1e-3 (M=16 vs `M_ref=40` self-convergence).
 /// Empirically ~3e-8 at T=0.5 (well inside 1e-3).
 #[cfg(feature = "slow-tests")]
 const TOL_JUMP: f64 = 1e-3;
@@ -95,10 +95,10 @@ pub fn canonical_resolvent_jump_core() -> Vec<f64> {
 // Independent evolve reference (many small Chernoff steps)
 // ---------------------------------------------------------------------------
 
-/// Compute M_ref=40 self-convergence reference via higher-M resolvent.
+/// Compute `M_ref=40` self-convergence reference via higher-M resolvent.
 ///
 /// Uses the same discrete A as the M=16 probe — no Chernoff/discrete mismatch.
-/// Mirrors G_RESOLVENT_JUMP_ORDER's M_ref=40 design (§47.5, ADR-0134).
+/// Mirrors `G_RESOLVENT_JUMP_ORDER`'s `M_ref=40` design (§47.5, ADR-0134).
 #[cfg(feature = "slow-tests")]
 fn resolvent_reference(grid: Grid1D<f64>, g: &GridFn1D<f64>) -> Vec<f64> {
     let chernoff = unit_diffusion(grid);

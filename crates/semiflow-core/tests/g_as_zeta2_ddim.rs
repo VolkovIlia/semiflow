@@ -35,6 +35,10 @@
 //! the ζ²-correction does NOT address (deferred ∂b term, §32.6).
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; values ≤ 512 ≤ 2^52
+#![allow(clippy::cast_lossless)]       // u32→f64 for n_steps: infallible, project idiom
+#![allow(clippy::items_after_statements)] // type alias GradBox after let statements
+#![allow(clippy::similar_names)]       // tau3/taus: standard math variable names
 
 use semiflow_core::{
     grid_nd::{GridFnND, GridND},
@@ -186,10 +190,10 @@ fn single_step_correction_magnitude(tau: f64) -> f64 {
         .iter()
         .zip(out_zeta2.values.iter())
         .map(|(&a, &b)| (a - b).abs())
-        .fold(0.0_f64, |m, e| m.max(e))
+        .fold(0.0_f64, f64::max)
 }
 
-/// G_AS_ZETA2_DDIM (RELEASE GATE) — τ-halving ratio of the single-step ζ²-correction.
+/// `G_AS_ZETA2_DDIM` (RELEASE GATE) — τ-halving ratio of the single-step ζ²-correction.
 ///
 /// **Outcome A gate**: proves the correction term scales as genuine O(τ²).
 ///
@@ -203,7 +207,7 @@ fn single_step_correction_magnitude(tau: f64) -> f64 {
 /// noise is τ²·O(dx²/h³) = τ²·O(const) — τ-independent noise coefficient — so
 /// the τ-scaling of the correction is exactly τ², giving halving ratio = 4.0.
 ///
-/// Measured (N_AXIS=8, τ ∈ {0.2, 0.1, 0.05, 0.025}):
+/// Measured (`N_AXIS=8`, τ ∈ {0.2, 0.1, 0.05, 0.025}):
 /// - τ=0.2000 → sup|corr| = 4.137e-4
 /// - τ=0.1000 → sup|corr| = 1.034e-4  (ratio 4.0000)
 /// - τ=0.0500 → sup|corr| = 2.585e-5  (ratio 4.0000)
@@ -215,7 +219,7 @@ fn single_step_correction_magnitude(tau: f64) -> f64 {
 /// Lower bound 3.6: excludes O(τ^{3/2}) (which gives ratio ≈ 2.83).
 /// Upper bound 4.4: excludes spurious over-correction or O(τ^3) behaviour.
 #[test]
-#[ignore]
+#[ignore = "slow gate for O(τ²) correction scaling; run with: cargo run -p xtask -- test-flagship"]
 fn g_as_zeta2_tau2_scaling() {
     // τ values: 0.2, 0.1, 0.05, 0.025 — each half the previous.
     let tau_values: [f64; 4] = [0.2, 0.1, 0.05, 0.025];
@@ -259,23 +263,23 @@ fn g_as_zeta2_tau2_scaling() {
     );
 }
 
-/// G_AS_ZETA2_DDIM (DIAGNOSTIC) — global self-convergence slope on N_AXIS=8.
+/// `G_AS_ZETA2_DDIM` (DIAGNOSTIC) — global self-convergence slope on `N_AXIS=8`.
 ///
 /// **NOT a release gate** — see `g_as_zeta2_tau2_scaling` for the actual gate.
 ///
 /// Documents the coarse-spatial-grid ceiling: the global self-convergence slope is
-/// dominated by the O(dx) spatial discretization of the operator at N_AXIS=8 (dx≈1.25).
+/// dominated by the O(dx) spatial discretization of the operator at `N_AXIS=8` (dx≈1.25).
 /// Measured slope ≈ −1.03.  This is DISTINCT from the τ-scaling of the correction term,
 /// which `g_as_zeta2_tau2_scaling` proves is genuine O(τ²) (ratio ≈ 4.0).
 ///
-/// To observe the global O(τ²) slope one would need a finer grid (N_AXIS≥64) or a
-/// problem with smoother coefficients; with N_AXIS=8 the first-order spatial error
+/// To observe the global O(τ²) slope one would need a finer grid (`N_AXIS≥64`) or a
+/// problem with smoother coefficients; with `N_AXIS=8` the first-order spatial error
 /// masks the second-order temporal improvement.
 ///
 /// The order-2 property of the ζ²-correction is proven by `g_as_zeta2_tau2_scaling`
 /// (τ-halving ratio ≈ 4.0) and by the sympy analytic-kill witness.
 #[test]
-#[ignore]
+#[ignore = "slow diagnostic (not a gate): documents global convergence slope ceiling; run with: cargo run -p xtask -- test-flagship"]
 fn g_as_zeta2_ddim_slope() {
     let kernel = make_zeta2_kernel_d2(N_AXIS);
     let u_ref = run_steps_zeta2(&kernel, N_REF);
@@ -310,14 +314,14 @@ fn g_as_zeta2_ddim_slope() {
     );
 }
 
-/// Smoke: order() == 2 on the ζ² wrapper.
+/// Smoke: `order()` == 2 on the ζ² wrapper.
 #[test]
 fn g_as_zeta2_order_is_2() {
     let k = make_zeta2_kernel_d2(8);
     assert_eq!(k.order(), 2, "AnisotropicShiftZeta2ND::order() must be 2");
 }
 
-/// Smoke: ζ²-corrected apply_into produces finite output for Gaussian IC.
+/// Smoke: ζ²-corrected `apply_into` produces finite output for Gaussian IC.
 #[test]
 fn g_as_zeta2_apply_smoke() {
     let kernel = make_zeta2_kernel_d2(8);

@@ -15,6 +15,8 @@
 //! ADR-0128; contracts/semiflow-core.math.md §33.8 Para 3.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64: intentional bit-mixing
+#![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
 
 use num_complex::Complex;
 use semiflow_core::{
@@ -62,7 +64,7 @@ impl Pcg64 {
 fn frob_norm_c<const M: usize>(a: &[[C64; M]; M]) -> f64 {
     a.iter()
         .flat_map(|r| r.iter())
-        .map(|z| z.norm_sqr())
+        .map(num_complex::Complex::norm_sqr)
         .sum::<f64>()
         .sqrt()
 }
@@ -163,7 +165,7 @@ fn cmat_mul<const M: usize>(a: &[[C64; M]; M], b: &[[C64; M]; M]) -> [[C64; M]; 
 // Extract the resulting M×M matrix by feeding unit basis vectors.
 // ---------------------------------------------------------------------------
 
-/// Compute exp(tau * C_fixed) using MatrixDiffusionChernoffComplex apply_into
+/// Compute exp(tau * `C_fixed`) using `MatrixDiffusionChernoffComplex` `apply_into`
 /// (zero diffusion, constant reaction). Returns the implied M×M matrix.
 fn extract_exp_via_kernel<const M: usize>(c_fixed: [[C64; M]; M], tau: f64) -> [[C64; M]; M] {
     let n = 8usize; // small grid; all points see same constant C_fixed.
@@ -302,55 +304,55 @@ fn run_unitarity_check<const M: usize>(seed: u128) -> f64 {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore]
+#[ignore = "slow complex Padé accuracy gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_accuracy_m5() {
     const M: usize = 5;
-    let err = run_accuracy_check::<M>(0xC0FF_EE_01);
+    let err = run_accuracy_check::<M>(0xC0FF_EE01);
     println!("G_CPLX_MATRIX M={M} rel-err (Taylor60 ref): {err:.3e}");
     assert!(err <= 1e-12, "M={M}: rel-err {err:.3e} > 1e-12");
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow complex Padé accuracy gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_accuracy_m6() {
     const M: usize = 6;
-    let err = run_accuracy_check::<M>(0xC0FF_EE_02);
+    let err = run_accuracy_check::<M>(0xC0FF_EE02);
     println!("G_CPLX_MATRIX M={M} rel-err (Taylor60 ref): {err:.3e}");
     assert!(err <= 1e-12, "M={M}: rel-err {err:.3e} > 1e-12");
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow complex Padé accuracy gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_accuracy_m8() {
     const M: usize = 8;
-    let err = run_accuracy_check::<M>(0xC0FF_EE_03);
+    let err = run_accuracy_check::<M>(0xC0FF_EE03);
     println!("G_CPLX_MATRIX M={M} rel-err (Taylor60 ref): {err:.3e}");
     assert!(err <= 1e-12, "M={M}: rel-err {err:.3e} > 1e-12");
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow complex unitarity gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_unitarity_m5() {
     const M: usize = 5;
-    let err = run_unitarity_check::<M>(0xDEAD_01);
+    let err = run_unitarity_check::<M>(0x00DE_AD01);
     println!("G_CPLX_MATRIX M={M} unitarity ‖UᴴU−I‖_F: {err:.3e}");
     assert!(err <= 1e-12, "M={M}: unitarity drift {err:.3e} > 1e-12");
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow complex unitarity gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_unitarity_m6() {
     const M: usize = 6;
-    let err = run_unitarity_check::<M>(0xDEAD_02);
+    let err = run_unitarity_check::<M>(0x00DE_AD02);
     println!("G_CPLX_MATRIX M={M} unitarity ‖UᴴU−I‖_F: {err:.3e}");
     assert!(err <= 1e-12, "M={M}: unitarity drift {err:.3e} > 1e-12");
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow complex unitarity gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_cplx_matrix_unitarity_m8() {
     const M: usize = 8;
-    let err = run_unitarity_check::<M>(0xDEAD_03);
+    let err = run_unitarity_check::<M>(0x00DE_AD03);
     println!("G_CPLX_MATRIX M={M} unitarity ‖UᴴU−I‖_F: {err:.3e}");
     assert!(err <= 1e-12, "M={M}: unitarity drift {err:.3e} > 1e-12");
 }

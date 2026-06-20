@@ -18,6 +18,7 @@
 //! References: ADR-0095, math.md §28.bis, Bonfiglioli-Lanconelli-Uguzzoni 2007 §4.3.6.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; n ≤ 128 ≤ 2^52
 
 use semiflow_core::{
     grid_nd::{GridFnND, GridND},
@@ -27,7 +28,7 @@ use semiflow_core::{
 
 // ─── Gate constants ───────────────────────────────────────────────────────────
 
-/// Slope gate: OLS ≤ SLOPE_GATE. Gate -1.95 gives 2.5% margin vs theory -2.0.
+/// Slope gate: OLS ≤ `SLOPE_GATE`. Gate -1.95 gives 2.5% margin vs theory -2.0.
 const SLOPE_GATE: f64 = -1.95;
 
 /// Total evolution time.
@@ -39,7 +40,7 @@ const DOMAIN_HALF: f64 = 2.5;
 /// Grid resolution per axis. 32⁴ ≈ 1M points × 8 B = 8 MB per state.
 const N_GRID: usize = 32;
 
-/// Chernoff step sweep for self-convergence (probe-vs-2N mirror G_NS2D_aniso).
+/// Chernoff step sweep for self-convergence (probe-vs-2N mirror `G_NS2D_aniso`).
 const N_SWEEP: [usize; 4] = [16, 32, 64, 128];
 
 // ─── Helper: evolve n Chernoff steps ─────────────────────────────────────────
@@ -93,7 +94,7 @@ fn sup_diff(a: &GridFnND<f64, 4>, b: &GridFnND<f64, 4>) -> f64 {
 // ─── Main test ───────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_horm_engel_slope() {
     // 4D grid: (x₁, x₂, x₃, x₄) ∈ [-L, L]⁴ with N_GRID nodes on each axis.
     let ax = Grid1D::new(-DOMAIN_HALF, DOMAIN_HALF, N_GRID).unwrap();
@@ -110,14 +111,9 @@ fn g_horm_engel_slope() {
     });
 
     println!("Computing G_HORM_ENGEL self-convergence sweep...");
-    println!(
-        "Grid: {}⁴ = {} points, domain [-{}, {}]⁴",
-        N_GRID,
-        grid.len(),
-        DOMAIN_HALF,
-        DOMAIN_HALF
-    );
-    println!("Sweep: n ∈ {:?}, T_FINAL={}", N_SWEEP, T_FINAL);
+    let grid_len = grid.len();
+    println!("Grid: {N_GRID}⁴ = {grid_len} points, domain [-{DOMAIN_HALF}, {DOMAIN_HALF}]⁴");
+    println!("Sweep: n ∈ {N_SWEEP:?}, T_FINAL={T_FINAL}");
 
     let mut self_errs: Vec<f64> = Vec::new();
     let mut scratch = ScratchPool::new();
@@ -135,10 +131,7 @@ fn g_horm_engel_slope() {
         // Self-convergence error ‖u_n − u_{2n}‖_∞ (probe-vs-2N).
         let self_err = sup_diff(&u_coarse, &u_fine);
         self_errs.push(self_err);
-        println!(
-            "G_HORM_ENGEL n={:3}: ‖u_n−u_{{2n}}‖_∞={:.4e}  τ={:.4e}",
-            n, self_err, tau
-        );
+        println!("G_HORM_ENGEL n={n:3}: ‖u_n−u_{{2n}}‖_∞={self_err:.4e}  τ={tau:.4e}");
     }
 
     // OLS slope of log(‖u_n − u_{2n}‖) vs log(n).
@@ -148,13 +141,10 @@ fn g_horm_engel_slope() {
     let slope = ols_slope(&xs, &ys);
 
     println!();
-    println!(
-        "G_HORM_ENGEL OLS slope: {:.4}  (gate ≤ {:.2})",
-        slope, SLOPE_GATE
-    );
+    println!("G_HORM_ENGEL OLS slope: {slope:.4}  (gate ≤ {SLOPE_GATE:.2})");
     println!("Per-n summary:");
     for (&n, &err) in N_SWEEP.iter().zip(self_errs.iter()) {
-        println!("  n={:3}: self_err={:.4e}", n, err);
+        println!("  n={n:3}: self_err={err:.4e}");
     }
 
     // ADR-0095 failure mode interpretation:
@@ -163,11 +153,9 @@ fn g_horm_engel_slope() {
     // slope > -1.0: refuted — Outcome B fallback.
     assert!(
         slope <= SLOPE_GATE,
-        "G_HORM_ENGEL FAIL: OLS slope {:.4} > {} \
-         (Engel step-3 Carnot palindromic-Strang order-2 gate; ADR-0095)",
-        slope,
-        SLOPE_GATE
+        "G_HORM_ENGEL FAIL: OLS slope {slope:.4} > {SLOPE_GATE} \
+         (Engel step-3 Carnot palindromic-Strang order-2 gate; ADR-0095)"
     );
 
-    println!("G_HORM_ENGEL PASS: slope {:.4} ≤ {} ✓", slope, SLOPE_GATE);
+    println!("G_HORM_ENGEL PASS: slope {slope:.4} ≤ {SLOPE_GATE} ✓");
 }

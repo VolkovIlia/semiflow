@@ -30,7 +30,14 @@
     clippy::cast_precision_loss,
     clippy::too_many_lines,
     clippy::suboptimal_flops,
-    clippy::many_single_char_names
+    clippy::many_single_char_names,
+    clippy::cast_possible_truncation, // usize→u32/i32, u32→i32: values ≤ n^d ≤ small in tests
+    clippy::cast_possible_wrap,       // usize→i32 on 32-bit: n ≤ N_COST=5 in all gate runs
+    clippy::cast_lossless,            // u32→f64 widening: always exact for u32
+    clippy::doc_lazy_continuation,    // doc list continuation without extra indent (style)
+    clippy::needless_range_loop,      // index loops use index arithmetic (CP decomposition)
+    clippy::too_many_arguments,       // nonsep step/evolve helpers need all parameters
+    clippy::explicit_iter_loop,       // v.iter_mut() pattern matches existing code style
 )]
 
 extern crate alloc;
@@ -162,7 +169,7 @@ fn expm_l(a: &[f64], m: usize) -> Vec<f64> {
     while norm > thr && s < 30 { s += 1; thr *= 2.0; }
     let sc = 0.5f64.powi(s as i32);
     let as_ = mat_scale(a, sc);
-    let c = [1.0, 0.5, 5.0/44.0, 1.0/66.0, 1.0/792.0, 1.0/15840.0, 1.0/665280.0];
+    let c = [1.0, 0.5, 5.0/44.0, 1.0/66.0, 1.0/792.0, 1.0/15840.0, 1.0/665_280.0];
     let a2 = mat_mat(&as_, &as_, m);
     let a4 = mat_mat(&a2, &a2, m);
     let a6 = mat_mat(&a2, &a4, m);
@@ -285,8 +292,8 @@ fn nonsep_evolve_local(
 
 /// Build the FULL non-separable 2-D generator and its residual R.
 ///
-/// L = a0*(Lap_x + Lap_y) + diag(AMP*cos(x)*sin(y)) * core_at_axis0.
-/// R = L - a0*(Lap_x + Lap_y).
+/// `L = a0*(Lap_x + Lap_y) + diag(AMP*cos(x)*sin(y)) * core_at_axis0`.
+/// `R = L - a0*(Lap_x + Lap_y)`.
 fn build_true_2d(n: usize, dx: f64, role: &str) -> (Vec<f64>, Vec<f64>) {
     let d = 2;
     let xs = grid_xs(n);
@@ -336,7 +343,7 @@ fn build_mean_frozen_r_2d(n: usize, dx: f64) -> Vec<f64> {
     lx.iter().map(|&v| a_mean * v).collect()
 }
 
-/// Smooth IC: tensor product of (cos(x_i)+0.3).
+/// Smooth IC: tensor product of `(cos(x_i)+0.3)`.
 fn smooth_u0(n: usize, d: usize) -> Vec<f64> {
     let xs = grid_xs(n);
     let g: Vec<f64> = xs.iter().map(|&x| x.cos() + 0.3).collect();
@@ -431,7 +438,7 @@ fn matrix_rank_power(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
 
 /// Operator-TT-rank via the axis0|rest bipartition (bond=1).
 ///
-/// Bipartition: rows = (i0, j0) [size n²], cols = (i_rest, j_rest) [size (n^{d-1})²].
+/// Bipartition: rows = (i0, j0) [size n²], cols = (`i_rest`, `j_rest`) [size (n^{d-1})²].
 /// This matches the Python probe `op_tt_rank_axis0`:
 ///   M.reshape(n, n^{d-1}, n, n^{d-1}).transpose(0,2,1,3).reshape(n², (n^{d-1})²)
 ///
@@ -498,7 +505,7 @@ fn max_over_all_bonds_rank(op: &[f64], n: usize, d: usize, eps: f64) -> usize {
     max_rank
 }
 
-/// Build R = diag(a_CP) * core_axis0, a as sum of cp_rank rank-1 CP-terms (deterministic).
+/// Build `R = diag(a_CP) * core_axis0`, a as sum of `cp_rank` rank-1 CP-terms (deterministic).
 fn build_residual_cp(n: usize, d: usize, dx: f64, cp_rank: usize, amp: f64) -> Vec<f64> {
     let nd = n.pow(d as u32);
     let xs = grid_xs(n);
@@ -528,7 +535,7 @@ fn build_residual_generic(n: usize, d: usize, dx: f64, amp: f64, seed: u64) -> V
     let nd = n.pow(d as u32);
     let mut state = seed.wrapping_add(1);
     let a_vals: Vec<f64> = (0..nd).map(|_| {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         amp * ((state >> 33) as f64 / (u32::MAX as f64) - 0.5) * 2.0
     }).collect();
     let lap = lap_1d(n, dx);
@@ -672,7 +679,7 @@ fn g_s3_nonsep_varcoef() {
                 let rk = max_over_all_bonds_rank(&r, n, d, eps);
                 ranks_all.push(rk);
             }
-            println!("  {label:12}: d=2,3,4 -> max-over-all-bonds rank {:?}", ranks_all);
+            println!("  {label:12}: d=2,3,4 -> max-over-all-bonds rank {ranks_all:?}");
             for &rk in &ranks_all {
                 assert_eq!(rk, cp_rank, "Assert 4 FAIL: {label} max rank {rk} ≠ {cp_rank}");
             }
@@ -685,7 +692,7 @@ fn g_s3_nonsep_varcoef() {
             let rk = op_tt_rank_axis0(&r, n, d, eps);
             ranks_gen.push(rk);
         }
-        println!("  GENERIC:       d=2,3,4 -> axis0|rest rank {:?} (expect [{n},{n},{n}])", ranks_gen);
+        println!("  GENERIC:       d=2,3,4 -> axis0|rest rank {ranks_gen:?} (expect [{n},{n},{n}])");
         for &rk in &ranks_gen { assert_eq!(rk, n, "Assert 4 FAIL: generic axis0 rank {rk} ≠ n={n}"); }
         println!("Assert 4 PASS: max-over-all-bonds rank = CP-rank flat in d; generic axis0 rank = n (full)");
     }

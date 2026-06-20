@@ -22,6 +22,7 @@
 
 // Integration test/bench: allows for numerical patterns.
 #![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_possible_truncation)] // D as u32: D=5, well within u32
 
 use semiflow_core::{
     grid_nd::{GridFnND, GridND},
@@ -70,7 +71,7 @@ pub fn canonical_carnot_cplx3_core() -> Vec<f64> {
 // G_BINDING_CARNOT_CPLX3_PARITY sub-test 1: core golden + anchors
 // ---------------------------------------------------------------------------
 
-/// G_BINDING_CARNOT_CPLX3_PARITY sub-test 1 (core golden + γ⋆ + finiteness).
+/// `G_BINDING_CARNOT_CPLX3_PARITY` sub-test 1 (core golden + γ⋆ + finiteness).
 ///
 /// Feature-gated under slow-tests (fast in practice: 5^5=3125 pts, 1 step).
 #[cfg(feature = "slow-tests")]
@@ -96,8 +97,8 @@ fn g_binding_carnot_cplx3_parity_core_golden() {
     assert_eq!(golden.len(), expected_len, "golden length mismatch");
 
     let all_finite = golden.iter().all(|v| v.is_finite());
-    let max_val = golden.iter().cloned().fold(0.0_f64, f64::max);
-    let min_val = golden.iter().cloned().fold(f64::MAX, f64::min);
+    let max_val = golden.iter().copied().fold(0.0_f64, f64::max);
+    let min_val = golden.iter().copied().fold(f64::MAX, f64::min);
 
     println!(
         "golden length={expected_len}, min={min_val:.6e}, max={max_val:.6e}, all_finite={all_finite}"

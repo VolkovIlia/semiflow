@@ -48,6 +48,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)] // usize→u32 for .pow(): d ≤ 10, n ≤ 32 in test
+#![allow(clippy::cast_possible_wrap)]       // u32→i32 for .powi(): scaling factor ≤ 30
+#![allow(clippy::many_single_char_names)]   // n, d, r, a, s, etc. are standard math variable names
+#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic
+#![allow(clippy::unreadable_literal)]       // LCG/expm constants are mathematical identifiers
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -71,17 +76,17 @@ const SIGMA0_SQ: f64 = 1.0;
 /// SPD-safe for all d≤10 tridiagonal (|ρ|<0.5 per-pair, |ρ|<1/√9≈0.333 full-tensor).
 const RHO_TRIDIAG: f64 = 0.3;
 
-/// SPD-safe for d=4 all-pairs (|ρ|<1/3≈0.333; det=(a_j/3)(a_k/3)−(0.3√(a_j a_k))²>0).
+/// SPD-safe for d=4 all-pairs (|ρ|<1/3≈0.333; `det=(a_j/3)(a_k/3)−(0.3√(a_j a_k))²>0`).
 const RHO_DENSE: f64 = 0.3;
 
 const D_LIST: [usize; 4] = [4, 6, 8, 10];
 
-/// C2 bounded-rank gate: evolved-state peak_rank ≤ RANK_BOUND at every d.
+/// C2 bounded-rank gate: evolved-state `peak_rank` ≤ `RANK_BOUND` at every d.
 /// Spec measures ~5–6 constant in d (pair-factor op-rank 6, §11.6); allow headroom.
 /// Do NOT loosen if the gate fires — report honest failure to architect.
 const RANK_BOUND: usize = 10;
 
-/// C2 slope gate: log(peak_rank) vs d slope < SLOPE_GATE (exponential-growth detector).
+/// C2 slope gate: `log(peak_rank)` vs d slope < `SLOPE_GATE` (exponential-growth detector).
 const SLOPE_GATE: f64 = 0.70;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -109,7 +114,7 @@ fn test_func(n: usize, j: usize) -> Vec<f64> {
         .collect()
 }
 
-/// Rank-1 separable Gaussian IC with heterogeneous axes (diffusion_coeff).
+/// Rank-1 separable Gaussian IC with heterogeneous axes (`diffusion_coeff`).
 fn rank1_ic(d: usize, n: usize) -> TtState<f64> {
     TtState::rank1_separable((0..d).map(|_| ic_slice(n)).collect())
 }
@@ -190,7 +195,7 @@ fn check_byte_repro(d: usize, n: usize, n_steps: usize, topo: CouplingTopology<f
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore]
+#[ignore = "slow P5 curse-escape gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_tt_coupled() {
     let bar = "═".repeat(72);
     println!("\n{bar}");
@@ -249,10 +254,7 @@ fn g_tt_coupled() {
         } else {
             "FAIL"
         };
-        println!(
-            "  {:>2} | {:>6} | {:>9} | {} | {:4} | {:4} | {:4}",
-            d, r, st, naive_str, c1, c2b, c4
-        );
+        println!("  {d:>2} | {r:>6} | {st:>9} | {naive_str} | {c1:4} | {c2b:4} | {c4:4}");
         ranks_t.push(r);
         storages_t.push(st);
     }

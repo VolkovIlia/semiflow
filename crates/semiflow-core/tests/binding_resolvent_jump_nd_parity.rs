@@ -153,22 +153,13 @@ fn g_binding_resolvent_jump_nd_parity_2d_core_golden() {
         .map(|(a, b)| (a - b).abs())
         .fold(0.0_f64, f64::max);
 
+    let center_idx_2d = NX2 * NY2 / 2;
+    let center_val_2d = jump_m[center_idx_2d];
     println!(
-        "G_BINDING_RESOLVENT_JUMP_ND_PARITY (2D core golden, {}x{}, M={}, M_ref={}, t={}):\n\
-         sup‖jump_M{} − jump_M{}‖∞ = {:.3e}  (gate ≤ {:.0e})\n\
+        "G_BINDING_RESOLVENT_JUMP_ND_PARITY (2D core golden, {NX2}x{NY2}, M={M2}, M_ref={M2_REF}, t={T2}):\n\
+         sup‖jump_M{M2} − jump_M{M2_REF}‖∞ = {sup_err:.3e}  (gate ≤ {TOL:.0e})\n\
          Golden (center sample):\n\
-           jump[{}] = {:.16e}",
-        NX2,
-        NY2,
-        M2,
-        M2_REF,
-        T2,
-        M2,
-        M2_REF,
-        sup_err,
-        TOL,
-        NX2 * NY2 / 2,
-        jump_m[NX2 * NY2 / 2],
+           jump[{center_idx_2d}] = {center_val_2d:.16e}",
     );
 
     // Print full golden for embedding in binding tests.
@@ -177,7 +168,7 @@ fn g_binding_resolvent_jump_nd_parity_2d_core_golden() {
         if i % 4 == 0 {
             print!("\n  ");
         }
-        print!("{:.16e}", v);
+        print!("{v:.16e}");
         if i + 1 < NX2 * NY2 {
             print!(", ");
         }
@@ -212,23 +203,13 @@ fn g_binding_resolvent_jump_nd_parity_3d_core_golden() {
         .map(|(a, b)| (a - b).abs())
         .fold(0.0_f64, f64::max);
 
+    let center_idx_3d = NX3 * NY3 * NZ3 / 2;
+    let center_val_3d = jump_m[center_idx_3d];
     println!(
-        "G_BINDING_RESOLVENT_JUMP_ND_PARITY (3D core golden, {}x{}x{}, M={}, M_ref={}, t={}):\n\
-         sup‖jump_M{} − jump_M{}‖∞ = {:.3e}  (gate ≤ {:.0e})\n\
+        "G_BINDING_RESOLVENT_JUMP_ND_PARITY (3D core golden, {NX3}x{NY3}x{NZ3}, M={M3}, M_ref={M3_REF}, t={T3}):\n\
+         sup‖jump_M{M3} − jump_M{M3_REF}‖∞ = {sup_err:.3e}  (gate ≤ {TOL:.0e})\n\
          Golden (center sample):\n\
-           jump[{}] = {:.16e}",
-        NX3,
-        NY3,
-        NZ3,
-        M3,
-        M3_REF,
-        T3,
-        M3,
-        M3_REF,
-        sup_err,
-        TOL,
-        NX3 * NY3 * NZ3 / 2,
-        jump_m[NX3 * NY3 * NZ3 / 2],
+           jump[{center_idx_3d}] = {center_val_3d:.16e}",
     );
 
     // Print full golden for embedding in binding tests.
@@ -237,7 +218,7 @@ fn g_binding_resolvent_jump_nd_parity_3d_core_golden() {
         if i % 4 == 0 {
             print!("\n  ");
         }
-        print!("{:.16e}", v);
+        print!("{v:.16e}");
         if i + 1 < NX3 * NY3 * NZ3 {
             print!(", ");
         }

@@ -19,6 +19,7 @@
 //! Feature gate: slow-tests.  ADR-0130.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 → f64 in test indexing; N_CHERNOFF ≤ 2^53
 
 use core::f64::consts::PI;
 
@@ -57,14 +58,14 @@ fn build_path_p3() -> (QuantumGraph<f64>, QuantumSchrödingerChernoff<C64>) {
 // Sub-test A: short-time norm conservation (informational / advisory)
 // ---------------------------------------------------------------------------
 
-/// G_QSCHROD A (ADVISORY) — cosine eigenmode short-time norm stability.
+/// `G_QSCHROD` A (ADVISORY) — cosine eigenmode short-time norm stability.
 ///
 /// The cosine mode `φ_k(s) = cos(k π s / L)` on the path P₃ does not satisfy
 /// the edge-Dirichlet BCs of the Cayley step, so exact phase-rotation is not
 /// expected from this operator-splitting scheme. This sub-test checks that the
 /// L²-norm is not catastrophically amplified over a single step, confirming the
 /// kernel is stable. This is ADVISORY — it reports but does not block release
-/// (sub-test B is the RELEASE_BLOCKING gate).
+/// (sub-test B is the `RELEASE_BLOCKING` gate).
 #[test]
 fn g_qschrod_a_stability_cosine_mode() {
     let (graph, kernel) = build_path_p3();
@@ -105,7 +106,7 @@ fn g_qschrod_a_stability_cosine_mode() {
 // Sub-test B: unitarity (L²-norm conservation)
 // ---------------------------------------------------------------------------
 
-/// G_QSCHROD B — L²-norm preserved to 1e-10 over T=0.1 with N=128 Chernoff steps.
+/// `G_QSCHROD` B — L²-norm preserved to 1e-10 over T=0.1 with N=128 Chernoff steps.
 ///
 /// Uses a smooth Gaussian-like initial state (not an eigenmode) to test generic norm
 /// conservation. Gate: |‖ψ(T)‖ − ‖ψ(0)‖| ≤ 1e-10.

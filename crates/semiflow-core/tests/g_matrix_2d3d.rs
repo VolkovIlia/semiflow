@@ -14,6 +14,9 @@
 //! PRE-FLIGHT (`scripts/verify_matrix_2d3d_preflight.py`).
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_lossless)]       // u32→f64 widening: always exact for u32
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; len ≤ 4 ≤ 2^52
+#![allow(clippy::similar_names)]       // u_n/u_2n are standard PDE convergence names
 
 use semiflow_core::{
     ChernoffFunction, Grid1D, Grid2D, Grid3D, MatrixDiffusionChernoff, MatrixDiffusionChernoff2D,
@@ -102,7 +105,7 @@ fn sup_diff_2d(a: &MatrixGridFn2D<f64, M>, b: &MatrixGridFn2D<f64, M>) -> f64 {
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_matrix_2d() {
     let ns = [32_u32, 64, 128, 256];
     let mut errs = Vec::with_capacity(ns.len());
@@ -161,7 +164,7 @@ fn sup_diff_3d(a: &MatrixGridFn3D<f64, M>, b: &MatrixGridFn3D<f64, M>) -> f64 {
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_matrix_3d() {
     let ns = [16_u32, 32, 64, 128];
     let mut errs = Vec::with_capacity(ns.len());

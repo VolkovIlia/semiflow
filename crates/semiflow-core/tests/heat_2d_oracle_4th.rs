@@ -29,7 +29,7 @@
 //!
 //! Recalibrated from hardware measurements: at n=2000 the temporal floor on this
 //! machine is ≈1.2e-9, contaminating N=800 and N=1600 in the old sweep (slope −1.45
-//! FAIL). N_STEPS raised to 4000 (floor → 0.3e-9); N_SWEEP reduced to {200,300,400}
+//! FAIL). `N_STEPS` raised to 4000 (floor → 0.3e-9); `N_SWEEP` reduced to {200,300,400}
 //! where all points are spatial-dominated (floor < 3.5% of smallest spatial error).
 //!
 //! # Design note
@@ -60,6 +60,8 @@
 //! `docs/adr/0013-fourth-order-spatial.md`, `docs/adr/0012-tensor-product-2d.md`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::needless_pass_by_value)] // Diffusion4thChernoff passed by value for Clone inside thread closure
+#![allow(clippy::too_many_lines)]         // parallel_y_pass is 51 lines due to detailed column-gather comments
 
 use semiflow_core::{
     chernoff::ApplyChernoffExt, ChernoffFunction, ChernoffSemigroup, Diffusion4thChernoff, Grid1D,

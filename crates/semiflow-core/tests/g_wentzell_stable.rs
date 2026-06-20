@@ -85,7 +85,7 @@ fn explicit_amp(c: [[f64; 2]; 2], tau: f64) -> [[f64; 2]; 2] {
 }
 
 #[test]
-#[ignore] // RELEASE_BLOCKING slow-test — run with `-- --include-ignored`
+#[ignore = "RELEASE_BLOCKING slow-test; run with: cargo run -p xtask -- test-flagship"]
 fn g_wentzell_stable() {
     let a = 1.0_f64;
     let c_reaction = 0.5_f64;

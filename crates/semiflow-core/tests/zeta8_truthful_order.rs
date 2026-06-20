@@ -20,8 +20,8 @@
 //! ## Configuration (NORMATIVE per ADR-0119 AMENDMENT 1)
 //!
 //! - `a(x) ≡ 1` (constant; corrections vanish since a' ≡ 0).
-//! - IC: `f₀(x) = exp(−x²)`, grid N=8192 on [−32, 32] (OctonicHermite).
-//! - T = 10.0, N_STEPS = {2, 4, 8, 16} (doubling ladder).
+//! - IC: `f₀(x) = exp(−x²)`, grid N=8192 on [−32, 32] (`OctonicHermite`).
+//! - T = 10.0, `N_STEPS` = {2, 4, 8, 16} (doubling ladder).
 //! - Oracle: `u(T, x) = (1+4T)^{−½} · exp(−x² / (1+4T))` (analytic heat kernel).
 //!
 //! ## Why N=8192/L=32 (ADR-0119 AMENDMENT 1)
@@ -60,7 +60,7 @@ const SLOPE_GATE_FINEST_PAIR: f64 = -7.95;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build ζ⁸ with constant a=1, OctonicHermite ON.
+/// Build ζ⁸ with constant a=1, `OctonicHermite` ON.
 fn make_zeta8_octonic(grid: Grid1D<f64>) -> Diffusion8thZeta8Chernoff<f64> {
     let inner = Diffusion4thChernoff::new(
         |_x: f64| 1.0_f64,
@@ -108,10 +108,10 @@ fn pair_slope(err_coarse: f64, err_fine: f64) -> f64 {
 // Gate test
 // ---------------------------------------------------------------------------
 
-/// G_zeta8_TRUTHFUL_ORDER — RELEASE_BLOCKING (ADR-0119, ADR-0110 AMENDMENT 1, ADR-0119 AMENDMENT 2).
+/// `G_zeta8_TRUTHFUL_ORDER` — `RELEASE_BLOCKING` (ADR-0119, ADR-0110 AMENDMENT 1, ADR-0119 AMENDMENT 2).
 ///
 /// Finest-pair (8→16) slope must be ≤ −7.95, demonstrating order ≥ K=8 (lower bound)
-/// on the finest, most-asymptotic rung with OctonicHermite + 6th-order stencil at L=32/N=8192/T=10.
+/// on the finest, most-asymptotic rung with `OctonicHermite` + 6th-order stencil at L=32/N=8192/T=10.
 /// Unblocked from ADR-0110 AMENDMENT 1 DEFER by the v7.0 KEYSTONE (ADR-0117+0118+0119).
 #[test]
 #[ignore = "slow-test: run with --features slow-tests --release -- --ignored"]

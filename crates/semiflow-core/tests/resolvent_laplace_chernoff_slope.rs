@@ -41,6 +41,8 @@
 //! for the 1e-3 residual bound; the slope gate is tested separately above).
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // n ≤ 4096, well within 2^52
+#![allow(clippy::doc_markdown)]        // math notation: R̃_n, n_ref, OLS slope formulae in doc
 
 use semiflow_core::{
     resolvent::{LaplaceChernoffResolvent, LaplaceQuadrature},
@@ -157,10 +159,7 @@ fn g24_resolvent_residual_at_n_64() {
         })
         .fold(0.0, f64::max);
 
-    println!(
-        "G24(1) residual = {:.6e}  (gate ≤ {:.0e})",
-        max_err, RESIDUAL_GATE
-    );
+    println!("G24(1) residual = {max_err:.6e}  (gate ≤ {RESIDUAL_GATE:.0e})");
     assert!(
         max_err <= RESIDUAL_GATE,
         "G24(1) FAIL: residual {max_err:.6e} > {RESIDUAL_GATE:.0e}"
@@ -270,6 +269,6 @@ fn g24_trapezoid_stress_small_lambda() {
     );
 
     let r_g = result.unwrap();
-    let max_val = r_g.values.iter().cloned().fold(0.0_f64, f64::max);
+    let max_val = r_g.values.iter().copied().fold(0.0_f64, f64::max);
     println!("G24(3) TrapezoidWithTail at λ={LAMBDA_STRESS}: max(R̃g) = {max_val:.4e}  [stress OK]");
 }

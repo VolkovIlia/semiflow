@@ -11,18 +11,19 @@
 //!   `λ_k` = k²·π² / 8             k = 0, 1, 2, 3
 //!
 //! Heat semigroup reference solution at T = 0.1:
-//!   `u_ref_k(T`, s) = exp(-λ_k · T) · `φ_k(s)`
+//!   `u_ref_k(T, s)` = `exp(-λ_k · T)` · `φ_k(s)`
 //!
-//! Gate: ||`u_k` - `u_ref_k`||_∞ ≤ 1e-3 for all k ∈ {0, 1, 2, 3}.
+//! Gate: `||u_k - u_ref_k||_∞` ≤ 1e-3 for all k ∈ {0, 1, 2, 3}.
 //!
 //! All 4 sub-checks MUST pass. Failure BLOCKS v3.1 release.
 //!
 //! Test uses `Evolver::new(kernel, 64).evolve(T, &ic)` per the G30 spec
-//! in contracts/semiflow-core.properties.yaml.
+//! in `contracts/semiflow-core.properties.yaml`.
 //!
 //! ADR-0078. Feature gate: slow-tests.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // k ≤ 3 in loop, never exceeds 2^52
 
 use core::f64::consts::PI;
 
@@ -42,19 +43,23 @@ const N_CHERNOFF: usize = 64;
 
 /// G30 — First 4 Friedlander eigenmodes on path P_3 reconstructed at ≤ 1e-3.
 ///
-/// Setup per contracts/semiflow-core.properties.yaml G30:
+/// Setup per `contracts/semiflow-core.properties.yaml` G30:
+/// ```text
 ///   edge_endpoints = [(0,1), (1,2)]
 ///   edge_lengths   = [1.0, 1.0]
 ///   graph  = QuantumGraph::<f64>::new(edge_endpoints, edge_lengths, 64)
 ///   kernel = QuantumGraphHeatChernoff::<f64>::new(graph.clone())
 ///   evolver = Evolver::new(kernel, 64)
+/// ```
 ///
 /// For each k ∈ {0,1,2,3}:
+/// ```text
 ///   f_0_k   = QuantumGraphSignal::from_eigenmode(&graph, k)
 ///   u_k     = evolver.evolve(T, &f_0_k)
 ///   u_ref_k = QuantumGraphSignal::from_eigenmode_scaled(&graph, k, exp(-λ_k · T))
 ///   err_k   = ||u_k - u_ref_k||_∞
 ///   ASSERT err_k ≤ 1e-3
+/// ```
 #[test]
 fn g30_path_graph_first_4_eigenmodes() {
     // Build path graph P_3: 3 vertices, 2 unit edges, 64 grid points per edge.

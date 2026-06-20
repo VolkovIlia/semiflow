@@ -23,6 +23,7 @@
 
 // Integration test/example: allows for numerical patterns.
 #![allow(clippy::doc_overindented_list_items, clippy::missing_panics_doc)]
+#![allow(clippy::too_many_lines)]
 
 use semiflow_core::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
@@ -70,7 +71,7 @@ pub fn canonical_adjoint_fp_core() -> (Vec<f64>, Vec<f64>) {
 // G_BINDING_ADJOINT_FP_PARITY sub-test 1: core golden + Lemma A.1 anchor
 // ---------------------------------------------------------------------------
 
-/// G_BINDING_ADJOINT_FP_PARITY sub-test 1 (core golden + analytic anchor).
+/// `G_BINDING_ADJOINT_FP_PARITY` sub-test 1 (core golden + analytic anchor).
 ///
 /// Marked slow-tests; fast in practice (pure arithmetic, no PDE solve).
 #[cfg(feature = "slow-tests")]
@@ -152,11 +153,10 @@ fn g_binding_adjoint_fp_parity_core_golden() {
         "\nG_BINDING_ADJOINT_FP_PARITY sub-test 1 (core golden + Lemma A.1 anchor):\n\
          a={A}, b={B}, c={C_COEF}, tau={TAU}\n\
          h = 2√(aτ) = {h:.16e}\n\
-         Golden positions: {:?}\n\
-         Golden weights:   {:?}\n\
+         Golden positions: {golden_pos:?}\n\
+         Golden weights:   {golden_wt:?}\n\
          mass = {mass:.16e}  (expected 1.0)\n\
          second_moment = {sm:.16e}  (analytic {sm_analytic:.16e})\n\
          Lemma A.1 anchor: PASS (‖·‖∞ within 1e-14)",
-        golden_pos, golden_wt,
     );
 }

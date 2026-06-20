@@ -8,6 +8,10 @@
 //! Probe runs n∈{512..4096} valid for all step sizes.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64 next_u64; intentional bit-extraction
+#![allow(clippy::cast_precision_loss)]      // usize→f64 for index arithmetic; values ≤ N_GRID
+#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic
+#![allow(clippy::unusual_byte_groupings)]   // 0xC0FFEE_BABE_DEAD_BEEF is a named seed constant
 
 use semiflow_core::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
@@ -119,7 +123,7 @@ fn initial_fn(x: f64) -> [f64; M] {
 }
 
 fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let kernel = make_kernel(N_GRID);
     let f0 = MatrixGridFn1D::<f64, M>::from_fn(kernel.grid, initial_fn);
     let mut pool = ScratchPool::<f64>::new();
@@ -142,9 +146,9 @@ fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
     err
 }
 
-/// OLS slope of (ln n_i, ln err_i): negative for convergence (err ∝ n^slope → slope < 0).
+/// OLS slope of (ln `n_i`, ln `err_i`): negative for convergence (err ∝ n^slope → slope < 0).
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
-    let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
+    let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let n = x.len() as f64;
     let sx: f64 = x.iter().sum();
@@ -156,7 +160,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
 
 #[test]
 fn g_matrix_m4_slope() {
-    let tau_ref = T / N_REF as f64;
+    let tau_ref = T / f64::from(N_REF);
     let kernel_ref = make_kernel(N_GRID);
     let f0 = MatrixGridFn1D::<f64, M>::from_fn(kernel_ref.grid, initial_fn);
     let mut pool = ScratchPool::<f64>::new();

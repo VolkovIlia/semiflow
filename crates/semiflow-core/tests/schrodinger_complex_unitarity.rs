@@ -10,6 +10,9 @@
 //! ADR-0079; math.md §30.4 Proposition 30.1.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // n_steps ≤ 128, well within 2^52
+#![allow(clippy::similar_names)]       // sb/sa, sb_dst/sa_dst are intentionally parallel Option B/A names
+#![allow(clippy::doc_markdown)]        // `n_steps=128` and similar notation in doc comment
 
 use std::f64::consts::PI;
 
@@ -74,14 +77,12 @@ fn g_schrod_b_unitarity_harmonic_oscillator_gaussian() {
     let unitarity_err = (norm_final - norm_initial).abs();
 
     println!(
-        "G_SCHROD_B: ‖ψ₀‖₂ = {:.15}, ‖ψ_T‖₂ = {:.15}, Δ = {:.4e}  (target ≤ 1e-12)",
-        norm_initial, norm_final, unitarity_err
+        "G_SCHROD_B: ‖ψ₀‖₂ = {norm_initial:.15}, ‖ψ_T‖₂ = {norm_final:.15}, Δ = {unitarity_err:.4e}  (target ≤ 1e-12)"
     );
 
     assert!(
         unitarity_err <= 1e-12,
-        "G_SCHROD_B FAIL: |‖ψ_T‖₂ − ‖ψ₀‖₂| = {:.4e} > 1e-12",
-        unitarity_err
+        "G_SCHROD_B FAIL: |‖ψ_T‖₂ − ‖ψ₀‖₂| = {unitarity_err:.4e} > 1e-12"
     );
 }
 
@@ -142,21 +143,18 @@ fn schrodinger_option_a_vs_b_sup_norm() {
 
     let four_ulp = 4.0 * f64::EPSILON;
     println!(
-        "Option A vs B sup-norm diff = {:.4e}  (4 ULP = {:.4e})",
-        sup_diff, four_ulp
+        "Option A vs B sup-norm diff = {sup_diff:.4e}  (4 ULP = {four_ulp:.4e})"
     );
 
     // ADVISORY: warn but do not panic (cross-check may differ slightly due to
     // algorithm ordering; hard-fail only if difference is catastrophically large)
     if sup_diff > four_ulp {
         eprintln!(
-            "ADVISORY: Option A vs B sup-norm {:.4e} exceeds 4 ULP {:.4e}. Investigate.",
-            sup_diff, four_ulp
+            "ADVISORY: Option A vs B sup-norm {sup_diff:.4e} exceeds 4 ULP {four_ulp:.4e}. Investigate."
         );
     }
     assert!(
         sup_diff < 1e-10,
-        "Option A vs B diff = {:.4e} is catastrophically large (> 1e-10); regression?",
-        sup_diff
+        "Option A vs B diff = {sup_diff:.4e} is catastrophically large (> 1e-10); regression?"
     );
 }

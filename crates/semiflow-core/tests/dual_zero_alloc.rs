@@ -25,6 +25,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(unsafe_code)]
+#![allow(clippy::cast_precision_loss)] // usize→f64 for N_STEPS: values ≤ 1000 ≤ 2^52
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -146,7 +147,7 @@ fn run_dual_warmup_then_count() -> usize {
 // Gate
 // ---------------------------------------------------------------------------
 
-/// G_DUAL_ZERO_ALLOC: warm apply_f alloc count equal at F=Dual<f64> vs F=f64.
+/// `G_DUAL_ZERO_ALLOC`: warm `apply_f` alloc count equal at F=`Dual<f64>` vs F=f64.
 ///
 /// Both SHOULD be 0 in steady state (ADR-0041 zero-alloc ping-pong invariant).
 /// The load-bearing contract is COUNT equality: a wider element (Dual = 2× bytes)

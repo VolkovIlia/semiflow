@@ -9,6 +9,7 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS and sweep; n ≤ 1024 ≤ 2^52
 
 use semiflow_core::{
     diffusion::DiffusionChernoff,
@@ -76,7 +77,7 @@ fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
 }
 
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow Robin convergence gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_robin_halfline_slope() {
     let domain_max = 10.0;
     // n_grid=512 is mandatory: the skew image BC introduces an O(dx) spatial error
@@ -118,23 +119,15 @@ fn g_robin_halfline_slope() {
             }
         }
         errs.push(err_max);
-        println!(
-            "G_ROBIN_HALFLINE n={:3}: err={:.4e} tau={:.4e}",
-            n, err_max, tau
-        );
+        println!("G_ROBIN_HALFLINE n={n:3}: err={err_max:.4e} tau={tau:.4e}");
     }
     let xs: Vec<f64> = n_sweep.iter().map(|&n| (n as f64).ln()).collect();
     let ys: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let slope = ols_slope(&xs, &ys);
-    println!(
-        "\nG_ROBIN_HALFLINE OLS slope: {:.4}  (gate ≤ {:.2})",
-        slope, SLOPE_GATE
-    );
+    println!("\nG_ROBIN_HALFLINE OLS slope: {slope:.4}  (gate ≤ {SLOPE_GATE:.2})");
     assert!(
         slope <= SLOPE_GATE,
-        "G_ROBIN_HALFLINE FAIL: OLS slope {:.4} > {} (order-1 gate, math §3.5.tris.5)",
-        slope,
-        SLOPE_GATE
+        "G_ROBIN_HALFLINE FAIL: OLS slope {slope:.4} > {SLOPE_GATE} (order-1 gate, math §3.5.tris.5)"
     );
 }
 

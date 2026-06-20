@@ -237,7 +237,7 @@ mod g2 {
         result.tangent
     }
 
-    /// f64 value path: θ·exp(-x²) sampled at x_probe (for Richardson reference).
+    /// f64 value path: θ·exp(-x²) sampled at `x_probe` (for Richardson reference).
     fn f64_sample(kind: InterpKind, x_probe: f64, theta: f64) -> f64 {
         let grid = Grid1D::new(X_MIN, X_MAX, N_GRID)
             .expect("grid valid")
@@ -249,7 +249,7 @@ mod g2 {
         grid.interp(&values, x_probe).expect("interp f64")
     }
 
-    /// G2a: OctonicHermite dual-AD gradient check.
+    /// G2a: `OctonicHermite` dual-AD gradient check.
     #[test]
     #[ignore = "G_DUAL_AD_GRADIENT_OCTONIC_CHEBYSHEV: run with --features slow-tests --release -- --ignored"]
     fn g2a_octonic_hermite_dual_gradient() {
@@ -268,7 +268,7 @@ mod g2 {
         );
     }
 
-    /// G2b: ChebyshevSpectralWithBC M=16 dual-AD gradient check.
+    /// G2b: `ChebyshevSpectralWithBC` M=16 dual-AD gradient check.
     #[test]
     #[ignore = "G_DUAL_AD_GRADIENT_OCTONIC_CHEBYSHEV: run with --features slow-tests --release -- --ignored"]
     fn g2b_chebyshev_spectral_dual_gradient() {

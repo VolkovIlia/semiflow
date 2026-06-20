@@ -13,6 +13,10 @@
 //! ADR-0125; contracts/semiflow-core.math.md §33.8 Para 2.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64: intentional bit-mixing
+#![allow(clippy::cast_precision_loss)]      // usize→f64 in small index arithmetic; values ≤ M ≤ 8
+#![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
+#![allow(clippy::float_cmp)]               // byte-identity assertion requires exact f64 equality
 
 use semiflow_core::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
@@ -345,7 +349,7 @@ fn cayley_hamilton_regression<const M: usize>() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore]
+#[ignore = "slow Padé[13/13] accuracy gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_matrix_pade_m5() {
     const TOL: f64 = 1e-12;
 

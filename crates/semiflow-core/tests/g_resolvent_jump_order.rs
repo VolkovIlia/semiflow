@@ -35,6 +35,7 @@
 //! geometric-convergence regime, not the round-off plateau.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS/sweep; values ≤ 40 ≤ 2^52
 
 use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 
@@ -45,7 +46,7 @@ use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 /// OLS slope gate: d log(err) / d log(1/M) ≥ +1.95 (G24 convention).
 const SLOPE_GATE: f64 = 1.95;
 
-/// Spread gate for t-independence sub-check: max_err / min_err ≤ 10× at M=16.
+/// Spread gate for t-independence sub-check: `max_err` / `min_err` ≤ 10× at M=16.
 const SPREAD_GATE: f64 = 10.0;
 
 /// Spatial grid size (matches Python oracle canonical setup).
@@ -60,7 +61,7 @@ const T_SLOPE: f64 = 100.0;
 /// Contour-node sweep for slope test (§47.5; keeps errors above f64 floor).
 const M_SWEEP: [usize; 5] = [6, 8, 10, 12, 14];
 
-/// Self-convergence reference: M_ref=40 has error ~1.9e-8 at t=100 (vs exact),
+/// Self-convergence reference: `M_ref=40` has error ~1.9e-8 at t=100 (vs exact),
 /// well below the M=14 probe error ~1.6e-7 — accurate reference for slope measurement.
 const M_REF: usize = 40;
 
@@ -97,7 +98,6 @@ fn pointwise_sup_err(a: &GridFn1D<f64>, b: &GridFn1D<f64>) -> f64 {
 // Helper: OLS slope of log(y) vs log(x) — G24 convention
 // ---------------------------------------------------------------------------
 
-#[allow(clippy::cast_precision_loss)]
 fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
     let m = xs.len() as f64;
     let lx: Vec<f64> = xs.iter().map(|&v| v.ln()).collect();
@@ -127,13 +127,13 @@ fn run_jump(grid: Grid1D<f64>, m: usize, t: f64, g: &GridFn1D<f64>) -> GridFn1D<
 // G_RESOLVENT_JUMP_ORDER gate
 // ---------------------------------------------------------------------------
 
-/// G_RESOLVENT_JUMP_ORDER — slope ≥ +1.95 (RELEASE_BLOCKING, ADR-0134).
+/// `G_RESOLVENT_JUMP_ORDER` — slope ≥ +1.95 (`RELEASE_BLOCKING`, ADR-0134).
 ///
 /// Sub-test A: OLS slope of log(err) vs log(1/M) at t=100, M ∈ {6,8,10,12,14}.
-///   Reference: ResolventJumpChernoff at M_ref=40 (self-convergence; same discrete A).
+///   Reference: `ResolventJumpChernoff` at `M_ref=40` (self-convergence; same discrete A).
 /// Sub-test B: t-independence — spread ≤ 10× at M=16, t ∈ {1, 20, 100}.
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_resolvent_jump_order() {
     let grid = Grid1D::new(-L, L, N).unwrap();
     let g = GridFn1D::from_fn(grid, |x: f64| (-x * x).exp());
@@ -180,8 +180,8 @@ fn g_resolvent_jump_order() {
         println!("  t={t:6.1}  err(M={M_T_INDEP}) = {err:.4e}");
         errs_b.push(err);
     }
-    let spread = errs_b.iter().cloned().fold(0.0_f64, f64::max)
-        / errs_b.iter().cloned().fold(f64::INFINITY, f64::min);
+    let spread = errs_b.iter().copied().fold(0.0_f64, f64::max)
+        / errs_b.iter().copied().fold(f64::INFINITY, f64::min);
     println!("  spread max/min = {spread:.2}×  (gate ≤ {SPREAD_GATE}×)");
     assert!(
         spread <= SPREAD_GATE,

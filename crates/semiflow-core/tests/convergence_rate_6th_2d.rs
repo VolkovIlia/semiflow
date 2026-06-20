@@ -31,6 +31,9 @@
 //! `docs/adr/0020-g3-6th-2d-flagship.md`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // v as usize: v is always non-negative N grid count
+#![allow(clippy::cast_sign_loss)]           // v as usize: same
+#![allow(clippy::doc_markdown)]             // err_sup, SepticHermite in doc: LaTeX-like math terms
 // v7.0: QuinticHermite removed (ADR-0109 removal clock fulfilled); using SepticHermite default.
 
 use semiflow_core::{
@@ -228,7 +231,7 @@ fn print_runtime_failure_diag(total_secs: u64) {
 ///
 /// Gate uses the floor-safe 3-point prime-N basket {191, 251, 331} (ADR-0163,
 /// superseding ADR-0020 Amendment 3's {503,997,1999} which saturated the
-/// SepticHermite floor at N≥997). The regime-map diagnostic
+/// `SepticHermite` floor at N≥997). The regime-map diagnostic
 /// (`g3_6_2d_regime_map_diagnostic`) measured in-band segment slopes -5.98 / -6.18
 /// (straddling -6.0) and basket OLS -6.07, with the finest point (err 2.25e-8) ≈
 /// 5000× the ~5e-12 floor — fully floor-safe. Mirrors 1D recalibration ADR-0120.
@@ -305,7 +308,7 @@ const DIAG_N_SWEEP: [usize; 8] = [127, 191, 251, 331, 419, 503, 691, 997];
 
 /// Run the diagnostic sweep, returning `(ns_f, errs)` and printing per-N rows.
 ///
-/// Holds N_CHERNOFF/T/a/domain identical to the FLAGSHIP gate (see module note):
+/// Holds `N_CHERNOFF`/T/a/domain identical to the FLAGSHIP gate (see module note):
 /// the regime map must describe the real error surface, not a cheapened proxy.
 // n ≤ 997 — within f64 mantissa.
 #[allow(clippy::cast_precision_loss)]
@@ -343,7 +346,7 @@ fn run_diag_sweep() -> (Vec<f64>, Vec<f64>) {
 
 /// Print the full-basket OLS slope plus a floor-safe sub-basket slope candidate.
 ///
-/// Floor-safe heuristic: keep grids whose err_sup ≥ 100 × the SepticHermite floor
+/// Floor-safe heuristic: keep grids whose `err_sup` ≥ 100 × the `SepticHermite` floor
 /// (≥ 5e-10), which the dx⁶ model places at N ≲ 503; the printed sub-slope over the
 /// floor-safe points is the predicted recalibrated-gate slope to seed the window.
 fn print_diag_summary(ns_f: &[f64], errs: &[f64]) {
@@ -373,7 +376,7 @@ fn print_diag_summary(ns_f: &[f64], errs: &[f64]) {
 
 /// G3⁶-2D REGIME-MAP DIAGNOSTIC (NON-ASSERTING; ADR-0163).
 ///
-/// Maps the asymptotic-vs-floor boundary for the SepticHermite 2D spatial sweep so
+/// Maps the asymptotic-vs-floor boundary for the `SepticHermite` 2D spatial sweep so
 /// the FLAGSHIP basket {503, 997, 1999} can be honestly recalibrated to floor-safe
 /// grids. Prints per-N err_sup, consecutive segment slopes, the full-basket OLS slope
 /// (expected ~-5.3, demonstrating the floor flattening) and a floor-safe sub-basket

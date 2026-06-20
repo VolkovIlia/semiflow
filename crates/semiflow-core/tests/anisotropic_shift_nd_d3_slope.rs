@@ -28,6 +28,8 @@
 //! Feature: slow-tests.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; len ≤ 4 ≤ 2^52
+#![allow(clippy::cast_lossless)]       // u32→f64 widening: always exact for u32
 
 use semiflow_core::{
     grid_nd::{GridFnND, GridND},
@@ -110,7 +112,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
     (n * sxy - sx * sy) / (n * sxx - sx * sx)
 }
 
-/// G_DDIM D=3 — anisotropic shift Chernoff self-convergence (calls real apply_into).
+/// `G_DDIM` D=3 — anisotropic shift Chernoff self-convergence (calls real `apply_into`).
 #[test]
 fn g_ddim_d3_slope() {
     // --- F(0)=I smoke check (ADR-0112 §Decision 5) ---

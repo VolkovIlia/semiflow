@@ -53,6 +53,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::too_many_lines)] // g_carnot_cplx3_slope: 54 lines, print-heavy diagnostic
 
 use std::io::Write as _;
 
@@ -151,12 +152,12 @@ fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
 
 /// RELEASE_BLOCKING: order-4 self-convergence of `ComplexTripleJump`.
 ///
-/// G_CARNOT_CPLX3 — ADR-0136 Amendment 2, math.md §28.bis.8.
+/// `G_CARNOT_CPLX3` — ADR-0136 Amendment 2, math.md §28.bis.8.
 /// OLS slope of ‖u_n − u_{2n}‖_∞ vs log(n) ≤ −3.80 (gate; theory −4.0).
 /// Feature-gated `slow-tests`; runs only under:
 ///   `cargo test --features slow-tests -- --ignored g_carnot_cplx3`
 #[test]
-#[ignore]
+#[ignore = "slow order-4 Carnot slope gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_carnot_cplx3_slope() {
     let ax = Grid1D::new(-DOMAIN_HALF, DOMAIN_HALF, N_GRID).expect("axis valid");
     let grid = GridND::<f64, 5>::new([ax; 5]).expect("5D grid valid");

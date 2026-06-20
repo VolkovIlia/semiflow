@@ -9,6 +9,7 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize→f64 in sweep/OLS; n ≤ 256 ≤ 2^52
 
 use semiflow_core::{
     heisenberg_heat_kernel, hormander::HypoellipticChernoff, ChernoffFunction, Grid1D, Grid3D,
@@ -17,7 +18,7 @@ use semiflow_core::{
 
 // ─── Gate constants ───────────────────────────────────────────────────────────
 
-/// Slope gate: OLS ≤ SLOPE_GATE. Gate -1.95 gives 2.5% margin vs theory -2.0.
+/// Slope gate: OLS ≤ `SLOPE_GATE`. Gate -1.95 gives 2.5% margin vs theory -2.0.
 const SLOPE_GATE: f64 = -1.95;
 
 /// Total evolution time.
@@ -127,7 +128,7 @@ fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
 // ─── Main test ───────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "slow flagship gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_horm_heisenberg_slope() {
     // 3D grid: (x, y, t) ∈ [-L,L]³ with N_GRID nodes on each axis.
     let gx = Grid1D::new(-DOMAIN_HALF, DOMAIN_HALF, N_GRID).unwrap();
@@ -166,8 +167,7 @@ fn g_horm_heisenberg_slope() {
             .fold(0.0_f64, f64::max);
         self_errs.push(self_err);
         println!(
-            "G_HORM_HEISENBERG n={:3}: ‖u_n−u_{{2n}}‖={:.4e}  tau={:.4e}",
-            n, self_err, tau
+            "G_HORM_HEISENBERG n={n:3}: ‖u_n−u_{{2n}}‖={self_err:.4e}  tau={tau:.4e}"
         );
     }
 
@@ -178,15 +178,12 @@ fn g_horm_heisenberg_slope() {
     let slope = ols_slope(&xs, &ys);
 
     println!(
-        "\nG_HORM_HEISENBERG OLS slope: {:.4}  (gate ≤ {:.2})",
-        slope, SLOPE_GATE
+        "\nG_HORM_HEISENBERG OLS slope: {slope:.4}  (gate ≤ {SLOPE_GATE:.2})"
     );
 
     assert!(
         slope <= SLOPE_GATE,
-        "G_HORM_HEISENBERG FAIL: OLS slope {:.4} > {} \
-         (Heisenberg palindromic-Strang order-2 gate)",
-        slope,
-        SLOPE_GATE
+        "G_HORM_HEISENBERG FAIL: OLS slope {slope:.4} > {SLOPE_GATE} \
+         (Heisenberg palindromic-Strang order-2 gate)"
     );
 }

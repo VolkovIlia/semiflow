@@ -44,6 +44,12 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)] // f64→usize n_steps: rounded positive value
+#![allow(clippy::cast_sign_loss)]           // f64→usize n_steps: .round().max(1.0) is positive
+#![allow(clippy::cast_possible_wrap)]       // usize→isize n: n ≤ 512 on all supported targets
+#![allow(clippy::needless_range_loop)]      // DFT inner loops use index arithmetic (k*j)
+#![allow(clippy::many_single_char_names)]   // n, a, l, k, j are standard math variable names
+#![allow(clippy::too_many_lines)]           // g_tt_band_converge is a single cohesive gate
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -151,7 +157,7 @@ fn heat_fft_reference(u0: &[f64], a: f64, t_end: f64, l: f64) -> Vec<f64> {
 /// It is intentionally test-local (no production path) to serve as the anti-vacuity
 /// regression witness: at the same grid, this should stay at error ≥ `INT_PLATEAU_GATE`.
 ///
-/// Uses the same `dx = (X_MAX - X_MIN)/(n-1)` as TtChernoff, and passes
+/// Uses the same `dx = (X_MAX - X_MIN)/(n-1)` as `TtChernoff`, and passes
 /// `L = n * dx` to the FFT reference so the wavenumber grid is consistent.
 fn integer_shift_heat_err(n: usize, a: f64, t_end: f64) -> f64 {
     // TtChernoff's grid spacing: (xmax-xmin)/(n-1)
@@ -218,7 +224,7 @@ fn integer_shift_heat_err(n: usize, a: f64, t_end: f64) -> f64 {
 /// The 1D `TtChernoff` with `d=1` exercises exactly `apply_per_axis_shift`
 /// in `tt_chernoff.rs` — the P2 production path, NOT a local copy.
 ///
-/// `dx` used here matches TtChernoff's internal `dx = (xmax-xmin)/(n-1)`.
+/// `dx` used here matches `TtChernoff`'s internal `dx = (xmax-xmin)/(n-1)`.
 /// The FFT reference uses domain length `L = n * dx` (periodic convention).
 fn band_split_heat_err(n: usize, a: f64, t_end: f64) -> (f64, f64) {
     // TtChernoff's grid spacing: (xmax-xmin)/(n-1)
@@ -287,7 +293,7 @@ fn two_point_log_log_slope(dxs: &[f64], errors: &[f64]) -> f64 {
 // ─── Main gate ─────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "slow P2 gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_tt_band_converge() {
     println!();
     println!("{}", "═".repeat(72));
@@ -298,10 +304,7 @@ fn g_tt_band_converge() {
     println!("Reference: analytic FFT heat truth (INDEPENDENT of TtChernoff).");
     println!("  u_exact = IFFT( exp(-a·ω²·T) · FFT(u₀) )");
     println!("  a={A}, T={T_FINAL}, target h/dx≈{H_OVER_DX_TARGET} (NON-integer)");
-    println!(
-        "  Joint parabolic refinement: τ ∼ C·dx², grids {:?}",
-        N_GRIDS
-    );
+    println!("  Joint parabolic refinement: τ ∼ C·dx², grids {N_GRIDS:?}");
     println!();
 
     // ── Band-split errors via REAL TtChernoff ─────────────────────────────
@@ -324,10 +327,7 @@ fn g_tt_band_converge() {
         let tau_target = (h_target / 2.0).powi(2) / A;
         let n_steps = (T_FINAL / tau_target).round().max(1.0) as usize;
         let tau_actual = T_FINAL / n_steps as f64;
-        println!(
-            "  {:>5} | {:.4e} | {:.4}  | {:.4e}  | {:.4e}",
-            n, tau_actual, h_over_dx, band_err, int_err
-        );
+        println!("  {n:>5} | {tau_actual:.4e} | {h_over_dx:.4}  | {band_err:.4e}  | {int_err:.4e}");
         dxs.push(dx);
         band_errs.push(band_err);
         int_errs.push(int_err);

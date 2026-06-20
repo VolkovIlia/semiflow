@@ -38,6 +38,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#![allow(clippy::similar_names)] // ratio1/ratio4/ratios: paired math vars
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -53,7 +54,7 @@ use semiflow_core::{
 /// Minimum ratio(64)/ratio(1) for PASS. Conservative slope floor (§51.9).
 const ADVANTAGE_GATE: f64 = 8.0;
 
-/// Kernel parameters (matches g_reverse_ad.rs for consistency).
+/// Kernel parameters (matches `g_reverse_ad.rs` for consistency).
 const THETA: f64 = 0.5;
 const X_MIN: f64 = -10.0;
 const X_MAX: f64 = 10.0;
@@ -206,7 +207,7 @@ fn reverse_step_count(k_params: usize) -> usize {
 /// Measure step-application count for FORWARD dual-AD reference with K tangent seeds.
 ///
 /// Forward dual-AD needs K independent forward passes: one pass per parameter.
-/// Total apply_f count = K * N_STEPS (exactly linear in K).
+/// Total `apply_f` count = K * `N_STEPS` (exactly linear in K).
 fn forward_dual_step_count(k_params: usize) -> usize {
     // K independent forward passes with Dual<f64>, each touching N_STEPS steps.
     // We count via a simple explicit loop (the actual Dual<f64> apply_f per step).
@@ -247,7 +248,7 @@ fn forward_dual_step_count(k_params: usize) -> usize {
 // G_REVERSE_AD_ADVANTAGE gate
 // ---------------------------------------------------------------------------
 
-/// `G_REVERSE_AD_ADVANTAGE` — RELEASE_BLOCKING (§51.9, ADR-0156 Amendment 1).
+/// `G_REVERSE_AD_ADVANTAGE` — `RELEASE_BLOCKING` (§51.9, ADR-0156 Amendment 1).
 ///
 /// Measures step-application counts and asserts O(1)-in-K for reverse vs O(K) for
 /// forward dual-AD. PASS iff `ratio(64)/ratio(1) ≥ 8`.

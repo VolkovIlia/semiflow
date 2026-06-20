@@ -1,6 +1,6 @@
 //! `G_HARD_WALL_ORDER2` — `KilledDirichletChernoff` order-2 convergence gate.
 //!
-//! Gate (ADR-0135 Amendment 2, `RELEASE_BLOCKING)`:
+//! Gate (ADR-0135 Amendment 2, `RELEASE_BLOCKING`):
 //!   OLS slope of `log(sup_err)` vs `log(n_spatial)` ≤ −1.95.
 //!
 //! ## Method: oracle vs exact closed-form (Dirichlet eigenfunction)
@@ -44,6 +44,9 @@
 //! ```
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)]  // usize→f64 in OLS; n ≤ 256 ≤ 2^52
+#![allow(clippy::cast_possible_truncation)] // f64→usize for n_steps: always non-negative finite
+#![allow(clippy::cast_sign_loss)]       // same: ceil() result is positive
 
 use semiflow_core::chernoff::ChernoffFunction;
 use semiflow_core::{Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool};
@@ -52,7 +55,7 @@ use semiflow_core::{Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool};
 // Gate constants (normative — do NOT relax without ADR + properties.yaml bump)
 // ---------------------------------------------------------------------------
 
-/// OLS slope gate (RELEASE_BLOCKING, ADR-0135 Amendment 2, math §44.ter.6).
+/// OLS slope gate (`RELEASE_BLOCKING`, ADR-0135 Amendment 2, math §44.ter.6).
 const SLOPE_GATE: f64 = -1.95;
 
 /// Domain `[0, π]` with absorbing Dirichlet walls at both endpoints.
@@ -105,7 +108,7 @@ fn evolve(n_spatial: usize) -> GridFn1D<f64> {
     let kernel = KilledDirichletChernoff::new(|_| A_COEF, |_| 0.0_f64, grid)
         .expect("a > 0, n >= 3 — never fails");
 
-    let mut src = GridFn1D::from_fn(grid, |x| x.sin());
+    let mut src = GridFn1D::from_fn(grid, f64::sin);
     let mut dst = GridFn1D::from_fn(grid, |_| 0.0_f64);
     let mut scratch = ScratchPool::new();
 
@@ -160,20 +163,20 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 // G_HARD_WALL_ORDER2 — RELEASE_BLOCKING gate
 // ---------------------------------------------------------------------------
 
-/// G_HARD_WALL_ORDER2: `KilledDirichletChernoff` order-2 spatial convergence gate.
+/// `G_HARD_WALL_ORDER2`: `KilledDirichletChernoff` order-2 spatial convergence gate.
 ///
 /// Problem: `∂_t u = 0.5·∂_xx u` on `[0, π]`, `u|_{∂Ω} = 0`, IC `sin(x)`.
 /// Oracle: `u(T, x) = exp(−0.5·T)·sin(x)` (mode-1 Dirichlet eigenfunction).
 /// Coupling: `τ = dx²` (temporal floor `O(dx⁴)` << spatial `O(dx²)`).
 ///
-/// Sweep n ∈ {32, 64, 128, 256}: OLS slope of log(sup_err) vs log(n_spatial)
+/// Sweep n ∈ {32, 64, 128, 256}: OLS slope of `log(sup_err)` vs `log(n_spatial)`
 /// MUST be ≤ −1.95 to confirm that `(I − τ/2·L^R)^{-1}(I + τ/2·L^R)` achieves
 /// genuine order-2 with the hard absorbing wall baked into the domain.
 ///
 /// Authority: ADR-0135 Amendment 2; math §44.ter.6; properties.yaml `G_HARD_WALL_ORDER2`.
 /// Failure BLOCKS v8.0.0 release.
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate; run with: cargo run -p xtask -- test-flagship"]
 fn g_hard_wall_order2() {
     let mut errs = Vec::with_capacity(N_SPATIAL.len());
 

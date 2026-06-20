@@ -44,8 +44,13 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::many_single_char_names)]
 
 extern crate alloc;
 
@@ -101,7 +106,7 @@ impl Lcg64 {
 /// combined with the Moro-like central rational for the interior.
 /// Accuracy ~3 decimal places (sufficient for QMC path generation).
 ///
-/// Verified: inv_normal(0.1587) ≈ -1.0, inv_normal(0.5) = 0, inv_normal(0.001) ≈ -3.09.
+/// Verified: `inv_normal(0.1587)` ≈ -1.0, `inv_normal(0.5)` = 0, `inv_normal(0.001)` ≈ -3.09.
 fn inv_normal(p: f64) -> f64 {
     // Central region: Moro rational (|y| < 0.42)
     const A: [f64; 4] = [
@@ -151,14 +156,14 @@ fn xi_j(j: usize) -> f64 {
     1.0 / (1.0 + 0.05 * j as f64)
 }
 
-/// Closed-form E[∏_j cos(ξ_j X_T,j)] = ∏_j exp(−T ξ_j² a_j).
+/// Closed-form `E[∏_j cos(ξ_j X_T,j)] = ∏_j exp(−T ξ_j² a_j)`.
 fn truth_d(d: usize, t: f64) -> f64 {
     (0..d)
         .map(|j| libm::exp(-t * xi_j(j) * xi_j(j) * a_j(j)))
         .product()
 }
 
-/// Product functional f(x) = ∏_j cos(ξ_j x_j).
+/// Product functional `f(x) = ∏_j cos(ξ_j x_j)`.
 fn functional(pos: &[f64], d: usize) -> f64 {
     (0..d).map(|j| libm::cos(xi_j(j) * pos[j])).product()
 }
@@ -253,7 +258,7 @@ fn owen_scramble(x: u32, seed: u64) -> u32 {
     let mut upper: u32 = 0; // upper bits of the ORIGINAL x (for tree-path dependency)
     for k in (0..32_u32).rev() {
         let hash_in =
-            wang_hash(seed ^ (upper as u64) ^ (k as u64).wrapping_mul(0x9E3779B97F4A7C15));
+            wang_hash(seed ^ u64::from(upper) ^ u64::from(k).wrapping_mul(0x9E3779B97F4A7C15));
         let flip = ((hash_in >> 63) as u32) & 1;
         let orig_bit = (x >> k) & 1; // use original x for upper bits (not mutated)
         let new_bit = ((result >> k) & 1) ^ flip;
@@ -263,7 +268,7 @@ fn owen_scramble(x: u32, seed: u64) -> u32 {
     result
 }
 
-/// Generate one P-th Owen-scrambled Sobol point in n_dims dimensions.
+/// Generate one P-th Owen-scrambled Sobol point in `n_dims` dimensions.
 /// `scramble_base` + `replication` together seed the per-dimension scrambles
 /// so that each replication gets an independent scramble.
 fn sobol_owen_point(
@@ -274,7 +279,7 @@ fn sobol_owen_point(
     replication: u64,
 ) -> alloc::vec::Vec<f64> {
     debug_assert!(n_dims <= MAX_SOBOL_DIM);
-    let scale = (u32::MAX as f64) + 1.0;
+    let scale = f64::from(u32::MAX) + 1.0;
     let g = i ^ (i >> 1); // Gray code
 
     // Accumulate direction vectors for each dimension
@@ -297,7 +302,7 @@ fn sobol_owen_point(
             );
             let scrambled = owen_scramble(x, seed);
             // Map to (0,1) — clamp away from exact 0 and 1 for inv_normal stability
-            (scrambled as f64 / scale).clamp(1e-8, 1.0 - 1e-8)
+            (f64::from(scrambled) / scale).clamp(1e-8, 1.0 - 1e-8)
         })
         .collect()
 }
@@ -460,7 +465,7 @@ fn mse_over_reps(estimates: &[f64], truth: f64) -> f64 {
 }
 
 /// Run the three-arm experiment for a given dimension `d` and sub-step count `n_steps`.
-/// Returns (mse_mc, mse_nobb, mse_bb).
+/// Returns `(mse_mc, mse_nobb, mse_bb)`.
 fn run_experiment(
     d: usize,
     n_steps: usize,
@@ -556,7 +561,7 @@ fn run_and_report_d(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Sanity-check: E[cos(Z)] with d=1, n=1 (single-step terminal), P=1024, R=8.
-/// Truth = exp(-a_0 * xi_0^2 * T) = exp(-0.5 * 1.0 * 1.0) = exp(-0.5) ≈ 0.6065.
+/// Truth = `exp(-a_0 * xi_0^2 * T)` = `exp(-0.5 * 1.0 * 1.0)` = `exp(-0.5)` ≈ 0.6065.
 /// Both MC and Sobol+Owen should be close to truth (within a few % at P=1024).
 fn self_calibration_check() {
     println!("\n  [Self-calibration] d=1, n=1, P=1024, R=8:");
@@ -632,17 +637,17 @@ const R_EXP: usize = 64; // replications
 // §L — The decisive experiment (pre-registered §3.2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// G_GRIDLESS_RQMC: path-space RQMC decisive experiment.
+/// `G_GRIDLESS_RQMC`: path-space RQMC decisive experiment.
 ///
 /// Pre-registered PASS criterion (§3.2, HARD-CODED):
-/// - PASS (§50.5 CONFIRMED):   MSE_MC / MSE_RQMC_BB ≥ 2.0  at BOTH d=4 AND d=8.
-/// - FAIL (§50.5 FALSIFIED):   ratio_BB < 2.0  at d=4 OR d=8.
+/// - PASS (§50.5 CONFIRMED):   `MSE_MC` / `MSE_RQMC_BB` ≥ 2.0  at BOTH d=4 AND d=8.
+/// - FAIL (§50.5 FALSIFIED):   `ratio_BB` < 2.0  at d=4 OR d=8.
 ///
 /// No hard assert on the final verdict — both outcomes are valid scientific results.
 /// The self-calibration check and the per-estimator `mse > 0` asserts catch
 /// degenerate setups; the ratio verdict is PRINTED HONESTLY whatever it is.
 #[test]
-#[ignore]
+#[ignore = "slow path-space RQMC decisive experiment; run with --ignored"]
 fn g_gridless_rqmc() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_RQMC — Path-space RQMC decisive experiment (§3, v9.0.0)");
