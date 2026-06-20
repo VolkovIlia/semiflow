@@ -85,6 +85,8 @@ mod howland_wasm;
 mod subordinated_wasm;
 #[cfg(feature = "full")]
 mod manifold_wasm;
+#[cfg(feature = "full")]
+mod hypoelliptic_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -125,6 +127,10 @@ pub use howland_wasm::Howland1D;
 pub use subordinated_wasm::Subordinated1D;
 #[cfg(feature = "full")]
 pub use manifold_wasm::Manifold2D;
+#[cfg(feature = "full")]
+pub use hypoelliptic_wasm::{
+    HypoellipticChernoffEngel, HypoellipticChernoffHeisenberg, HypoellipticChernoffKolmogorov,
+};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///

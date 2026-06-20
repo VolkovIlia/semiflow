@@ -183,3 +183,17 @@ pub use manifold_ffi::{
     smf_manifold2d_new, smf_manifold2d_evolve, smf_manifold2d_values,
     smf_manifold2d_size, smf_manifold2d_free, SmfManifold2D,
 };
+
+// Round 8 — hypoelliptic / sub-Riemannian Chernoff engines
+pub mod hypoelliptic_ffi;
+pub mod hypoelliptic_engel_ffi;
+pub use hypoelliptic_ffi::{
+    smf_hypo_heisenberg_new, smf_hypo_heisenberg_order, smf_hypo_heisenberg_kernel,
+    smf_hypo_heisenberg_free, SmfHypoHeisenberg,
+    smf_hypo_kolmogorov_new, smf_hypo_kolmogorov_evolve, smf_hypo_kolmogorov_values,
+    smf_hypo_kolmogorov_size, smf_hypo_kolmogorov_free, SmfHypoKolmogorov,
+};
+pub use hypoelliptic_engel_ffi::{
+    smf_hypo_engel_new, smf_hypo_engel_evolve, smf_hypo_engel_values,
+    smf_hypo_engel_size, smf_hypo_engel_free, SmfHypoEngel,
+};

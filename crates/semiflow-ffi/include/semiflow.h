@@ -483,6 +483,34 @@ typedef struct {
   uint8_t _private[0];
 } SmfManifold2D;
 
+/**
+ * Opaque handle for the Heisenberg-group Chernoff kernel (no grid state).
+ *
+ * Obtain from `smf_hypo_heisenberg_new`; free with `smf_hypo_heisenberg_free`.
+ * Provides `order` and `kernel` — mirrors Python `HypoellipticChernoffHeisenberg`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfHypoHeisenberg;
+
+/**
+ * Opaque handle for Kolmogorov-equation hypoelliptic Chernoff evolver.
+ *
+ * Obtain from `smf_hypo_kolmogorov_new`; free with `smf_hypo_kolmogorov_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfHypoKolmogorov;
+
+/**
+ * Opaque handle for Engel-group hypoelliptic Chernoff evolver.
+ *
+ * Obtain from `smf_hypo_engel_new`; free with `smf_hypo_engel_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfHypoEngel;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -3463,7 +3491,7 @@ void smf_howland1d_free(SmfHowland1D *ev);
 /**
  * Allocate a subordinated 1D heat evolver.
  *
- * `subordinator_tag`: 0 = stable, 1 = gamma, 2 = inverse_gaussian.
+ * `subordinator_tag`: 0 = stable, 1 = gamma, 2 = `inverse_gaussian`.
  * `alpha` used for tag 0 (must be in `(0,1)`).
  * `c`     used for tags 1, 2 (must be `> 0`).
  * `n_nodes` GL quadrature nodes; `1..=32`; typical 32.
@@ -3614,6 +3642,203 @@ uintptr_t smf_manifold2d_size(const SmfManifold2D *ev);
  * `ev` must be null or a live pointer from `smf_manifold2d_new`.
  */
 void smf_manifold2d_free(SmfManifold2D *ev);
+
+/**
+ * Construct the Heisenberg-group Chernoff kernel.
+ *
+ * Verifies the step-2 Carnot bracket `[X₁, X₂] = ∂_t` at the origin
+ * (mirrors Python `HypoellipticChernoffHeisenberg.__new__()`).
+ *
+ * No grid parameters — the Heisenberg binding provides only `order` and `kernel`.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `OutOfDomain` (bracket failure) | `Panic`.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfHypoHeisenberg`.
+ */
+SemiflowStatus smf_hypo_heisenberg_new(SmfHypoHeisenberg **out);
+
+/**
+ * Return the approximation order (always 2 for palindromic Strang-Hörmander).
+ *
+ * Returns 0 if `handle` is null.
+ *
+ * # Safety
+ * `handle` must be null or a live pointer from `smf_hypo_heisenberg_new`.
+ */
+uint32_t smf_hypo_heisenberg_order(const SmfHypoHeisenberg *handle);
+
+/**
+ * Evaluate the Heisenberg heat kernel oracle `p_h(x, y, tc)`.
+ *
+ * Delegates to `heisenberg_heat_kernel(h, x, y, tc)` (Gaveau-Hulanicki,
+ * 32-pt Gauss-Legendre quadrature, math.md §28 AMENDMENT 2).
+ *
+ * ## Parameters
+ * - `h` — step parameter h > 0; writes 0.0 for h ≤ 0 (matches Python).
+ * - `x`, `y` — horizontal coordinates.
+ * - `tc` — vertical (centre) coordinate.
+ * - `out` — writable pointer for the kernel value.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `Panic`.
+ *
+ * # Safety
+ * `handle` must be a live pointer from `smf_hypo_heisenberg_new`.
+ * `out` must point to a writable `f64`.
+ */
+SemiflowStatus smf_hypo_heisenberg_kernel(const SmfHypoHeisenberg *handle,
+                                          double h,
+                                          double x,
+                                          double y,
+                                          double tc,
+                                          double *out);
+
+/**
+ * Free a Heisenberg handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * `handle` must be null or a live pointer from `smf_hypo_heisenberg_new`.
+ */
+void smf_hypo_heisenberg_free(SmfHypoHeisenberg *handle);
+
+/**
+ * Allocate a Kolmogorov-equation hypoelliptic Chernoff evolver.
+ *
+ * Solves `∂_t p = v·∂_x p + ½·∂²_v p` on ℝ² via the palindromic
+ * Strang-Hörmander decomposition (Kolmogorov 1934, math.md §28.4.A).
+ *
+ * ## Buffer layout (x-fastest)
+ * Flat f64 array of length `nx*nv`:
+ *   `idx(i,j) = j*nx + i`   (`i` = x-index, `j` = v-index).
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable f64 values.
+ * `out` must be a valid writable `*mut *mut SmfHypoKolmogorov`.
+ */
+SemiflowStatus smf_hypo_kolmogorov_new(double xmin,
+                                       double xmax,
+                                       uintptr_t nx,
+                                       double vmin,
+                                       double vmax,
+                                       uintptr_t nv,
+                                       const double *u0,
+                                       uintptr_t u0_len,
+                                       SmfHypoKolmogorov **out);
+
+/**
+ * Advance Kolmogorov state by time `t` using `n_steps` iterations (τ = `t/n_steps`).
+ *
+ * Writes `nx*nv` values into `dst` (x-fastest). Updates internal state.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_hypo_kolmogorov_new`.
+ * `dst` must be valid for `dst_len` writable f64s.
+ */
+SemiflowStatus smf_hypo_kolmogorov_evolve(SmfHypoKolmogorov *ev,
+                                          double t,
+                                          uintptr_t n_steps,
+                                          double *dst,
+                                          uintptr_t dst_len);
+
+/**
+ * Copy current Kolmogorov state into `out` (x-fastest, length `nx*nv`).
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_hypo_kolmogorov_new`.
+ * `out` must be valid for `out_len` writable f64s.
+ */
+SemiflowStatus smf_hypo_kolmogorov_values(const SmfHypoKolmogorov *ev,
+                                          double *out,
+                                          uintptr_t out_len);
+
+/**
+ * Return `nx * nv`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_hypo_kolmogorov_new`.
+ */
+uintptr_t smf_hypo_kolmogorov_size(const SmfHypoKolmogorov *ev);
+
+/**
+ * Free a Kolmogorov handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_hypo_kolmogorov_new`.
+ */
+void smf_hypo_kolmogorov_free(SmfHypoKolmogorov *ev);
+
+/**
+ * Allocate an Engel-group hypoelliptic Chernoff evolver.
+ *
+ * Wraps `HypoellipticChernoff<f64, 4, 2>` on ℝ⁴ (step-3 Carnot, D=4, M=2).
+ * All 4 axes share the same `[xmin, xmax, n]` parameters.
+ *
+ * ## Buffer layout (axis-0-fastest)
+ * Flat f64 array of length `n**4`:
+ *   `idx(i0,i1,i2,i3) = i3*n³ + i2*n² + i1*n + i0`
+ *
+ * ## Preconditions
+ * `xmin < xmax` (finite); `n >= 4`. `u0` non-null, `u0_len == n**4`, all finite.
+ * `out` non-null.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable f64 values.
+ * `out` must be a valid writable `*mut *mut SmfHypoEngel`.
+ */
+SemiflowStatus smf_hypo_engel_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  SmfHypoEngel **out);
+
+/**
+ * Advance Engel state by time `t` using `n_steps` iterations (τ = `t/n_steps`).
+ *
+ * Writes `n**4` values into `dst` (axis-0-fastest). Updates internal state.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_hypo_engel_new`.
+ * `dst` must be valid for `dst_len` writable f64s.
+ */
+SemiflowStatus smf_hypo_engel_evolve(SmfHypoEngel *ev,
+                                     double t,
+                                     uintptr_t n_steps,
+                                     double *dst,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current Engel state into `out` (axis-0-fastest, length `n**4`).
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_hypo_engel_new`.
+ * `out` must be valid for `out_len` writable f64s.
+ */
+SemiflowStatus smf_hypo_engel_values(const SmfHypoEngel *ev, double *out, uintptr_t out_len);
+
+/**
+ * Return `n**4`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
+ */
+uintptr_t smf_hypo_engel_size(const SmfHypoEngel *ev);
+
+/**
+ * Free an Engel handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
+ */
+void smf_hypo_engel_free(SmfHypoEngel *ev);
 
 #ifdef __cplusplus
 }  // extern "C"
