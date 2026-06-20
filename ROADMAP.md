@@ -9,6 +9,36 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Binding-parity wave — DONE (follows 0.9.0-beta)
+
+Near-full parity between `semiflow-core` and all three binding crates
+(`semiflow-ffi`, `semiflow-py`, `semiflow-wasm`) reached as a documentation-
+and implementation follow-up to the 0.9.0-beta public release.
+
+**Done:**
+- C ABI (`semiflow-ffi`) and WASM (`semiflow-wasm`) now expose the full engine
+  surface: higher-order ζ-ladder, 2D/3D tensor, non-separable anisotropic,
+  all boundary-condition variants, Schrödinger (real + complex), matrix
+  diffusion, Howland/subordinated, manifold, hypoelliptic, graph family,
+  SmolyakD6, Adjoint, AdaptivePI, ComplexTripleJump, PointEval.
+- `s3-poc` cargo feature retired; the six S³ POC evolvers are now in the
+  default core API (ADR-0169 boundary-as-type wrappers).
+- S³ carrier C-ABI surface (ADR-0171): `TtEvolver/TtState`,
+  `TtCoupledEvolver`, `GridlessEvolver/MeasureState`.
+- WASM `full` cargo feature added: lite default ≈ 768 KB raw; `--features full`
+  ≈ 1.4 MB raw.
+
+**Remaining known gaps (PyO3-only deferrals — named, not silently omitted):**
+- `ObstacleND` / `ObstacleGamma` — multi-dimensional obstacle surface.
+- `GraphTraj` — trajectory/path sampling output.
+- Laplacian introspection / `GraphAdjoint` dense read-back — dense-matrix
+  outputs not yet ABI-safe across C or WASM boundaries.
+- S³ WASM exposure — deferred pending WASM ABI design for ragged-array carriers.
+
+Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI).
+
+---
+
 ## v9.2.0 — S³ honest-scope public API (ADR-0169) — experiment/triz-s3-curse-escape
 
 Five S³ POC evolvers promoted to a curated public surface behind the new non-default

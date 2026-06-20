@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "PyO3 Python bindings for semiflow-core (1D heat, unit diffusion)"
+description = "PyO3 Python bindings for semiflow-core — broad engine parity (experimental, ABI unstable until v1.0)"
 publish = false  # wheel distribution only; not on crates.io
 
 [lib]

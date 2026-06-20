@@ -4,6 +4,39 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — binding-parity follow-up to 0.9.0-beta
+
+### Changed — bindings
+
+- **Near-full binding parity** across `semiflow-ffi` (C ABI), `semiflow-py`
+  (PyO3), and `semiflow-wasm` (wasm-bindgen).  All three bindings now reach
+  the full engine set shipped in the core: higher-order ζ-ladder, 2D/3D
+  tensor-product, non-separable anisotropic, boundary conditions (Killing /
+  Reflected / Robin / Resolvent / KilledDirichlet / Obstacle), Schrödinger
+  (real + complex), matrix diffusion, Howland nonautonomous, subordinated,
+  manifold (Torus/Sphere2/Hyperbolic2), hypoelliptic (Heisenberg/Kolmogorov/
+  Engel), graph family (4th-order, Magnus-6, VarCoef, Quantum, Strang),
+  sparse-grid SmolyakD6, Adjoint, AdaptivePI, and ComplexTripleJump/PointEval.
+- **S³ carrier surface stabilised** (ADR-0171): `TtState/TtEvolver`,
+  `TtCoupledEvolver`, and `GridlessEvolver/MeasureState` are now reachable
+  from C via the opaque carrier-handle ABI; the `s3-poc` cargo feature that
+  previously guarded the six S³ POC evolvers is retired — those types are now
+  part of the default core API.
+- **WASM `full` cargo feature**: the default/"lite" WASM build stays small
+  (≈ 768 KB raw, baseline 1D + graph engines); `--features full` enables all
+  heavy-grid, multi-dimensional, and hypoelliptic engines (≈ 1.4 MB raw).
+- **Cargo.toml description fields** updated to reflect broad engine surface
+  (no longer say "1D heat, unit diffusion only").
+
+### Known gaps (documented, not silently omitted)
+
+`ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and
+`GraphAdjoint` dense read-back remain PyO3-only deferrals (closures and
+dense-matrix read-back are not expressible in a stable C / WASM ABI without
+additional design work).  S³ WASM exposure is deferred to a follow-up release.
+
+Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI contract).
+
 ## [0.9.0-beta] — 2026-06-19
 
 First public release of **SemiFlow** — a Rust library that solves linear

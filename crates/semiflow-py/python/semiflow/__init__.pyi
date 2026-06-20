@@ -4844,3 +4844,338 @@ class ObstacleNDV8:
     def shape(self) -> tuple[int, int]:
         """Return ``(nx, ny)``."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# v9 S³ carrier classes (ADR-0162): TtState, TtEvolver, TtCoupledEvolver,
+# MeasureState, GridlessEvolver
+# ---------------------------------------------------------------------------
+
+@final
+class TtState:
+    """Tensor-train state built from rank-1 separable per-axis slices (v9, §52).
+
+    Storage: O(d·n·r²) — curse-escaped for diagonal-A Gaussian diffusion.
+
+    Parameters
+    ----------
+    slices : list[NDArray[np.float64]]
+        Per-axis 1-D float64 arrays (at least one element each).
+
+    Raises
+    ------
+    SemiflowError
+        kind='GridMismatch' — empty list or any slice is empty.
+        kind='NanInf' — any slice contains NaN or Inf.
+    """
+
+    def __init__(self, slices: list[NDArray[np.float64]]) -> None: ...
+
+    def ndim(self) -> int:
+        """Number of modes (dimensions d)."""
+        ...
+
+    def n_j(self, j: int) -> int:
+        """Mode size ``n_j`` for axis ``j``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' if ``j >= ndim()``.
+        """
+        ...
+
+    def peak_rank(self) -> int:
+        """Peak bond rank (max over internal bonds)."""
+        ...
+
+    def storage_size(self) -> int:
+        """Total number of stored scalars (working-set size)."""
+        ...
+
+    def inner_separable(self, functionals: list[NDArray[np.float64]]) -> float:
+        """Separable inner product ``⟨f, u⟩`` for a list of per-axis numpy vectors.
+
+        Parameters
+        ----------
+        functionals : list[NDArray[np.float64]]
+            One 1-D float64 array per axis; length of each must match ``n_j(axis)``.
+
+        Returns
+        -------
+        float
+            The scalar projection value.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' — list length != ndim or slice lengths mismatch.
+            kind='NanInf' — NaN/Inf in any functional.
+        """
+        ...
+
+
+@final
+class TtEvolver:
+    """Tensor-train Chernoff evolver for separable diagonal-A diffusion (v9, §52).
+
+    Parameters
+    ----------
+    a : list[float]
+        Per-axis diffusion coefficients (all >= 0, finite).
+    b : list[float]
+        Per-axis drift coefficients (finite).
+    c : float
+        Scalar reaction coefficient (finite).
+    dom_min : list[float]
+        Per-axis domain lower bounds.
+    dom_max : list[float]
+        Per-axis domain upper bounds (each > corresponding ``dom_min``).
+    eps_round : float
+        TT-rounding tolerance (finite, >= 0).
+
+    Raises
+    ------
+    SemiflowError
+        kind='GridMismatch' — empty axis list.
+        kind='NanInf' — non-finite or negative ``a[j]``, non-finite ``b[j]``/``c``/domain.
+    """
+
+    def __init__(
+        self,
+        a: list[float],
+        b: list[float],
+        c: float,
+        dom_min: list[float],
+        dom_max: list[float],
+        eps_round: float,
+    ) -> None: ...
+
+    def ndim(self) -> int:
+        """Number of axes this evolver was built for."""
+        ...
+
+    def evolve(self, state: TtState, t_final: float, n_steps: int) -> None:
+        """Evolve ``state`` in-place for time ``t_final`` using ``n_steps`` Chernoff steps.
+
+        Parameters
+        ----------
+        state : TtState
+            Mutable carrier state (rank-1 IC or previous result).
+        t_final : float
+            Total evolution time (>= 0, finite).
+        n_steps : int
+            Number of Chernoff time steps (>= 1).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``n_steps`` == 0, ``t_final`` non-finite/negative,
+            or ``evolver.ndim() != state.ndim()``.
+        """
+        ...
+
+
+@final
+class TtCoupledEvolver:
+    """Coupled tensor-train Chernoff evolver (v9, §52.9, ADR-0162).
+
+    Extends ``TtEvolver`` with stable pair-factor coupling ``exp(τ·L_pair)``.
+    With ``coupling=("None",)``, behaviour is bit-identical to ``TtEvolver``.
+
+    Parameters
+    ----------
+    a : list[float]
+        Per-axis diffusion coefficients (finite, >= 0).
+    b : list[float]
+        Per-axis drift (must all be 0.0 — drift deferred to v9.2.0).
+    c : float
+        Scalar reaction coefficient (finite).
+    coupling : tuple
+        One of:
+
+        - ``("None",)`` — no coupling.
+        - ``("Tridiagonal", rho)`` — nearest-neighbour chain.
+        - ``("Pairs", [(j, k, rho), ...])`` — explicit adjacent pairs.
+    dom_min : list[float]
+        Per-axis domain lower bounds.
+    dom_max : list[float]
+        Per-axis domain upper bounds.
+    eps_round : float
+        TT-rounding tolerance (finite, >= 0).
+
+    Raises
+    ------
+    SemiflowError
+        kind='OutOfDomain' — any ``b[j]`` != 0, non-adjacent pair, non-SPD block.
+        kind='GridMismatch' — empty axis list or invalid domain.
+        kind='NanInf' — non-finite inputs.
+    """
+
+    def __init__(
+        self,
+        a: list[float],
+        b: list[float],
+        c: float,
+        coupling: tuple[Any, ...],
+        dom_min: list[float],
+        dom_max: list[float],
+        eps_round: float,
+    ) -> None: ...
+
+    def ndim(self) -> int:
+        """Number of axes this evolver was built for."""
+        ...
+
+    def evolve(self, state: TtState, t_final: float, n_steps: int) -> None:
+        """Evolve ``state`` in-place for time ``t_final`` using ``n_steps`` Chernoff steps.
+
+        Same carrier (``TtState``) as ``TtEvolver.evolve``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``n_steps`` == 0, ``t_final`` non-finite/negative,
+            or ``evolver.ndim() != state.ndim()``.
+        """
+        ...
+
+
+@final
+class MeasureState:
+    """Sparse weighted-Dirac particle ensemble on R (D=1, v9, §50).
+
+    Represents a signed measure ``rho = sum_i w_i delta_{x_i}`` as a particle set.
+    Curse-escape: the ``3^D`` dense tree is never materialised; only sparse
+    marginals and scalar observables cross the Python boundary.
+
+    Parameters
+    ----------
+    positions : NDArray[np.float64]
+        Flat array of particle positions, length ``n_part`` (D=1).
+    weights : NDArray[np.float64]
+        Signed weights, length ``n_part``.
+    dim : int
+        Must equal 1 (compiled D); any other value raises ``kind='Unsupported'``.
+
+    Raises
+    ------
+    SemiflowError
+        kind='Unsupported' — ``dim`` != 1.
+        kind='GridMismatch' — ``n_part`` == 0 or lengths mismatch.
+        kind='NanInf' — NaN/Inf in positions or weights.
+    """
+
+    def __init__(
+        self,
+        positions: NDArray[np.float64],
+        weights: NDArray[np.float64],
+        dim: int,
+    ) -> None: ...
+
+    def n_diracs(self) -> int:
+        """Number of Dirac atoms."""
+        ...
+
+    def total_variation(self) -> float:
+        """Total-variation norm ``TV(rho)``."""
+        ...
+
+    def second_moment(self) -> float:
+        """Second moment ``<x^2, rho>`` — tightness monitor (§38.5)."""
+        ...
+
+    def marginal(self, axis: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Return the marginal projection onto ``axis`` as (positions, weights) arrays.
+
+        Parameters
+        ----------
+        axis : int
+            Axis to project onto.  Must be 0 for D=1.
+
+        Returns
+        -------
+        tuple[NDArray[np.float64], NDArray[np.float64]]
+            Both arrays have length ``n_diracs()``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``axis >= 1`` (COMPILED_D).
+        """
+        ...
+
+
+@final
+class GridlessEvolver:
+    """Gridless particle-ensemble Chernoff evolver (D=1, v9, §50, ADR-0155).
+
+    Advances ``MeasureState`` via the 1-D 3-branch Chernoff kernel.
+
+    Parameters
+    ----------
+    a : float
+        Diffusion coefficient (>= 0, finite). D=1 scalar.
+    b : float
+        Drift coefficient (finite). D=1 scalar.
+    c : float
+        Reaction coefficient (finite).
+    voronoi_cap : int, optional
+        Particle cap for ``WeightedVoronoi`` reduction (default 64, must be >= 1).
+    gaussian_background : bool, optional
+        If ``True``, use the ``GaussianBackground`` stub instead of Voronoi cap
+        (default ``False``).
+
+    Raises
+    ------
+    SemiflowError
+        kind='NanInf' — non-finite or negative ``a``, non-finite ``b``/``c``.
+        kind='OutOfDomain' — ``voronoi_cap == 0`` with ``WeightedVoronoi`` selected.
+    """
+
+    def __init__(
+        self,
+        a: float,
+        b: float,
+        c: float,
+        voronoi_cap: int = 64,
+        gaussian_background: bool = False,
+    ) -> None: ...
+
+    def apply(self, tau: float, src: MeasureState, dst: MeasureState) -> None:
+        """Apply one Chernoff step of size ``tau`` to ``src``, writing result into ``dst``.
+
+        Parameters
+        ----------
+        tau : float
+            Step size (>= 0, finite).
+        src : MeasureState
+            Read-only source.
+        dst : MeasureState
+            Overwritten with push-forward.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``tau`` < 0 or non-finite.
+        """
+        ...
+
+    def evolve(self, state: MeasureState, t_final: float, n_steps: int) -> None:
+        """Evolve ``state`` in-place for time ``t_final`` using ``n_steps`` Chernoff steps.
+
+        Parameters
+        ----------
+        state : MeasureState
+            Modified in-place.
+        t_final : float
+            Total time (>= 0, finite).
+        n_steps : int
+            Number of steps (>= 1).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``n_steps`` == 0 or ``t_final`` non-finite/negative.
+        """
+        ...

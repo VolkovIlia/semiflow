@@ -202,6 +202,12 @@ boundary translation exactly as it owns `unit_a` / `zero_d` today. NO shared
 binding utility crate is introduced (ADR-0028 §"PyO3 owns its own boundary"
 preserved).
 
+## Amendment 3 — WASM bundle-size target superseded by `full` feature (2026-06-20)
+
+**Status:** Accepted (records intentional deviation from the original < 500 KB bundle target)
+
+The v0.10.0 Wave C decision implicitly targeted a small < 500 KB raw Wasm binary (the `Heat1D`-only scope made this easy). The binding-parity wave adds a `full` cargo feature to `semiflow-wasm` that enables all heavy-grid, multi-dimensional, and hypoelliptic engines; the resulting binary exceeds the informal size target. The default/"lite" build (no `--features full`) retains the lightweight baseline — all engines present at v0.10.0 — and measures **≈ 768 KB raw**. `--features full` measures **≈ 1.4 MB raw**; this is acceptable for applications that need the complete engine surface and have the bandwidth budget. The dual-target design is explicit: `Cargo.toml` `[features] full = []` plus the `lib.rs` module-level documentation listing lite vs full contents. No existing CI smoke or cross-validation gate changes.
+
 ### Out of scope (v8.0.0 bindings)
 
 - F3 FFI + WASM bindings (TIER 2 is PyO3-only).

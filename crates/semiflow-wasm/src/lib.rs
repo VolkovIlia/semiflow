@@ -1,8 +1,56 @@
-//! WebAssembly bindings for `semiflow-core` (experimental, v0.10.0 Wave C).
+//! WebAssembly bindings for `semiflow-core` (experimental, v0.9.0-beta).
 //!
-//! Exposes a single [`Heat1D`] JS class for 1-D heat with constant diffusion
-//! `a = 1`, mirroring `semiflow-ffi` and `semiflow-py`.  Distribution via npm
-//! is deferred to v0.11.0; v0.10.0 ships CI-built artifacts only.
+//! Exposes a broad set of `semiflow-core` engine families as JS classes via
+//! `wasm-bindgen`, mirroring `semiflow-ffi` and `semiflow-py`.
+//!
+//! ## Cargo features — `full` vs default (lite)
+//!
+//! The default build ("lite") exposes only the lightweight baseline engines
+//! (1D heat, graph path/heat, resolvent-jump, reverse-AD, Greeks, Wentzell,
+//! adjoint Fokker–Planck) and keeps the raw Wasm binary to **≈ 768 KB**.
+//!
+//! Building with `--features full` adds all heavy-grid, multi-dimensional,
+//! boundary-condition, and hypoelliptic engines, bringing the raw binary to
+//! **≈ 1.4 MB**.  See `[features]` in `Cargo.toml`.
+//!
+//! ## Engine surface — default (lite) build
+//!
+//! - `Heat1D`, `GraphPath`, `GraphHeat`, `GraphHeat6`.
+//! - `ResolventJumpV8`, `ResolventJump2DV8`, `ResolventJump3DV8`.
+//! - `ReverseHeat1D`, `EvolverHeat1DGreeksV3`, `GrowthV3`,
+//!   `EvolverHeat1DUnitV3`.
+//! - `WentzellV8`, `GammaFamily`.
+//! - `AdjointFokkerPlanckV8`.
+//!
+//! ## Engine surface — `--features full` additions
+//!
+//! - **Higher-order 1D** — `Heat1D4th/6th`, `Heat1DZeta4/6/8`,
+//!   `TruncatedExp1D`, `TruncatedExp4th1D`, `DriftReaction1D`, `Shift1D`,
+//!   `Strang1D`.
+//! - **Matrix / Schrödinger** — `MatrixDiffusion1D`, `Schrodinger1D`,
+//!   `SchrodingerComplex1D`.
+//! - **Boundary conditions** — `Killing1D`, `Reflected1D`, `Robin1D`,
+//!   `Resolvent1D`, `KilledDirichlet1D`.
+//! - **2D/3D tensor** — `Heat2D/3D`, `Heat2DVarA/3DVarA`.
+//! - **Non-separable / anisotropic** — `NonSeparable2D`, `NonSeparable2DAniso`,
+//!   `AnisotropicShiftND2/3`.
+//! - **High-dimensional** — `SmolyakD6`.
+//! - **Nonautonomous** — `Howland1D`, `Subordinated1D`.
+//! - **Manifold** — `Manifold2D` (Torus, Sphere2, Hyperbolic2).
+//! - **Hypoelliptic** — Heisenberg, Kolmogorov, Engel.
+//! - **Graph extensions** — `GraphHeat4th`, `VarCoefGraphHeat`,
+//!   `MagnusGraphHeat`, `MagnusGraphHeat6`, `VarCoefMagnusGraph`,
+//!   `QuantumGraph`, `QuantumGraphHeat`, `StrangGraph`.
+//! - **Other** — `Obstacle1D`, `Adjoint1D`, `AdaptivePI1D`,
+//!   `ComplexTripleJump`, `PointEval`.
+//!
+//! **Documented deferrals:** `ObstacleND`, `ObstacleGamma`, `GraphTraj`,
+//! Laplacian introspection, and `GraphAdjoint` dense read-back (same reasons
+//! as `semiflow-ffi` — closures and dense matrices are not ABI-safe).
+//! S³ carriers (`TtEvolver`, `GridlessEvolver`) are C-ABI-accessible
+//! (ADR-0171) but not yet wired to WASM; deferred to a follow-up release.
+//!
+//! Distribution via npm is managed by `release-wasm.yml`.
 //!
 //! # Error model
 //!
@@ -150,7 +198,7 @@ pub use hypoelliptic_wasm::{
     HypoellipticChernoffEngel, HypoellipticChernoffHeisenberg, HypoellipticChernoffKolmogorov,
 };
 #[cfg(feature = "full")]
-pub use obstacle_wasm::ObstacleChernoffWasm;
+pub use obstacle_wasm::ObstacleChernoffWasm; // Rust type name; JS sees `Obstacle1D` via js_name
 #[cfg(feature = "full")]
 pub use adjoint_wasm::Adjoint1D;
 #[cfg(feature = "full")]

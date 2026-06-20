@@ -17,11 +17,41 @@
 //! `catch_unwind` into a no-op, breaking the FFI panic boundary.
 //! `[profile.release-ffi]` overrides this to `panic = "unwind"`.
 //!
-//! ## Scope (v0.10.0 Wave A)
+//! ## Scope (v0.9.0-beta binding-parity wave)
 //!
-//! Only 1-D heat with `a(x) = 1.0` (constant diffusion) is exposed.
-//! Variable-coefficient `a(x)` requires a runtime callback; deferred to
-//! v0.11.0. See [`crate::ffi::smf_state_new_heat_1d_unit`].
+//! Near-full parity with `semiflow-core` across the following families:
+//!
+//! - **1D diffusion** — standard (`smf_heat1d_*`), higher-order ζ-ladder
+//!   (`Diffusion4th/6th/8th`, `Zeta4/6th`), truncated-exp (`TruncExp/4th`),
+//!   drift-reaction (`DriftReaction1D`), shift (`Shift1D`), Strang split.
+//! - **2D/3D Strang tensor product** — `Heat2D/3D`, variable-coef (`VarA`).
+//! - **Non-separable** — `NonSeparable2D`, `NonSeparable2DAniso`,
+//!   `AnisotropicShiftND2/3`.
+//! - **High-dimensional sparse grid** — `SmolyakD6`.
+//! - **Boundary conditions** — `Killing1D`, `Reflected1D`, `Robin1D`,
+//!   `Resolvent1D`, `KilledDirichlet1D`, `ObstacleChernoff` (1D).
+//! - **Schrödinger** — real (`Schrodinger1D`) and complex
+//!   (`SchrodingerComplex1D`).
+//! - **Matrix diffusion** — `MatrixDiffusion1D`.
+//! - **Nonautonomous / resolvent** — `Howland1D`, `Subordinated1D`,
+//!   `ResolventJumpChernoff` (1D/2D/3D).
+//! - **Manifold** — `ManifoldChernoff` (Torus, Sphere2, Hyperbolic2).
+//! - **Hypoelliptic / sub-Riemannian** — Heisenberg, Kolmogorov, Engel.
+//! - **Graph** — `GraphHeatChernoff`, `GraphHeat4th`,
+//!   `MagnusGraphHeat`, `VarCoefGraphHeat`, `VarCoefMagnusGraphHeat`,
+//!   `QuantumGraphHeatChernoff`, `StrangGraph`.
+//! - **S³ flagship carriers** (ADR-0171) — `TtEvolver/TtState`,
+//!   `TtCoupledEvolver`, `GridlessEvolver/MeasureState`.
+//! - **Adjoint / Greeks / adaptive** — `AdjointFokkerPlanck`,
+//!   `EvolverHeat1DGreeksV3`, `AdaptivePI`, `Adjoint1D`.
+//! - **Carnot / point evaluation** — `ComplexTripleJump`, `PointEval`.
+//!
+//! **Documented deferrals (ABI-unsafe or closure-capture surfaces):**
+//! `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection,
+//! and `GraphAdjoint` read-back — dense-matrix / closure reads are not
+//! expressible in a stable C ABI.
+//!
+//! See ADR-0028 for the binding split rationale and ABI stability roadmap.
 
 #[macro_use]
 mod panic;

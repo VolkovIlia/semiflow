@@ -33,10 +33,37 @@
 //! `#![allow(unsafe_code)]` is required: the `#[pymodule]` proc-macro
 //! expands `unsafe` blocks inside this file (`PyO3` initialisation code).
 //!
-//! ## Scope (v0.10.0 Wave B)
+//! ## Scope (v0.9.0-beta binding-parity wave)
 //!
-//! 1D heat, unit diffusion only.  Variable `a(x)`, 2D/3D, async, and type
-//! stubs are deferred to v0.11.0+.  See ADR-0028.
+//! Broad parity with `semiflow-core` across the following families:
+//!
+//! - **1D diffusion** — `Heat1D`, `Heat1D4th/6th`, `TruncatedExp/4th`,
+//!   `DriftReaction1D`, `Shift1D`, `Strang1D`.
+//! - **2D/3D Strang tensor product** — `Heat2D/3D`, `Heat2DVarA/3DVarA`.
+//! - **Non-separable / anisotropic** — `NonSeparable2D`, `NonSeparable2DAniso`,
+//!   `AnisotropicShiftND2/3`.
+//! - **High-dimensional sparse grid** — `SmolyakD6`.
+//! - **Boundary conditions** — `Killing1D`, `Reflected1D`, `Robin1D`,
+//!   `Resolvent1D`, `KilledDirichlet1D`, `ObstacleChernoff1D`.
+//! - **Schrödinger** — real and complex variants.
+//! - **Matrix diffusion** — `MatrixDiffusion1D`.
+//! - **Nonautonomous / resolvent** — `Howland1D`, `Subordinated1D`,
+//!   `ResolventJumpChernoff` (1D/2D/3D).
+//! - **Manifold** — `ManifoldChernoff` (Torus, Sphere2, Hyperbolic2).
+//! - **Hypoelliptic / sub-Riemannian** — Heisenberg, Kolmogorov, Engel.
+//! - **Graph** — `GraphHeat`, `GraphHeat4th`, `MagnusGraphHeat`,
+//!   `VarCoefGraphHeat`, `QuantumGraphHeat`, `StrangGraph`.
+//! - **S³ flagship carriers** (ADR-0171) — `TtEvolver`, `TtCoupledEvolver`,
+//!   `GridlessEvolver`.
+//! - **Adjoint / Greeks / adaptive** — `AdjointFokkerPlanck`,
+//!   `EvolverHeat1DGreeksV3`, `AdaptivePI`, `Adjoint1D`.
+//! - **Carnot / point evaluation** — `ComplexTripleJump`, `PointEval`.
+//!
+//! **PyO3-only deferrals:** `ObstacleND`, `ObstacleGamma`, `GraphTraj`,
+//! Laplacian introspection, and `GraphAdjoint` dense read-back are not yet
+//! exposed (closure / dense-matrix surfaces require additional ABI design).
+//!
+//! See ADR-0028 for the binding split rationale and ABI stability roadmap.
 
 #![allow(unsafe_code)]
 
