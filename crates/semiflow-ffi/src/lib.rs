@@ -26,6 +26,8 @@
 #[macro_use]
 mod panic;
 
+pub mod bc_ffi;
+pub mod bc_ffi2;
 pub mod adjoint_fp_ffi;
 pub mod cdr_ffi;
 pub mod matrix_ffi;
@@ -125,4 +127,42 @@ pub use schrodinger_ffi::{
 pub use schrodinger_complex_ffi::{
     smf_schrodinger_cx_evolve, smf_schrodinger_cx_free, smf_schrodinger_cx_new,
     smf_schrodinger_cx_size, smf_schrodinger_cx_values, SmfSchrodingerComplex1D,
+};
+pub use bc_ffi::{
+    smf_killing1d_evolve, smf_killing1d_free, smf_killing1d_new, smf_killing1d_size,
+    smf_killing1d_values, SmfKilling1D,
+    smf_reflected1d_evolve, smf_reflected1d_free, smf_reflected1d_new, smf_reflected1d_size,
+    smf_reflected1d_values, SmfReflected1D,
+};
+pub use bc_ffi2::{
+    smf_robin1d_evolve, smf_robin1d_free, smf_robin1d_new, smf_robin1d_size,
+    smf_robin1d_values, SmfRobin1D,
+    smf_resolvent1d_eval, smf_resolvent1d_free, smf_resolvent1d_new, smf_resolvent1d_size,
+    SmfResolvent1D,
+    smf_killed_dir1d_apply, smf_killed_dir1d_free, smf_killed_dir1d_new,
+    smf_killed_dir1d_size, smf_killed_dir1d_values, SmfKilledDir1D,
+};
+
+// Round 6 — non-separable 2D, anisotropic-ND, Smolyak 6D
+pub mod nonsep_ffi;
+pub mod aniso_nd2_ffi;
+pub mod aniso_nd3_ffi;
+pub mod smolyak_ffi;
+pub use nonsep_ffi::{
+    smf_nonsep2d_new, smf_nonsep2d_evolve, smf_nonsep2d_size,
+    smf_nonsep2d_values, smf_nonsep2d_free, SmfNonSep2D,
+    smf_nonsep2d_aniso_new, smf_nonsep2d_aniso_evolve, smf_nonsep2d_aniso_size,
+    smf_nonsep2d_aniso_values, smf_nonsep2d_aniso_free, SmfNonSep2DAniso,
+};
+pub use aniso_nd2_ffi::{
+    smf_aniso_nd2_new, smf_aniso_nd2_evolve, smf_aniso_nd2_size,
+    smf_aniso_nd2_values, smf_aniso_nd2_free, SmfAnisoND2,
+};
+pub use aniso_nd3_ffi::{
+    smf_aniso_nd3_new, smf_aniso_nd3_evolve, smf_aniso_nd3_size,
+    smf_aniso_nd3_values, smf_aniso_nd3_free, SmfAnisoND3,
+};
+pub use smolyak_ffi::{
+    smf_smolyak_d6_new, smf_smolyak_d6_apply, smf_smolyak_d6_size,
+    smf_smolyak_d6_n_nodes, smf_smolyak_d6_free, SmfSmolyakD6,
 };

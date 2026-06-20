@@ -70,7 +70,15 @@ mod schrodinger_complex_wasm;
 #[cfg(feature = "full")]
 mod schrodinger_wasm;
 #[cfg(feature = "full")]
+mod bc_wasm;
+#[cfg(feature = "full")]
 mod strang_nd_wasm;
+#[cfg(feature = "full")]
+mod nonsep_wasm;
+#[cfg(feature = "full")]
+mod aniso_nd_wasm;
+#[cfg(feature = "full")]
+mod smolyak_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -96,7 +104,15 @@ pub use schrodinger_complex_wasm::SchrodingerComplex1D;
 #[cfg(feature = "full")]
 pub use schrodinger_wasm::Schrodinger1D;
 #[cfg(feature = "full")]
+pub use bc_wasm::{KilledDirichlet1D, Killing1D, Reflected1D, Resolvent1D, Robin1D};
+#[cfg(feature = "full")]
 pub use strang_nd_wasm::{Heat2D, Heat2DVarA, Heat3D, Heat3DVarA};
+#[cfg(feature = "full")]
+pub use nonsep_wasm::{NonSeparable2D, NonSeparable2DAniso};
+#[cfg(feature = "full")]
+pub use aniso_nd_wasm::{AnisotropicShiftND2, AnisotropicShiftND3};
+#[cfg(feature = "full")]
+pub use smolyak_wasm::SmolyakD6;
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///
