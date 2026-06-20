@@ -79,6 +79,12 @@ mod nonsep_wasm;
 mod aniso_nd_wasm;
 #[cfg(feature = "full")]
 mod smolyak_wasm;
+#[cfg(feature = "full")]
+mod howland_wasm;
+#[cfg(feature = "full")]
+mod subordinated_wasm;
+#[cfg(feature = "full")]
+mod manifold_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -113,6 +119,12 @@ pub use nonsep_wasm::{NonSeparable2D, NonSeparable2DAniso};
 pub use aniso_nd_wasm::{AnisotropicShiftND2, AnisotropicShiftND3};
 #[cfg(feature = "full")]
 pub use smolyak_wasm::SmolyakD6;
+#[cfg(feature = "full")]
+pub use howland_wasm::Howland1D;
+#[cfg(feature = "full")]
+pub use subordinated_wasm::Subordinated1D;
+#[cfg(feature = "full")]
+pub use manifold_wasm::Manifold2D;
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///

@@ -166,3 +166,20 @@ pub use smolyak_ffi::{
     smf_smolyak_d6_new, smf_smolyak_d6_apply, smf_smolyak_d6_size,
     smf_smolyak_d6_n_nodes, smf_smolyak_d6_free, SmfSmolyakD6,
 };
+
+// Round 7 — Howland lift, subordinated heat, manifold Chernoff
+pub mod howland_ffi;
+pub mod subordinated_ffi;
+pub mod manifold_ffi;
+pub use howland_ffi::{
+    smf_howland1d_new, smf_howland1d_evolve, smf_howland1d_values,
+    smf_howland1d_size, smf_howland1d_free, SmfHowland1D,
+};
+pub use subordinated_ffi::{
+    smf_subordinated1d_new, smf_subordinated1d_evolve, smf_subordinated1d_values,
+    smf_subordinated1d_size, smf_subordinated1d_free, SmfSubordinated1D,
+};
+pub use manifold_ffi::{
+    smf_manifold2d_new, smf_manifold2d_evolve, smf_manifold2d_values,
+    smf_manifold2d_size, smf_manifold2d_free, SmfManifold2D,
+};

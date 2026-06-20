@@ -456,6 +456,33 @@ typedef struct {
   uint8_t _private[0];
 } SmfSmolyakD6;
 
+/**
+ * Opaque handle to a `HowlandLift<DiffusionChernoff<f64>>` evolver.
+ *
+ * Obtain from `smf_howland1d_new`; free with `smf_howland1d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfHowland1D;
+
+/**
+ * Opaque handle to a `SubordinatedChernoff` 1D evolver.
+ *
+ * Obtain from `smf_subordinated1d_new`; free with `smf_subordinated1d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfSubordinated1D;
+
+/**
+ * Opaque handle to a `ManifoldChernoff` 2D evolver.
+ *
+ * Obtain from `smf_manifold2d_new`; free with `smf_manifold2d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfManifold2D;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -3360,6 +3387,233 @@ uintptr_t smf_smolyak_d6_n_nodes(const SmfSmolyakD6 *ev);
  * `ev` must be null or live from `smf_smolyak_d6_new`.
  */
 void smf_smolyak_d6_free(SmfSmolyakD6 *ev);
+
+/**
+ * Allocate a Howland-lift 1D nonautonomous heat evolver.
+ *
+ * Unit diffusion `a = 1`. The lifted state holds `n_t` time slices of
+ * `GridFn1D`, all initialised from `u0`.
+ *
+ * ## Preconditions
+ * - `xmin < xmax`, both finite; `n >= 4`.
+ * - `n_t >= 2`; `t_horizon > 0` and finite.
+ * - `u0` non-null, `u0_len == n`, all finite.
+ * - `out` non-null.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64` values.
+ * `out` must be a valid writable `*mut *mut SmfHowland1D`.
+ */
+SemiflowStatus smf_howland1d_new(double xmin,
+                                 double xmax,
+                                 uintptr_t n,
+                                 uintptr_t n_t,
+                                 double t_horizon,
+                                 const double *u0,
+                                 uintptr_t u0_len,
+                                 SmfHowland1D **out);
+
+/**
+ * Advance the Howland state by one full `t_horizon`.
+ *
+ * Uses `n_steps = n_t − 1` Chernoff iterations with `tau = delta_s`
+ * (matched-step constraint, math §23.4).
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_howland1d_new`.
+ */
+SemiflowStatus smf_howland1d_evolve(SmfHowland1D *ev);
+
+/**
+ * Copy the last time slice `u(t_horizon, ·)` into `out`.
+ *
+ * `out_len` must equal the spatial grid size `n`.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `Panic`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_howland1d_new`.
+ * `out` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_howland1d_values(const SmfHowland1D *ev, double *out, uintptr_t out_len);
+
+/**
+ * Return spatial grid size `n`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_howland1d_new`.
+ */
+uintptr_t smf_howland1d_size(const SmfHowland1D *ev);
+
+/**
+ * Free a Howland handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_howland1d_new`.
+ */
+void smf_howland1d_free(SmfHowland1D *ev);
+
+/**
+ * Allocate a subordinated 1D heat evolver.
+ *
+ * `subordinator_tag`: 0 = stable, 1 = gamma, 2 = inverse_gaussian.
+ * `alpha` used for tag 0 (must be in `(0,1)`).
+ * `c`     used for tags 1, 2 (must be `> 0`).
+ * `n_nodes` GL quadrature nodes; `1..=32`; typical 32.
+ *
+ * ## Preconditions
+ * - `xmin < xmax`, finite; `n >= 4`.
+ * - `n_chernoff >= 1`.
+ * - `u0` non-null, `u0_len == n`, all finite.
+ * - `out` non-null.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Unsupported` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64` values.
+ * `out` must be a valid writable `*mut *mut SmfSubordinated1D`.
+ */
+SemiflowStatus smf_subordinated1d_new(double xmin,
+                                      double xmax,
+                                      uintptr_t n,
+                                      uintptr_t n_chernoff,
+                                      unsigned int subordinator_tag,
+                                      double alpha,
+                                      double c,
+                                      uintptr_t n_nodes,
+                                      const double *u0,
+                                      uintptr_t u0_len,
+                                      SmfSubordinated1D **out);
+
+/**
+ * Advance the subordinated evolver by `t` using `n_steps` iterations.
+ *
+ * Writes `n` values into `dst`.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_subordinated1d_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_subordinated1d_evolve(SmfSubordinated1D *ev,
+                                         double t,
+                                         uintptr_t n_steps,
+                                         double *dst,
+                                         uintptr_t dst_len);
+
+/**
+ * Copy current values into `out`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_subordinated1d_new`.
+ * `out` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_subordinated1d_values(const SmfSubordinated1D *ev,
+                                         double *out,
+                                         uintptr_t out_len);
+
+/**
+ * Return grid size `n`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_subordinated1d_new`.
+ */
+uintptr_t smf_subordinated1d_size(const SmfSubordinated1D *ev);
+
+/**
+ * Free a subordinated handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_subordinated1d_new`.
+ */
+void smf_subordinated1d_free(SmfSubordinated1D *ev);
+
+/**
+ * Allocate a 2D Riemannian manifold Chernoff evolver.
+ *
+ * `manifold_tag`: 0 = torus, 1 = sphere2, 2 = hyperbolic2.
+ * `radius`      — sphere radius or hyperbolic scale; must be > 0.
+ *                 Ignored for torus.
+ * `curvature_correction` — apply R/12 correction (MMRS 2023 Thm 1).
+ *
+ * ## Preconditions
+ * - `x0min < x0max`, `x1min < x1max`, both finite; `nx >= 4`, `ny >= 4`.
+ * - `u0` non-null, `u0_len == nx*ny`, all finite.
+ * - `out` non-null.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Unsupported` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64` values.
+ * `out` must be a valid writable `*mut *mut SmfManifold2D`.
+ */
+SemiflowStatus smf_manifold2d_new(double x0min,
+                                  double x0max,
+                                  uintptr_t nx,
+                                  double x1min,
+                                  double x1max,
+                                  uintptr_t ny,
+                                  unsigned int manifold_tag,
+                                  double radius,
+                                  bool curvature_correction,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  SmfManifold2D **out);
+
+/**
+ * Advance manifold evolver by time `t` using `n_steps` iterations.
+ *
+ * Writes `nx*ny` values into `dst` (row-major, x0-fastest).
+ * `tau = t / n_steps`.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_manifold2d_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_manifold2d_evolve(SmfManifold2D *ev,
+                                     double t,
+                                     uintptr_t n_steps,
+                                     double *dst,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current manifold values into `out` (row-major, x0-fastest).
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_manifold2d_new`.
+ * `out` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_manifold2d_values(const SmfManifold2D *ev, double *out, uintptr_t out_len);
+
+/**
+ * Return `nx * ny`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ */
+uintptr_t smf_manifold2d_size(const SmfManifold2D *ev);
+
+/**
+ * Free a manifold handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ */
+void smf_manifold2d_free(SmfManifold2D *ev);
 
 #ifdef __cplusplus
 }  // extern "C"
