@@ -1,6 +1,6 @@
 [package]
 name = "semiflow-ffi"
-description = "C ABI bindings for semiflow-core — near-full engine parity (experimental, ABI unstable until v1.0)"
+description = "C ABI (cdylib) bindings for semiflow-core evolution-equation / PDE engines (experimental, ABI unstable until v1.0)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "semiflow-pde"
 dynamic = ["version"]
-description = "PyO3 Python bindings for semiflow-core (1D heat, unit diffusion)"
+description = "Python bindings for SemiFlow: evolution-equation / PDE engines via Chernoff approximation of operator semigroups"
 requires-python = ">=3.10,<3.15"
 dependencies = ["numpy >= 1.24"]
 license = { text = "MIT OR Apache-2.0" }

@@ -1,6 +1,6 @@
 [package]
 name = "semiflow-core"
-description = "Chernoff approximations of operator semigroups (Theorem 6 of Remizov 2025)"
+description = "no_std Rust PDE solver: evolution equations via Chernoff approximation of operator semigroups (heat, diffusion, Schrodinger)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
-keywords = ["math", "pde", "semigroup", "chernoff", "numerical"]
-categories = ["science", "mathematics", "no-std"]
+keywords = ["pde", "semigroup", "numerical", "diffusion", "simulation"]
+categories = ["mathematics", "science", "no-std", "algorithms", "simulation"]
 
 [features]
 default = ["simd"]  # ADR-0019: simd default-on; v2_compat removed at v4.0 (ADR-0084)

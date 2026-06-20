@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 authors = ["Ilia Volkov <ilia.volkov@outlook.com>"]
 repository = "https://github.com/VolkovIlia/semiflow"
 readme = "README.md"
-description = "WebAssembly bindings for semiflow-core — broad engine parity; `full` feature for heavy-grid engines (experimental)"
+description = "WebAssembly (wasm-bindgen) bindings for semiflow-core evolution-equation / PDE engines; `full` feature for heavy-grid engines (experimental)"
 publish = false  # npm distribution deferred to v0.11.0
 
 [lib]

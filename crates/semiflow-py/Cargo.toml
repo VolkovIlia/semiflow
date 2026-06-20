@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "PyO3 Python bindings for semiflow-core — broad engine parity (experimental, ABI unstable until v1.0)"
+description = "PyO3 Python bindings for semiflow-core evolution-equation / PDE engines; abi3-py310 wheel (experimental)"
 publish = false  # wheel distribution only; not on crates.io
 
 [lib]
