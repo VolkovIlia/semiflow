@@ -197,3 +197,20 @@ pub use hypoelliptic_engel_ffi::{
     smf_hypo_engel_new, smf_hypo_engel_evolve, smf_hypo_engel_values,
     smf_hypo_engel_size, smf_hypo_engel_free, SmfHypoEngel,
 };
+
+// Round 9 — obstacle, adjoint, and adaptive-stepping engines
+pub mod obstacle_ffi;
+pub mod adjoint_ffi;
+pub mod adaptive_ffi;
+pub use obstacle_ffi::{
+    smf_obstacle1d_new, smf_obstacle1d_evolve, smf_obstacle1d_values,
+    smf_obstacle1d_size, smf_obstacle1d_free, SmfObstacle1D,
+};
+pub use adjoint_ffi::{
+    smf_adjoint1d_new, smf_adjoint1d_evolve, smf_adjoint1d_values,
+    smf_adjoint1d_size, smf_adjoint1d_order, smf_adjoint1d_free, SmfAdjoint1D,
+};
+pub use adaptive_ffi::{
+    smf_adaptive_pi_new, smf_adaptive_pi_evolve, smf_adaptive_pi_values,
+    smf_adaptive_pi_size, smf_adaptive_pi_free, SmfAdaptivePI,
+};

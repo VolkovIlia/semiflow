@@ -511,6 +511,33 @@ typedef struct {
   uint8_t _private[0];
 } SmfHypoEngel;
 
+/**
+ * Opaque handle to a 1-D obstacle Chernoff evolver.
+ *
+ * Obtained from `smf_obstacle1d_new`; free with `smf_obstacle1d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfObstacle1D;
+
+/**
+ * Opaque handle to a 1-D adjoint Chernoff evolver.
+ *
+ * Obtained from `smf_adjoint1d_new`; free with `smf_adjoint1d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfAdjoint1D;
+
+/**
+ * Opaque handle to a 1-D adaptive PI integrator.
+ *
+ * Obtained from `smf_adaptive_pi_new`; free with `smf_adaptive_pi_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfAdaptivePI;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -3839,6 +3866,187 @@ uintptr_t smf_hypo_engel_size(const SmfHypoEngel *ev);
  * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
  */
 void smf_hypo_engel_free(SmfHypoEngel *ev);
+
+/**
+ * Allocate a 1-D obstacle Chernoff evolver.
+ *
+ * - `obs_buf == NULL` → constant obstacle at `level`.
+ * - `obs_buf != NULL` → array obstacle; `obs_len` must equal `n`.
+ * - `b == 0 && c == 0` → pure-diffusion fast path.
+ * - Otherwise → Strang-split inner.
+ *
+ * # Safety
+ * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfObstacle1D`.
+ * `obs_buf` readable for `obs_len` f64s when non-null.
+ */
+SemiflowStatus smf_obstacle1d_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
+                                  uintptr_t n_steps,
+                                  double a,
+                                  double b,
+                                  double c,
+                                  double level,
+                                  const double *obs_buf,
+                                  uintptr_t obs_len,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  SmfObstacle1D **out);
+
+/**
+ * Evolve the obstacle evolver by time `t` and write grid values to `dst_buf`.
+ *
+ * # Safety
+ * `ev` live pointer from `smf_obstacle1d_new`; `dst_buf` writable for `dst_len` f64s.
+ */
+SemiflowStatus smf_obstacle1d_evolve(SmfObstacle1D *ev,
+                                     double t,
+                                     double *dst_buf,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` live pointer; `out_buf` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_obstacle1d_values(const SmfObstacle1D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_obstacle1d_new`.
+ */
+uintptr_t smf_obstacle1d_size(const SmfObstacle1D *ev);
+
+/**
+ * Free a `SmfObstacle1D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_obstacle1d_new`.
+ */
+void smf_obstacle1d_free(SmfObstacle1D *ev);
+
+/**
+ * Allocate a 1-D adjoint Chernoff evolver.
+ *
+ * `kernel` must be a NUL-terminated C string: `"heat2"`, `"heat4"`,
+ * `"heat6"`, `"drift"`, or `"shift"`.
+ * `self_adjoint` is treated as `bool` (0 = false).
+ *
+ * # Safety
+ * `kernel` must be a valid NUL-terminated C string for its lifetime.
+ * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfAdjoint1D`.
+ */
+SemiflowStatus smf_adjoint1d_new(double xmin,
+                                 double xmax,
+                                 uintptr_t n,
+                                 uintptr_t n_steps,
+                                 const char *kernel,
+                                 int self_adjoint,
+                                 const double *u0,
+                                 uintptr_t u0_len,
+                                 SmfAdjoint1D **out);
+
+/**
+ * Evolve the adjoint evolver by time `t`; write values to `dst_buf`.
+ *
+ * # Safety
+ * `ev` live from `smf_adjoint1d_new`; `dst_buf` writable for `dst_len` f64s.
+ */
+SemiflowStatus smf_adjoint1d_evolve(SmfAdjoint1D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` live; `out_buf` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_adjoint1d_values(const SmfAdjoint1D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_adjoint1d_new`.
+ */
+uintptr_t smf_adjoint1d_size(const SmfAdjoint1D *ev);
+
+/**
+ * Return approximation order of the adjoint kernel; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_adjoint1d_new`.
+ */
+uint32_t smf_adjoint1d_order(const SmfAdjoint1D *ev);
+
+/**
+ * Free a `SmfAdjoint1D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_adjoint1d_new`.
+ */
+void smf_adjoint1d_free(SmfAdjoint1D *ev);
+
+/**
+ * Allocate a 1-D adaptive PI integrator.
+ *
+ * `kernel` must be NUL-terminated: `"heat2"`, `"heat4"`, `"heat6"`,
+ * `"drift"`, or `"shift"`.
+ *
+ * # Safety
+ * `kernel` must be a valid NUL-terminated C string.
+ * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfAdaptivePI`.
+ */
+SemiflowStatus smf_adaptive_pi_new(double xmin,
+                                   double xmax,
+                                   uintptr_t n,
+                                   const char *kernel,
+                                   double tol_abs,
+                                   double tol_rel,
+                                   const double *u0,
+                                   uintptr_t u0_len,
+                                   SmfAdaptivePI **out);
+
+/**
+ * Evolve by time `t` using adaptive PI substeps; write result to `dst_buf`.
+ *
+ * `steps_accepted` and `steps_rejected` are optional — pass NULL to ignore.
+ *
+ * # Safety
+ * `ev` live from `smf_adaptive_pi_new`; `dst_buf` writable for `dst_len` f64s.
+ */
+SemiflowStatus smf_adaptive_pi_evolve(SmfAdaptivePI *ev,
+                                      double t,
+                                      double *dst_buf,
+                                      uintptr_t dst_len,
+                                      uintptr_t *steps_accepted,
+                                      uintptr_t *steps_rejected);
+
+/**
+ * Copy current grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` live; `out_buf` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_adaptive_pi_values(const SmfAdaptivePI *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_adaptive_pi_new`.
+ */
+uintptr_t smf_adaptive_pi_size(const SmfAdaptivePI *ev);
+
+/**
+ * Free a `SmfAdaptivePI` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or live from `smf_adaptive_pi_new`.
+ */
+void smf_adaptive_pi_free(SmfAdaptivePI *ev);
 
 #ifdef __cplusplus
 }  // extern "C"
