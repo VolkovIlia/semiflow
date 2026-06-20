@@ -63,6 +63,14 @@ mod wentzell_wasm;
 mod diffusion_hi_wasm;
 #[cfg(feature = "full")]
 mod diffusion_extra_wasm;
+#[cfg(feature = "full")]
+mod matrix_diffusion_wasm;
+#[cfg(feature = "full")]
+mod schrodinger_complex_wasm;
+#[cfg(feature = "full")]
+mod schrodinger_wasm;
+#[cfg(feature = "full")]
+mod strang_nd_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -81,6 +89,14 @@ pub use diffusion_hi_wasm::{Heat1D4th, Heat1D6th, Heat1DZeta4, Heat1DZeta6, Heat
 pub use diffusion_extra_wasm::{
     DriftReaction1D, Shift1D, Strang1D, TruncatedExp1D, TruncatedExp4th1D,
 };
+#[cfg(feature = "full")]
+pub use matrix_diffusion_wasm::MatrixDiffusion1D;
+#[cfg(feature = "full")]
+pub use schrodinger_complex_wasm::SchrodingerComplex1D;
+#[cfg(feature = "full")]
+pub use schrodinger_wasm::Schrodinger1D;
+#[cfg(feature = "full")]
+pub use strang_nd_wasm::{Heat2D, Heat2DVarA, Heat3D, Heat3DVarA};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///

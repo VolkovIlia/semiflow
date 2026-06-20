@@ -1005,6 +1005,7 @@ name = "semiflow-ffi"
 version = "0.9.0-beta"
 dependencies = [
  "cbindgen",
+ "num-complex",
  "semiflow-core",
 ]
 
@@ -1026,6 +1027,7 @@ version = "0.9.0-beta"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
+ "num-complex",
  "semiflow-core",
  "wasm-bindgen",
  "wasm-bindgen-test",
