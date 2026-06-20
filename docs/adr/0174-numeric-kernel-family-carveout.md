@@ -26,3 +26,22 @@ split — their separation is a *deliberate* ADR-0018 bit-identical-mirror bound
 cap dodge, and 987 exceeds the ceiling anyway. Override count stays **3 / 3** (reuses the
 retired #1 slot; #2 MCP and #3 spec-doc unchanged). Guardrail #7 (Security-by-Design)
 UNTOUCHED and IMMUTABLE.
+
+---
+
+## Execution Amendment — 2026-06-21 (commit 72ead1a)
+
+**Outcome:** The consolidation refactor authorized by this ADR was executed in 2026-06
+and found that the ADR's premise of "artificial fragmentation" was largely incorrect
+for the two named qualifying families.
+
+| Family | Finding | Action taken |
+|---|---|---|
+| Diffusion ζ-ladder (diffusion4/6/8) | FD `apply`/stencil routines are order-specific (7-pt no-SIMD vs 9-pt 4+4+1 SIMD, distinct delta margins); sharing them would break bit-equality | Merged only the genuinely-identical validators (`validate_tau` / `validate_a_x`, f64 + generic) into `crates/semiflow-core/src/diffusion_zeta_common.rs` (net −114 LoC) |
+| Chebyshev septic/octonic | Stencil widths differ (8/7/6-pt septic vs 10/9/10-pt octonic) and `quad_prime` exists in octonic only; no genuine duplication | Consolidation ABORTED — audit/plan premise was incorrect; no files merged |
+
+**Conclusion.** The ~900-LoC carve-out remains essentially unexercised: no file needed
+to exceed 500 LoC after the real (small) consolidation. The per-order numeric files are
+legitimately distinct for mathematical reasons, not ceiling-driven fragmentation. The
+carve-out stays in the constitution as a sanctioned-but-currently-unexercised allowance
+in case a genuinely cohesive family is introduced in future.
