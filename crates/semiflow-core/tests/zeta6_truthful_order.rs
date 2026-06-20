@@ -152,6 +152,27 @@ fn g_zeta6_truthful_order() {
         );
     }
 
+    // ζ⁶ SAFETY-window invariant (ADR-0173): gate only in-window rungs.
+    //
+    // Principled rung-selection rule (ADR-0173): retain rungs with
+    // SAFETY = c·τ^K/φ ≥ 100 (temporal signal dominates spatial floor).
+    // At T=10.0 / N=8192 / K=6: OctonicHermite φ≈2.1e-13·T (spatial floor),
+    // boundary floor ≈ 2.2e-12 — both ≥ 4 orders below temporal signal at EVERY rung.
+    //
+    // Ladder rungs and SAFETY (all in-window at T=10):
+    //   n=2  → τ=5.000: SAFETY ≫ 100 (in-window)
+    //   n=4  → τ=2.500: SAFETY ≫ 100 (in-window)
+    //   n=8  → τ=1.250: SAFETY ≫ 100 (in-window)
+    //   n=16 → τ=0.625: SAFETY ≫ 100 (in-window, finest — most-asymptotic)
+    //
+    // ALL rungs are deep pre-asymptotic at T=10; convergence ramps super-algebraically
+    // (slope ≈ 1.84 → 3.70 → 7.42 for K=6).  The finest pair (8→16) is the most-
+    // asymptotic and gives the tightest ≥K lower-bound witness: finest-pair slope ≤
+    // −5.95 (= K−0.05, ADR-0119 AMENDMENT 2).  Finest-pair-only is honest here
+    // because the finest pair IS in-window — the opposite of ζ⁴ at T=2.
+    //
+    // SAFETY invariant: ≤ −(K−0.05) = −5.95 for one in-window finest pair.
+
     // Finest pair (index 2→3, i.e. n=8→16) is the tightest ≥K=6 lower-bound witness.
     let finest_slope = pair_slope(errs[2], errs[3]);
     eprintln!(

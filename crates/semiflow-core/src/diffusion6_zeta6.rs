@@ -230,7 +230,9 @@ fn validate_tau(tau: f64) -> Result<(), SemiflowError> {
 impl ChernoffFunction<f64> for Diffusion6thZeta6Chernoff<f64> {
     type S = GridFn1D<f64>;
 
-    /// Consistency order **6** (ADR-0088 Wave I: K=3 nested Richardson on ζ⁴).
+    /// Consistency order **≥ 6** (ADR-0088 Wave I: K=3 nested Richardson on ζ⁴),
+    /// verified by the finest-rung lower-bound gate `G_zeta6_TRUTHFUL_ORDER`
+    /// (finest pair (8→16) slope ≤ −5.95 = K−0.05; ADR-0119 AMENDMENT 2).
     ///
     /// Richardson at K=3 on R² (order-4 base) cancels the leading O(τ⁵) error
     /// term, achieving O(τ⁷) local / O(τ⁶) global convergence.

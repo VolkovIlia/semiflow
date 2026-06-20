@@ -185,6 +185,28 @@ fn g_zeta4_truthful_order() {
         errs.push(err);
     }
 
+    // ζ⁴ SAFETY-window invariant (ADR-0173): gate only in-window rungs.
+    //
+    // Principled rung-selection rule (ADR-0173): retain rungs with
+    // SAFETY = c·τ^K/φ ≥ 100 (temporal signal dominates spatial floor).
+    // At T=2.0 / N=512 / K=4: c₄=1.328e-6, φ=1.49e-12,
+    // τ_pre_asymp(SAFETY=100) ≈ 0.162.
+    //
+    // Ladder rungs and SAFETY:
+    //   n=2  → τ=1.000: SAFETY ≫ 100 (in-window)
+    //   n=4  → τ=0.500: SAFETY ≫ 100 (in-window)
+    //   n=8  → τ=0.250: SAFETY ≫ 100 (in-window)
+    //   n=16 → τ=0.125: SAFETY ≈ 27  (transition zone — out-of-window)
+    //
+    // The finest pair (8→16, τ=0.125) is OUT of the pre-asymptotic window
+    // (SAFETY≈27 < 100); its anomalous slope (≈−1.08) is transition-zone
+    // mixing, not floor onset.  Full-ladder OLS (≤ −3.5 per ADR-0110
+    // AMENDMENT 1) weights the 3 in-window rungs more heavily; the middle
+    // pair (4→8) alone shows slope ≈ −4.07 (honest order-4 pre-asymp signal).
+    // Naïvely switching to finest-pair-only at T=2.0 would score an
+    // out-of-window rung and produce a false fail — that would be dishonest
+    // threshold gaming in reverse.
+
     // Pair-slope diagnostic per AMENDMENT 1 sub-check (4a): the MIDDLE pair
     // (4→8) is the canonical demonstration of honest GLOBAL order-4. The
     // coarsest pair (2→4) may show super-convergence; the finest pair

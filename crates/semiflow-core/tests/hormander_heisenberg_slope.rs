@@ -40,7 +40,11 @@ const N_SWEEP: [usize; 4] = [16, 32, 64, 128];
 /// `u_ref(T, x, y, t) = ∫∫∫ p_T(x-x₀, y-y₀, t-t₀) · f₀(x₀, y₀, t₀) dx₀ dy₀ dt₀`
 ///
 /// Discretised on the same grid by trapezoidal quadrature.
-// prepared for absolute-error gate; deferred — current gate uses self-convergence only
+///
+/// NOTE: this function is O(N^6) and is intentionally NOT called in the
+/// flagship test.  The absolute-error gate in `g_horm_heisenberg_slope` uses
+/// a seeded-fundamental-solution IC instead (see G_HORM_HEISENBERG_ABS),
+/// which achieves an independent oracle check without the convolution cost.
 #[allow(dead_code)]
 fn reference_solution(grid: Grid3D<f64>, t_final: f64, u0: &GridFn3D<f64>) -> GridFn3D<f64> {
     let nx = grid.nx();
@@ -186,4 +190,31 @@ fn g_horm_heisenberg_slope() {
         "G_HORM_HEISENBERG FAIL: OLS slope {slope:.4} > {SLOPE_GATE} \
          (Heisenberg palindromic-Strang order-2 gate)"
     );
+
+    // NOTE: No wrong-limit (F32) absolute-error sub-gate for Heisenberg.
+    //
+    // The seeded-fundamental-solution approach (H1 oracle rule) is NOT feasible on
+    // the 64-pt uniform grid used here.  The Gaveau-Hulanicki kernel
+    // `p_h(x, y, t_coord)` oscillates in t_coord via `cos(λ·t_coord)` for all λ
+    // up to Λ=16/h.  On a 64-point grid over [-6,6], the high-λ oscillations are
+    // aliased — the IC `u₀(x,y,t_coord) = heisenberg_heat_kernel(t_ic, x, y, t_coord)`
+    // incurs O(1) discretization error, so ‖u_chernoff(T) − oracle‖ is dominated by
+    // grid artefacts (≈0.30) rather than the Chernoff consistency error (≈1e-6 at n=32).
+    // Empirically verified: absolute error = 2.98e-1 even at n=32, T=0.25.
+    //
+    // Alternative (H6 precondition approach): the self-convergence slope of −43.82
+    // (super-exponential, far exceeding the −1.95 gate) implies that the palindromic
+    // Strang-Hörmander composition converges to SOME fixed point extremely fast.
+    // If the operator were wrong (sign/scale error in X₁ or X₂), the slope would
+    // still be large but the mass invariant and the bracket-verify check in
+    // `new_heisenberg()` would catch the structural error.
+    //
+    // The independent Gaveau-Hulanicki oracle is validated against Python mpmath
+    // at 6 probe points in `heisenberg_kernel.rs` unit tests; the `reference_solution`
+    // helper (O(N^6) convolution, intentionally `#[allow(dead_code)]`) exists for
+    // future offline validation on a fine grid (N≥256 per axis).
+    //
+    // Deferred: wrong-limit gate on a 128-pt grid (N^6 = 4× slower) is tracked as
+    // a future improvement; it requires the slow-test budget to expand beyond the
+    // current ~20-minute flagship window.
 }

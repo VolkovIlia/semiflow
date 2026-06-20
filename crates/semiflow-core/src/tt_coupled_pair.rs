@@ -403,8 +403,15 @@ pub(crate) fn precompute_pair_expsyms<F: SemiflowFloat>(
                 state, j, k, cj, ck, r_cross, tau_fwd, dx_j, dx_k,
             )?);
         } else {
-            pair_eigen_check(cj, ck, r_cross)?;
-            fwd.push(alloc::vec::Vec::new()); // placeholder for non-adjacent
+            // Non-adjacent pairs are rejected at constructor time (CoupledTtChernoff::new
+            // guard 2: k>j+1 triggers assert!).  A path reaching here means the pairs
+            // list was built bypassing the constructor — reject loudly so coupling is
+            // never silently dropped (defense-in-depth against H5 silent-wrong).
+            return Err(SemiflowError::UnsupportedOperation {
+                what: "precompute_pair_expsyms: non-adjacent pair (k>j+1) — \
+                       spectral pair factor only supports adjacent (k==j+1) axes; \
+                       true non-adjacent coupling is deferred to v9.2.0 (ADR-0162)",
+            });
         }
         if use_strang && k == j + 1 {
             rev.push(build_pair_expsym(
