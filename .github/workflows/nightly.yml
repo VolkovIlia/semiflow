@@ -14,6 +14,27 @@ jobs:
       - run: pip install scipy numpy
       - run: cargo test --release -p semiflow-core --features diff-scipy --test diff_scipy
 
+  miri:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with: { components: miri }
+      - uses: Swatinem/rust-cache@v2
+      # Miri approach: run WITHOUT the `simd` feature (scalar fallback).
+      # Rationale: Miri does not support target-specific SIMD intrinsics
+      # (e.g. AVX2 _mm256_* / NEON vld1q_f64); compiling with --features simd
+      # produces "unsupported operation: AVX intrinsics are not supported"
+      # at runtime.  The unsafe pointer / aliasing logic in simd/ is still
+      # compiled for the scalar path, so Miri exercises the memory-safety
+      # invariants (provenance, aliasing, alignment) without the ISA-specific
+      # intrinsic layer.  If Miri gains stable SIMD-intrinsic support in
+      # future, re-enable with `--features simd`.
+      - name: Run Miri (scalar path — simd intrinsics not supported by Miri)
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+        run: cargo +nightly miri test -p semiflow-core --lib
+
   bench-regression:
     name: Bench regression check (>5% fails)
     runs-on: ubuntu-latest

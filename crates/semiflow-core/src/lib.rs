@@ -169,6 +169,7 @@ pub mod diffusion4_zeta4;
 pub(crate) mod diffusion4_zeta4_stencil_ho;
 pub mod diffusion6;
 pub mod diffusion6_zeta6;
+pub(crate) mod diffusion_zeta_common;
 pub mod diffusion8_zeta8;
 mod diffusion_storage;
 pub mod drift_reaction;

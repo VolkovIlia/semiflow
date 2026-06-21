@@ -6,6 +6,7 @@
 use num_traits::Float;
 
 use crate::{
+    diffusion_zeta_common,
     error::SemiflowError,
     float::{from_f64, half, SemiflowFloat},
     grid_fn::GridFn1D,
@@ -13,29 +14,7 @@ use crate::{
 
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
 
-/// Validate `tau`: must be finite and non-negative (generic).
-#[inline]
-pub(super) fn validate_tau_generic<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
-    if !tau.is_finite() || tau < F::zero() {
-        return Err(SemiflowError::DomainViolation {
-            what: "tau must be finite and >= 0",
-            value: tau.to_f64().unwrap_or(f64::NAN),
-        });
-    }
-    Ok(())
-}
-
-/// Validate `a(x_pre) ≥ 0` and finite (generic).
-#[inline]
-pub(super) fn validate_a_x_generic<F: SemiflowFloat>(a_x: F, x: F) -> Result<(), SemiflowError> {
-    if !a_x.is_finite() || a_x < F::zero() {
-        return Err(SemiflowError::DomainViolation {
-            what: "a(x) must be finite and >= 0 (strict ellipticity required for sqrt)",
-            value: x.to_f64().unwrap_or(f64::NAN),
-        });
-    }
-    Ok(())
-}
+pub(super) use diffusion_zeta_common::{validate_a_x_generic, validate_tau_generic};
 
 /// γ⁶-A baseline (generic, scalar path).
 #[inline]

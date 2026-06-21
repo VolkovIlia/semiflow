@@ -106,6 +106,9 @@ mod reverse_ad_wasm;
 mod state;
 mod v3;
 mod wentzell_wasm;
+mod tt_wasm;
+mod tt_coupled_wasm;
+mod gridless_wasm;
 
 #[cfg(feature = "full")]
 mod diffusion_hi_wasm;
@@ -164,6 +167,9 @@ pub use reverse_ad_wasm::ReverseHeat1D;
 pub use state::Heat1D;
 pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
 pub use wentzell_wasm::{GammaFamily, WentzellV8};
+pub use tt_wasm::{TtState, TtEvolver};
+pub use tt_coupled_wasm::TtCoupledEvolver;
+pub use gridless_wasm::{MeasureState, GridlessEvolver};
 
 #[cfg(feature = "full")]
 pub use diffusion_hi_wasm::{Heat1D4th, Heat1D6th, Heat1DZeta4, Heat1DZeta6, Heat1DZeta8};

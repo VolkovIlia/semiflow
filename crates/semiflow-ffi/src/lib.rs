@@ -79,6 +79,9 @@ pub mod strang_nd_2d_ffi;
 pub mod strang_nd_3d_ffi;
 pub mod v3;
 pub mod wentzell_ffi;
+pub mod tt_ffi;
+pub mod tt_coupled_ffi;
+pub mod gridless_ffi;
 
 pub use adjoint_fp_ffi::{
     smf_adjoint_fp_free_v3, smf_adjoint_fp_new_brownian_1d_v3, smf_adjoint_fp_step_v3,
@@ -263,6 +266,25 @@ pub use carnot_ffi::{
 pub use point_eval_ffi::{
     smf_point_eval_new, smf_point_eval_eval_at, smf_point_eval_size,
     smf_point_eval_drop, SmfPointEval,
+};
+
+// S³ flagship carriers (ADR-0171) — TtEvolver/TtState, TtCoupledEvolver, GridlessEvolver/MeasureState
+pub use tt_ffi::{
+    smf_ttstate_new_separable, smf_ttstate_free, smf_ttstate_ndim, smf_ttstate_n_j,
+    smf_ttstate_peak_rank, smf_ttstate_storage_size, smf_ttstate_inner_separable,
+    smf_tt_evolver_new, smf_tt_evolver_evolve, smf_tt_evolver_free,
+    SmfTtState, SmfTtEvolver,
+};
+pub use tt_coupled_ffi::{
+    smf_tt_coupled_new, smf_tt_coupled_evolve, smf_tt_coupled_free,
+    SmfTtCoupledEvolver,
+};
+pub use gridless_ffi::{
+    smf_measurestate_new, smf_measurestate_free, smf_measurestate_n_diracs,
+    smf_measurestate_total_variation, smf_measurestate_second_moment,
+    smf_measurestate_marginal,
+    smf_gridless_new, smf_gridless_apply, smf_gridless_evolve, smf_gridless_free,
+    SmfMeasureState, SmfGridlessEvolver,
 };
 
 // Round 9 — obstacle, adjoint, and adaptive-stepping engines

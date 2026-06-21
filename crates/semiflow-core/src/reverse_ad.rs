@@ -269,23 +269,25 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
         }
     }
 
-    /// Compute `(J, ∂J/∂θ)` for a K-vector of parameters in ONE backward pass.
+    /// Compute `(J, ∂J/∂θ)` for a **K=1** parameter slice in ONE backward pass.
     ///
-    /// **Implementation (§51.9, ADR-0156 Amendment 2 — GENUINE reverse-mode):**
+    /// **K>1 is rejected fail-loud** — returns `Err(SemiflowError::UnsupportedOperation)`.
+    /// This kernel carries a single scalar constant-a coefficient (`a(x) ≡ θ`);
+    /// a K-vector of θ has no well-defined meaning (ADR-0172 — K=1-only scope).
+    /// True multi-parameter reverse-AD requires per-region dual seeding and is
+    /// deferred to a future ADR.
+    ///
+    /// **Implementation (§51.9, ADR-0156 Amendment 2 — GENUINE reverse-mode, K=1):**
     /// 1. Forward pass with `⌈√n⌉` checkpointing → `u_n`, O(√n) states.
     /// 2. Seed cotangent `λ_n = 2(u_n − target)`.
     /// 3. Backward sweep `k = n…1` (strictly decreasing):
     ///    (a) replay `u_{k-1}` from checkpoint (bit-exact);
-    ///    (b) `∇J[p] += ⟨λ_k, b_k^{(p)}⟩` via `step_jacobian_col` (load-bearing);
+    ///    (b) `∇J[0] += ⟨λ_k, b_k^{(0)}⟩` via `step_jacobian_col` (load-bearing);
     ///    (c) `λ_{k-1} = apply_transpose_step(τ, λ_k)` (load-bearing, §51.6 oracle).
     ///
-    /// `K = 1` routes through the SAME backward machinery — there is NO forward
-    /// shortcut (§51.9 normative).  K>1 multi-seed is Phase 3; for K=1 with
-    /// constant-a, `kernel_dual` (`a(x)=Dual::variable(θ)`) provides the single
-    /// θ-seeded `b_k^{(0)}`.
-    ///
     /// # Errors
-    /// Propagates `SemiflowError` from any kernel application.
+    /// - `SemiflowError::UnsupportedOperation` if `theta.len() != 1` (ADR-0172).
+    /// - Propagates `SemiflowError` from any kernel application.
     pub fn value_and_grad(
         &self,
         tau: F,
@@ -294,6 +296,14 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
         target: &GridFn1D<F>,
         theta: &[F],
     ) -> Result<(F, Vec<F>), SemiflowError> {
+        // ADR-0172: K=1-only scope — K-vector of θ is ill-posed for this kernel.
+        if theta.len() != 1 {
+            return Err(SemiflowError::UnsupportedOperation {
+                what: "value_and_grad: K>1 parameter vector is not supported for \
+                       constant-a DiffusionChernoff (ADR-0172); use theta.len()==1 \
+                       or a future multi-region kernel",
+            });
+        }
         let fwd = |t: F, u: &GridFn1D<F>| self.kernel.apply_f(t, u);
         let (u_n, checkpoints) = forward_with_checkpoints(&fwd, tau, u0, n, &self.schedule)?;
         let loss = compute_loss(&u_n, target);
@@ -305,7 +315,6 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
             target,
             &checkpoints,
             &self.schedule,
-            theta.len(),
         )?;
         Ok((loss, grad))
     }

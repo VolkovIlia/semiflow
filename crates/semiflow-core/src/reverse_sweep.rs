@@ -34,11 +34,13 @@ use crate::{
 // backward_sweep — genuine K-vector cotangent backward sweep (§51.9, Amdt 2)
 // ---------------------------------------------------------------------------
 
-/// Execute one backward step: accumulate gradient and propagate cotangent.
+/// Execute one backward step: accumulate K=1 gradient and propagate cotangent.
 ///
-/// Step 2(b)+(c) of Algorithm §51.9 at position `k`:
-/// - Accumulates `∇J[p] += ⟨λ_k, b_k^{(p)}⟩` for each `p ∈ 0..k_params`.
+/// Step 2(b)+(c) of Algorithm §51.9 at position `k` for K=1 (ADR-0172):
+/// - Accumulates `∇J[0] += ⟨λ_k, b_k^{(0)}⟩` (single θ-seed, LOAD-BEARING).
 /// - Propagates `λ_{k-1} = F^⊤ λ_k` (LOAD-BEARING §51.6 oracle — transpose path).
+///
+/// K>1 is rejected at `value_and_grad` before this is ever called (ADR-0172).
 #[allow(clippy::too_many_arguments)]
 fn backward_step<F: SemiflowFloat>(
     kernel: &DiffusionChernoff<F>,
@@ -48,17 +50,14 @@ fn backward_step<F: SemiflowFloat>(
     u_prev: &GridFn1D<F>,
     lambda: &mut Vec<F>,
     grad: &mut [F],
-    k_params: usize,
 ) -> Result<(), SemiflowError> {
-    // (b) Accumulate gradient.
-    for g in &mut grad[..k_params] {
-        let b_k = step_jacobian_col(kernel_dual, tau_dual, u_prev)?;
-        let dot: F = lambda
-            .iter()
-            .zip(b_k.iter())
-            .fold(F::zero(), |acc, (&l, &b)| acc + l * b);
-        *g += dot;
-    }
+    // (b) Accumulate K=1 gradient: ∇J[0] += ⟨λ_k, b_k^{(0)}⟩.
+    let b_k = step_jacobian_col(kernel_dual, tau_dual, u_prev)?;
+    let dot: F = lambda
+        .iter()
+        .zip(b_k.iter())
+        .fold(F::zero(), |acc, (&l, &b)| acc + l * b);
+    grad[0] += dot;
     // (c) Propagate cotangent (LOAD-BEARING — §51.6 sub-check a).
     let lambda_fn = GridFn1D {
         values: lambda.clone(),
@@ -69,14 +68,14 @@ fn backward_step<F: SemiflowFloat>(
     Ok(())
 }
 
-/// Compute `∂J/∂θ` for all `K = theta.len()` parameters via the genuine cotangent
-/// backward sweep (§51.9, ADR-0156 Amendment 2).
+/// Compute `∂J/∂θ` for the single K=1 parameter via the genuine cotangent
+/// backward sweep (§51.9, ADR-0156 Amendment 2; K=1-only per ADR-0172).
 ///
 /// Algorithm (backward cotangent, `k = n … 1`):
 /// 1. Seed: `λ_n = 2(u_n − target)`.
 /// 2. For `k = n…1` (strictly decreasing loop — reverse-mode direction witness):
 ///    a. Replay `u_{k-1}` from nearest checkpoint (bit-exact).
-///    b. Accumulate: `∇J[p] += ⟨λ_k, b_k^{(p)}⟩` for all `p ∈ 0..K`.
+///    b. Accumulate: `∇J[0] += ⟨λ_k, b_k^{(0)}⟩` (single θ-seed).
 ///    c. Propagate: `λ_{k-1} = apply_transpose_step(τ, λ_k)`.
 ///
 /// # Normative notes (§51.9)
@@ -87,11 +86,13 @@ fn backward_step<F: SemiflowFloat>(
 /// Both are called on EVERY step of the backward loop, not just at the boundary.
 ///
 /// Transport terms (`h₀(θ) = 2√(θτ)` sample-position dependency) live
-/// ONLY in `b_k^{(p)}` (captured by `step_jacobian_col`), NOT in `Jᵀλ`.
+/// ONLY in `b_k^{(0)}` (captured by `step_jacobian_col`), NOT in `Jᵀλ`.
+///
+/// Caller contract: `theta.len() == 1` is enforced by `value_and_grad` (ADR-0172).
 ///
 /// # Errors
 /// Propagates `SemiflowError` from kernel or recompute applications.
-// 8 args: kernel pair, τ, u_n, target, checkpoints, schedule, k_params — all required.
+// 7 args: kernel pair, τ, u_n, target, checkpoints, schedule — all required.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn backward_sweep<F: SemiflowFloat>(
     kernel: &DiffusionChernoff<F>,
@@ -101,7 +102,6 @@ pub(crate) fn backward_sweep<F: SemiflowFloat>(
     target: &GridFn1D<F>,
     checkpoints: &[GridFn1D<F>],
     schedule: &CheckpointSchedule,
-    k_params: usize,
 ) -> Result<Vec<F>, SemiflowError> {
     let n = schedule.n_steps;
     let stride = schedule.stride;
@@ -112,7 +112,7 @@ pub(crate) fn backward_sweep<F: SemiflowFloat>(
     let mut lambda: Vec<F> = (0..n_vals)
         .map(|i| two * (u_n.values[i] - target.values[i]))
         .collect();
-    let mut grad = vec![F::zero(); k_params];
+    let mut grad = vec![F::zero(); 1]; // K=1 (ADR-0172)
 
     let fwd = |s: F, u: &GridFn1D<F>| kernel.apply_f(s, u);
     let tau_dual = Dual::constant(tau);
@@ -132,7 +132,6 @@ pub(crate) fn backward_sweep<F: SemiflowFloat>(
             u_prev,
             &mut lambda,
             &mut grad,
-            k_params,
         )?;
     }
 

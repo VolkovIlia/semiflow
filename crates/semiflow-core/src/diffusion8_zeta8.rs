@@ -91,6 +91,7 @@ use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion4_zeta4_stencil_ho::apply_jet_iter_6th,
     diffusion6_zeta6::Diffusion6thZeta6Chernoff,
+    diffusion_zeta_common::validate_tau_f64,
     error::SemiflowError,
     float::SemiflowFloat,
     grid::Grid1D,
@@ -213,28 +214,15 @@ impl<F: SemiflowFloat> Diffusion8thZeta8Chernoff<F> {
 }
 
 // ---------------------------------------------------------------------------
-// Private helper: validate tau (f64)
-// ---------------------------------------------------------------------------
-
-#[inline]
-fn validate_tau(tau: f64) -> Result<(), SemiflowError> {
-    if !tau.is_finite() || tau < 0.0 {
-        return Err(SemiflowError::DomainViolation {
-            what: "tau must be finite and >= 0",
-            value: tau,
-        });
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // ChernoffFunction impl
 // ---------------------------------------------------------------------------
 
 impl ChernoffFunction<f64> for Diffusion8thZeta8Chernoff<f64> {
     type S = GridFn1D<f64>;
 
-    /// Consistency order **8** (ADR-0088 Wave II: K=4 nested Richardson on ζ⁶).
+    /// Consistency order **≥ 8** (ADR-0088 Wave II: K=4 nested Richardson on ζ⁶),
+    /// verified by the finest-rung lower-bound gate `G_zeta8_TRUTHFUL_ORDER`
+    /// (finest pair (8→16) slope ≤ −7.95 = K−0.05; ADR-0119 AMENDMENT 2).
     fn order(&self) -> u32 {
         8
     }
@@ -267,7 +255,7 @@ impl ChernoffFunction<f64> for Diffusion8thZeta8Chernoff<f64> {
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
-        validate_tau(tau)?;
+        validate_tau_f64(tau)?;
         let n = src.values.len();
         let tau_half = tau / 2.0;
 

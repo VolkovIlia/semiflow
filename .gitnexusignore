@@ -1,0 +1,8 @@
+# Exclude wasm-pack generated output directories.
+# These contain generated JS glue code (and stale artifacts from the old crate
+# name "remizov_wasm"), not authored source — they pollute the code graph with
+# synthetic symbols like makeJsError, takeFromExternrefTable0, etc.
+# Regenerated on every `wasm-pack build`; not authored source; excluded from git.
+crates/semiflow-wasm/pkg-web/
+crates/semiflow-wasm/pkg-node/
+crates/semiflow-wasm/pkg-web-full/

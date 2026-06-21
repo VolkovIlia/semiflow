@@ -38,7 +38,8 @@ use core::f64::consts::PI;
 
 use semiflow_core::{
     killing::{BoxRegion, KillingChernoff},
-    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, ScratchPool,
+    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind,
+    ScratchPool,
 };
 
 // ---------------------------------------------------------------------------
@@ -100,9 +101,20 @@ fn sup_error_at(n: usize) -> f64 {
 
     // Grid [0, 1] with ZeroExtend (Dirichlet-like stencil BC; killing handles
     // the operator-level absorbing BC via post-multiply masking).
+    //
+    // CubicHermite is pinned explicitly (not relying on the default). The
+    // default changed CubicHermite → SepticHermite in v6.0 (ADR-0109). With
+    // ZeroExtend BC and coarse N ∈ {8, 16, 32, 64}, SepticHermite's ±4-node
+    // FD stencils access ghost nodes (ZeroExtend returns 0) at every
+    // boundary-adjacent node, producing a non-convergent interpolation error
+    // floor that masks the O(dx) killing commutator slope under test. CubicHermite
+    // (Catmull-Rom) needs only ±1 node beyond the sample cell; for node i=1 the
+    // leftward neighbour i=0 is a valid domain node, so no ghost contamination
+    // occurs at the coarse sweep sizes used here.
     let grid = Grid1D::new(0.0_f64, 1.0, n)
         .unwrap()
-        .with_boundary(BoundaryPolicy::ZeroExtend);
+        .with_boundary(BoundaryPolicy::ZeroExtend)
+        .with_interp(InterpKind::CubicHermite);
 
     // Inner: DiffusionChernoff(a=0.5, a'=0, a''=0)
     let inner = DiffusionChernoff::new(|_| A_COEF, |_| 0.0_f64, |_| 0.0_f64, A_COEF, grid);

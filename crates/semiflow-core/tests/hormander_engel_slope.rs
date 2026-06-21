@@ -147,6 +147,11 @@ fn g_horm_engel_slope() {
         println!("  n={n:3}: self_err={err:.4e}");
     }
 
+    // No closed-form oracle exists for Engel (Bonfiglioli-Lanconelli-Uguzzoni 2007 §18.3):
+    // Folland-Kaplan explicit kernels require H-type groups; Engel is a step-3 Carnot
+    // group that is NOT H-type, so no analytic fundamental solution is available.
+    // Self-convergence only is therefore the honest gate (no wrong-limit guard possible).
+
     // ADR-0095 failure mode interpretation:
     // slope ≤ -1.95: PASS — Galkin-Remizov K=2 framework empirically extends to step-3 Engel.
     // slope ∈ (-1.95, -1.0): partial — ship as experimental.
