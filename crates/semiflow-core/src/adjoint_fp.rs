@@ -152,6 +152,80 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
         self.diracs.len()
     }
 
+    /// Mass-weighted centre of mass (first moment), per axis (§38.12).
+    ///
+    /// Returns `E[x_d] = (Σ_diracs w·pos[d] + Σ_gauss w·mean[d]) / mass` for
+    /// each axis `d`, where `mass = total_variation()`.
+    ///
+    /// If `mass = 0`, returns all-zeros (undefined mean for the zero measure).
+    #[must_use]
+    pub fn first_moment(&self) -> [F; D] {
+        let mass = self.total_variation();
+        if mass == F::zero() {
+            return [F::zero(); D];
+        }
+        let mut result = [F::zero(); D];
+        for (pos, w) in &self.diracs {
+            for d in 0..D {
+                result[d] = result[d] + pos[d] * *w;
+            }
+        }
+        for g in &self.gaussians {
+            for d in 0..D {
+                result[d] = result[d] + g.mean[d] * g.weight;
+            }
+        }
+        for d in 0..D {
+            result[d] = result[d] / mass;
+        }
+        result
+    }
+
+    /// Total scalar variance `Var = E[|x|²] − |E[x]|²` (§38.12).
+    ///
+    /// Uses mass-normalised second moment: `E[|x|²] = second_moment() / mass`.
+    /// Returns 0 if `mass = 0`.
+    #[must_use]
+    pub fn variance(&self) -> F {
+        let mass = self.total_variation();
+        if mass == F::zero() {
+            return F::zero();
+        }
+        let e_x2 = self.second_moment() / mass;
+        let mu = self.first_moment();
+        let mu_sq = mu.iter().fold(F::zero(), |acc, &xi| acc + xi * xi);
+        e_x2 - mu_sq
+    }
+
+    /// Per-axis variance `Var_d = E[x_d²] − (E[x_d])²` (§38.12).
+    ///
+    /// Returns all-zeros if `mass = 0`.
+    #[must_use]
+    pub fn variance_per_axis(&self) -> [F; D] {
+        let mass = self.total_variation();
+        if mass == F::zero() {
+            return [F::zero(); D];
+        }
+        // Per-axis unnormalised second moment: Σ_diracs w·pos[d]² + Σ_gauss w·(mean[d]²+var)
+        let mut e_x2_per = [F::zero(); D];
+        for (pos, w) in &self.diracs {
+            for d in 0..D {
+                e_x2_per[d] = e_x2_per[d] + pos[d] * pos[d] * *w;
+            }
+        }
+        for g in &self.gaussians {
+            for d in 0..D {
+                e_x2_per[d] = e_x2_per[d] + (g.mean[d] * g.mean[d] + g.variance) * g.weight;
+            }
+        }
+        let mu = self.first_moment();
+        let mut result = [F::zero(); D];
+        for d in 0..D {
+            result[d] = e_x2_per[d] / mass - mu[d] * mu[d];
+        }
+        result
+    }
+
     /// Extract Dirac positions and weights as flat `Vec<F>` buffers (D=1 binding ABI).
     ///
     /// Returns `(positions, weights)` where both have length `n_diracs()`.
