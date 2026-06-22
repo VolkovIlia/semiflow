@@ -134,12 +134,20 @@ ceiling for small-grid 2D work).
 
 - Novel operator coverage (manifold, hypoelliptic, graph, S³ carriers) with no
   practical alternative.
-- Tail-latency-sensitive HFT pricing: `Diffusion4thChernoff` achieves 45 ns
-  p99.9 vs QuantLib V3 CEV 6711 ns (149× advantage, 95 % CI [145×, 153×]) at
-  matched accuracy (5e-4 gate). Source: `examples/latency_tail.rs`,
-  ADR-0067, `remizov-publications benchmarks/hft-latency-tail/`.
+- Tail-latency-sensitive HFT pricing (niche): `Diffusion4thChernoff` achieves
+  **41 ns p99.9** vs QuantLib V3 CEV 9573 ns (**233× advantage**, 95% CI [227×,
+  236×]) clean; **284×** [272×, 335×] under DRAM stress (p99.9 RC 53 ns vs QL
+  15032 ns). Matched accuracy err=8e-6 < 5e-4 gate; 0 heap allocs in hot loop;
+  1M ticks × 5 reps, core-0 pinned, i7-12700K. RC tail degrades only 1.29× clean
+  → DRAM-stressed vs QL's 1.57× ("gold under stress"). Source:
+  `benchmarks/hft-latency-tail/data/phase-e-summary.md`, `examples/latency_tail.rs`.
+  **This is a niche win.** Wallclock H-WALL is FALSIFIED for general PDE solving.
 - S³ flagship capabilities: TtChernoff 524288× storage advantage at d=4
   (H-CURSE SUPPORT); ReverseChernoff O(√n) checkpoint memory (slope 0.4956,
   r²=0.999); GridlessChernoff N-independent 13.9/22.5 KB working set at d=1/2.
+  S³ low-rank carriers are **L1-resident**: TtChernoff 0.0008% L1d-miss,
+  ReverseChernoff 0.0019% (confirmed via perf cpu_core/ counters, b923777) —
+  approximately 4 orders of magnitude below a dense 256 KB working set (80.9%
+  L1d-miss). This applies to the low-rank carriers only, not dense-grid engines.
 
 Source: `remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`.

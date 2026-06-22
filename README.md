@@ -21,10 +21,14 @@ exponentials, no linear solves, flat memory footprint.**
 > PDE solving (H-WALL FALSIFIED by iter-8; e.g. 730× slower than
 > SUNDIALS-CVODE at 5e-5 accuracy; 7303× slower than QuantLib FDM-CEV at
 > 1e-2 accuracy). Parallelism pays off only at large 3D grid sizes
-> (eta8=0.908 for 3D fine; eta8≈0.125 for 2D). The library wins in specific
-> niches: operator novelty (manifold, hypoelliptic, graph, S³ carriers), and
-> tail-latency-sensitive pricing (149× p99.9 vs QuantLib V3 CEV at matched
-> accuracy in the HFT benchmark).
+> (eta8=0.908 for 3D fine; eta8≈0.125 for 2D). The library wins in two
+> additional confirmed niches: (1) tail-latency-sensitive HFT pricing —
+> `Diffusion4thChernoff` achieves **41 ns p99.9** vs QuantLib V3 CEV 9573 ns
+> (**233×** clean, **284×** under DRAM stress) at matched accuracy, confirmed
+> on b923777; (2) L1-resident S³ low-rank carriers — TtChernoff 0.0008%
+> L1d-miss, ReverseChernoff 0.0019%, roughly 4 orders of magnitude below a
+> dense 256 KB working set (80.9% L1d-miss). Both are niche results;
+> neither generalizes to "SemiFlow is fast" or "SemiFlow computes in L1."
 
 The method evaluates `e^{tL}f` by iterating an explicit, allocation-free step
 operator `S(τ)`: `(S(t/n))ⁿ f → e^{tL}f`. Each step fits in cache; the working
@@ -177,8 +181,12 @@ heavy frameworks); H-WALL FALSIFIED (RC slower than adaptive/spectral solvers
 at matched accuracy); H-PAR FALSIFIED as universal claim (eta8=0.908 only for
 large 3D; ~0.125 for 2D); S³ capabilities (TtChernoff 524288× storage
 advantage at d=4, ReverseChernoff O(√n) checkpoint slope=0.496, GridlessChernoff
-flat 13.9/22.5 KB at d=1/2) all SUPPORT. Source:
-`remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`.
+flat 13.9/22.5 KB at d=1/2) all SUPPORT. Iter-8 addendum (b923777) confirms
+two niche advantages: (1) HFT tail-latency 233× p99.9 clean / 284× under DRAM
+stress vs QuantLib V3 CEV; (2) S³ low-rank carriers L1-resident (TtChernoff
+0.0008% L1d-miss, ReverseChernoff 0.0019%). Neither generalizes beyond the
+niche. Source: `remizov-publications/benchmarks/results/aggregate-iter8/`
+and `benchmarks/hft-latency-tail/data/phase-e-summary.md`.
 
 Design principles: `no_std + alloc` core; only 3 runtime dependencies; SIMD
 hot paths isolated to `src/simd/` (AVX2 on x86_64, NEON on aarch64, scalar
