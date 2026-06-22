@@ -78,4 +78,65 @@ mod tests {
         let rho = MeasureState::<f64, 1>::dirac([3.0], 2.0);
         assert!((rho.second_moment() - 18.0).abs() < 1e-14);
     }
+
+    // ── §38.12 variance diagnostic ───────────────────────────────────────────
+
+    /// Explicit D=2 mixture: two Diracs + one Gaussian.
+    ///
+    /// Mixture:
+    ///   δ_{[1.0, 0.0]} weight 1.0
+    ///   δ_{[3.0, 0.0]} weight 1.0
+    ///   Gaussian mean=[2.0, 0.0], var=1.0, weight=2.0
+    ///
+    /// mass = 1 + 1 + 2 = 4
+    /// mu_x = (1·1 + 1·3 + 2·2) / 4 = 8/4 = 2.0
+    /// mu_y = 0.0
+    /// E[x²] = (1·1 + 1·9 + 2·(4 + 1·2)) / 4 = (1+9+12)/4 = 22/4 = 5.5
+    ///   (D=2 Gaussian contribution: w·(|mean|²+D·var) = 2·(4+2) = 12)
+    /// Var = E[x²] - (mu_x²+mu_y²) = 5.5 - 4.0 = 1.5
+    ///
+    /// Per-axis:
+    ///   E[x_0²] = (1·1 + 1·9 + 2·(4+1)) / 4 = (1+9+10)/4 = 5.0
+    ///   Var_0 = 5.0 - 4.0 = 1.0
+    ///   E[x_1²] = (0+0 + 2·(0+1)) / 4 = 2/4 = 0.5
+    ///   Var_1 = 0.5 - 0.0 = 0.5
+    ///   Var_0 + Var_1 = 1.5 ✓
+    #[test]
+    fn variance_dirac_gaussian_d2() {
+        let mut rho = MeasureState::<f64, 2>::dirac([1.0, 0.0], 1.0);
+        rho.push_dirac_raw([3.0, 0.0], 1.0);
+        let gauss = MeasureState::<f64, 2>::gaussian([2.0, 0.0], 1.0, 2.0).unwrap();
+        // Merge by axpy (α=1, so weights transfer unchanged)
+        use crate::state::State;
+        rho.axpy_into(1.0, &gauss);
+
+        let tol = 1e-12_f64;
+
+        // first_moment
+        let mu = rho.first_moment();
+        assert!((mu[0] - 2.0).abs() < tol, "mu[0]={}", mu[0]);
+        assert!(mu[1].abs() < tol, "mu[1]={}", mu[1]);
+
+        // variance (scalar)
+        let var_s = rho.variance();
+        assert!((var_s - 1.5).abs() < tol, "variance={var_s}");
+
+        // variance_per_axis
+        let var_ax = rho.variance_per_axis();
+        assert!((var_ax[0] - 1.0).abs() < tol, "var_ax[0]={}", var_ax[0]);
+        assert!((var_ax[1] - 0.5).abs() < tol, "var_ax[1]={}", var_ax[1]);
+
+        // consistency: Var = Var_0 + Var_1
+        assert!((var_s - (var_ax[0] + var_ax[1])).abs() < tol, "Var≠Σ_d Var_d");
+    }
+
+    #[test]
+    fn variance_zero_mass_returns_zero() {
+        // Empty measure: first_moment/variance/variance_per_axis must not NaN.
+        let rho = MeasureState::<f64, 2>::from_particles(&[]);
+        let mu = rho.first_moment();
+        assert_eq!(mu, [0.0, 0.0]);
+        assert_eq!(rho.variance(), 0.0);
+        assert_eq!(rho.variance_per_axis(), [0.0, 0.0]);
+    }
 }

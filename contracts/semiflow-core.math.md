@@ -9229,6 +9229,28 @@ The engineer wave at `.dev-docs/specs/adjoint-fp-wave.md` documents the `Adjoint
 - `scripts/verify_adjoint_fp_tightness.py` — PRE-FLIGHT T_ADJOINT_FP_TIGHTNESS sympy oracle (6/6 PASS 2026-05-30; ships as the T_ADJOINT_FP_TIGHTNESS invocation).
 - `.dev-docs/specs/adjoint-fp-wave.md` — OPTIONAL engineer-wave spec for v5.1+ `AdjointFokkerPlanckChernoff<C, F, D>` Rust implementation.
 
+### §38.12 — Variance diagnostic on MeasureState (NORMATIVE library; issue #3)
+
+Three public diagnostic methods on `MeasureState<F, D>` (all in `adjoint_fp.rs`):
+
+**first_moment** — mass-weighted centre of mass, per axis (D-vector):
+`E[x_d] = (Σ_diracs w·pos[d] + Σ_gauss w·mean[d]) / mass`, where `mass = total_variation()`.
+Returns `[0; D]` when `mass = 0` (zero measure has undefined mean; zero is the safe default).
+
+**variance** — total scalar variance (E[|x|²]−|E[x]|²):
+`Var = second_moment() / mass − Σ_d (first_moment[d])²`.
+Uses the mass-normalised second moment (§38.5 Lemma A.3 defines the unnormalised `⟨|x|²,ρ⟩`; division by `mass` gives E[|x|²]).
+Returns `0` when `mass = 0`.
+
+**variance_per_axis** — per-axis variance (D-vector):
+`Var_d = (Σ_diracs w·pos[d]² + Σ_gauss w·(mean[d]²+var)) / mass − (E[x_d])²`.
+For isotropic Gaussian covariance `σ²·I`, `Σ_d Var_d = Var` exactly (no cross-terms).
+Returns `[0; D]` when `mass = 0`.
+
+**Oracle**: `scripts/verify_measure_state_variance.py` — `T_GRIDLESS_VARIANCE` sympy gate (4/4 sub-checks: `closed_form_var`, `per_axis_var`, `var_equals_sum_per_axis`, `zero_mass_guard`). PASS verified 2026-06-23; integrated into `cargo run -p xtask -- test-fast` sympy sweep.
+
+**Tests**: `adjoint_fp_tests.rs` — `variance_dirac_gaussian_d2` (explicit D=2 mixture, tolerance 1e-12) + `variance_zero_mass_returns_zero`.
+
 ## §39 — T_CHEBYSHEV_SLOPE_LIMIT — saturation formula (v5.1, ADR-0108, NORMATIVE library; CITATION mathematics)
 
 ### §39.1 — Setting
