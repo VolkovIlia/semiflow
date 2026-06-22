@@ -126,6 +126,9 @@ mod structured_traj;
 mod subordinated_py;
 mod time_dependent;
 mod v3;
+mod gridless_py;
+mod tt_coupled_py;
+mod tt_py;
 mod wentzell_helpers;
 mod wentzell_py;
 mod zeta4_py;
@@ -212,7 +215,11 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     obstacle_gamma_py::register(py, m)?;
     wentzell_py::register(py, m)?;
     // v9.0.0 Shift B — reverse-mode AD (math §51.5, ADR-0156)
-    reverse_ad_py::register(py, m)
+    reverse_ad_py::register(py, m)?;
+    // v9 S³ flagship carriers — tensor-train + gridless particle (ADR-0171)
+    tt_py::register(py, m)?;
+    tt_coupled_py::register(py, m)?;
+    gridless_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------
