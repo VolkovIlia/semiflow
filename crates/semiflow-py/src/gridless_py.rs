@@ -139,13 +139,8 @@ impl PyMeasureState {
             if axis >= COMPILED_D {
                 return Err(new_pyerr("OutOfDomain", "MeasureState.marginal: axis >= 1 (COMPILED_D)"));
             }
-            let diracs = self.inner.diracs();
-            let mut pos_out = Vec::with_capacity(diracs.len());
-            let mut wt_out = Vec::with_capacity(diracs.len());
-            for (pos, w) in diracs {
-                pos_out.push(pos[axis]);
-                wt_out.push(*w);
-            }
+            // D=1: axis==0 always; use the public flat-buffer extractor.
+            let (pos_out, wt_out) = self.inner.to_flat_buffers_d1();
             Ok((
                 pos_out.as_slice().to_pyarray(py),
                 wt_out.as_slice().to_pyarray(py),

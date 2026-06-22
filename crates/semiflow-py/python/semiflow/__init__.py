@@ -92,6 +92,12 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     # and ObstacleNDV8 (D=2 forward evolution, Fortran-order, TIER 2, ADR-0153)
     ObstacleGammaV8,
     ObstacleNDV8,
+    # v9 S³ flagship carriers (ADR-0171) — tensor-train + gridless particle
+    TtState,
+    TtEvolver,
+    TtCoupledEvolver,
+    MeasureState,
+    GridlessEvolver,
 )
 
 __all__ = [
@@ -184,4 +190,10 @@ __all__ = [
     # v8.3.0 B-7 — ObstacleGammaV8 + ObstacleNDV8 (TIER 2, ADR-0153)
     "ObstacleGammaV8",
     "ObstacleNDV8",
+    # v9 S³ flagship carriers (ADR-0171) — tensor-train + gridless particle
+    "TtState",
+    "TtEvolver",
+    "TtCoupledEvolver",
+    "MeasureState",
+    "GridlessEvolver",
 ]
