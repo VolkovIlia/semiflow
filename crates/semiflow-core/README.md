@@ -7,8 +7,16 @@
 
 `no_std` Rust solver for linear evolution equations (`∂ₜu = Lu`) via Chernoff
 approximation of operator semigroups. No matrix exponentials. No linear solves.
-Embarrassingly parallel. Ships 60+ engine implementations across heat,
-Schrödinger, diffusion, graph, manifold, and hypoelliptic operators.
+Flat memory footprint. Ships 60+ engine implementations across heat, Schrödinger,
+diffusion, graph, manifold, and hypoelliptic operators.
+
+> **Performance note (iter-8, HEAD b923777):** The library's primary measured
+> advantage is **memory frugality** (~3 MB flat working set vs 50–418 MB for
+> heavy frameworks). Wallclock is NOT a strength for general matched-accuracy
+> PDE solving — RC is uniformly slower than adaptive ODE solvers and spectral
+> methods. Parallelism scales well only at large 3D grid sizes (eta8=0.908
+> for F7 fine; eta8≈0.125 for 2D). See the root workspace README for the full
+> honest benchmark picture.
 
 Mathematical foundation: **Theorem 6 of I. D. Remizov (2025)**, *Vladikavkaz
 Math. J.* 27(4), 124–135
