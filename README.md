@@ -10,7 +10,21 @@
 
 **SemiFlow is a `no_std` Rust library for solving evolution equations and PDEs
 (`∂ₜu = Lu`) by Chernoff approximation of operator semigroups — no matrix
-exponentials, no linear solves, embarrassingly parallel.**
+exponentials, no linear solves, flat memory footprint.**
+
+> **Honest performance note (iter-8, HEAD b923777, 45 families):** SemiFlow's
+> primary measured advantage is **memory frugality** — a flat ~3 MB working
+> set across all 1D/2D/3D families, vs 50–418 MB for heavy frameworks (KIOPS,
+> Dedalus, scipy-mol), with 33/43 head-to-head pairs below the 0.5× memory
+> gate (76.7%). Wallclock is **not a general strength**: SemiFlow is uniformly
+> slower than adaptive ODE solvers and spectral methods for matched-accuracy
+> PDE solving (H-WALL FALSIFIED by iter-8; e.g. 730× slower than
+> SUNDIALS-CVODE at 5e-5 accuracy; 7303× slower than QuantLib FDM-CEV at
+> 1e-2 accuracy). Parallelism pays off only at large 3D grid sizes
+> (eta8=0.908 for 3D fine; eta8≈0.125 for 2D). The library wins in specific
+> niches: operator novelty (manifold, hypoelliptic, graph, S³ carriers), and
+> tail-latency-sensitive pricing (149× p99.9 vs QuantLib V3 CEV at matched
+> accuracy in the HFT benchmark).
 
 The method evaluates `e^{tL}f` by iterating an explicit, allocation-free step
 operator `S(τ)`: `(S(t/n))ⁿ f → e^{tL}f`. Each step fits in cache; the working
@@ -155,6 +169,16 @@ reference oracle (convergence-order tests and sup-norm-floor tests). Because
 evolution is zero-allocation — but treat memory and latency as **measured
 properties of the concrete grid types, not contractual guarantees of the trait
 API**. Reproducible benchmarks are published in the benchmarks repository.
+
+The current authoritative benchmark is **iter-8** (semiflow-core HEAD b923777,
+45 families, i7-12700K, 12 reps + 3 warmup). Key verdicts: H-MEM
+PARTIAL_SUPPORT (33/43 pairs RC < competitor; flat ~3 MB vs 50–418 MB for
+heavy frameworks); H-WALL FALSIFIED (RC slower than adaptive/spectral solvers
+at matched accuracy); H-PAR FALSIFIED as universal claim (eta8=0.908 only for
+large 3D; ~0.125 for 2D); S³ capabilities (TtChernoff 524288× storage
+advantage at d=4, ReverseChernoff O(√n) checkpoint slope=0.496, GridlessChernoff
+flat 13.9/22.5 KB at d=1/2) all SUPPORT. Source:
+`remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`.
 
 Design principles: `no_std + alloc` core; only 3 runtime dependencies; SIMD
 hot paths isolated to `src/simd/` (AVX2 on x86_64, NEON on aarch64, scalar

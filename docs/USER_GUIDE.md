@@ -112,3 +112,34 @@ cost for self-adjoint/sectorial generators.
 - Steady-state evolution is allocation-free (reused scratch buffers).
 - See [precision-policy.md](precision-policy.md) and
   [api-stability.md](api-stability.md) for guarantees and gated floors.
+
+### Honest benchmark summary (iter-8, HEAD b923777, 45 families)
+
+SemiFlow's primary measured advantage is **memory frugality**: flat ~3 MB working
+set across all 1D/2D/3D families, vs 50–418 MB for heavy frameworks (KIOPS 418 MB,
+Dedalus ~146 MB, scipy-mol-3d 90 MB). 33/43 head-to-head pairs show RC using less
+memory than the competitor.
+
+**Wallclock** is honestly not a general strength. RC is uniformly slower than
+adaptive ODE solvers and spectral methods at matched accuracy (e.g. 730× slower
+than SUNDIALS-CVODE on 1D heat at 5e-5 accuracy; 7303× slower than QuantLib
+FDM-CEV). If raw solve speed is the primary concern, an adaptive solver is likely
+the better choice.
+
+**Parallelism** (`--features parallel`) scales well only at large problem sizes:
+eta8=0.908 for 3D Strang at fine resolution; eta8≈0.125 for 2D problems (Amdahl
+ceiling for small-grid 2D work).
+
+**Where SemiFlow wins:**
+
+- Novel operator coverage (manifold, hypoelliptic, graph, S³ carriers) with no
+  practical alternative.
+- Tail-latency-sensitive HFT pricing: `Diffusion4thChernoff` achieves 45 ns
+  p99.9 vs QuantLib V3 CEV 6711 ns (149× advantage, 95 % CI [145×, 153×]) at
+  matched accuracy (5e-4 gate). Source: `examples/latency_tail.rs`,
+  ADR-0067, `remizov-publications benchmarks/hft-latency-tail/`.
+- S³ flagship capabilities: TtChernoff 524288× storage advantage at d=4
+  (H-CURSE SUPPORT); ReverseChernoff O(√n) checkpoint memory (slope 0.4956,
+  r²=0.999); GridlessChernoff N-independent 13.9/22.5 KB working set at d=1/2.
+
+Source: `remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`.

@@ -1,9 +1,12 @@
 # SemiFlow — Roadmap
 
-> Mission: a fast and universal computation library implementing
-> Chernoff approximations of operator semigroups (Theorem 6, Remizov 2025)
-> and adjacent approaches (operator splitting, BCH tau²-corrections,
-> truncated-exp power series, adaptive integrators).
+> Mission: a memory-frugal, mathematically universal computation library
+> implementing Chernoff approximations of operator semigroups (Theorem 6,
+> Remizov 2025) and adjacent approaches (operator splitting, BCH
+> tau²-corrections, truncated-exp power series, adaptive integrators).
+> Wallclock competitiveness vs adaptive/spectral solvers is NOT a design
+> goal; see `docs/perf-commitment-v1_0_0.md` and the iter-8 benchmark
+> campaign (HEAD b923777, 45 families) for the honest performance picture.
 
 Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 

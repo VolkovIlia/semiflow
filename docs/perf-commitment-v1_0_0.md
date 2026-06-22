@@ -12,6 +12,18 @@ changelog:
 
 # Performance Commitment — v1.0.0
 
+> **Scope note:** This document tracks internal criterion micro-benchmarks
+> (regression thresholds for throughput in isolated kernels). It is
+> **distinct from competitive head-to-head comparisons**, which are
+> documented in the iter-8 campaign
+> (`remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`,
+> library HEAD b923777, 45 families). The iter-8 campaign found:
+> memory frugality PARTIAL_SUPPORT (33/43 pairs RC < competitor); wallclock
+> FALSIFIED vs adaptive/spectral solvers; parallelism FALSIFIED as universal
+> claim (eta8≈0.125 for 2D; 0.908 for large 3D only). The micro-benchmarks
+> below track that the library does not regress on its own prior throughput;
+> they do not imply wallclock competitiveness vs external solvers.
+
 ## 1. Status
 
 Effective from v1.0.0.
