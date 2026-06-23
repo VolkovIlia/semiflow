@@ -184,6 +184,55 @@ array path; a batched-sampler API is specced for a future minor.
 Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI contract),
 ADR-0179 (GraphAdjoint closure deferral).
 
+### Added — production rough-Heston pricer (issue #9, ADR-0181)
+
+- **Risk-neutral discounting** (`semiflow-core`, `examples/rough_heston_pricer.rs`):
+  `c_00 = −r` in the reaction matrix — the block-CN Strang half-steps
+  `exp(τC/2)` compound to `e^{−rT}` over `n = T/τ` steps via the
+  Feynman-Kac equation `∂_τ u = Lu − ru` (math.md §33.9, ADR-0181 §D1).
+  No post-evolution multiply by `e^{−rT}` — discount rides the existing
+  matrix-exp machinery.
+
+- **`--price` mode** (`examples/rough_heston_pricer.rs`): builds the call-payoff
+  initial condition, evolves `n = T/τ` backward steps, reads component-0 at
+  `x = 0`, and prints discounted call prices at `K ∈ {90, 100, 110}`.
+  `--rate 0.0` recovers the pre-issue-#9 demonstrator output (regression guard).
+
+- **RELEASE_BLOCKING gate `G_ROUGH_HESTON_MC_PARITY`**
+  (`tests/rough_heston_mc_oracle.rs`, slow-tests):
+  Gate I of the two-tier honesty design. Asserts that the Chernoff kernel
+  (accuracy grid N=192, τ=0.01) agrees with a QE-CIR Monte-Carlo of the
+  SAME linearised/frozen-V₀ 4-factor Markov model — zero model bias enters,
+  so this is a pure numerical gate. Tolerance: 3·MC_stderr + δ_kernel
+  (δ_kernel ≤ 0.55 price units ≈ 0.6% ATM, measured by N=48 vs N=192
+  self-convergence). MC: 1M antithetic paths, n_steps=200, QE-CIR factors
+  (Andersen 2008), seed PCG64(lower-64 of 0xC0FFEE_BABE_DEAD_BEEF).
+  Three strikes K ∈ {90, 100, 110}, T=1, H=0.1, S₀=100, V₀=0.04, κ=1.5,
+  θ=0.04, ξ=0.3, ρ=−0.7, r=0.05.
+
+- **Discount sub-test** (`tests/rough_heston_mc_oracle.rs`): flat IC u₀≡1,
+  coupling zeroed, c_00 = −r → component-0 ≈ e^{−rT} to ≤1e-6 (validates
+  the discounting mechanism independently of diffusion/coupling).
+
+- **ADVISORY record `A_ROUGH_HESTON_MODEL_BIAS`**
+  (`tests/rough_heston_model_bias.rs`, slow-tests):
+  Gate II of the two-tier design. Measures and reports three model-approximation
+  sub-biases (frozen-V₀ vs stochastic √V_t, reaction coupling vs exact cross-term,
+  3-factor GL vs N→∞ Markov). Expected aggregate O(H) ≈ 1–5% at H=0.1. Never
+  fails. Reports one JSONL line per sub-bias to stdout.
+
+- **Math §33.9** (`contracts/semiflow-core.math.md`): discounting formula and
+  the two-error-source decomposition (gate I / gate II). Cites Andersen 2008
+  (QE-CIR), El Euch–Rosenbaum 2019 (multifactor convergence), Carr-Cisek-Pintar
+  2021 (GL 3-factor model).
+
+- **`contracts/semiflow-core.properties.yaml`** bumped to schema_version 4.16.0:
+  adds `G_ROUGH_HESTON_MC_PARITY` property, new `advisory_records:` section with
+  `A_ROUGH_HESTON_MODEL_BIAS`, and `notes:` entry documenting the two-tier design.
+
+**Honest claim**: oracle-validated solver of a documented 4-factor Markov model
+(~0.6% numerical precision); itself O(H)-biased ~1–5% vs true rough-Heston at H=0.1.
+
 ## [0.9.0-beta] — 2026-06-19
 
 First public release of **SemiFlow** — a Rust library that solves linear

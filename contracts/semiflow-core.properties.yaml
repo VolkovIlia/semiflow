@@ -111,7 +111,7 @@
 #   - tests/tensor_properties.rs      (G3_4_2D — extends v0.5.0 file)
 #   - tests/adaptive_properties.rs    (G_PI, adaptive_pi_contractivity)
 
-schema_version: "4.15.0"
+schema_version: "4.16.0"
 # 4.14.0 (v8.3.0 TIER-3 binding surface — MINOR, ADDITIVE; ADR-0153.
 #   THREE NEW binding-parity META-GATES, no existing gate changed, no removal.
 #   traits.yaml correspondingly 4.12.0 → 4.13.0.
@@ -9326,3 +9326,121 @@ latency_gates:
     feature_gate: "slow-tests"
     introduced_in: v8.3.0
     authority: ADR-0153
+
+  - name: G_ROUGH_HESTON_MC_PARITY
+    type: MC_PARITY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    threshold: "3.0 * MC_stderr + 0.55"
+    measured_value: "PENDING — run with slow-tests; back-annotate after rc.1"
+    pass_status: "PENDING"
+    rationale: |
+      G_ROUGH_HESTON_MC_PARITY (RELEASE_BLOCKING, ADR-0181 §D3, issue #9):
+      Gate I of the two-tier honesty design for the production rough-Heston pricer.
+
+      Verifies that the MatrixDiffusionChernoff<f64, 4> Chernoff kernel for the
+      4-factor Markov rough-Heston model (Carr-Cisek-Pintar 2021 Gauss-Laguerre
+      approximation at H=0.1) agrees with a Monte-Carlo of the SAME linearised/
+      frozen-V₀ 4-factor Markov SDE.
+
+      CRUX (ADR-0181 §D2): The MC simulates the kernel's OWN model (frozen a_00=½V₀,
+      QE-CIR variance factors, leading-order reaction coupling), NOT the full
+      nonlinear rough-Heston SDE. Zero model bias enters gate I → tight numerical gate.
+
+      Setup:
+        Canonical parameters: H=0.1, S_0=100, V_0=0.04, κ=1.5, θ=0.04, ξ=0.3,
+          ρ=−0.7, r=0.05, T=1.0.
+        MC: 1M antithetic paths (500k pairs), QE-CIR factors, Euler log-spot,
+          n_steps=200, seed PCG64(lower-64 of 0xC0FFEE_BABE_DEAD_BEEF).
+        Chernoff: accuracy grid N=192, τ=0.01 (separate from latency grid).
+        Discounting: c_00 = −r in the reaction matrix (ADR-0181 §D1; §33.9).
+        Strikes: K ∈ {90, 100, 110}.
+
+      Assertion: |C_chernoff(accuracy_grid) − C_mc| ≤ 3·MC_stderr + DELTA_KERNEL
+        where DELTA_KERNEL = 0.55 price units (≈0.6% ATM; rc.1 measured value;
+        see delta_kernel_self_convergence sub-test).
+
+      Sub-tests (in rough_heston_mc_oracle.rs):
+        1. discount_factor_subtest: flat IC, coupling zeroed → component-0 ≈ e^{−rT}
+           to ≤1e-6 (validates c_00 = −r discounting mechanism).
+        2. delta_kernel_self_convergence: measures δ_kernel = max_K |C_ch(N=48,τ=0.025)
+           − C_ch(N=192,τ=0.01)| by N=48 vs N=192 self-convergence (SLOW).
+        3. gate_i_parity: the RELEASE_BLOCKING assertion at K∈{90,100,110} (SLOW).
+
+      Gate II (model bias, NOT release-blocking): see A_ROUGH_HESTON_MODEL_BIAS.
+    gate: "|C_chernoff(accuracy_grid) − C_mc| ≤ 3·MC_stderr + 0.55 for K∈{90,100,110}"
+    purpose: |
+      Validates the numerical correctness of the 4-factor Markov rough-Heston
+      Chernoff kernel (discounting + diffusion + CIR coupling + Feynman-Kac)
+      against its own MC reference. Gate I only — model-approximation bias
+      (gate II) is separately documented via A_ROUGH_HESTON_MODEL_BIAS.
+    test_file: "crates/semiflow-core/tests/rough_heston_mc_oracle.rs"
+    feature_gate: "slow-tests"
+    introduced_in: v0.9.0-beta
+    authority: ADR-0181
+
+advisory_records:
+
+  - name: A_ROUGH_HESTON_MODEL_BIAS
+    severity: ADVISORY
+    blocks_release: false
+    rationale: |
+      A_ROUGH_HESTON_MODEL_BIAS (ADVISORY, ADR-0181 §D4, issue #9):
+      Gate II of the two-tier honesty design. Measures the three model-approximation
+      sub-biases accumulated between the kernel's linearised/frozen-V₀ 4-factor Markov
+      model and the true rough-Heston SDE. Reports % of ATM call; never asserts-fail.
+
+      Sub-biases:
+        (a) frozen-V₀ vs stochastic-√V_t spot diffusion: the kernel freezes a_00=½V₀;
+            the true SDE has ½V_t time-varying. Expected: ~1-3% ATM.
+        (b) reaction-coupling vs exact correlated cross-term: the kernel uses
+            c_{0k}·v_k (leading-order linear); true SDE has ρξ·√V_t dW_vol.
+            Expected: ~0.5-1% ATM.
+        (c) 3-factor vs N→∞ Markov approximation at H=0.1 (El Euch–Rosenbaum 2019):
+            GL 3-factor converges at O(n^{-2H}); at n=3, H=0.1 residual ≈3-5%.
+            Reference: N=20 factors (high-fidelity, not computed in this record).
+
+      Expected aggregate: O(H) ≈ 1–5% at H=0.1.
+      Honest claim (ADR-0181 §D5): "oracle-validated solver of a documented 4-factor
+      Markov model (~0.6% numerical precision); itself O(H)-biased ~1–5% vs true
+      rough-Heston at H=0.1."
+    sub_biases:
+      - id: frozen_v0
+        description: "Frozen a_00=½V₀ vs stochastic ½V_t spot diffusion"
+        expected_rel_pct: "1-3"
+      - id: reaction_coupling
+        description: "Leading-order c_{0k}v_k coupling vs exact ρξ√V_t dW_vol cross-term"
+        expected_rel_pct: "0.5-1"
+      - id: n_factor_markov
+        description: "3-factor GL vs N→∞ Markov at H=0.1 (El Euch–Rosenbaum 2019 theory)"
+        expected_rel_pct: "3-5"
+    test_file: "crates/semiflow-core/tests/rough_heston_model_bias.rs"
+    feature_gate: "slow-tests"
+    introduced_in: v0.9.0-beta
+    authority: ADR-0181
+
+notes:
+  - id: rough_heston_two_tier_design
+    title: "Two-tier (I/II) error design for the production rough-Heston pricer"
+    body: |
+      The rough-Heston pricer uses a TWO-TIER gate design (ADR-0181):
+
+      TIER I — Numerical/kernel error (RELEASE_BLOCKING, G_ROUGH_HESTON_MC_PARITY):
+        Compares Chernoff kernel vs MC of the SAME linearised/frozen-V₀ model.
+        Zero model bias enters → can be a tight gate (target ≤0.55 price units ≈ 0.6% ATM).
+        MC scheme: QE-CIR (Andersen 2008) variance factors, Euler log-spot,
+          antithetic, 1M paths, n_steps=200.
+
+      TIER II — Model-approximation error (ADVISORY, A_ROUGH_HESTON_MODEL_BIAS):
+        Measures how far the 4-factor Markov model (frozen-V₀ + leading-order coupling +
+        O(H) 3-factor GL approximation) deviates from the true rough-Heston SDE.
+        Expected O(H) ≈ 1–5% at H=0.1. Reported, not blocked.
+
+      Discounting (§33.9, ADR-0181 §D1): c_00 = −r in the reaction matrix. The
+        existing block-CN Strang half-steps exp(τC/2) compound to e^{−rT} over
+        n = T/τ steps. NO post-evolution multiply needed.
+
+      References: Andersen 2008 (QE-CIR); El Euch–Rosenbaum 2019 (multifactor convergence);
+        Carr-Cisek-Pintar 2021 (GL 3-factor Markov model); math.md §33.9.
+    introduced_in: v0.9.0-beta
+    authority: ADR-0181
