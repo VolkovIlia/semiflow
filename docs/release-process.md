@@ -236,3 +236,68 @@ pip install semiflow-py==N.M.K && \
    git push origin hotfix/vN.M.K+1 vN.M.K+1
    ```
 6. Open a PR from `hotfix/vN.M.K+1` → `master` to carry the fix forward.
+
+---
+
+## PyPI Trusted Publishing setup (one-time)
+
+`release-wheels.yml` uses [OIDC Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+to publish `semiflow-pde` without storing a long-lived API token anywhere.  
+Complete the steps below **once**; subsequent tag pushes publish fully automatically.
+
+### 1. Register the pending publisher on PyPI
+
+Go to **pypi.org → Your account → Publishing** (direct link:
+`https://pypi.org/manage/account/publishing/`).
+
+Click **"Add a new pending publisher"** (this works before the project exists on PyPI).
+
+Fill in the form:
+
+| Field | Value |
+|---|---|
+| **PyPI Project Name** | `semiflow-pde` |
+| **Owner** | `VolkovIlia` |
+| **Repository name** | `semiflow` |
+| **Workflow name** | `release-wheels.yml` |
+| **Environment name** | `pypi` |
+
+The **Environment name** field must exactly match the `environment: name: pypi` declared
+in the `publish-pypi` job; this scopes the OIDC token and prevents other workflows from
+publishing under the same project.
+
+Click **"Add"**. PyPI will show a pending publisher entry; it becomes active on first use.
+
+### 2. Create the matching GitHub Environment (if not present)
+
+In the repository go to **Settings → Environments → New environment**, name it `pypi`.
+No additional protection rules are required; Trusted Publishing OIDC is the only auth
+mechanism.
+
+### 3. Remove the now-unnecessary PYPI_API_TOKEN secret
+
+The `PYPI_API_TOKEN` secret listed in the "Required GitHub Secrets" table above is no
+longer needed for automated publishing.  You may delete it from
+**Settings → Secrets and variables → Actions** to reduce the attack surface.
+
+### 4. Publish by pushing a version tag
+
+```bash
+git tag -a v0.9.0-beta2 -m "chore(release): v0.9.0-beta2"
+git push origin master v0.9.0-beta2
+```
+
+The workflow will:
+1. Build CPython 3.10–3.13 wheels on Linux, macOS (Intel + ARM), and Windows via `cibuildwheel`.
+2. Build an sdist via `maturin sdist`.
+3. Upload both wheels and sdist to the `pypi` environment with OIDC — no token exchanged.
+
+**Version normalisation note**: maturin derives the Python package version from the
+Cargo.toml workspace version.  A pre-release suffix such as `0.9.0-beta` becomes
+`0.9.0b0` under PEP 440 normalisation; `0.9.0-rc.1` → `0.9.0rc1`.
+
+**First-publish coverage note**: The first successful publish must include at least the
+`manylinux` wheel (produced by the `ubuntu-latest` matrix leg) and the sdist so that
+`pip install semiflow-pde` works broadly.  All four matrix legs run in parallel and
+their artifacts are merged before upload, so a single tag push satisfies this
+requirement automatically.
