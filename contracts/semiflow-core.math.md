@@ -12122,6 +12122,118 @@ TRUE about the integer-shift carrier and are archived in `.dev-docs/specs/v9.1.0
   GridlessChernoff — the refuted form whose §50.7 INTRINSIC LIMIT is the motivation for the carrier
   change); ADR-0159 (Shift C RESOLUTION decision); ADR-0154 (v9.0.0 umbrella, third S-curve).
 
+### §52.10 — Variable-coefficient TT step on the carrier: per-axis diagonal `a_j(x_j)` with bounded rank (NORMATIVE — Grade A scope, Grade B novelty; ADR-0178)
+
+**Scope (NORMATIVE).** This subsection extends §52 from constant diagonal-A to **per-axis diagonal
+variable-coefficient** generators carried natively on `TtState`. The class is
+$$
+L \;=\; \sum_{j=1}^{d} L_j,\qquad
+L_j \;=\; \partial_{x_j}\!\big(a_j(x_j)\,\partial_{x_j}\big) + b_j(x_j)\,\partial_{x_j} + v_j(x_j),
+\qquad a_j(x_j) > 0,
+\tag{52.10a}
+$$
+i.e. each axis carries its own spatially-varying diffusion/drift/reaction, **additive-separable**
+across axes (no cross term `a(x_i,x_j)`). This is the §53.3 `S3VarCoefEvolver` operator class
+(ADR-0166), here **carried on the tensor-train state** rather than the flat `n^d` array — the
+distinction that makes the curse-escape claim measurable on the carrier (§52.10.4).
+
+**§52.10.1 — Per-axis variable shift operator (the discretised step).** The inter-axis split is EXACT
+because disjoint-axis generators commute, `[L_j,L_k]=0`, so `exp(τL) = ∏_j exp(τL_j)` with zero
+splitting error (§10.7-bis Theorem 7; ADR-0166 Layer-1). Each factor `exp(τL_j)` acts as
+`E_j ⊗ I^{⊗(d-1)}` — a **rank-1 TT operator**. The single-axis factor reuses the ADR-0166 sandwich,
+re-targeted from a flat line to the mode index of TT core `G_j`:
+$$
+\exp(\tau L_j) \;\approx\; P_2(\tau/2)\;k_j(\tau)\;P_2(\tau/2),\qquad
+k_j(\tau) = \exp\!\big(\tau\,a_{0,j}\,\mathrm{Lap}_j\big),\quad
+a_{0,j} = \tfrac1n\textstyle\sum_x a_j(x),
+\tag{52.10b}
+$$
+$$
+R_j \;=\; L_j - a_{0,j}\,\mathrm{Lap}_j \quad(\text{periodic tridiagonal}),\qquad
+P_2(s) \;=\; I + s\,R_j + \tfrac{s^2}{2}\,R_j^2 \quad(\text{2 mode-axis mat-vecs}).
+\tag{52.10c}
+$$
+`k_j(\tau)` is a **constant-coefficient** factor → a permutation/spectral band of QTT-rank ≤ 2
+(§52.2); `R_j`, `R_j²` are `n×n` operators on the **mode index** of `G_j` (shape `r_{j-1}×n×r_j`),
+with the bond indices `(r_{j-1}, r_j)` passive. A full step is the symmetric per-axis Strang sweep
+`(j=0:τ/2)…(j=d-1:τ)…(j=0:τ/2)` followed by `tt_round(ε)`. **Solver-free (Theorem-6 R2):** NO
+`lu_solve_inplace`, NO `dense_expm` — only FFT-diagonal `k_j` and tridiagonal mat-vecs.
+
+**§52.10.2 — Rank-growth bound (the bounded-rank argument — Grade A).** A mode-axis linear map
+`M: r_{j-1}×n×r_j → r_{j-1}×n×r_j` acts only on the `n`-index, leaving the bond dimensions fixed; it
+is therefore **bond-rank-preserving on every bond** — it cannot increase `r_{j-1}` or `r_j`.
+Composing: (i) the inter-axis factors are rank-1 operators `E_j ⊗ I` (operator-TT-rank = 1), and
+applying a rank-1 operator multiplies state bond rank by 1; (ii) the intra-axis `P_2·k_j·P_2` is a
+mode-axis map on a single core. Hence, **for the class (52.10a), one evolution step does not increase
+any bond rank**, and `tt_round` only ever shrinks it. Consequently:
+$$
+\text{peak rank}\big(u_{t+\tau}\big) \;\le\; \text{peak rank}\big(u_t\big),
+\tag{52.10d}
+$$
+so a rank-1 separable IC stays **exactly rank-1** (storage `O(d·n)`, the §52.3 Strang⊗ floor, now with
+heterogeneous `a_j(x_j)`), and any low-rank correlated IC remains capped by the Rohrbach bound
+`r ≤ ⌊d/2⌋` (52.3) — **the per-axis factors inject no cross-axis correlation, so they cannot push the
+precision-matrix off-blocks above the Gaussian rank.** The curse-escape `n^d → O(d·n·r²)` of §52
+**survives the variable coefficient** for this class. (Contrast: a non-separable `diag(a(x_i,x_j))`
+multiplier is NOT a mode-axis map — it couples two bond indices and its rank is the TT-rank of `a` as
+a grid function, uncapped; this is the §52.10.5 wall.)
+
+**§52.10.3 — Convergence order (claim).** Layer-1 (inter-axis) is exact; Layer-2 (intra-axis
+`P_2·k_j·P_2`) is the symmetric second-order Chernoff/Strang factor, order-2 in τ (ADR-0166 measured
+slope 2.0000 vs dense Padé). The composed per-axis Strang sweep is symmetric, preserving order 2.
+**Target: O(τ²)**, i.e. log-log slope of `rel_err` vs τ ≤ −1.95 — verified against the closed-form
+linear-`a` oracle (§52.10.4 / `scripts/verify_tt_varcoef.py`) and by self-convergence at fixed grid.
+This is honestly order-p (p=2), NOT exact: variable LEADING diffusion is provably not a single
+multiplier (ADR-0166 wrong-operator floor), so the gate is a **slope** gate, never an exactness gate.
+
+**§52.10.4 — Acceptance gate `G_TT_VARCOEF` (NORMATIVE — RELEASE-BLOCKING, PRE-REGISTERED).**
+File `crates/semiflow-core/tests/g_tt_varcoef.rs` (`slow-tests`, `--ignored`). Runs the new
+`tt_varcoef::VarCoefTt` evolver **on `TtState`** for `∂_t u = Σ_j ∂_{x_j}(a_j(x_j)∂_{x_j})u`,
+`a_j(x_j) = a₀ + α·g_j(x_j)` with `g_j` a smooth low-rank profile, `d ∈ {4,6,8,10}`, `n = 32`,
+`ε_round = 1e-8`. **TWO load-bearing assertions (PASS iff BOTH):**
+
+1. **Convergence O(τ²) (curse-escape must be a real method, not a wrong-operator floor).**
+   Log-log OLS slope of `rel_err` vs τ over an `n_steps` sweep is **≤ −1.95**, where `rel_err` is
+   measured against the closed-form variable-`a` oracle (linear-`a` Gaussian, §52.10b reduction) OR
+   self-convergence vs `2·n_steps`. Paired with a load-bearing variation assert
+   `‖u(a_var) − u(a_const-mean)‖ / ‖u(a_const)‖ ≥ 0.02` AND `max_j(max α_j − min α_j) > 0.1`
+   (anti-degenerate-params; the coefficient genuinely varies).
+
+2. **Sub-exponential rank growth (the curse-escape SURVIVES the variable coefficient).**
+   Measured state `peak_rank()` stays **polynomial in d**: log-rank-vs-d OLS slope `< 0.70`
+   (the §52.5 exponential threshold; `ln 2 ≈ 0.693`). For a rank-1 IC the HARD assert is
+   `peak_rank() == 1` at every d (any r>1 is a structural bug — bond-preservation 52.10d). For a
+   low-rank correlated IC, `peak_rank() ≤ ⌊d/2⌋ + slack`. TT `storage_size()` sub-exponential vs
+   naive `n^d` at every d where `n^d` is computable. Byte-reproducible (two runs bit-identical).
+
+   **Anti-vacuous discipline:** assertion 2 is the genuine curse-escape check the flat-`n^d`
+   `g_s3_varcoef_spectral` gate could NOT make (it never builds a `TtState`); a passing slope without
+   a measured bounded `peak_rank` would be the vacuous-gate failure mode this codebase forbids.
+
+**§52.10.5 — Fail-loud boundary (NORMATIVE — INTRINSIC_LIMIT, NOT a silent gap).** The phase-1 type
+`VarCoefTt` accepts only **per-axis arrays** `a_axis[j]:[F;n]` (like `AxisCoef`), so:
+- **non-separable / cross-axis `a(x_i,x_j)`** is **structurally unrepresentable** — no constructor
+  slot. INTRINSIC: its TT-rank as a grid function is uncapped (§52.4/§52.6, Rohrbach), so no
+  representation escapes the curse. (Low-CP-rank non-separable exists only on flat `n^d` as
+  `S3NonSepVarCoefEvolver`; lifting it to the carrier with a measured rank-growth gate is deferred
+  phase-2 / ADR-0179.)
+- **non-diagonal constant A** is owned by `CoupledTtChernoff` (§52.9 / ADR-0162), adjacent-pair band
+  only; dense / non-adjacent remain ADR-0162 `CouplingError` walls.
+- **dense `a(x)`, nonlinear `f(u)`, time-dependent `a(x,t)`, `a_j ≤ 0`** ⇒ typed
+  `SemiflowError::VarCoefOutOfClass` at construction (fail-loud, parabolicity-checked) — never a
+  silent wrong-operator floor, mirroring ADR-0162's `b≠0` / non-adjacent-pair panics.
+
+**§52.10.6 — Oracle.** `scripts/verify_tt_varcoef.py` proves the (52.10b) step is consistent to O(τ²)
+for a small closed-form linear-`a` case and prints `T_TT_VARCOEF PASS` (§52.10 obligation; mirrors
+`tt_band_shift_kit.py`).
+
+**§52.10.7 — Narrow novelty (Grade B).** The method class (explicit Chernoff step + TT-rounding) is
+prior art (§52.7, Rodgers–Venturi). The narrow, defensible novelty here is **running the
+additive-separable variable-coefficient Chernoff sandwich on the TT carrier and measuring that the
+state's `peak_rank` is preserved** (52.10d) — i.e. the first carrier-level (not operator-level) proof
+that a variable coefficient does not re-introduce the curse for the per-axis-separable class, in the
+`no_std` / no-LAPACK / bit-reproducible envelope. Do NOT claim curse-escape for non-separable `a`.
+
 ## §53 — S³ honest-scope public API: boundary-as-type wrappers (v9.2.0, ADR-0169)
 
 This section serves as the umbrella cross-reference for the five S³ POC evolvers
