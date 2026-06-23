@@ -170,5 +170,16 @@ pub(crate) fn resolve_axis<F: SemiflowFloat>(bc: BoundaryPolicy<F>, n: usize, id
                 AxisHit::Inside(n - 1)
             }
         }
+        // Odd-image: fold index same as Reflect. Sign negation applied at value resolution level.
+        // For nonseparable_mixed stencil purposes, treat as reflect (the caller must negate).
+        BoundaryPolicy::OddReflect => {
+            let nn = n as i64;
+            let period = 2 * (nn - 1);
+            let mut k = ((idx % period) + period) % period;
+            if k >= nn {
+                k = period - k;
+            }
+            AxisHit::Inside(k as usize)
+        }
     }
 }

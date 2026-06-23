@@ -115,6 +115,13 @@ fn out_of_domain_sample_g<F: SemiflowFloat>(values: &[F], grid: &Grid1D<F>, x: F
             let nearest = if x > grid.xmax { grid.xmax } else { grid.xmin };
             sample_virtual_node_g(values, grid, nearest)
         }
+        // Odd-image: reflect into domain, negate. Mirrors Reflect path with sign flip.
+        BoundaryPolicy::OddReflect => {
+            let reflected = reflect_into_domain_g(x, grid.xmin, grid.xmax);
+            let v = sample_chebyshev_spectral_1d_generic(values, grid, reflected, m)
+                .unwrap_or_else(|_| F::zero());
+            F::zero() - v
+        }
     }
 }
 

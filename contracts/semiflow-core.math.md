@@ -5903,6 +5903,53 @@ is **order-2 globally**. The PRE-FLIGHT confirms it on a faithful non-commuting 
 
 **Honest cross-reference.** `Killing2ndChernoff` (continuous soft killing, order-2) and `KillingChernoff` (hard absorbing wall, order-1, §21.3) are DIFFERENT operators — not faster/slower versions of one. Users needing an absorbing Dirichlet boundary MUST use the order-1 §21 wrapper; `Killing2ndChernoff` does not solve the hard-wall problem at higher order (it cannot — §21.8 Para 1). Reference: Butko 2018 §5 (the rate-formulation reading of the open problem); Strang 1968 SIAM J. Numer. Anal. 5:3 (palindromic split).
 
+### §21.9 — Order-2 hard-wall Dirichlet via the ODD (antisymmetric) image method (issue-6, ADR-0176, NORMATIVE library; CITATION mathematics)
+
+**Scope.** §21.3 `KillingChernoff` realises the hard absorbing wall $u|_{\partial R} = 0$ at **order 1** (the indicator $\mathbb{1}_R$ has the irreducible boundary commutator $[L, \mathbb{1}_R] = O(\tau)$; §21.2, §21.8). §21.9 ships an **order-2** construction for the SAME hard wall — not via killing, but via the **odd (antisymmetric) image method**, the exact minus-sign mirror of the **even**-image Neumann method of §25. The wrapper `DirichletHeat2ndChernoff<C, R, F>` (NEW) is an ADDITIVE SIBLING; `KillingChernoff` (§21.3) is UNCHANGED and remains the order-1 reference (and the only Dirichlet path for non-self-adjoint $L$).
+
+**Odd extension.** For a Chernoff function $C(\tau)$ approximating $\exp(\tau L)$ on a self-adjoint $L$, and reflection $\sigma_R : M \to M$ across $\partial R$ (identity on $\partial R$; §25.2), define the **odd extension** of $f$ across $\partial R$:
+$$
+\tilde f(x) \;=\; \begin{cases} f(x), & x \in R, \\ -\,f(\sigma_R(x)), & x \notin R. \end{cases} \tag{21.9.1}
+$$
+At the boundary, $\sigma_R(x_0) = x_0$ for $x_0 \in \partial R$, so $\tilde f(x_0) = -f(x_0)$, forcing $f(x_0) = 0$: **the odd extension vanishes on $\partial R$ automatically** — the Dirichlet BC is not imposed, it is a consequence of oddness.
+
+**Odd-image Dirichlet kernel (CITATION — image method, minus-sign mirror of Walsh 1986 §3.4 / math §25.2).** With $K(x, y; t)$ the free-space heat kernel of $L$,
+$$
+K^D(x, y; t) \;=\; K(x, y; t) \;-\; K(x, \sigma_R(y); t), \qquad x, y \in R. \tag{21.9.2}
+$$
+The **minus** (vs the **plus** of the Neumann kernel (25.2)) is the only change. The defining Dirichlet identity follows immediately: for $x_0 \in \partial R$, $\sigma_R(x_0) = x_0$, hence
+$$
+K^D(x_0, y; t) \;=\; K(x_0, y; t) - K(x_0, y; t) \;=\; 0 \qquad \text{(absorbing wall)}. \tag{21.9.3}
+$$
+For the half-line $R = [0, \infty)$ with $\sigma_R(y) = -y$: $K^D(x, y; t) = (4\pi t)^{-1/2}\,[\,e^{-(x-y)^2/(4t)} - e^{-(x+y)^2/(4t)}\,]$, the classical Dirichlet (absorbing) heat kernel; $K^D(0, y; t) = 0$.
+
+**Proposition 21.9.1 (order-2 hard-wall Dirichlet via odd image — mirror of Proposition 25.1, $+ \to -$).** Given a Chernoff function $C(\tau)$ of order $m$ for the self-adjoint $\exp(\tau L)$, the wrapper
+$$
+F_D(\tau)\,f(x) \;:=\; C(\tau) f(x) \;-\; C(\tau)\,(f \circ \sigma_R)(x), \qquad x \in R, \tag{21.9.4}
+$$
+is a Chernoff function for the **Dirichlet** (absorbing) semigroup on $R$, and its order equals the order of $C$ ($m$). In particular, with $C = $ `DiffusionChernoff` ($m = 2$), $F_D$ is **order-2** — escaping the §21.2 order-1 killing cap.
+
+**Proof sketch (the $+ \to -$ transfer).** The reflection $\sigma_R$ is a Riemannian isometry on $R$ and the identity on $\partial R$; $L$ is self-adjoint. The §25.2 Lemma 3.4.1 argument establishes that the commutator of $L$ with the *symmetric* extension operator vanishes on the core of $L$ — and that argument **uses only the isometry of $\sigma_R$ and the self-adjointness of $L$, not the sign of the image term**. Therefore
+$$
+[\,L,\; \mathbb{1}_R - \mathbb{1}_R \circ \sigma_R\,] \;=\; 0 \quad \text{identically on the core of } L, \tag{21.9.5}
+$$
+exactly as $[\,L,\; \mathbb{1}_R + \mathbb{1}_R \circ \sigma_R\,] = 0$ in the Neumann case (25.2). Hence (21.9.4) introduces NO $O(\tau)$ commutator term — the order-1 cap of the killing wrapper (§21.2, Butko 2018 §3.2) does not apply — and $F_D$ inherits the inner order $m$. The Dirichlet BC holds by (21.9.3). $\square$
+
+**Honest limits (NORMATIVE).**
+- **Self-adjoint $L$ only.** (21.9.5) requires self-adjoint $L$ (the same caveat as Neumann, §25.7). For non-self-adjoint operators (generic drift-reaction), the odd-image order argument fails; users MUST use the order-1 `KillingChernoff` (§21.3).
+- **No non-negativity.** The odd ghost SUBTRACTS mass; $F_D$ does NOT preserve non-negativity. This is correct physics — an absorbing wall removes mass — so NO non-negativity gate is applied to `DirichletHeat2ndChernoff` (contrast `ReflectedHeatChernoff`, §25, where reflection is mass-preserving and a non-negativity check IS valid).
+- **Distinct from §21.8 soft killing.** §21.8 `Killing2ndChernoff` makes a smooth killing *rate* $\kappa$ order-2; §21.9 makes the HARD WALL $u|_{\partial R}=0$ order-2. Different operators; §21.8 Para 1 states the killing formulation cannot reach order-2 on the hard wall — the odd image sidesteps it by never forming the discontinuous indicator.
+
+**Acceptance gates (NORMATIVE).**
+- **`G_DIRICHLET_ORDER2`** (RELEASE_BLOCKING — ADR-0176): Dirichlet heat on $R = (0, 1)$ with $L = \tfrac12 \partial_{xx}$ and eigenmode oracle $u(t, x) = \sum_{k=1}^{8} a_k \sin(k \pi x)\, e^{-(k\pi)^2 t / 2}$ (each mode is an exact Dirichlet eigenfunction, vanishing at $x \in \{0, 1\}$). Sweep $n_{\mathrm{Chernoff}}$ at fixed $T$; the empirical $\log$-$\log$ OLS slope of $\|F^n_D(u_0) - u(T, \cdot)\|_\infty$ vs $1/n$ MUST be $\le -1.95$ (order-2). G23 (the order-1 killing gate, §21.5) stays UNCHANGED. Test file: `tests/g_dirichlet_order2.rs` (NEW, feature `slow-tests`).
+- **`T_DIRICHLET_ORDER2`** sympy gate (NORMATIVE — ADR-0176): symbolic identity for the odd kernel $K^D(x, y; t) = K(x, y; t) - K(x, -y; t)$ on the half-line. Mirror of T22N (§25.5) with the minus sign. Mandatory sub-checks: (1) heat-PDE residual $\partial_t K^D - \partial_{xx} K^D = 0$ symbolically in $(0,\infty)^2$; (2) Dirichlet boundary $K^D(0, y; t) = 0$ symbolically (the two terms cancel — the odd kernel's defining property at $x = 0$). Script: `scripts/verify_dirichlet_order2.py` (NEW), MUST print exactly `T_DIRICHLET_ORDER2 PASS` on success. Pure symbolic; safe for CI without `slow-tests`.
+
+**References.**
+- J. B. Walsh, *Markov Processes and Potential Theory*, Springer LNM **1180** (1986), §3.4. — image-method kernel; the EVEN form (25.2) whose minus-sign mirror is (21.9.2).
+- N. V. Butko, *Approximation of subordinate semigroups by Chernoff iterations involving killing*, Fract. Calc. Appl. Anal. 21:5 (2018), §3.2. — cited for the CONTRAST: the killing indicator caps order at 1; the odd image does not.
+- math.md §25 (v2.8, ADR-0072) — Neumann EVEN-image method; this section is its `+ → −` mirror, sharing the Proposition 25.1 / 21.9.1 commutator-vanishing argument.
+- math.md §21.3 (v2.6, ADR-0068) — order-1 hard-wall `KillingChernoff`; the unchanged sibling reference.
+
 ---
 
 ## §22 — Laplace-Chernoff resolvent (v2.7, ADR-0069, NORMATIVE library; CITATION mathematics)

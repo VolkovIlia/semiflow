@@ -194,6 +194,11 @@ fn out_of_domain_sample(values: &[f64], grid: &Grid1D, x: f64, m: usize) -> f64 
             let nearest = if x > grid.xmax { grid.xmax } else { grid.xmin };
             sample_virtual_node(values, grid, nearest)
         }
+        // Odd-image: reflect into domain, negate. Mirrors Reflect path with sign flip.
+        BoundaryPolicy::OddReflect => {
+            let reflected = reflect_into_domain(x, grid.xmin, grid.xmax);
+            -sample_chebyshev_1d(values, grid, reflected, m).unwrap_or(0.0)
+        }
     }
 }
 
