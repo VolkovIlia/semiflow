@@ -2,7 +2,7 @@
 
 Documentation is split into **user-facing** material (how to use the library) and
 **developer-facing** material (how the library is built and decided). For the API
-reference, see [docs.rs/semiflow-core](https://docs.rs/semiflow-core).
+reference, see [docs.rs/semiflow](https://docs.rs/semiflow).
 
 ## For users
 
@@ -12,8 +12,8 @@ reference, see [docs.rs/semiflow-core](https://docs.rs/semiflow-core).
 | [User Guide](USER_GUIDE.md) | Use-case-driven tour ("I want to solve …") |
 | [Install](INSTALL.md) | Installation and feature flags |
 | [Bindings Guide](BINDINGS.md) | C, Python, and WASM usage |
-| [`semiflow-core/README.md`](../crates/semiflow-core/README.md) | Full type catalogue + cargo features |
-| [`examples/`](../crates/semiflow-core/examples/README.md) | Worked examples, beginner → advanced |
+| [`semiflow/README.md`](../crates/semiflow/README.md) | Full type catalogue + cargo features |
+| [`examples/`](../crates/semiflow/examples/README.md) | Worked examples, beginner → advanced |
 | [precision-policy.md](precision-policy.md) | Accuracy / performance trade-offs |
 | [python-coverage.md](python-coverage.md) | Python binding parity matrix |
 

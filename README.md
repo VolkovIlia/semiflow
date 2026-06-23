@@ -1,8 +1,8 @@
 # SemiFlow
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/VolkovIlia/semiflow/actions)
-[![Docs.rs](https://img.shields.io/badge/docs.rs-semiflow--core-blue)](https://docs.rs/semiflow-core)
-[![Crates.io](https://img.shields.io/crates/v/semiflow-core)](https://crates.io/crates/semiflow-core)
+[![Docs.rs](https://img.shields.io/badge/docs.rs-semiflow-blue)](https://docs.rs/semiflow)
+[![Crates.io](https://img.shields.io/crates/v/semiflow)](https://crates.io/crates/semiflow)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 > **Status: `0.9.0-beta`** — first public beta. The API is stabilizing toward
@@ -83,13 +83,13 @@ Python, and WebAssembly bindings with near-full engine parity.
 ### Rust
 
 ```bash
-cargo add semiflow-core
+cargo add semiflow
 ```
 
 `no_std` users: disable default features:
 
 ```toml
-semiflow-core = { version = "0.9.0-beta", default-features = false }
+semiflow = { version = "0.9.0-beta", default-features = false }
 ```
 
 The `simd` (AVX2 / NEON) and `parallel` features require `std`.
@@ -150,14 +150,14 @@ A runnable version with the error check lives in
 | Adaptive stepping | `AdaptivePI` | PI step-size controller for any `ChernoffFunction` |
 
 Some families are experimental and gated behind cargo features (e.g. `s3-poc`,
-`full` for WASM). See [`crates/semiflow-core/README.md`](crates/semiflow-core/README.md)
+`full` for WASM). See [`crates/semiflow/README.md`](crates/semiflow/README.md)
 for the full type catalogue, constructor signatures, and feature flags.
 
 ## Bindings
 
 | Language | Crate / Package | Key feature |
 |----------|----------------|-------------|
-| Rust | `semiflow-core` (crates.io) | Full engine catalogue, `no_std + alloc` |
+| Rust | `semiflow` (crates.io) | Full engine catalogue, `no_std + alloc` |
 | C / C++ | `semiflow-ffi` (cdylib; release artifacts) | `extern "C"` ABI, `catch_unwind` on every entry point, header `semiflow.h` |
 | Python | `semiflow-pde` (PyPI; maturin wheel) | PyO3, abi3-py310 wheel (Python 3.10–3.13), GIL-release via `py.detach` |
 | JavaScript / WASM | `@semiflow/wasm` (npm; wasm-bindgen) | Lite default bundle; `full` feature for higher-order / 2D / 3D engines |
@@ -183,8 +183,8 @@ For build instructions and cross-language examples see [docs/BINDINGS.md](docs/B
 |-----------------|------|
 | Get started | [Quickstart](docs/QUICKSTART.md) · [User Guide](docs/USER_GUIDE.md) |
 | Use a binding | [Bindings Guide](docs/BINDINGS.md) (C / Python / WASM) |
-| Browse the API | [docs.rs/semiflow-core](https://docs.rs/semiflow-core) |
-| See worked examples | [`examples/`](crates/semiflow-core/examples) ([index](crates/semiflow-core/examples/README.md)) |
+| Browse the API | [docs.rs/semiflow](https://docs.rs/semiflow) |
+| See worked examples | [`examples/`](crates/semiflow/examples) ([index](crates/semiflow/examples/README.md)) |
 | Understand accuracy / precision policy | [precision-policy.md](docs/precision-policy.md) · [api-stability.md](docs/api-stability.md) |
 | Read design decisions | [`docs/adr/`](docs/adr) (Architecture Decision Records) |
 | Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -198,7 +198,7 @@ evolution is zero-allocation — but treat memory and latency as **measured
 properties of the concrete grid types, not contractual guarantees of the trait
 API**. Reproducible benchmarks are published in the benchmarks repository.
 
-The current authoritative benchmark is **iter-8** (semiflow-core HEAD b923777,
+The current authoritative benchmark is **iter-8** (semiflow HEAD b923777,
 45 families, i7-12700K, 12 reps + 3 warmup). Key verdicts: H-MEM
 PARTIAL_SUPPORT (33/43 pairs RC < competitor; flat ~3 MB vs 50–418 MB for
 heavy frameworks); H-WALL FALSIFIED (RC slower than adaptive/spectral solvers

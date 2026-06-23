@@ -3,8 +3,8 @@
 This guide is organized by **what you want to solve**. Each section names the
 types to reach for and points at a runnable example. For the full type catalogue
 and cargo feature flags, see
-[`crates/semiflow-core/README.md`](../crates/semiflow-core/README.md); for the
-API reference, see [docs.rs/semiflow-core](https://docs.rs/semiflow-core).
+[`crates/semiflow/README.md`](../crates/semiflow/README.md); for the
+API reference, see [docs.rs/semiflow](https://docs.rs/semiflow).
 
 ## Core concepts (read once)
 
@@ -39,8 +39,8 @@ theorem) or `DiffusionChernoff` / `DriftReactionChernoff`. Coefficients are
 closures, so variable coefficients are free. For 2D/3D, build a `Grid2D`/`Grid3D`
 and split per axis with `Strang2D` / `Strang3D`.
 
-→ Examples: [`heat_2d_demo.rs`](../crates/semiflow-core/examples/heat_2d_demo.rs),
-[`strang_advdiff_demo.rs`](../crates/semiflow-core/examples/strang_advdiff_demo.rs).
+→ Examples: [`heat_2d_demo.rs`](../crates/semiflow/examples/heat_2d_demo.rs),
+[`strang_advdiff_demo.rs`](../crates/semiflow/examples/strang_advdiff_demo.rs).
 
 ## I want higher-order accuracy
 
@@ -62,7 +62,7 @@ Set a `BoundaryPolicy` on the grid: `Reflect` (default, Neumann), `Dirichlet`,
   `BoundaryPolicy::OddReflect` with this kernel.
 - `ObstacleChernoff` — obstacle / variational-inequality evolver.
 
-→ Example: [`boundary_demo.rs`](../crates/semiflow-core/examples/boundary_demo.rs).
+→ Example: [`boundary_demo.rs`](../crates/semiflow/examples/boundary_demo.rs).
 
 ## I want to solve a Schrödinger equation
 
@@ -75,7 +75,7 @@ The kinetic step is unitary by construction.
 (Poincaré disk), or `FubiniStudyCp1`. Enable the `R/12` curvature correction to
 lift the order from 1 to 2. The SABR volatility model lives on `Hyperbolic2`.
 
-→ Example: [`sabr_pricer.rs`](../crates/semiflow-core/examples/sabr_pricer.rs).
+→ Example: [`sabr_pricer.rs`](../crates/semiflow/examples/sabr_pricer.rs).
 
 ## I want hypoelliptic / sub-Riemannian operators
 
@@ -89,12 +89,12 @@ Diffusion pricers map directly onto the kernels above. CEV is a 1D diffusion;
 Heston and rough Heston are matrix/2D; SABR is manifold-based. The HFT-oriented
 examples report per-tick latency.
 
-→ Examples: [`cev_european_call.rs`](../crates/semiflow-core/examples/cev_european_call.rs),
-[`heston_pricer.rs`](../crates/semiflow-core/examples/heston_pricer.rs),
-[`rough_heston_pricer.rs`](../crates/semiflow-core/examples/rough_heston_pricer.rs)
+→ Examples: [`cev_european_call.rs`](../crates/semiflow/examples/cev_european_call.rs),
+[`heston_pricer.rs`](../crates/semiflow/examples/heston_pricer.rs),
+[`rough_heston_pricer.rs`](../crates/semiflow/examples/rough_heston_pricer.rs)
 (oracle-validated 4-factor Markov approximation; see the honest two-tier validation
 note in the [rough-vol section](#i-want-to-price-rough-heston--rough-vol-models)),
-[`latency_tail.rs`](../crates/semiflow-core/examples/latency_tail.rs).
+[`latency_tail.rs`](../crates/semiflow/examples/latency_tail.rs).
 
 ## I want sensitivities / Greeks
 
@@ -116,7 +116,7 @@ The pre-sampled path works across all three binding surfaces; it expects 2·n_st
 Laplacian samples (GL4-aware). The live-callback constructor of `GraphAdjoint` that
 accepts a closure is available in PyO3 only.
 
-→ Example: [`resolvent_perf.rs`](../crates/semiflow-core/examples/resolvent_perf.rs).
+→ Example: [`resolvent_perf.rs`](../crates/semiflow/examples/resolvent_perf.rs).
 
 ## I want gridless (particle-ensemble) diagnostics
 
@@ -179,11 +179,11 @@ high accuracy for the full model.
 
 ```bash
 # Risk-neutral mode (r=0.05, spot pricing)
-cargo run --release -p semiflow-core --example rough_heston_pricer \
+cargo run --release -p semiflow --example rough_heston_pricer \
     -- --rate 0.05 --price
 
 # Latency mode (r=0.0, recovers the latency demonstrator)
-cargo run --release -p semiflow-core --example rough_heston_pricer \
+cargo run --release -p semiflow --example rough_heston_pricer \
     -- --rate 0.0
 ```
 

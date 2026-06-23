@@ -6,7 +6,7 @@ Four crates ship under a single lockstep workspace version (`vN.M.K`):
 
 | Crate | Kind | Registry |
 |-------|------|----------|
-| `semiflow-core` | `rlib` | crates.io (`publish = true`) |
+| `semiflow` | `rlib` | crates.io (`publish = true`) |
 | `semiflow-ffi` | `cdylib` | GitHub Releases only (`publish = false`) |
 | `semiflow-py` | PyO3 wheel | GitHub Releases (`.whl` artefacts) |
 | `semiflow-wasm` | wasm-bindgen | npmjs.org (`@semiflow/wasm`) |
@@ -30,7 +30,7 @@ Every MUST item for the target version in `ROADMAP.md` must be `[x]`.
 Verify sympy gates locally (all must print `PASS`):
 
 ```bash
-python crates/semiflow-core/sympy/<gate>.py   # repeat for all T*N_*.py
+python crates/semiflow/sympy/<gate>.py   # repeat for all T*N_*.py
 ```
 
 **For math-creation ADRs** (any ADR that introduces a new mathematical construction
@@ -182,7 +182,7 @@ Set under **Settings → Secrets and variables → Actions**
 4. **Manual** — publish the Rust crate:
 
    ```bash
-   cargo publish -p semiflow-core
+   cargo publish -p semiflow
    ```
 
    `semiflow-ffi`, `semiflow-py`, `semiflow-wasm` have `publish = false`; do not
@@ -202,16 +202,16 @@ Set under **Settings → Secrets and variables → Actions**
 Wait 5–15 minutes for registries to propagate:
 
 ```bash
-cargo search semiflow-core | grep "^semiflow-core "   # crates.io
+cargo search semiflow | grep "^semiflow "   # crates.io
 npm view @semiflow/wasm version                       # npmjs.org
 pip index versions semiflow-py                        # PyPI
-# docs.rs: https://docs.rs/semiflow-core/N.M.K (allow ~15 min)
+# docs.rs: https://docs.rs/semiflow/N.M.K (allow ~15 min)
 ```
 
 Smoke-test each surface:
 
 ```bash
-cargo add semiflow-core@N.M.K && cargo build
+cargo add semiflow@N.M.K && cargo build
 npm install @semiflow/wasm@N.M.K && \
     node -e "const r=require('@semiflow/wasm'); console.log(typeof r.Heat1D)"
 pip install semiflow-py==N.M.K && \

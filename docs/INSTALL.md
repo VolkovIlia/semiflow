@@ -15,7 +15,7 @@ toolchain automatically when building from the repository.
 
 ```toml
 [dependencies]
-semiflow-core = "9"
+semiflow = "9"
 ```
 
 Default features include `simd` (AVX2/NEON auto-selected; scalar fallback on
@@ -37,11 +37,11 @@ require `std`.
 ## API documentation
 
 ```sh
-cargo doc --open -p semiflow-core
+cargo doc --open -p semiflow
 ```
 
-Published docs: https://docs.rs/semiflow-core
+Published docs: https://docs.rs/semiflow
 
-See [`crates/semiflow-core/README.md`](../crates/semiflow-core/README.md) for a
+See [`crates/semiflow/README.md`](../crates/semiflow/README.md) for a
 full type catalogue, usage examples, and the math reference (Theorem 6,
 Remizov 2025).

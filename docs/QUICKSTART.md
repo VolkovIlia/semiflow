@@ -1,7 +1,7 @@
 # Quickstart — Solving the heat equation
 
 > Current release: **v0.9.0-beta** (first public beta). For a full type catalogue and feature flag reference see
-> [`crates/semiflow-core/README.md`](../crates/semiflow-core/README.md).
+> [`crates/semiflow/README.md`](../crates/semiflow/README.md).
 
 We numerically integrate `∂_t u = (1/2)·∂_xx u` from `u_0(x) = exp(-x²)` to
 `t = 1`, and compare against the closed-form Gaussian heat kernel
@@ -120,9 +120,9 @@ at each grid node during `apply`; callers are responsible for ellipticity.
 
 - See [contracts/semiflow-core.math.md](../contracts/semiflow-core.math.md) for the
   full mathematical specification of formula (6) and the convergence bound.
-- See [crates/semiflow-core/tests/heat_kernel.rs](../crates/semiflow-core/tests/heat_kernel.rs)
+- See [crates/semiflow/tests/heat_kernel.rs](../crates/semiflow/tests/heat_kernel.rs)
   for the gate tests (G1 at n=100, G2 at n=1000) run in CI.
-- Read the API docs: `cargo doc --open -p semiflow-core`.
+- Read the API docs: `cargo doc --open -p semiflow`.
 
 ---
 
@@ -206,8 +206,8 @@ The empirical log-log slope over `n ∈ {32, 64, 128, 256, 512, 1024}` is
 
 ## 2D heat (v0.5.0)
 
-> See `crates/semiflow-core/examples/heat_2d_demo.rs` for the full demo
-> (run via `cargo run --release --example heat_2d_demo -p semiflow-core`).
+> See `crates/semiflow/examples/heat_2d_demo.rs` for the full demo
+> (run via `cargo run --release --example heat_2d_demo -p semiflow`).
 
 We numerically integrate `∂_t u = ½(∂_xx + ∂_yy)u` from
 `u_0(x,y) = exp(-(x²+y²))` to `t = 1` on `[-10, 10]²`,
@@ -293,4 +293,4 @@ fn main() {
 - See `contracts/semiflow-core.tensor.yaml` for the NORMATIVE schema
   (schema_version 0.5.0) covering `Grid2D`, `GridFn2D`, `AxisLift`, `Strang2D`.
 - See `docs/adr/0012-tensor-product-2d.md` for architectural rationale.
-- Read the API docs: `cargo doc --open -p semiflow-core`.
+- Read the API docs: `cargo doc --open -p semiflow`.
