@@ -53,9 +53,14 @@ gated floors.
 ## I want boundary conditions
 
 Set a `BoundaryPolicy` on the grid: `Reflect` (default, Neumann), `Dirichlet`,
-`Robin { alpha, beta }`. For operator-level treatments use `KillingChernoff`
-(absorbing/Dirichlet via Feynman–Kac), `ReflectedHeatChernoff` (Neumann via image
-method), or `ObstacleChernoff` (obstacle / variational-inequality problems).
+`Robin { alpha, beta }`. For operator-level treatments:
+
+- `KillingChernoff` — absorbing / Dirichlet via Feynman–Kac.
+- `ReflectedHeatChernoff` — Neumann via Walsh 1986 image method.
+- `DirichletHeat2ndChernoff` — absorbing / Dirichlet via the odd-image method
+  (math §21.9); order 2 in the continuation region; use
+  `BoundaryPolicy::OddReflect` with this kernel.
+- `ObstacleChernoff` — obstacle / variational-inequality evolver.
 
 → Example: [`boundary_demo.rs`](../crates/semiflow-core/examples/boundary_demo.rs).
 
@@ -86,7 +91,9 @@ examples report per-tick latency.
 
 → Examples: [`cev_european_call.rs`](../crates/semiflow-core/examples/cev_european_call.rs),
 [`heston_pricer.rs`](../crates/semiflow-core/examples/heston_pricer.rs),
-[`rough_heston_pricer.rs`](../crates/semiflow-core/examples/rough_heston_pricer.rs),
+[`rough_heston_pricer.rs`](../crates/semiflow-core/examples/rough_heston_pricer.rs)
+(oracle-validated 4-factor Markov approximation; see the honest two-tier validation
+note in the [rough-vol section](#i-want-to-price-rough-heston--rough-vol-models)),
 [`latency_tail.rs`](../crates/semiflow-core/examples/latency_tail.rs).
 
 ## I want sensitivities / Greeks
@@ -102,7 +109,83 @@ Chernoff semigroup. `HowlandLift` handles time-dependent generators via the
 Howland augmented-generator trick. `ResolventJumpChernoff` gives O(1) large-`t`
 cost for self-adjoint/sectorial generators.
 
+For a time-dependent graph Laplacian without a live callback, supply the Laplacian
+sequence as a pre-sampled array via `MagnusGraphHeatChernoff::from_presampled` (Rust)
+or `GraphAdjointPresampled` (Python / WASM) / `smf_graph_adjoint_new_presampled` (C).
+The pre-sampled path works across all three binding surfaces; it expects 2·n_steps
+Laplacian samples (GL4-aware). The live-callback constructor of `GraphAdjoint` that
+accepts a closure is available in PyO3 only.
+
 → Example: [`resolvent_perf.rs`](../crates/semiflow-core/examples/resolvent_perf.rs).
+
+## I want gridless (particle-ensemble) diagnostics
+
+After each evolution step with `GridlessChernoff`, inspect the `MeasureState`
+output to monitor convergence:
+
+```rust
+use semiflow_core::{MeasureState, GridlessChernoff, ChernoffSemigroup};
+
+// ... build evolver and evolve to get `state: MeasureState<f64, 2>` ...
+let mean:         [f64; 2] = state.first_moment();
+let total_var:    f64      = state.variance();          // E[|x|²] − |E[x]|² (§38.12)
+let per_axis_var: [f64; 2] = state.variance_per_axis(); // per-component variance
+```
+
+`variance` is the total scalar variance (§38.12). `variance_per_axis` returns each
+component separately. These are diagnostic-only — they do not gate correctness of
+the evolution.
+
+## I want to use the S³ carriers from Python
+
+The `TtEvolver`, `TtCoupledEvolver`, `TtState`, `VarCoefTtEvolver`, `MeasureState`,
+and `GridlessEvolver` types are importable directly from the `semiflow` package
+(Python wheel `semiflow-pde`):
+
+```python
+from semiflow import TtState, TtEvolver, TtCoupledEvolver
+from semiflow import MeasureState, GridlessEvolver
+from semiflow import VarCoefTtEvolver
+
+# TtEvolver: TT-Chernoff for the diagonal-A Gaussian class
+ev = TtEvolver(d=4, n=32, a_diag=[0.5, 0.5, 0.5, 0.5], n_steps=50)
+state_out = ev.evolve(t=1.0, state_in=initial_tt_state)
+
+# VarCoefTtEvolver: separable diagonal variable coefficients
+# Raises SemiflowError (VarCoefOutOfClass) if coefficients are non-separable
+ev2 = VarCoefTtEvolver(d=2, n=64, a_seqs=a_seqs_list, n_steps=100)
+```
+
+`TtState` holds the tensor-train grid function; `MeasureState` holds the
+particle-ensemble state for `GridlessEvolver`. Both can be constructed, inspected,
+and passed across the evolve boundary in Python.
+
+## I want to price rough-Heston / rough-vol models
+
+`examples/rough_heston_pricer.rs` is an oracle-validated risk-neutral pricer for a
+4-factor Markov approximation of the rough-Heston model.
+
+**Tiered validation claim (important):**
+
+- `G_ROUGH_HESTON_MC_PARITY` (RELEASE-BLOCKING): the pricer matches a Monte Carlo
+  oracle within the stated tolerance for the 4-factor Markov approximation.
+- `A_ROUGH_HESTON_MODEL_BIAS` (ADVISORY): the Markov approximation itself is
+  ~1–5% O(H)-biased from the true rough-Heston model (expected; this is an
+  approximation of an approximation).
+
+This is an **oracle-validated solver of an approximate model**, not a validated
+approximation of true rough-Heston. Do not use the bias-advisory tier to claim
+high accuracy for the full model.
+
+```bash
+# Risk-neutral mode (r=0.05, spot pricing)
+cargo run --release -p semiflow-core --example rough_heston_pricer \
+    -- --rate 0.05 --price
+
+# Latency mode (r=0.0, recovers the latency demonstrator)
+cargo run --release -p semiflow-core --example rough_heston_pricer \
+    -- --rate 0.0
+```
 
 ## Performance & precision
 

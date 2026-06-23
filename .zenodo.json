@@ -1,0 +1,39 @@
+{
+  "title": "SemiFlow: Chernoff Approximation of Operator Semigroups",
+  "upload_type": "software",
+  "description": "A no_std Rust library for solving linear evolution equations and PDEs by Chernoff approximation of operator semigroups. Implements Theorem 6 of Remizov (2025) with 60+ engine families covering heat, diffusion, Schrödinger, hypoelliptic, manifold, graph, tensor-train, and reverse-AD operators. Only 3 runtime dependencies; flat ~3 MB memory footprint; C, Python, and WebAssembly bindings.",
+  "creators": [
+    {
+      "name": "Volkov, Ilia",
+      "affiliation": "Independent Researcher"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "PDE",
+    "semigroup",
+    "Chernoff approximation",
+    "operator semigroup",
+    "numerical methods",
+    "Rust",
+    "no_std",
+    "evolution equations",
+    "diffusion equation",
+    "heat equation",
+    "Schrödinger equation"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/VolkovIlia/semiflow",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.46698/a3908-1212-5385-q",
+      "relation": "isDerivedFrom",
+      "scheme": "doi"
+    }
+  ],
+  "access_right": "open",
+  "version": "0.9.0-beta"
+}

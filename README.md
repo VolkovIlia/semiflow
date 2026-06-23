@@ -48,13 +48,25 @@ Python, and WebAssembly bindings with near-full engine parity.
 - **Up to 8th-order spatial accuracy** via the ζ-ladder (Richardson extrapolation
   on the Chernoff step); convergence gated in CI against closed-form oracles.
 - **Curse-of-dimensionality escape** via tensor-train (TT) carriers for the
-  Gaussian class: storage `O(d·n·r²)` instead of `O(nᵈ)`.
+  Gaussian class: storage `O(d·n·r²)` instead of `O(nᵈ)`. Variable-coefficient
+  separable diagonal diffusion now supported via `VarCoefTt` (fail-loud
+  `VarCoefOutOfClass` for non-separable inputs).
 - **Reverse-mode automatic differentiation** via binomial checkpointing at
   `O(√n)` memory overhead — compute parameter gradients through the semigroup.
+  Multi-parameter (K>1) sensitivity supported via `RegionMap` (per-region θ).
+- **Native `f32` + f32 SIMD** — all leaf 1D kernels implement `ChernoffFunction<f32>`;
+  a dedicated f32x8 AVX2 / f32x4 NEON kernel is provided with no FMA dependency.
+- **Order-2 Dirichlet boundary** — `DirichletHeat2ndChernoff` with
+  `BoundaryPolicy::OddReflect` (odd-image method, §21.9); order-2 sibling of
+  `ReflectedHeatChernoff`.
+- **Gridless variance / MSE diagnostic** — `MeasureState` now exposes
+  `first_moment`, `variance`, and `variance_per_axis` for particle-ensemble
+  convergence diagnostics (math §38.12).
 - **Four language surfaces** — Rust core, C ABI (FFI / `cdylib`), Python
   (PyO3 / maturin wheels, abi3-py310), and WebAssembly (wasm-bindgen / npm),
   with a lite default WASM bundle and opt-in `full` feature for heavy-grid engines.
-- **18,992-symbol codebase, 279 verified execution flows** — every numerical
+  The three binding surfaces now reach the full operator zoo (see [Bindings](#bindings)).
+- **17,848-symbol codebase, 279 verified execution flows** — every numerical
   claim tested in CI.
 
 ## Who is this for
@@ -128,10 +140,10 @@ A runnable version with the error check lives in
 | Riemannian manifolds | `ManifoldChernoff` + `Sphere2`, `Hyperbolic2`, `Torus`, `FubiniStudyCp1` | R/12 curvature-corrected |
 | Hypoelliptic / sub-Riemannian | `HypoellipticChernoff` (Kolmogorov, Heisenberg, Engel) | Strang–Hörmander, step-2/3 Carnot |
 | Graph and quantum-graph Laplacians | `GraphHeatChernoff`, `QuantumGraphHeatChernoff`, `QuantumSchrödingerChernoff` | Kirchhoff vertex conditions |
-| Boundary conditions | `KillingChernoff`, `ReflectedHeatChernoff`, `ObstacleChernoff`, `BoundaryPolicy` | Dirichlet / Neumann / Robin / obstacle |
+| Boundary conditions | `KillingChernoff`, `ReflectedHeatChernoff`, `DirichletHeat2ndChernoff`, `ObstacleChernoff`, `BoundaryPolicy` | Dirichlet (order-2) / Neumann / Robin / obstacle |
 | Resolvent and nonautonomous | `LaplaceChernoffResolvent`, `HowlandLift` | `(λI−A)⁻¹g`; Howland augmented generator |
 | High-dimensional / sparse-grid | `AnisotropicShiftChernoffND`, `SmolyakGridND` | Gauss-Hermite / Smolyak, d ≥ 5 |
-| Tensor-train (TT) carrier | `TtChernoff`, `TtState` | Curse-of-dimensionality escape; `O(d·n·r²)` |
+| Tensor-train (TT) carrier | `TtChernoff`, `TtState`, `VarCoefTt` | Curse-of-dimensionality escape; `O(d·n·r²)`; variable-coef separable diagonal via `VarCoefTt` |
 | Gridless / particle ensemble | `GridlessChernoff` | Particle-ensemble Chernoff, d ≤ ~10 |
 | Reverse-mode AD | `ReverseChernoff`, `CheckpointSchedule` | Binomial checkpointing, `O(√n)` memory |
 | Lévy subordination | `SubordinatedChernoff` | Subordinate any engine to a Lévy process |
@@ -150,8 +162,20 @@ for the full type catalogue, constructor signatures, and feature flags.
 | Python | `semiflow-pde` (PyPI; maturin wheel) | PyO3, abi3-py310 wheel (Python 3.10–3.13), GIL-release via `py.detach` |
 | JavaScript / WASM | `@semiflow/wasm` (npm; wasm-bindgen) | Lite default bundle; `full` feature for higher-order / 2D / 3D engines |
 
-All four surfaces target near-full engine parity. For build instructions and
-cross-language examples see [docs/BINDINGS.md](docs/BINDINGS.md).
+All three non-Rust surfaces now expose a curated mirror of the user-facing operator
+zoo, including the S³ carriers (`TtState`, `TtEvolver`, `TtCoupledEvolver`,
+`MeasureState`, `GridlessEvolver`) and recently added engines
+(`DiffusionExpmvChernoff`, `DriftReactionZeta4Chernoff`, `Killing2ndChernoff`,
+`MatrixDiffusionChernoff2D/3D`, `DirichletHeat2ndChernoff`, `VarCoefTt`).
+Variable coefficients cross the binding boundary as pre-sampled arrays, not live
+closures. The binding surface is a curated mirror of the user-facing operator zoo,
+not a 1:1 map of internal composition types (e.g. `AxisLift`, `StrangSplit` are
+not directly exposed). The one remaining PyO3-only deferral is `GraphAdjoint`'s
+time-dependent Laplacian constructor accepting a live callback — the pre-sampled
+path (`GraphAdjointPresampled` / `smf_graph_adjoint_new_presampled`) covers the
+common case and is available in all three surfaces.
+
+For build instructions and cross-language examples see [docs/BINDINGS.md](docs/BINDINGS.md).
 
 ## Documentation
 
@@ -211,13 +235,34 @@ Dual-licensed under either of [MIT](LICENSE-MIT) or
 
 SemiFlow is created and maintained by **Ilia Volkov**.
 
-## Citation
+## How to cite
 
-If you use SemiFlow in academic work, please cite the software (see
-[`CITATION.cff`](CITATION.cff)) and reference the underlying theorem above:
+If you use SemiFlow in academic work, cite both the **software** and the
+**underlying theorem**:
 
-> Volkov, I. (2026). *SemiFlow* (version 0.9.0-beta) [Computer software].
-> https://github.com/VolkovIlia/semiflow
+**Software** — use the GitHub "Cite this repository" widget (top-right of the
+repo) which reads [`CITATION.cff`](CITATION.cff), or use this BibTeX entry:
+
+```bibtex
+@software{volkov2026semiflow,
+  author    = {Volkov, Ilia},
+  title     = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
+  year      = {2026},
+  version   = {0.9.0-beta},
+  url       = {https://github.com/VolkovIlia/semiflow},
+  note      = {DOI: pending (Zenodo archive of the next GitHub Release)}
+}
+```
+
+DOI: **pending** — will be minted automatically when the maintainer publishes a
+GitHub Release with the Zenodo↔GitHub integration enabled. The DOI will appear
+in `CITATION.cff` and here at that time.
+
+**Underlying theorem** — always cite this alongside the software:
+
+> Remizov, I. D. (2025). *Chernoff Approximations of the Solution of Linear ODE
+> with Variable Coefficients.* Vladikavkaz Mathematical Journal, 27(4), 124–135.
+> [doi:10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q)
 
 ## Contributing and security
 
