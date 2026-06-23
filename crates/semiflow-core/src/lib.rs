@@ -301,6 +301,7 @@ pub mod truncated_exp4_cached;
 pub mod tt_chernoff;
 pub mod tt_core;
 pub mod tt_coupled;
+pub mod tt_varcoef;
 pub(crate) mod tt_coupled_pair;
 pub(crate) mod tt_dense_expm;
 #[cfg(feature = "s3-poc")]
@@ -455,6 +456,9 @@ pub use crate::{
     // Applies D1_j⊗D1_k pair-bond operators; grows rank from a rank-1 IC.
     // See math §52.9 / ADR-0159 Amendment 1.
     tt_coupled::{CoupledTtChernoff, CouplingTopology},
+    // VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver.
+    // Rank-1 IC stays rank-1 (bond-preserving, §52.10d). Solver-free.
+    tt_varcoef::VarCoefTt,
     varcoef_magnus_graph::{compute_rho_bar, VarCoefMagnusGraphHeatChernoff, WeightAtTime},
     wentzell::{DynamicWentzellChernoff, HalfSpaceWentzell, WentzellRegion},
 };

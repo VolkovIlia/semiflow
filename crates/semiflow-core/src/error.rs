@@ -161,6 +161,23 @@ pub enum SemiflowError {
         /// Stable label for the violated class boundary.
         detail: &'static str,
     },
+
+    /// Input lies outside the proven operator class for [`crate::VarCoefTt`].
+    ///
+    /// Returned by [`crate::VarCoefTt::new`] when the supplied parameters
+    /// cannot represent an in-class additive-separable variable-coefficient
+    /// operator — for example, `a_axis[j][i] ≤ 0` (non-parabolic), shape
+    /// mismatch between axes, or `d == 0`.
+    ///
+    /// `detail` is a stable, grep-friendly static label naming the violated
+    /// class boundary.
+    ///
+    /// **Recovery:** adjust the input to lie within the additive-separable
+    /// parabolic class described in [`crate::VarCoefTt`].
+    VarCoefOutOfClass {
+        /// Stable label for the violated class boundary.
+        detail: &'static str,
+    },
 }
 
 /// Format helpers — each formats one variant, keeping `fmt` under 50 lines.
@@ -262,6 +279,9 @@ impl fmt::Display for SemiflowError {
             #[cfg(feature = "s3-poc")]
             Self::S3OutOfClass { detail } => {
                 write!(f, "S³ out-of-class: {detail}")
+            }
+            Self::VarCoefOutOfClass { detail } => {
+                write!(f, "VarCoefTt out-of-class: {detail}")
             }
         }
     }
