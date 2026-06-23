@@ -100,6 +100,12 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     MeasureState,
     GridlessEvolver,
     VarCoefTtEvolver,
+    # bind-remaining-operators wave
+    DiffusionExpmv1D,
+    DriftReaction4th1D,
+    Killing2nd1D,
+    MatrixDiffusion2D,
+    MatrixDiffusion3D,
 )
 
 __all__ = [
@@ -201,4 +207,10 @@ __all__ = [
     "GridlessEvolver",
     # VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
     "VarCoefTtEvolver",
+    # bind-remaining-operators wave
+    "DiffusionExpmv1D",
+    "DriftReaction4th1D",
+    "Killing2nd1D",
+    "MatrixDiffusion2D",
+    "MatrixDiffusion3D",
 ]

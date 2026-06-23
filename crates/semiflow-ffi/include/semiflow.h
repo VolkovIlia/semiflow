@@ -464,6 +464,41 @@ typedef struct {
 } SmfGridlessEvolver;
 
 /**
+ * Opaque handle to a `DiffusionExpmvChernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfExpmv1D;
+
+/**
+ * Opaque handle to a `DriftReactionZeta4Chernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfDriftReactionZeta4;
+
+/**
+ * Opaque handle to a `Killing2ndChernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfKilling2nd;
+
+/**
+ * Opaque handle to a `MatrixDiffusionChernoff2D` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMatrix2D;
+
+/**
+ * Opaque handle to a `MatrixDiffusionChernoff3D` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMatrix3D;
+
+/**
  * Opaque handle for `NonSep2D` (constant-beta coupling).
  */
 typedef struct {
@@ -3599,6 +3634,284 @@ SemiflowStatus smf_gridless_evolve(const SmfGridlessEvolver *ev,
  * `ev` must be null or a live pointer from `smf_gridless_new`.
  */
 void smf_gridless_free(SmfGridlessEvolver *ev);
+
+/**
+ * Allocate a `DiffusionExpmvChernoff` 1-D evolver (unit diffusion `a = 1`).
+ *
+ * Solves `∂_t u = ∂²u` via tolerance-driven scaled truncated-Taylor (ADR-0121).
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfExpmv1D`.
+ */
+SemiflowStatus smf_expmv1d_new(double xmin,
+                               double xmax,
+                               uintptr_t n,
+                               const double *u0,
+                               uintptr_t u0_len,
+                               uintptr_t n_steps,
+                               SmfExpmv1D **out);
+
+/**
+ * Evolve `SmfExpmv1D` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_expmv1d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_expmv1d_evolve(SmfExpmv1D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfExpmv1D` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_expmv1d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_expmv1d_values(const SmfExpmv1D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfExpmv1D` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_expmv1d_new`.
+ */
+uintptr_t smf_expmv1d_size(const SmfExpmv1D *ev);
+
+/**
+ * Free a `SmfExpmv1D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_expmv1d_new`.
+ */
+void smf_expmv1d_free(SmfExpmv1D *ev);
+
+/**
+ * Allocate a `DriftReactionZeta4Chernoff` 1-D evolver.
+ *
+ * Solves `∂_t u = b(x)∂_x u + c(x)u` (order 4; palindromic R_sym ∘ K5 ∘ R_sym,
+ * ADR-0127). Default: `b = 0.5`, `b' = 0.0`, `c = 0.0`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfDriftReactionZeta4`.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_new(double xmin,
+                                            double xmax,
+                                            uintptr_t n,
+                                            const double *u0,
+                                            uintptr_t u0_len,
+                                            uintptr_t n_steps,
+                                            SmfDriftReactionZeta4 **out);
+
+/**
+ * Evolve `SmfDriftReactionZeta4` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_evolve(SmfDriftReactionZeta4 *ev,
+                                               double t,
+                                               double *dst_buf,
+                                               uintptr_t dst_len);
+
+/**
+ * Copy current `SmfDriftReactionZeta4` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_values(const SmfDriftReactionZeta4 *ev,
+                                               double *out_buf,
+                                               uintptr_t out_len);
+
+/**
+ * Return `SmfDriftReactionZeta4` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
+ */
+uintptr_t smf_drift_reaction_zeta4_size(const SmfDriftReactionZeta4 *ev);
+
+/**
+ * Free a `SmfDriftReactionZeta4` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
+ */
+void smf_drift_reaction_zeta4_free(SmfDriftReactionZeta4 *ev);
+
+/**
+ * Allocate a `Killing2ndChernoff` 1-D evolver (unit diffusion, constant κ).
+ *
+ * Solves `∂_t u = ∂²u − κ·u` via palindromic Strang; order 2 (ADR-0126).
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfKilling2nd`.
+ */
+SemiflowStatus smf_killing2nd_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
+                                  double kappa,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  uintptr_t n_steps,
+                                  SmfKilling2nd **out);
+
+/**
+ * Evolve `SmfKilling2nd` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_killing2nd_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_killing2nd_evolve(SmfKilling2nd *ev,
+                                     double t,
+                                     double *dst_buf,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current `SmfKilling2nd` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_killing2nd_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_killing2nd_values(const SmfKilling2nd *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfKilling2nd` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_killing2nd_new`.
+ */
+uintptr_t smf_killing2nd_size(const SmfKilling2nd *ev);
+
+/**
+ * Free a `SmfKilling2nd` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_killing2nd_new`.
+ */
+void smf_killing2nd_free(SmfKilling2nd *ev);
+
+/**
+ * Allocate a `MatrixDiffusionChernoff2D` evolver (M=2, constant scalar coefficients).
+ *
+ * Solves coupled 2-component 2D diffusion via palindromic Strang (order 2, ADR-0124).
+ *
+ * # Safety
+ * `u0` must point to `2*nx*ny` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfMatrix2D`.
+ */
+SemiflowStatus smf_matrix2d_new(double xmin,
+                                double xmax,
+                                uintptr_t nx,
+                                double ymin,
+                                double ymax,
+                                uintptr_t ny,
+                                double a_diag,
+                                double c_coupling,
+                                const double *u0,
+                                uintptr_t u0_len,
+                                uintptr_t n_steps,
+                                SmfMatrix2D **out);
+
+/**
+ * Evolve `SmfMatrix2D` state by time `t`, writing `2*nx*ny` values into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix2d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix2d_evolve(SmfMatrix2D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfMatrix2D` values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix2d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix2d_values(const SmfMatrix2D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfMatrix2D` buffer size (`2*nx*ny`); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix2d_new`.
+ */
+uintptr_t smf_matrix2d_size(const SmfMatrix2D *ev);
+
+/**
+ * Free a `SmfMatrix2D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix2d_new`.
+ */
+void smf_matrix2d_free(SmfMatrix2D *ev);
+
+/**
+ * Allocate a `MatrixDiffusionChernoff3D` evolver (M=2, constant scalar coefficients).
+ *
+ * Solves coupled 2-component 3D diffusion via palindromic Strang (order 2, ADR-0124).
+ *
+ * # Safety
+ * `u0` must point to `2*nx*ny*nz` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfMatrix3D`.
+ */
+SemiflowStatus smf_matrix3d_new(double xmin,
+                                double xmax,
+                                uintptr_t nx,
+                                double ymin,
+                                double ymax,
+                                uintptr_t ny,
+                                double zmin,
+                                double zmax,
+                                uintptr_t nz,
+                                double a_diag,
+                                double c_coupling,
+                                const double *u0,
+                                uintptr_t u0_len,
+                                uintptr_t n_steps,
+                                SmfMatrix3D **out);
+
+/**
+ * Evolve `SmfMatrix3D` state by time `t`, writing `2*nx*ny*nz` values into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix3d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix3d_evolve(SmfMatrix3D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfMatrix3D` values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix3d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix3d_values(const SmfMatrix3D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfMatrix3D` buffer size (`2*nx*ny*nz`); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix3d_new`.
+ */
+uintptr_t smf_matrix3d_size(const SmfMatrix3D *ev);
+
+/**
+ * Free a `SmfMatrix3D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix3d_new`.
+ */
+void smf_matrix3d_free(SmfMatrix3D *ev);
 
 /**
  * Construct a non-separable 2D evolver with constant coupling `c`.

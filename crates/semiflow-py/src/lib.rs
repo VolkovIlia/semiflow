@@ -86,6 +86,7 @@ mod diffusion_extra;
 mod diffusion_extra2;
 mod diffusion_hi;
 mod drift_reaction_py;
+mod drift_reaction_zeta4_py;
 mod dtype_dispatch;
 mod error;
 mod geometry;
@@ -132,6 +133,9 @@ mod tt_py;
 mod tt_varcoef_py;
 mod wentzell_helpers;
 mod wentzell_py;
+mod expmv_py;
+mod killing_soft_py;
+mod matrix_2d3d_py;
 mod zeta4_py;
 mod zeta6_py;
 
@@ -182,7 +186,12 @@ fn register_core_v2(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // v4.1 Phase D — PyO3 parity for new Rust APIs
     hormander_py::register(py, m)?;
     zeta4_py::register(py, m)?;
-    zeta6_py::register(py, m)
+    zeta6_py::register(py, m)?;
+    // bind-remaining-operators wave
+    expmv_py::register(py, m)?;
+    drift_reaction_zeta4_py::register(py, m)?;
+    killing_soft_py::register(py, m)?;
+    matrix_2d3d_py::register(py, m)
 }
 
 /// Register ADR-0111 Wave P1–P7 pyclasses.
