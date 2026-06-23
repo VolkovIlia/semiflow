@@ -426,3 +426,10 @@ fn g_reverse_ad_checkpoint() {
 
     println!("G_REVERSE_AD_CHECKPOINT PASS (slope={slope:.4} <= {CHECKPOINT_SLOPE_GATE})");
 }
+
+// K-vector gradient tests (§51.10, ADR-0177) have been moved to the separate
+// binary `g_reverse_ad_kvector.rs`.  They require `build_f_transpose` which
+// allocates an N×N matrix; keeping them here would race with the
+// `PeakTrackingAlloc` global allocator used by `g_reverse_ad_checkpoint`,
+// causing non-deterministic slope failures.  Separation is structural
+// (each `tests/*.rs` compiles into its own binary) — no `#[serial]` needed.

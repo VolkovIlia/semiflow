@@ -7,8 +7,9 @@
 //! kernels are OUT of scope.
 //!
 //! Forward pass: n steps, checkpoint every `⌈√n⌉` states (`O(√n)` peak mem).
-//! K-vector gradient: GENUINE cotangent backward sweep (§51.9) wired as the public path.
-//! `value_and_grad(θ: &[F])` accepts K parameters; `value_and_grad_k1` is a thin K=1 wrapper.
+//! K-vector gradient: GENUINE cotangent backward sweep (§51.9/§51.10) wired as the public path.
+//! `value_and_grad(τ, n, u₀, target, θ ∈ ℝ^K)` accepts K≥1 parameters via region partition.
+//! `value_and_grad_k1` is a thin K=1 wrapper (byte-identical to §51.9).
 //! Forward-mode `Dual<F>` (§46) is retained ONLY as the `< 1e-12` parity reference
 //! (§51.4 Amendment 2 — NOT 0 ULP; two independent float paths agree by adjoint identity).
 //!
@@ -32,7 +33,7 @@ use crate::reverse_sweep::backward_sweep;
 
 use crate::{
     diffusion::DiffusionChernoff, dual::Dual, error::SemiflowError, float::SemiflowFloat,
-    grid_fn::GridFn1D,
+    grid_fn::GridFn1D, reverse_region::RegionMap,
 };
 
 // ---------------------------------------------------------------------------
@@ -235,58 +236,84 @@ fn compute_loss<F: SemiflowFloat>(u: &GridFn1D<F>, target: &GridFn1D<F>) -> F {
 /// `J(θ) = ‖(F_θ(τ))ⁿ u₀ − target‖²`.
 ///
 /// Generic over `F: SemiflowFloat`. Wraps a `DiffusionChernoff<F>` +
-/// `DiffusionChernoff<Dual<F>>` pair. `C` must implement `TransposeApply<F>`;
-/// for the narrow scope `DiffusionChernoff<F>` with constant `a(x) ≡ θ`,
-/// `F^⊤ = F` (self-adjoint).
+/// `DiffusionChernoff<Dual<F>>` pair plus a [`RegionMap`] (K regions).
 ///
-/// # Scope (NARROW — §51.5)
+/// `value_and_grad` accepts `theta ∈ ℝ^K` for K ≥ 1 (ADR-0177).
+/// K=1 path is byte-identical to the §51.9 scalar path (regression guarantee).
 ///
-/// Linear / truncated-Magnus family ONLY. Variable-coefficient and nonlinear
-/// kernels are not supported (research-track per §51.7).
+/// # Scope (NARROW — §51.5/§51.10)
+///
+/// Linear / truncated-Magnus family with const-per-region `a` ONLY.
+/// Variable-coefficient within a region and nonlinear kernels are out of scope.
 pub struct ReverseChernoff<F: SemiflowFloat = f64> {
     /// Forward kernel `F_θ(τ)` at primal type `F`.
     pub kernel: DiffusionChernoff<F>,
-    /// Same kernel at `Dual<F>` for per-step Jacobian (§46).
+    /// Same kernel at `Dual<F>` for per-step Jacobian (§46) — K=1 path only.
     pub kernel_dual: DiffusionChernoff<Dual<F>>,
     /// Checkpoint schedule (default: `√n` binomial, §51.3).
     pub schedule: CheckpointSchedule,
+    /// Region partition for K-vector reverse-AD (§51.10, ADR-0177).
+    ///
+    /// K=1 default: single region spanning all nodes (byte-identical to §51.9).
+    region_map: RegionMap,
 }
 
 impl<F: SemiflowFloat> ReverseChernoff<F> {
-    /// Construct from kernel pair and checkpoint schedule.
+    /// Construct from kernel pair and checkpoint schedule (K=1 default region map).
     ///
     /// Use `CheckpointSchedule::sqrt_n(n)` for the `O(√n)` default (§51.3/§51.7).
+    /// The region map defaults to K=1 (whole domain is one region). To use K>1
+    /// per-region gradients, call [`Self::with_region_map`] after construction.
+    ///
+    /// # Panics
+    /// Panics if the kernel's grid node count is zero (should never happen for
+    /// valid grids with n ≥ 4).
     #[must_use]
     pub fn new(
         kernel: DiffusionChernoff<F>,
         kernel_dual: DiffusionChernoff<Dual<F>>,
         schedule: CheckpointSchedule,
     ) -> Self {
+        let n_grid = kernel.grid.n;
+        let region_map = RegionMap::contiguous(n_grid, 1)
+            .expect("K=1 region map always valid for n >= 1");
         Self {
             kernel,
             kernel_dual,
             schedule,
+            region_map,
         }
     }
 
-    /// Compute `(J, ∂J/∂θ)` for a **K=1** parameter slice in ONE backward pass.
+    /// Replace the region map (enables K>1 per-region reverse-AD, §51.10).
     ///
-    /// **K>1 is rejected fail-loud** — returns `Err(SemiflowError::UnsupportedOperation)`.
-    /// This kernel carries a single scalar constant-a coefficient (`a(x) ≡ θ`);
-    /// a K-vector of θ has no well-defined meaning (ADR-0172 — K=1-only scope).
-    /// True multi-parameter reverse-AD requires per-region dual seeding and is
-    /// deferred to a future ADR.
-    ///
-    /// **Implementation (§51.9, ADR-0156 Amendment 2 — GENUINE reverse-mode, K=1):**
-    /// 1. Forward pass with `⌈√n⌉` checkpointing → `u_n`, O(√n) states.
-    /// 2. Seed cotangent `λ_n = 2(u_n − target)`.
-    /// 3. Backward sweep `k = n…1` (strictly decreasing):
-    ///    (a) replay `u_{k-1}` from checkpoint (bit-exact);
-    ///    (b) `∇J[0] += ⟨λ_k, b_k^{(0)}⟩` via `step_jacobian_col` (load-bearing);
-    ///    (c) `λ_{k-1} = apply_transpose_step(τ, λ_k)` (load-bearing, §51.6 oracle).
+    /// `rmap.region_count()` determines the length of the gradient returned by
+    /// `value_and_grad`. `rmap.n_grid()` must equal `kernel.grid.n`.
     ///
     /// # Errors
-    /// - `SemiflowError::UnsupportedOperation` if `theta.len() != 1` (ADR-0172).
+    /// Returns `SemiflowError::UnsupportedOperation` if grid sizes do not match.
+    pub fn with_region_map(mut self, rmap: RegionMap) -> Result<Self, SemiflowError> {
+        if rmap.n_grid() != self.kernel.grid.n {
+            return Err(SemiflowError::UnsupportedOperation {
+                what: "ReverseChernoff::with_region_map: rmap.n_grid() != kernel.grid.n",
+            });
+        }
+        self.region_map = rmap;
+        Ok(self)
+    }
+
+    /// Compute `(J, ∂J/∂θ)` for a **K-parameter** vector in ONE backward pass.
+    ///
+    /// Accepts `theta.len() == region_map.region_count()` (ADR-0177).
+    /// K=1: byte-identical to §51.9 (structural early branch in sweep).
+    /// K>1: per-region dual seeding (§51.10) — genuinely distinct gradients
+    ///      in a single O(1)-in-K backward pass.
+    ///
+    /// Out-of-scope cases (variable-a within region, non-DoF-aligned, non-self-adjoint)
+    /// remain fail-loud via `SemiflowError::UnsupportedOperation`.
+    ///
+    /// # Errors
+    /// - `SemiflowError::UnsupportedOperation` if `theta.len() != region_map.region_count()`.
     /// - Propagates `SemiflowError` from any kernel application.
     pub fn value_and_grad(
         &self,
@@ -296,12 +323,12 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
         target: &GridFn1D<F>,
         theta: &[F],
     ) -> Result<(F, Vec<F>), SemiflowError> {
-        // ADR-0172: K=1-only scope — K-vector of θ is ill-posed for this kernel.
-        if theta.len() != 1 {
+        // ADR-0177: validate theta length matches region count.
+        if theta.len() != self.region_map.region_count() {
             return Err(SemiflowError::UnsupportedOperation {
-                what: "value_and_grad: K>1 parameter vector is not supported for \
-                       constant-a DiffusionChernoff (ADR-0172); use theta.len()==1 \
-                       or a future multi-region kernel",
+                what: "value_and_grad: theta.len() must equal region_map.region_count() \
+                       (ADR-0177); use with_region_map to set K regions, or \
+                       value_and_grad_k1 for the scalar K=1 path",
             });
         }
         let fwd = |t: F, u: &GridFn1D<F>| self.kernel.apply_f(t, u);
@@ -315,18 +342,21 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
             target,
             &checkpoints,
             &self.schedule,
+            theta,
+            &self.region_map,
         )?;
         Ok((loss, grad))
     }
 
     /// Compute `(J, ∂J/∂θ)` for scalar parameter `K = 1`.
     ///
-    /// **Thin wrapper** around [`Self::value_and_grad`] with `theta = &[θ]`
-    /// (length-1 slice). K=1 routes through the SAME genuine cotangent backward
-    /// sweep — NO forward shortcut (§51.9 normative, ADR-0156 Amendment 2).
+    /// **Thin wrapper** around [`Self::value_and_grad`] with `theta = &[0.0]`
+    /// (length-1 slice — actual θ encoded in `kernel_dual`'s closure).
+    /// K=1 routes through the SAME genuine cotangent backward sweep — NO forward
+    /// shortcut (§51.9 normative, ADR-0156 Amendment 2).
     ///
-    /// Forward-mode `Dual<F>` (§46) is the independent parity *reference*
-    /// used only in `G_REVERSE_AD_GRADIENT` leg (ii) — it is NOT called here.
+    /// The gradient is byte-identical to the original §51.9 implementation
+    /// (structural K=1 branch in `backward_sweep`).
     ///
     /// # Errors
     /// Propagates `SemiflowError` from any kernel application.
@@ -337,10 +367,8 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
         u0: &GridFn1D<F>,
         target: &GridFn1D<F>,
     ) -> Result<(F, F), SemiflowError> {
-        // K=1: routes through the K-vector backward sweep (§51.9 normative — no
-        // forward shortcut).  The theta slice only sets k_params=1; the actual
-        // θ-seed is encoded in kernel_dual's coefficient closure a(x)=Dual::variable(θ).
-        let placeholder = [F::zero()]; // length-1: sets K=1
+        // K=1: placeholder theta slice — actual θ-seed encoded in kernel_dual's closure.
+        let placeholder = [F::zero()];
         let (loss, grads) = self.value_and_grad(tau, n, u0, target, &placeholder)?;
         Ok((loss, grads[0]))
     }
