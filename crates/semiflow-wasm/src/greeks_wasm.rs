@@ -31,7 +31,7 @@
 use js_sys::{Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{dual::Dual, DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{dual::Dual, DiffusionChernoff, Grid1D, GridFn1D};
 
 use crate::error::{err_to_js, make_js_error};
 
@@ -181,7 +181,7 @@ fn run_hyper_dual_sweep(
     n_chernoff: usize,
     theta: f64,
     t: f64,
-) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), semiflow_core::SemiflowError> {
+) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), semiflow::SemiflowError> {
     let lo = Dual::constant(Dual::constant(grid_f64.xmin));
     let hi = Dual::constant(Dual::constant(grid_f64.xmax));
     let grid_hd = Grid1D::<HyperDual>::new_generic(lo, hi, grid_f64.n)?;
@@ -266,11 +266,11 @@ fn build_greeks_inner(
     u0: &[f64],
     n_chernoff: usize,
     theta: f64,
-) -> Result<GreeksInnerWasm, semiflow_core::SemiflowError> {
+) -> Result<GreeksInnerWasm, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     validate_theta(theta)?;
     if n_chernoff == 0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "n_chernoff must be >= 1",
             value: 0.0,
         });
@@ -288,10 +288,10 @@ fn build_greeks_inner(
 // Validation helpers
 // ---------------------------------------------------------------------------
 
-fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });
@@ -300,9 +300,9 @@ fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
     Ok(())
 }
 
-fn validate_theta(theta: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_theta(theta: f64) -> Result<(), semiflow::SemiflowError> {
     if !theta.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "scale_theta must be finite",
             value: theta,
         });

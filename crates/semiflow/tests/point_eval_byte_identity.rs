@@ -17,7 +17,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     hormander::{HypoellipticChernoff, KolmogorovPhaseSpace},
     point_eval::sample_gridfn2d,
     ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn1D, GridFn2D, ManifoldChernoff,
@@ -253,7 +253,7 @@ fn g_pointeval_byte_identity_hypoelliptic_kolmogorov() {
 /// followed by `GridFnND::sample`, identical to the full-grid path.
 #[test]
 fn g_pointeval_byte_identity_anisotropic_shift_nd() {
-    use semiflow_core::{
+    use semiflow::{
         grid_nd::{GridFnND, GridND},
         AnisotropicShiftChernoffND, SquareMatrix,
     };

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
 
-use semiflow_core::{ChernoffFunction, Graph, GraphSignal, ScratchPool, VarCoefGraphHeatChernoff};
+use semiflow::{ChernoffFunction, Graph, GraphSignal, ScratchPool, VarCoefGraphHeatChernoff};
 
 // ---------------------------------------------------------------------------
 // Helper

@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     nonseparable_mixed_closure, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparableMixedChernoff, ScratchPool,
 };
@@ -237,7 +237,7 @@ fn evolve_nonsep(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut state = GridFn2D::new(grid, input)?;
     let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();
@@ -280,9 +280,9 @@ fn build_grid_2d(
     ymin: f64,
     ymax: f64,
     ny: usize,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<(Grid1D<f64>, Grid1D<f64>, Grid2D<f64>)> {
-    use semiflow_core::Grid1D;
+    use semiflow::Grid1D;
     let gx = Grid1D::new(xmin, xmax, nx)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);

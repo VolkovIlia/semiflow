@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use semiflow_core::scratch::ScratchPool;
-use semiflow_core::{ChernoffSemigroup, GraphHeatChernoff, Laplacian, MagnusGraphHeatChernoff};
+use semiflow::scratch::ScratchPool;
+use semiflow::{ChernoffSemigroup, GraphHeatChernoff, Laplacian, MagnusGraphHeatChernoff};
 
 use crate::status::SemiflowStatus;
 

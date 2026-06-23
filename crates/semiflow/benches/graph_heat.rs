@@ -25,7 +25,7 @@
 use std::{sync::Arc, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian, LaplacianAtTime,
     MagnusGraphHeatChernoff, VarCoefGraphHeatChernoff,
 };

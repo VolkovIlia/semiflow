@@ -32,7 +32,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     howland::{HowlandLift, HowlandState},
     ChernoffSemigroup, Grid1D, GridFn1D,
@@ -68,10 +68,10 @@ pub(crate) fn validate_params_td(n_steps: usize, t: f64) -> PyResult<()> {
     Ok(())
 }
 
-pub(crate) fn validate_u0_td(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+pub(crate) fn validate_u0_td(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });
@@ -254,8 +254,8 @@ fn build_howland(
     u0: &[f64],
     n_t: usize,
     t_horizon: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Howland1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Howland1DInner, semiflow::SemiflowError> {
     validate_u0_td(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_td, zero_td, zero_td, 1.0, grid);
@@ -280,7 +280,7 @@ fn build_howland(
 fn evolve_howland(
     lift: HowlandKernel,
     state: HowlandState<GridFn1D<f64>, f64>,
-) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow_core::SemiflowError> {
+) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow::SemiflowError> {
     let n_t = lift.n_t();
     // n_steps = n_t - 1 so that tau = t_horizon / (n_t - 1) = delta_s exactly.
     let n_steps = n_t - 1;

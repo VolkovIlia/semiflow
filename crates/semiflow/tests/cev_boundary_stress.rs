@@ -20,7 +20,7 @@
 //!     The residual at `S_max=150` (window [50,125]) is a pure corner artefact:
 //!     by `S_max=175` error drops to 1.59e-2 (full [50,150] window).
 
-use semiflow_core::{
+use semiflow::{
     grid::{BoundaryPolicy, InterpKind},
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, StrangSplit,
 };

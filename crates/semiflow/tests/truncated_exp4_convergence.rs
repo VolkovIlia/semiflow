@@ -24,7 +24,7 @@
 //! Design note (Phase 1 lesson): n-sweep measures Chernoff-temporal convergence
 //! (order 2) — NOT spatial order. The spatial gate requires the DX-SWEEP above.
 
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFn1D, State, TruncatedExp4thDiffusionChernoff};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, State, TruncatedExp4thDiffusionChernoff};
 
 const T_FINAL: f64 = 1.0;
 const X_MIN: f64 = -15.0;

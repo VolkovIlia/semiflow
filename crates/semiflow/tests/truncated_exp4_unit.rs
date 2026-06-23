@@ -8,7 +8,7 @@
 //! - `cfl_boundary_reject` — apply at 1.05×CFL returns Err(CflViolated).
 //! - `constant_a_steady_state_convergence` — both `TruncatedExp` types converge to oracle.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     ChernoffSemigroup, Grid1D, GridFn1D, SemiflowError, State, TruncatedExp4thDiffusionChernoff,
     TruncatedExpDiffusionChernoff,

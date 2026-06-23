@@ -38,7 +38,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, Grid1D, ScratchPool,
@@ -226,7 +226,7 @@ fn build_nd2(
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
     u0: &[f64],
-) -> Result<InnerND2, semiflow_core::SemiflowError> {
+) -> Result<InnerND2, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let grid_nd = GridND::<f64, 2>::new([gx, gy])?;
@@ -275,7 +275,7 @@ fn run_nd2(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFnND::<f64, 2>::new(grid.clone(), input)?;
     let mut dst = GridFnND::<f64, 2>::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

@@ -2,7 +2,7 @@
 //! ADR-0156, Shift B).
 //!
 //! Exposes `ReverseHeat1D` — a thin wrapper around
-//! `semiflow_core::ReverseChernoff<f64>` for the constant-a
+//! `semiflow::ReverseChernoff<f64>` for the constant-a
 //! `DiffusionChernoff` kernel (narrow scope, §51.5).
 //!
 //! ## API
@@ -41,7 +41,7 @@
 #![allow(clippy::similar_names)]
 
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError, CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind,
     ReverseChernoff,
 };

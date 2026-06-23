@@ -15,7 +15,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
-use semiflow_core::{CoupledTtChernoff, CouplingTopology};
+use semiflow::{CoupledTtChernoff, CouplingTopology};
 
 use crate::{status::SemiflowStatus, tt_ffi::SmfTtState};
 
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn smf_tt_coupled_evolve(
             return SemiflowStatus::OutOfDomain;
         }
         let evolver = unsafe { &*ev.cast::<CoupledTtChernoff<f64>>() };
-        let s = unsafe { &mut *state.cast::<semiflow_core::TtState<f64>>() };
+        let s = unsafe { &mut *state.cast::<semiflow::TtState<f64>>() };
         if evolver.ndim() != s.ndim() {
             return SemiflowStatus::OutOfDomain;
         }

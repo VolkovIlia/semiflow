@@ -37,7 +37,7 @@
 //!
 //! Reference: `contracts/semiflow-core.math.md §9.2.3.B`, properties.yaml.
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Parameters

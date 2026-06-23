@@ -14,8 +14,8 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
 
-use semiflow_core::diffusion4::Diffusion4thChernoff;
-use semiflow_core::{
+use semiflow::diffusion4::Diffusion4thChernoff;
+use semiflow::{
     ChernoffFunction, Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState, ScratchPool,
 };
 

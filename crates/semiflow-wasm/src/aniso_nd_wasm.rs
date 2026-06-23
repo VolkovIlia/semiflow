@@ -32,7 +32,7 @@ extern crate alloc;
 use alloc::sync::Arc;
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, Grid1D, ScratchPool,

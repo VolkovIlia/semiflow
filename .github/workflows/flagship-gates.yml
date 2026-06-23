@@ -213,7 +213,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build release binary (required by latency-gate bench invocation)
-        run: cargo build --release -p semiflow-core
+        run: cargo build --release -p semiflow
         env:
           RUSTFLAGS: "-C target-cpu=native"
       - name: Run latency gate (L_CEV_PTICK)

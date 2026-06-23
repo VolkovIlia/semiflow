@@ -39,7 +39,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::cast_possible_wrap)]
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, grid::OobPolicy, simd::with_force_scalar, BoundaryPolicy, Grid1D,
 };
 
@@ -198,7 +198,7 @@ fn g1b_chebyshev_generic_f64_byte_identity() {
 
 #[cfg(feature = "slow-tests")]
 mod g2 {
-    use semiflow_core::{boundary::InterpKind, grid::OobPolicy, BoundaryPolicy, Dual, Grid1D};
+    use semiflow::{boundary::InterpKind, grid::OobPolicy, BoundaryPolicy, Dual, Grid1D};
 
     const X_MIN: f64 = -10.0;
     const X_MAX: f64 = 10.0;

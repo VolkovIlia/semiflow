@@ -5,7 +5,7 @@
 //! See ADR-0042 acceptance criterion 5.
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     diffusion::DiffusionChernoff,
     grid::Grid1D,

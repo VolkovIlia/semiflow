@@ -54,7 +54,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use semiflow_core::{TtChernoff, TtState};
+use semiflow::{TtChernoff, TtState};
 
 // ─── Pre-registered parameters ─────────────────────────────────────────────
 

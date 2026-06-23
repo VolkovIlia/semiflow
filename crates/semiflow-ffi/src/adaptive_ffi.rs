@@ -50,7 +50,7 @@
 use std::ffi::CStr;
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     AdaptivePI as CorePI, BoundaryPolicy, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
 };
@@ -91,7 +91,7 @@ impl AdaptiveVariant {
         &mut self,
         t: f64,
         u0: &GridFn1D<f64>,
-    ) -> Result<(GridFn1D<f64>, usize, usize), semiflow_core::SemiflowError> {
+    ) -> Result<(GridFn1D<f64>, usize, usize), semiflow::SemiflowError> {
         let outcome = match self {
             Self::Diff2(k) => k.evolve_adaptive(t, u0)?,
             Self::Diff4(k) => k.evolve_adaptive(t, u0)?,
@@ -290,7 +290,7 @@ fn build_adaptive_inner(
     tol_abs: f64,
     tol_rel: f64,
     u0: &[f64],
-) -> Result<AdaptivePIInner, semiflow_core::SemiflowError> {
+) -> Result<AdaptivePIInner, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let current = GridFn1D::new(grid, u0.to_vec())?;
@@ -302,7 +302,7 @@ fn build_adaptive_inner(
 fn build_variant(
     grid: Grid1D<f64>,
     kernel: &str,
-) -> Result<AdaptiveVariant, semiflow_core::SemiflowError> {
+) -> Result<AdaptiveVariant, semiflow::SemiflowError> {
     match kernel {
         "heat2" => {
             let inner = DiffusionChernoff::new(unit_a_adp, zero_adp, zero_adp, 1.0, grid);
@@ -324,7 +324,7 @@ fn build_variant(
             let inner = ShiftChernoff1D::new(half_a_adp, zero_adp, zero_adp, 0.5, grid);
             Ok(AdaptiveVariant::Shift(CorePI::new(inner)))
         }
-        _ => Err(semiflow_core::SemiflowError::DomainViolation {
+        _ => Err(semiflow::SemiflowError::DomainViolation {
             what: "adaptive: unknown kernel; expected heat2|heat4|heat6|drift|shift",
             value: 0.0,
         }),

@@ -8,7 +8,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     subordinated::{
         GammaSubordinator, InverseGaussianSubordinator, LevySubordinator, StableSubordinator,
@@ -244,8 +244,8 @@ fn build_subordinated(
     u0: &[f64],
     sub: SubordinatorEnum,
     n_nodes: usize,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Subordinated1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Subordinated1DInner, semiflow::SemiflowError> {
     validate_u0_td(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_td, zero_td, zero_td, 1.0, grid);
@@ -265,7 +265,7 @@ fn evolve_subordinated(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)

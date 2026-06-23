@@ -12,7 +12,7 @@ assignees: ''
 
 ## Affected component
 
-- [ ] `semiflow-core`
+- [ ] `semiflow`
 - [ ] `semiflow-ffi`
 - [ ] `semiflow-py`
 - [ ] `semiflow-wasm`
@@ -22,7 +22,7 @@ assignees: ''
 ## Version
 
 <!-- Output of one of:
-       cargo pkgid -p semiflow-core
+       cargo pkgid -p semiflow
        pip show semiflow-pde
        npm list @semiflow/wasm
 -->

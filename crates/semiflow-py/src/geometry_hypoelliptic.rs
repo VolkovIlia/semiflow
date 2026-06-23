@@ -13,7 +13,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     hormander::{HypoellipticChernoff, KolmogorovHypoelliptic, KolmogorovPhaseSpace},
     ChernoffSemigroup, Grid1D, Grid2D, GridFn2D,
@@ -46,10 +46,10 @@ pub(crate) fn extract_f64_vec_geo(obj: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> 
     })
 }
 
-pub(crate) fn validate_u0_geo(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+pub(crate) fn validate_u0_geo(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });
@@ -305,14 +305,14 @@ fn build_kolmogorov(
     vmax: f64,
     nv: usize,
     u0: &[f64],
-) -> Result<KolmogorovInner, semiflow_core::SemiflowError> {
+) -> Result<KolmogorovInner, semiflow::SemiflowError> {
     validate_u0_geo(u0)?;
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gv = Grid1D::new(vmin, vmax, nv)?;
     let grid = Grid2D::new(gx, gv);
     let expected = nx * nv;
     if u0.len() != expected {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0 length must equal nx * nv",
             value: u0.len() as f64,
         });
@@ -331,13 +331,13 @@ fn build_engel(
     xmax: f64,
     n: usize,
     u0: &[f64],
-) -> Result<EngelInner, semiflow_core::SemiflowError> {
+) -> Result<EngelInner, semiflow::SemiflowError> {
     validate_u0_geo(u0)?;
     let ax = Grid1D::new(xmin, xmax, n)?;
     let grid = GridND::<f64, 4>::new([ax, ax, ax, ax])?;
     let expected = n * n * n * n;
     if u0.len() != expected {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0 length must equal n**4",
             value: u0.len() as f64,
         });
@@ -360,7 +360,7 @@ fn evolve_kolmogorov(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     extern crate alloc;
     // Reconstruct canonical Kolmogorov kernel (cheap: struct + bracket check).
     let x0 = alloc::boxed::Box::new(KolmogorovPhaseSpace::x0_drift());
@@ -376,7 +376,7 @@ fn evolve_engel(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     // Reconstruct Engel kernel (cheap: struct + bracket check).
     let kernel = HypoellipticChernoff::<f64, 4, 2>::new_engel()?;
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;

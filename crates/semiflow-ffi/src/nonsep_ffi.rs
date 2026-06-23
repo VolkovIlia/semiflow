@@ -46,7 +46,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     nonseparable_mixed_closure, BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D,
     Grid2D, GridFn2D, NonSeparableMixedChernoff, ScratchPool,
 };
@@ -387,7 +387,7 @@ fn unit_dc(grid: Grid1D<f64>) -> DiffusionChernoff<f64> {
 fn build_grid_2d(
     xmin: f64, xmax: f64, nx: usize,
     ymin: f64, ymax: f64, ny: usize,
-) -> Result<(Grid1D<f64>, Grid1D<f64>, Grid2D<f64>), semiflow_core::SemiflowError> {
+) -> Result<(Grid1D<f64>, Grid1D<f64>, Grid2D<f64>), semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
     Ok((gx, gy, Grid2D::new(gx, gy)))
@@ -398,7 +398,7 @@ fn build_nonsep2d_const(
     ymin: f64, ymax: f64, ny: usize,
     c: f64,
     u0: &[f64],
-) -> Result<InnerNonSep2D, semiflow_core::SemiflowError> {
+) -> Result<InnerNonSep2D, semiflow::SemiflowError> {
     let (gx, gy, grid) = build_grid_2d(xmin, xmax, nx, ymin, ymax, ny)?;
     let c_norm = c.abs();
     let c_val = c;
@@ -417,7 +417,7 @@ fn build_nonsep2d_aniso(
     beta: &[f64],
     norm_bound: f64,
     u0: &[f64],
-) -> Result<InnerNonSep2D, semiflow_core::SemiflowError> {
+) -> Result<InnerNonSep2D, semiflow::SemiflowError> {
     let (gx, gy, grid) = build_grid_2d(xmin, xmax, nx, ymin, ymax, ny)?;
     let arc = Arc::new(beta.to_vec());
     let (nx2, ny2) = (nx, ny);
@@ -456,7 +456,7 @@ fn evolve_nonsep(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn2D::new(grid, input)?;
     let mut dst = GridFn2D::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

@@ -20,7 +20,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::Growth,
     howland::{HowlandLift, HowlandState, TimedChernoffFunction},
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError,

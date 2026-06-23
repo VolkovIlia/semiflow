@@ -28,7 +28,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{CoupledTtChernoff, CouplingTopology};
+use semiflow::{CoupledTtChernoff, CouplingTopology};
 
 use crate::error::make_js_error;
 use crate::tt_wasm::TtState;

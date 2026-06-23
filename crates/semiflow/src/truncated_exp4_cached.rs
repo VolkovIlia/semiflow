@@ -111,7 +111,7 @@ impl HalfNodeCoeffCache {
 /// # Construction
 ///
 /// ```rust
-/// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache};
+/// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache};
 /// let grid = Grid1D::new(-4.0, 4.0, 64).unwrap();
 /// let me4c = TruncatedExp4WithCache::with_cached_coefficients(
 ///     |_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid,

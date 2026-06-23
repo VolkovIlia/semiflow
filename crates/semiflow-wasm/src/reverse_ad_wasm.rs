@@ -2,7 +2,7 @@
 //! ADR-0156, Shift B).
 //!
 //! Exposes `ReverseHeat1D` — a JS class wrapping
-//! `semiflow_core::ReverseChernoff<f64>` for the constant-a
+//! `semiflow::ReverseChernoff<f64>` for the constant-a
 //! `DiffusionChernoff` kernel (narrow scope, §51.5).
 //!
 //! ## JS API
@@ -52,7 +52,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind, ReverseChernoff,
 };
 
@@ -76,7 +76,7 @@ fn build_reverse_chernoff_wasm(
     xmax: f64,
     n_grid: usize,
     n_steps: usize,
-) -> Result<ReverseChernoff<f64>, semiflow_core::error::SemiflowError> {
+) -> Result<ReverseChernoff<f64>, semiflow::error::SemiflowError> {
     // f64 grid.
     let grid_f64 = Grid1D::<f64>::new(xmin, xmax, n_grid)?.with_interp(InterpKind::CubicHermite);
 

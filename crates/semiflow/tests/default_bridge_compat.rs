@@ -11,7 +11,7 @@
 //!
 //! Reference: ADR-0043, ADR-0074.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
     error::SemiflowError,
     scratch::ScratchPool,

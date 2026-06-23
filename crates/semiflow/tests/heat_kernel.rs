@@ -7,7 +7,7 @@
 //! G1 (n=100):  sup-norm error < 5e-4
 //! G2 (n=1000): sup-norm error < 5e-5
 
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
 
 // Revised per acceptance-criteria.md amendment 2026-04-29.
 const TOL_N100: f64 = 5.0e-4;

@@ -10,7 +10,7 @@
 //! Feature gate: `slow-tests` for the heavy GL sweep.  Guard test is always on.
 
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     resolvent::{LaplaceChernoffResolvent, LaplaceQuadrature},
     DiffusionChernoff, Grid1D, GridFn1D, SemiflowError,
 };
@@ -35,7 +35,7 @@ fn gaussian_g() -> GridFn1D<f64> {
 #[allow(dead_code)]
 fn residual_inf(
     lambda: Complex<f64>,
-    r: &semiflow_core::GridFnComplex1D<Complex<f64>>,
+    r: &semiflow::GridFnComplex1D<Complex<f64>>,
     g: &GridFn1D<f64>,
 ) -> f64 {
     let n = r.values.len();

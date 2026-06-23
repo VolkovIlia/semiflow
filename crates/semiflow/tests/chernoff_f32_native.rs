@@ -5,7 +5,7 @@
 //!
 //! ADR-0175 (Phase 5a): additive impls delegate to the generic scalar `apply_f` path.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt,
     diffusion::DiffusionChernoff,
     diffusion4::Diffusion4thChernoff,

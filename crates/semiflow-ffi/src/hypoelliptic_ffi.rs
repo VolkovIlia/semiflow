@@ -46,7 +46,7 @@ extern crate alloc;
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     heisenberg_heat_kernel,
     hormander::{HypoellipticChernoff, KolmogorovHypoelliptic, KolmogorovPhaseSpace},
     ChernoffFunction, ChernoffSemigroup, Grid1D, Grid2D, GridFn2D,
@@ -329,7 +329,7 @@ fn build_kolmogorov(
     vmax: f64,
     nv: usize,
     u0: &[f64],
-) -> Result<KolmogorovState, semiflow_core::SemiflowError> {
+) -> Result<KolmogorovState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gv = Grid1D::new(vmin, vmax, nv)?;
@@ -350,7 +350,7 @@ fn evolve_kolmogorov(
     values: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let x0 = alloc::boxed::Box::new(KolmogorovPhaseSpace::x0_drift());
     let x1 = alloc::boxed::Box::new(KolmogorovPhaseSpace::x1_diffusion());
     let kernel = KolmogorovHypoelliptic::<f64>::new(x0, [x1])?;
@@ -365,9 +365,9 @@ pub(crate) fn check_len(
     what: &'static str,
     got: usize,
     expected: usize,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     if got != expected {
-        return Err(semiflow_core::SemiflowError::DomainViolation { what, value: got as f64 });
+        return Err(semiflow::SemiflowError::DomainViolation { what, value: got as f64 });
     }
     Ok(())
 }

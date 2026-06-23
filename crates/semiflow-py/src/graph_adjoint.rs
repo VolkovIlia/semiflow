@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     graph_adjoint_presampled::{
         fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
     },
@@ -170,7 +170,7 @@ impl GraphAdjoint {
             #[allow(clippy::cast_precision_loss)]
             let tau = t / n as f64;
 
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> = match &self.config {
+            let result: Result<Vec<f64>, semiflow::SemiflowError> = match &self.config {
                 KernelConfig::Magnus {
                     rho_bar,
                     convergence_check,
@@ -351,7 +351,7 @@ impl GraphAdjointPresampled {
         }
         let g = Arc::clone(&self.graph);
         let tau = self.tau;
-        let out: Result<Vec<f64>, semiflow_core::SemiflowError> = match &self.variant {
+        let out: Result<Vec<f64>, semiflow::SemiflowError> = match &self.variant {
             PresampledVariant::Magnus(ps) => {
                 py.detach(|| presampled_magnus_evolve(ps, g, &lam, tau, ns))
             }
@@ -386,7 +386,7 @@ fn adjoint_magnus(
     lam: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let g2 = Arc::clone(&graph);
     let lap: LaplacianAtTime<f64> = Box::new(move |t: f64| {
         Python::attach(|py| match callback.call1(py, (t,)) {
@@ -412,7 +412,7 @@ fn adjoint_varcoef(
     lam: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let n = graph.n_nodes();
     let g2 = Arc::clone(&graph);
     let lap: LaplacianAtTime<f64> = Box::new(move |t: f64| {
@@ -421,7 +421,7 @@ fn adjoint_varcoef(
             Err(_) => Arc::new(Laplacian::assemble_combinatorial(&g2)),
         })
     });
-    let a_fn: semiflow_core::varcoef_magnus_graph::WeightAtTime<f64> = Box::new(move |t: f64| {
+    let a_fn: semiflow::varcoef_magnus_graph::WeightAtTime<f64> = Box::new(move |t: f64| {
         Python::attach(|py| match cb_a.call1(py, (t,)) {
             Ok(v) => v
                 .bind(py)
@@ -448,7 +448,7 @@ fn presampled_magnus_evolve(
     lam: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let src = GraphSignal::from_fn(Arc::clone(&graph), |i| lam[i as usize]);
     let mut dst = GraphSignal::zeros(Arc::clone(&graph));
     let mut scratch = ScratchPool::new();
@@ -462,7 +462,7 @@ fn presampled_varcoef_evolve(
     lam: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let src = GraphSignal::from_fn(Arc::clone(&graph), |i| lam[i as usize]);
     let mut dst = GraphSignal::zeros(Arc::clone(&graph));
     let mut scratch = ScratchPool::new();

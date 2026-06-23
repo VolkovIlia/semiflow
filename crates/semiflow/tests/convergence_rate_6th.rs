@@ -53,7 +53,7 @@
 //! headline gate (slope ≤ -5.85) lives in `g3_6_slope_gate`.
 //! Ignored by default (use `cargo test --release -- --ignored` to run).
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, Diffusion6thChernoff, Grid1D, GridFn1D, InterpKind, State,
 };
 

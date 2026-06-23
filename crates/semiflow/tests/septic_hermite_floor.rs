@@ -41,7 +41,7 @@
 
 #![allow(clippy::cast_precision_loss)] // N ≤ 512; well within f64 mantissa
 
-use semiflow_core::Grid1D;
+use semiflow::Grid1D;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,7 +185,7 @@ fn septic_hermite_nodal_exactness() {
 /// would silently regress to lower interpolation order.
 #[test]
 fn septic_hermite_is_default_interp_kind() {
-    use semiflow_core::boundary::InterpKind;
+    use semiflow::boundary::InterpKind;
     let grid = Grid1D::new(X_MIN, X_MAX, N_SPATIAL).expect("Grid1D::new must succeed");
     assert!(
         matches!(grid.interp, InterpKind::SepticHermite),

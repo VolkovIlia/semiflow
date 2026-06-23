@@ -14,7 +14,7 @@
 #![allow(missing_docs, clippy::cast_precision_loss)]
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Shared helpers (no Python layer — benchmark pure Rust path)

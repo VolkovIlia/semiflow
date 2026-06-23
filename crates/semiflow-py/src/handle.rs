@@ -11,7 +11,7 @@
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::too_many_arguments)]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, ChernoffFunction, ChernoffSemigroup,
     DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn1D, GridFn2D, GridFn3D, SemiflowError,
     ScratchPool, Strang2D, Strang3D,

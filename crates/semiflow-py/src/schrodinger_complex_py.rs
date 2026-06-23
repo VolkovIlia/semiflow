@@ -31,7 +31,7 @@ use std::sync::Mutex;
 
 use numpy::{Complex64, PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFnComplex1D, SchrödingerChernoffComplex};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFnComplex1D, SchrödingerChernoffComplex};
 
 use crate::{
     boundary::parse_boundary,
@@ -276,9 +276,9 @@ fn build_zero_v(
     xmin: f64,
     xmax: f64,
     n: usize,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
     psi: &[C64],
-) -> Result<SchrodingerComplexInner, semiflow_core::SemiflowError> {
+) -> Result<SchrodingerComplexInner, semiflow::SemiflowError> {
     validate_psi_finite(psi)?;
     let grid = Grid1D::<f64>::new(xmin, xmax, n)?.with_boundary(policy);
     // Validate kernel construction (zero potential always succeeds).
@@ -292,7 +292,7 @@ fn build_with_v(
     xmin: f64,
     xmax: f64,
     n: usize,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
     v_arr: &Bound<'_, PyAny>,
     psi: &[C64],
 ) -> PyResult<SchrodingerComplexInner> {
@@ -345,7 +345,7 @@ fn compute_complex(
     values: Vec<C64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<C64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<C64>, semiflow::SemiflowError> {
     let v_arc = std::sync::Arc::new(v_at_node);
     let v_arc2 = v_arc.clone();
     let dx = grid.dx();
@@ -373,10 +373,10 @@ fn validate_evolve_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-fn validate_psi_finite(psi: &[C64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_psi_finite(psi: &[C64]) -> Result<(), semiflow::SemiflowError> {
     for z in psi {
         if !z.re.is_finite() || !z.im.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "psi0 contains NaN or Inf",
                 value: f64::NAN,
             });

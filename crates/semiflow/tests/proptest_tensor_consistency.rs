@@ -18,7 +18,7 @@
 //! `contracts/semiflow-core.math.md` §10.4 Lemma 10.2.
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, Axis, AxisLift, DiffusionChernoff, Grid1D, Grid2D, GridFn1D,
     GridFn2D, State,
 };

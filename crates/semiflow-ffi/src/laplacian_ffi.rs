@@ -48,7 +48,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{Graph, Laplacian, LaplacianKind};
+use semiflow::{Graph, Laplacian, LaplacianKind};
 
 use crate::graph_ffi::{GraphInner, SmfGraph};
 use crate::status::SemiflowStatus;

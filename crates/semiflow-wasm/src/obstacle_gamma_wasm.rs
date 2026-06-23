@@ -44,7 +44,7 @@
 use js_sys::{Float64Array, Object, Reflect, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D,

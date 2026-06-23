@@ -19,7 +19,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_possible_truncation)]
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     point_eval::PointEval as _,
     Grid1D, GridFn1D,

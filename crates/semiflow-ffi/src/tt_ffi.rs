@@ -13,7 +13,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
-use semiflow_core::{TtChernoff, TtState};
+use semiflow::{TtChernoff, TtState};
 
 use crate::status::SemiflowStatus;
 

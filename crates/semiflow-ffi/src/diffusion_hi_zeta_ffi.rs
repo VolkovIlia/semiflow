@@ -11,7 +11,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
     Diffusion6thZeta6Chernoff, Diffusion8thZeta8Chernoff, Grid1D, GridFn1D,
 };
@@ -426,7 +426,7 @@ fn build_zeta4(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerZeta4, semiflow_core::SemiflowError> {
+) -> Result<InnerZeta4, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let d4 = Diffusion4thChernoff::new(unit_a_z, zero_d_z, zero_d_z, 1.0, grid);
@@ -442,7 +442,7 @@ fn build_zeta6(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerZeta6, semiflow_core::SemiflowError> {
+) -> Result<InnerZeta6, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let d4 = Diffusion4thChernoff::new(unit_a_z, zero_d_z, zero_d_z, 1.0, grid);
@@ -459,7 +459,7 @@ fn build_zeta8(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerZeta8, semiflow_core::SemiflowError> {
+) -> Result<InnerZeta8, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let d4 = Diffusion4thChernoff::new(unit_a_z, zero_d_z, zero_d_z, 1.0, grid);
@@ -474,21 +474,21 @@ fn build_zeta8(
 fn run_evolve4(
     i: &mut InnerZeta4,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }
 fn run_evolve6(
     i: &mut InnerZeta6,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }
 fn run_evolve8(
     i: &mut InnerZeta8,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }

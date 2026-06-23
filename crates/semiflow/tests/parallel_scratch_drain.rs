@@ -17,7 +17,7 @@
 
 #![cfg(feature = "parallel")]
 
-use semiflow_core::{
+use semiflow::{
     drain_thread_local_pools,
     strang2d_parallel::{drain_thread_local_pools_2d, PARALLEL_2D_POOL},
     strang3d_parallel::{drain_thread_local_pools_3d, PARALLEL_3D_POOL},

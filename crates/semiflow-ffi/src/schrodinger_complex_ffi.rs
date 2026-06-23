@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::os::raw::c_double;
 
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, Grid1D, GridFnComplex1D, SchrödingerChernoffComplex,
 };
 
@@ -246,7 +246,7 @@ fn build_schrodinger_cx(
     v_slice: Option<&[f64]>,
     psi0: &[f64],
     n_steps: usize,
-) -> Result<InnerSchrodingerCx, semiflow_core::SemiflowError> {
+) -> Result<InnerSchrodingerCx, semiflow::SemiflowError> {
     validate_psi_interleaved(psi0, n)?;
     let psi_vec = deinterleave_to_complex(psi0);
     let v_at_node = build_v_at_node(v_slice, n)?;
@@ -260,16 +260,16 @@ fn build_schrodinger_cx(
 fn validate_psi_interleaved(
     psi0: &[f64],
     n: usize,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     if psi0.len() != 2 * n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "psi0_len must equal 2*n (interleaved re/im)",
             value: psi0.len() as f64,
         });
     }
     for &v in psi0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "psi0 contains NaN or Inf",
                 value: v,
             });
@@ -281,19 +281,19 @@ fn validate_psi_interleaved(
 fn build_v_at_node(
     v_slice: Option<&[f64]>,
     n: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     match v_slice {
         None => Ok(vec![0.0_f64; n]),
         Some(arr) => {
             if arr.len() != n {
-                return Err(semiflow_core::SemiflowError::DomainViolation {
+                return Err(semiflow::SemiflowError::DomainViolation {
                     what: "v_len must equal n",
                     value: arr.len() as f64,
                 });
             }
             for &vi in arr {
                 if !vi.is_finite() {
-                    return Err(semiflow_core::SemiflowError::DomainViolation {
+                    return Err(semiflow::SemiflowError::DomainViolation {
                         what: "v contains NaN or Inf",
                         value: vi,
                     });
@@ -308,7 +308,7 @@ fn build_cx_kernel(
     v_at_node: &[f64],
     grid: Grid1D<f64>,
     xmin: f64,
-) -> Result<SchrödingerChernoffComplex<C64>, semiflow_core::SemiflowError> {
+) -> Result<SchrödingerChernoffComplex<C64>, semiflow::SemiflowError> {
     let v = Arc::new(v_at_node.to_vec());
     let v2 = v.clone();
     let dx = grid.dx();
@@ -332,7 +332,7 @@ fn complex_to_interleaved(dst: &mut [f64], vals: &[C64]) {
 fn evolve_schrodinger_cx(
     inner: &mut InnerSchrodingerCx,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let kernel = build_cx_kernel(&inner.v_at_node, inner.grid, inner.xmin)?;
     let sg = ChernoffSemigroup::new(kernel, inner.n_steps)?;
     let src = GridFnComplex1D::<C64>::new(inner.grid, inner.state.values.clone())?;

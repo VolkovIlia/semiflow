@@ -11,7 +11,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS and sweep; n ≤ 1024 ≤ 2^52
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,

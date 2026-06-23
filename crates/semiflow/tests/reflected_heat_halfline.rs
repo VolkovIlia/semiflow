@@ -28,7 +28,7 @@
 #![allow(clippy::cast_precision_loss)] // n, n_steps ≤ 1024, well within 2^52
 #![allow(clippy::doc_markdown)]        // math notation in doc comments (K_N, n_Chernoff, etc.)
 
-use semiflow_core::{
+use semiflow::{
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff},
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, ScratchPool,
 };

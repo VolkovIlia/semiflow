@@ -1,6 +1,6 @@
 //! v3.0 `PyO3` surface (ADR-0076, Wave E, Approach A).
 //!
-//! Wraps `semiflow_core` v3 types (`Evolver`, `Growth<F>`, `apply_into`) for
+//! Wraps `semiflow` v3 types (`Evolver`, `Growth<F>`, `apply_into`) for
 //! Python callers.  **Additive** to the existing v2 pyclasses; the v2
 //! compatibility shim layer was hard-removed at v4.0 (ADR-0084).
 //!
@@ -43,7 +43,7 @@
 
 use numpy::{PyArray1, PyReadwriteArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, DiffusionChernoff, Evolver, Grid1D, GridFn1D, Growth, ScratchPool,
 };
 
@@ -292,7 +292,7 @@ fn evolve_detached(
     raw_addr: usize,
     raw_len: usize,
 ) -> PyResult<Vec<f64>> {
-    let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+    let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
         let evolver = Evolver::new(chernoff, n_chernoff)?;
         let src = GridFn1D::new(grid, src_values)?;
         let mut dst = src.clone();
@@ -320,7 +320,7 @@ fn build_evolver_inner(
     n_grid: usize,
     u0: &[f64],
     n_chernoff: usize,
-) -> Result<EvolverInner, semiflow_core::SemiflowError> {
+) -> Result<EvolverInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(lo, hi, n_grid)?;
     let chernoff = DiffusionChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
@@ -367,10 +367,10 @@ fn validate_t_param(t: f64) -> PyResult<()> {
 }
 
 /// Validate all elements of `u0` are finite.
-fn validate_u0(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

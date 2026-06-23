@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{Graph, GraphSignal};
+use semiflow::{Graph, GraphSignal};
 
 use crate::status::SemiflowStatus;
 

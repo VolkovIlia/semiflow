@@ -1,6 +1,6 @@
 //! v3.0 WASM surface (ADR-0076, Wave F, Approach A).
 //!
-//! Wraps `semiflow_core` v3 types ([`Evolver`], [`Growth<f64>`], `apply_into`)
+//! Wraps `semiflow` v3 types ([`Evolver`], [`Growth<f64>`], `apply_into`)
 //! for JavaScript callers.  **Additive** to the existing v2 JS classes; the
 //! v2 compatibility shim layer was hard-removed at v4.0 (ADR-0084).
 //!
@@ -30,7 +30,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, DiffusionChernoff, Evolver, Grid1D, GridFn1D, Growth, ScratchPool,
 };
 
@@ -255,7 +255,7 @@ fn build_evolver_v3(
     n_grid: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<EvolverInnerV3, semiflow_core::SemiflowError> {
+) -> Result<EvolverInnerV3, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(lo, hi, n_grid)?;
     let chernoff = DiffusionChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
@@ -281,10 +281,10 @@ extern "Rust" fn zero_d(_: f64) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Return `DomainViolation` if any element of `u0` is non-finite.
-fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

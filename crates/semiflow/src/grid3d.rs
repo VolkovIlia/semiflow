@@ -42,7 +42,7 @@ use crate::{error::SemiflowError, float::SemiflowFloat, grid::Grid1D};
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, Grid3D};
+/// use semiflow::{Grid1D, Grid3D};
 /// let g = Grid1D::new(-1.0, 1.0, 8).unwrap();
 /// let grid = Grid3D::new(g, g, g).unwrap();
 /// assert_eq!(grid.nx(), 8);

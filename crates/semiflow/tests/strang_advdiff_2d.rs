@@ -39,7 +39,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
 // ---------------------------------------------------------------------------
 // Grid parameters

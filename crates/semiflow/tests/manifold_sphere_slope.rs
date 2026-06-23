@@ -19,7 +19,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, Grid2D, GridFn2D, ManifoldChernoff, ScratchPool, Sphere2,
 };
 

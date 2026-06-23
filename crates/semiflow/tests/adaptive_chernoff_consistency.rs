@@ -20,7 +20,7 @@
 //! Oracle: u(t,x) = (1+2t)^{-1/2} exp(-x²/(1+2t)).
 //! See: ADR-0014, Lady Windermere's fan (HLW §II.3).
 
-use semiflow_core::{
+use semiflow::{
     state::State, AdaptivePI, BoundaryPolicy, ChernoffSemigroup, DiffusionChernoff, Grid1D,
     GridFn1D,
 };

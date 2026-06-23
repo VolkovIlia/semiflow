@@ -25,7 +25,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid_fn::GridFn1D,
     point_eval::PointEval as CorePointEval,
@@ -184,7 +184,7 @@ fn eval_at_rust(
     tau: f64,
     x: f64,
     n_steps: u32,
-) -> Result<f64, semiflow_core::SemiflowError> {
+) -> Result<f64, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let kernel = DiffusionChernoff::new(
         |_: f64| 1.0_f64,

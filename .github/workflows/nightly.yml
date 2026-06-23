@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install scipy numpy
-      - run: cargo test --release -p semiflow-core --features diff-scipy --test diff_scipy
+      - run: cargo test --release -p semiflow --features diff-scipy --test diff_scipy
 
   miri:
     runs-on: ubuntu-latest
@@ -33,7 +33,7 @@ jobs:
       - name: Run Miri (scalar path — simd intrinsics not supported by Miri)
         env:
           MIRIFLAGS: "-Zmiri-strict-provenance"
-        run: cargo +nightly miri test -p semiflow-core --lib
+        run: cargo +nightly miri test -p semiflow --lib
 
   bench-regression:
     name: Bench regression check (>5% fails)

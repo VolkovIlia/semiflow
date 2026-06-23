@@ -29,7 +29,7 @@
 use std::sync::Arc;
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, ChernoffFunction, Graph, GraphHeatChernoff,
     GraphSignal, strang_graph::StrangSplitGraph,
 };

@@ -52,7 +52,7 @@
 use core::cell::Cell;
 use std::f64::consts::PI;
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, chernoff::ApplyChernoffExt, Diffusion4thChernoff, DiffusionChernoff,
     Grid1D, GridFn1D,
 };

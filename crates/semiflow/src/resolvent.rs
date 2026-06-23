@@ -81,7 +81,7 @@ pub trait Sampleable<F: SemiflowFloat>: State<F> + Sized {
 /// # Usage
 ///
 /// ```rust
-/// use semiflow_core::{
+/// use semiflow::{
 ///     DiffusionChernoff, Grid1D, GridFn1D,
 ///     resolvent::{LaplaceChernoffResolvent, LaplaceQuadrature},
 /// };

@@ -20,7 +20,7 @@
 //!
 //! Reference: `contracts/semiflow-core.math.md §6.2, §9.4, §9.5`; ADR-0006 v2.
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, StrangSplit,
 };
 

@@ -3,7 +3,7 @@
 //!
 //! Run with: `cargo run --example boundary_demo --package semiflow-core`
 
-use semiflow_core::{BoundaryPolicy, Grid1D, GridFn1D};
+use semiflow::{BoundaryPolicy, Grid1D, GridFn1D};
 
 fn main() {
     let grid_base = Grid1D::new(-2.0, 2.0, 8).expect("valid grid");

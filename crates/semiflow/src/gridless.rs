@@ -36,9 +36,9 @@ pub use crate::gridless_reduce::ParticleReduction;
 /// ## Example
 ///
 /// ```rust
-/// use semiflow_core::{GridlessChernoff, MeasureState, ParticleReduction};
-/// use semiflow_core::chernoff::ChernoffFunction;
-/// use semiflow_core::scratch::ScratchPool;
+/// use semiflow::{GridlessChernoff, MeasureState, ParticleReduction};
+/// use semiflow::chernoff::ChernoffFunction;
+/// use semiflow::scratch::ScratchPool;
 ///
 /// let ev = GridlessChernoff::<f64, 1>::isotropic(
 ///     0.5, 0.0, 0.0, ParticleReduction::WeightedVoronoi { cap: 64 });

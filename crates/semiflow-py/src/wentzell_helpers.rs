@@ -8,7 +8,7 @@
 
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},
     robin::RobinRegion,

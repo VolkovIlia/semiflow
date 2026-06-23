@@ -81,7 +81,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, Grid1D, Grid2D, GridFn2D, HdrSnapshot, Hyperbolic2,
     ManifoldChernoff,
 };

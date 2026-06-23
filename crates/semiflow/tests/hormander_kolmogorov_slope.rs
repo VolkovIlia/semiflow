@@ -25,7 +25,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     hormander::{HypoellipticChernoff, KolmogorovPhaseSpace},
     ChernoffFunction, Grid1D, Grid2D, GridFn2D, ScratchPool,
 };

@@ -31,7 +31,7 @@
 
 #![cfg(all(feature = "parallel", feature = "slow-tests"))]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
     diffusion::DiffusionChernoff,
     error::SemiflowError,

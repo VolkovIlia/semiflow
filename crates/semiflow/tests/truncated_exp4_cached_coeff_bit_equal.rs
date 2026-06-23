@@ -30,7 +30,7 @@
 //! actually performs non-trivial work.  A constant `a` would give identical
 //! results even if the cache were ignoring the stored values.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache,
     TruncatedExp4thDiffusionChernoff,
 };

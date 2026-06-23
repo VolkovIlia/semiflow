@@ -27,7 +27,7 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 
 use crate::error::{from_core, new_pyerr};
 use crate::panic::catch_panic_py;
@@ -156,7 +156,7 @@ fn run_jump(
     g_vals: &[f64],
     m_nodes: usize,
     t: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let chernoff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0, grid);
     let kernel = ResolventJumpChernoff::new(chernoff, m_nodes, grid)?;
     let g = GridFn1D::new(grid, g_vals.to_vec())?;
@@ -173,7 +173,7 @@ fn build_inner(
     hi: f64,
     n_grid: usize,
     m_nodes: usize,
-) -> Result<ResolventJumpInner, semiflow_core::SemiflowError> {
+) -> Result<ResolventJumpInner, semiflow::SemiflowError> {
     let grid = Grid1D::new(lo, hi, n_grid)?;
     let chernoff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0, grid);
     let kernel = ResolventJumpChernoff::new(chernoff, m_nodes, grid)?;

@@ -41,7 +41,7 @@ use crate::float::SemiflowFloat;
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::scratch::ScratchPool;
+/// use semiflow::scratch::ScratchPool;
 /// let mut pool: ScratchPool<f64> = ScratchPool::new();
 /// {
 ///     let mut v = pool.borrow_vec(8);

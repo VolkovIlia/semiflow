@@ -40,7 +40,7 @@
 #![allow(clippy::similar_names)]        // nx_c/nx_f/ny_c are math index names
 #![allow(clippy::manual_range_contains)] // `r2 < MIN || r2 > MAX` exclusion is clearer
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, FubiniStudyCp1, Grid1D, Grid2D, GridFn2D, ManifoldChernoff, ScratchPool,
 };
 

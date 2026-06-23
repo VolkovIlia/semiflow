@@ -40,7 +40,7 @@
 #![allow(clippy::items_after_statements)] // type alias GradBox after let statements
 #![allow(clippy::similar_names)]       // tau3/taus: standard math variable names
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd_zeta2::AnisotropicShiftZeta2ND,
     AnisotropicShiftChernoffND, ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,

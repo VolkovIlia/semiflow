@@ -27,7 +27,7 @@
 //!
 //! Uses `a(x) = |sin(x)| + 0.5` (non-constant) so the stencil is non-trivial.
 
-use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache};
+use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache};
 
 // ---------------------------------------------------------------------------
 // Diagnostic reporter — byte-level diff on divergence.
@@ -81,7 +81,7 @@ fn texp4_simd_bit_equal_variable_a_n64() {
     let out_simd = me4c.apply_chernoff(tau, &u0).expect("simd apply");
 
     // Scalar fallback path (forced via FORCE_SCALAR hook).
-    let out_scalar = semiflow_core::simd::with_force_scalar(|| {
+    let out_scalar = semiflow::simd::with_force_scalar(|| {
         me4c.apply_chernoff(tau, &u0).expect("scalar apply")
     });
 
@@ -114,7 +114,7 @@ fn texp4_simd_bit_equal_multistep() {
 
     for step in 0..5_usize {
         u_simd = me4c.apply_chernoff(tau, &u_simd).expect("simd step");
-        u_scalar = semiflow_core::simd::with_force_scalar(|| {
+        u_scalar = semiflow::simd::with_force_scalar(|| {
             me4c.apply_chernoff(tau, &u_scalar).expect("scalar step")
         });
         assert_bit_equal(
@@ -142,7 +142,7 @@ fn texp4_simd_bit_equal_n256() {
         TruncatedExp4WithCache::with_cached_coefficients(a, |_| 0.0, |_| 0.0, a_norm_bound, grid);
 
     let out_simd = me4c.apply_chernoff(tau, &u0).expect("simd apply n256");
-    let out_scalar = semiflow_core::simd::with_force_scalar(|| {
+    let out_scalar = semiflow::simd::with_force_scalar(|| {
         me4c.apply_chernoff(tau, &u0).expect("scalar apply n256")
     });
 

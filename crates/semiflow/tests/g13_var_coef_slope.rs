@@ -20,7 +20,7 @@
 use std::f64::consts::TAU as TWO_PI;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     state::HilbertState,
     Graph, GraphSignal, ScratchPool, VarCoefGraphHeatChernoff,
@@ -269,7 +269,7 @@ fn g13_unit_a_is_contractive() {
 
 #[test]
 fn g13_cfl_violation_returns_error() {
-    use semiflow_core::SemiflowError;
+    use semiflow::SemiflowError;
     let n = 8usize;
     let g = Arc::new(Graph::<f64>::path(n));
     let a = vec![2.0_f64; n]; // max_a^2 = 4

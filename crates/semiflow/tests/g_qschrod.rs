@@ -24,7 +24,7 @@
 use core::f64::consts::PI;
 
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction,
     quantum_graph::QuantumGraph,
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},

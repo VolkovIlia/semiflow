@@ -19,7 +19,7 @@
 // Test: allows exact float comparisons for identity/sentinel checks.
 #![allow(clippy::float_cmp)]
 
-use semiflow_core::{
+use semiflow::{
     boundary::{InterpKind, OobPolicy},
     BoundaryPolicy, Grid1D, GridFn1D,
 };

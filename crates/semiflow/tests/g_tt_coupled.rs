@@ -57,7 +57,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use semiflow_core::{CoupledTtChernoff, CouplingTopology, TtState};
+use semiflow::{CoupledTtChernoff, CouplingTopology, TtState};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §A — Pre-registered parameters (NORMATIVE)

@@ -40,7 +40,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, grid_nd::GridND};
+/// use semiflow::{Grid1D, grid_nd::GridND};
 /// let axes = core::array::from_fn(|_| Grid1D::new(-5.0_f64, 5.0, 16).unwrap());
 /// let grid = GridND::<f64, 2>::new(axes).unwrap();
 /// assert_eq!(grid.len(), 256); // 16*16
@@ -146,7 +146,7 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, grid_nd::{GridND, GridFnND}};
+/// use semiflow::{Grid1D, grid_nd::{GridND, GridFnND}};
 /// let axes = core::array::from_fn(|_| Grid1D::new(-5.0_f64, 5.0, 16).unwrap());
 /// let grid = GridND::<f64, 2>::new(axes).unwrap();
 /// let f = GridFnND::from_fn(grid.clone(), |x: &[f64; 2]| (-x[0]*x[0] - x[1]*x[1]).exp());

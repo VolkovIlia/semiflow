@@ -35,7 +35,7 @@ mod full {
     use js_sys::Float64Array;
     use wasm_bindgen::prelude::*;
 
-    use semiflow_core::{
+    use semiflow::{
         graph::Graph,
         graph_adjoint_presampled::{
             fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj,
@@ -43,7 +43,7 @@ mod full {
         graph_signal::GraphSignal,
         LaplacianKind, MagnusGraphHeatChernoff,
     };
-    use semiflow_core::scratch::ScratchPool;
+    use semiflow::scratch::ScratchPool;
     use std::sync::Arc;
 
     use crate::error::{err_to_js, make_js_error};

@@ -16,7 +16,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     resolvent::{LaplaceChernoffResolvent, LaplaceChernoffResolventResidual, LaplaceQuadrature},
     DiffusionChernoff, Grid1D, GridFn1D,
 };

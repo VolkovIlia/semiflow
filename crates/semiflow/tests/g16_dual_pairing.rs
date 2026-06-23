@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     drift_reaction::DriftReactionChernoff,
     grid::Grid1D,

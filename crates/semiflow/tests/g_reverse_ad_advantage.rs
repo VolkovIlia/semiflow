@@ -42,7 +42,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use semiflow_core::{
+use semiflow::{
     reverse_ad::{forward_with_checkpoints, recompute_segment, step_jacobian_col, TransposeApply},
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind, ReverseChernoff,
 };

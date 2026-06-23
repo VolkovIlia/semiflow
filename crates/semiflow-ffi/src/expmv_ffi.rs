@@ -14,7 +14,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D,
     GridFn1D,
 };
@@ -193,7 +193,7 @@ fn build_expmv(
     n: usize,
     n_steps: usize,
     u0: &[f64],
-) -> Result<InnerExpmv, semiflow_core::SemiflowError> {
+) -> Result<InnerExpmv, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let d4 = Diffusion4thChernoff::new(unit_a_expmv_ffi, zero_expmv_ffi, zero_expmv_ffi, 1.0, grid);
@@ -203,7 +203,7 @@ fn build_expmv(
     Ok(InnerExpmv { semigroup, current })
 }
 
-fn evolve_expmv(inner: &mut InnerExpmv, t: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn evolve_expmv(inner: &mut InnerExpmv, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

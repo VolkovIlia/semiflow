@@ -34,7 +34,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction,
     graph_sensitivity::{adjoint_state_gradient, magnus_step_jvp_into, EdgeWeightSensitivity},
     magnus6_graph::MagnusGraphHeat6thChernoff,

@@ -34,7 +34,7 @@
 use js_sys::{Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
     ScratchPool, State,
 };
@@ -175,7 +175,7 @@ fn run_steps(
     pos_in: &[f64],
     wts_in: &[f64],
     n_steps: usize,
-) -> Result<(Vec<f64>, Vec<f64>), semiflow_core::SemiflowError> {
+) -> Result<(Vec<f64>, Vec<f64>), semiflow::SemiflowError> {
     let grid = Grid1D::new(-4.0_f64, 4.0, 32)?;
     let fwd = DiffusionChernoff::new_const_a(a, a, grid);
     let kernel = AdjointFokkerPlanckChernoff::new(fwd, a, b, c);

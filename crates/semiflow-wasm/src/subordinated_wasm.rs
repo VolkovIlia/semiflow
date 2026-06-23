@@ -20,7 +20,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     subordinated::{
         GammaSubordinator, InverseGaussianSubordinator, LevySubordinator, StableSubordinator,
@@ -139,7 +139,7 @@ fn build_subordinated_wasm(
     u0: &[f64],
     sub: SubordinatorEnum,
     n_nodes: usize,
-) -> Result<(SubKernel, GridFn1D<f64>), semiflow_core::SemiflowError> {
+) -> Result<(SubKernel, GridFn1D<f64>), semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let diff = DiffusionChernoff::new(unit_a_sub, zero_sub, zero_sub, 1.0, grid);
     let kernel = SubordinatedChernoff::with_n_nodes(diff, sub, n_nodes)?;

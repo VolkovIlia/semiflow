@@ -17,14 +17,14 @@
 //! the pure-scalar fallback only.
 
 #[cfg(not(feature = "parallel"))]
-use semiflow_core::nonseparable2d::NonSeparable2DChernoff;
+use semiflow::nonseparable2d::NonSeparable2DChernoff;
 #[cfg(not(feature = "parallel"))]
-use semiflow_core::nonseparable2d_aniso::NonSeparable2DAnisotropicChernoff;
+use semiflow::nonseparable2d_aniso::NonSeparable2DAnisotropicChernoff;
 #[cfg(not(feature = "parallel"))]
-use semiflow_core::strang2d::Strang2D;
+use semiflow::strang2d::Strang2D;
 #[cfg(not(feature = "parallel"))]
-use semiflow_core::strang3d::Strang3D;
-use semiflow_core::{
+use semiflow::strang3d::Strang3D;
+use semiflow::{
     adaptive::AdaptivePI,
     axis::{Axis, AxisLift},
     boundary::InterpKind,
@@ -68,7 +68,7 @@ fn assert_abs_f32(actual: f32, expected: f32, tol: f32, label: &str) {
 // `apply_generic` without touching any production impl.
 // ---------------------------------------------------------------------------
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
     error::SemiflowError,
     scratch::ScratchPool,
@@ -78,7 +78,7 @@ use semiflow_core::{
 /// can be used as `ChernoffFunction<F>` for non-f64 smoke tests.
 /// `Copy` removed in v0.12.0 (ADR-0034): `DiffusionChernoff` holds Arc closures.
 #[derive(Clone)]
-struct WrapDiff<F: SemiflowFloat>(semiflow_core::diffusion::DiffusionChernoff<F>);
+struct WrapDiff<F: SemiflowFloat>(semiflow::diffusion::DiffusionChernoff<F>);
 
 impl<F: SemiflowFloat> ChernoffFunction<F> for WrapDiff<F> {
     type S = GridFn1D<F>;
@@ -105,7 +105,7 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for WrapDiff<F> {
 /// `Copy` removed (v2.3 ADR-0034 ext): `DriftReactionChernoff` now holds
 /// `Option<Storage2<F>>` which contains `Arc<dyn Fn>` in the closure path.
 #[derive(Clone)]
-struct WrapDrift<F: SemiflowFloat>(semiflow_core::drift_reaction::DriftReactionChernoff<F>);
+struct WrapDrift<F: SemiflowFloat>(semiflow::drift_reaction::DriftReactionChernoff<F>);
 
 impl<F: SemiflowFloat> ChernoffFunction<F> for WrapDrift<F> {
     type S = GridFn1D<F>;
@@ -635,7 +635,7 @@ fn grid_fn2d_f32_smoke() {
     // new_generic with wrong length returns error.
     let err = GridFn2D::<f32>::new_generic(g, vec![0.0_f32; 3]).unwrap_err();
     assert!(
-        matches!(err, semiflow_core::SemiflowError::DomainViolation { .. }),
+        matches!(err, semiflow::SemiflowError::DomainViolation { .. }),
         "expected DomainViolation, got {err:?}"
     );
 }
@@ -700,7 +700,7 @@ fn grid_fn3d_f32_smoke() {
     // new_generic with wrong length returns DomainViolation.
     let err = GridFn3D::<f32>::new_generic(g, vec![0.0_f32; 3]).unwrap_err();
     assert!(
-        matches!(err, semiflow_core::SemiflowError::DomainViolation { .. }),
+        matches!(err, semiflow::SemiflowError::DomainViolation { .. }),
         "expected DomainViolation, got {err:?}"
     );
 }
@@ -889,7 +889,7 @@ fn strang_split_f32_smoke() {
 fn adaptive_pi_strang_split_f64_smoke() {
     // AdaptivePI is f64-only. This test verifies the f64 path still works
     // after the Wave 4 generic refactor.
-    use semiflow_core::grid::Grid1D as G1;
+    use semiflow::grid::Grid1D as G1;
     let g = G1::new(-4.0_f64, 4.0_f64, 32).unwrap();
     let f = GridFn1D::<f64>::from_fn(g, |x| (-x * x).exp());
     let diff = DiffusionChernoff::new(|_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5, g);

@@ -13,7 +13,7 @@
 #![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic
 #![allow(clippy::unusual_byte_groupings)]   // 0xC0FFEE_BABE_DEAD_BEEF is a named seed constant
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
 };
 

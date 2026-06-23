@@ -26,7 +26,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Diffusion4thChernoff, Grid1D, GridFn1D, SchrodingerChernoff,
     SchrodingerState, ScratchPool,
 };

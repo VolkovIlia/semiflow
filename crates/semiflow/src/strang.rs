@@ -64,7 +64,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{
+/// use semiflow::{
 ///     Grid1D, GridFn1D, DiffusionChernoff, DriftReactionChernoff, StrangSplit,
 ///     ChernoffSemigroup, ChernoffFunction,
 /// };

@@ -30,7 +30,7 @@
 #![allow(clippy::cast_sign_loss)]        // f64→usize probe index: .round() result ≥ 0
 #![allow(clippy::too_many_lines)]        // g_wentzell_order is a single cohesive gate (51 lines)
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,

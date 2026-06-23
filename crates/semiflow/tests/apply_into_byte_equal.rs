@@ -19,7 +19,7 @@
 use core::cell::Cell;
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     scratch::ScratchPool,
     Diffusion4thChernoff, Diffusion6thChernoff, DiffusionChernoff, Grid1D, GridFn1D,

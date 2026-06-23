@@ -29,7 +29,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
-use semiflow_core::{CoupledTtChernoff, CouplingTopology};
+use semiflow::{CoupledTtChernoff, CouplingTopology};
 
 use crate::error::new_pyerr;
 use crate::panic::catch_panic_py;

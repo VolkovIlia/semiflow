@@ -24,7 +24,7 @@
 //!
 //! Run with:  `cargo run --release --example heat_2d_demo -p semiflow-core`
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
 /// Spatial nodes per axis. 1000 × 1000 = 1M cells.
 const N_NODES: usize = 1000;

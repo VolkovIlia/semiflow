@@ -46,7 +46,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use semiflow_core::{TtChernoff, TtState};
+use semiflow::{TtChernoff, TtState};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §A — Pre-registered parameters
@@ -189,8 +189,8 @@ fn build_state_regime_h(d: usize) -> TtState<f64> {
 
     // Build rank-2 TT: first core is [base | eps*shifted(0)], others accumulate
     // Build rank-2 TT state: superposition of base ⊗ ... ⊗ base and shifted terms.
-    // Since TtCore is pub, we use semiflow_core::tt_core::TtCore directly.
-    use semiflow_core::tt_core::TtCore;
+    // Since TtCore is pub, we use semiflow::tt_core::TtCore directly.
+    use semiflow::tt_core::TtCore;
 
     // Core 0: shape 1 × N_GRID × 2  (2 = left rank-1, right rank for superposition)
     let mut c0 = TtCore::zeros(1, N_GRID, 2);

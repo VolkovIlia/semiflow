@@ -24,7 +24,7 @@
 // Integration test/example: allows for numerical patterns.
 #![allow(clippy::missing_panics_doc)]
 
-use semiflow_core::{
+use semiflow::{
     ClosureObstacle, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff,
 };
 
@@ -191,7 +191,7 @@ fn g_binding_obstacle_gamma_min_n_4_ok() {
 
 #[test]
 fn g_binding_obstacle_gamma_length_mismatch_error() {
-    use semiflow_core::SemiflowError;
+    use semiflow::SemiflowError;
     let grid = Grid1D::new(0.0_f64, 1.0, 8).unwrap();
     let v = GridFn1D::from_fn(grid, |s| s);
     let obs = ConstantObstacle::new(0.0_f64).unwrap();

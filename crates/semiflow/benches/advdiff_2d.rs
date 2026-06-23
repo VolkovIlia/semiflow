@@ -14,7 +14,7 @@
 #![allow(missing_docs, clippy::type_complexity)]
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use semiflow_core::{ChernoffSemigroup, DriftReactionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
+use semiflow::{ChernoffSemigroup, DriftReactionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
 type Semi2D = ChernoffSemigroup<
     Strang2D<DriftReactionChernoff<f64>, DriftReactionChernoff<f64>>,

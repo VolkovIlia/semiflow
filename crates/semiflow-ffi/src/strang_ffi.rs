@@ -24,7 +24,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D,
     StrangSplit,
 };
@@ -203,7 +203,7 @@ fn build_strang1d(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerStrang1D, semiflow_core::SemiflowError> {
+) -> Result<InnerStrang1D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let diff = DiffusionChernoff::new(unit_a_st, zero_st, zero_st, 1.0, grid);
@@ -219,7 +219,7 @@ fn build_strang1d(
 // Evolve helper
 // ---------------------------------------------------------------------------
 
-fn evolve_strang1d(inner: &mut InnerStrang1D, t: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn evolve_strang1d(inner: &mut InnerStrang1D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

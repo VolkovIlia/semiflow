@@ -17,7 +17,7 @@
 //! Reference: `contracts/v2/wave3-state-trait.md` §5, `docs/adr/0043-state-trait-three-layer-split.md`.
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     state::{HilbertState, State},
     Grid1D, GridFn1D,
 };

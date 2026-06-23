@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction,
     drift_reaction::DriftReactionChernoff,
     grid_nd::{GridFnND, GridND},

@@ -26,7 +26,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::too_many_lines)] // evaluate_backend covers all 5 λ modes inline
 
-use semiflow_core::{
+use semiflow::{
     drift_reaction::DriftReactionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,

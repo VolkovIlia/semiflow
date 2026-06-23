@@ -32,7 +32,7 @@
 //! Domain [−15, 15] keeps the 7-point FD stencil (±3·dx from x) well inside
 //! the grid for all N tested. Boundary policy: Reflect (default).
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, ChernoffSemigroup, Diffusion4thChernoff, Grid1D, GridFn1D, State,
 };
 

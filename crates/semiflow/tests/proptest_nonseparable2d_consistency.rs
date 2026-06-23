@@ -16,7 +16,7 @@
 //! Reference: `contracts/semiflow-core.properties.yaml` Block C properties.
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparable2DChernoff, SemiflowError, Strang2D,
 };

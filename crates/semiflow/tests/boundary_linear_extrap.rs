@@ -7,7 +7,7 @@
 //!   values bounded by `M + C` where C is a generous constant absorbing the
 //!   3-point slope formula's possible amplification at the boundary stencil.
 
-use semiflow_core::{BoundaryPolicy, Grid1D, GridFn1D};
+use semiflow::{BoundaryPolicy, Grid1D, GridFn1D};
 
 // Grid parameters.
 const XMIN: f64 = -10.0;

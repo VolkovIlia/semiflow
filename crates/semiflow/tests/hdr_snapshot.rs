@@ -14,7 +14,7 @@
 )]
 
 use proptest::prelude::*;
-use semiflow_core::HdrSnapshot;
+use semiflow::HdrSnapshot;
 
 // ---------------------------------------------------------------------------
 // Deterministic unit tests

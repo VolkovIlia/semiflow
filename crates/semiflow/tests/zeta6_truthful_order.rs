@@ -36,7 +36,7 @@
 
 #![allow(clippy::cast_precision_loss)] // n ≤ 16; well within f64 mantissa
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
     Diffusion6thZeta6Chernoff, Grid1D, GridFn1D, ScratchPool,
 };

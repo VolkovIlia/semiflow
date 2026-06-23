@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_heat::GraphHeatChernoff,
     graph_signal::GraphSignal,

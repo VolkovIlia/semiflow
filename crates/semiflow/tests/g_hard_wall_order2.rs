@@ -48,8 +48,8 @@
 #![allow(clippy::cast_possible_truncation)] // f64→usize for n_steps: always non-negative finite
 #![allow(clippy::cast_sign_loss)]       // same: ceil() result is positive
 
-use semiflow_core::chernoff::ChernoffFunction;
-use semiflow_core::{Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool};
+use semiflow::chernoff::ChernoffFunction;
+use semiflow::{Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool};
 
 // ---------------------------------------------------------------------------
 // Gate constants (normative — do NOT relax without ADR + properties.yaml bump)

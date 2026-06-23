@@ -12,7 +12,7 @@
 #![allow(missing_docs)]
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
 
 /// Build the semigroup and initial state for the benchmark.
 fn make_state() -> (

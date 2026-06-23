@@ -26,7 +26,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow_core::{
+use semiflow::{
     boundary::{InterpKind, OobPolicy},
     chernoff::ChernoffFunction,
     Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Diffusion6thZeta6Chernoff,

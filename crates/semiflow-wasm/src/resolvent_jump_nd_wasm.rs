@@ -42,7 +42,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ResolventJumpChernoff2D, ResolventJumpChernoff3D,
 };
 
@@ -268,7 +268,7 @@ fn run_jump_2d(
     g_vals: &[f64],
     m_nodes: usize,
     t: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = ResolventJumpChernoff2D::new(grid, m_nodes)?;
     let g = GridFn2D {
         values: g_vals.to_vec(),
@@ -283,7 +283,7 @@ fn run_jump_3d(
     g_vals: &[f64],
     m_nodes: usize,
     t: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = ResolventJumpChernoff3D::new(grid, m_nodes)?;
     let g = GridFn3D {
         values: g_vals.to_vec(),
@@ -305,7 +305,7 @@ fn build_kernel_2d(
     ymax: f64,
     ny: usize,
     m_nodes: usize,
-) -> Result<ResolventJumpChernoff2D<f64>, semiflow_core::SemiflowError> {
+) -> Result<ResolventJumpChernoff2D<f64>, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let grid = Grid2D::new(gx, gy);
@@ -323,7 +323,7 @@ fn build_kernel_3d(
     zmax: f64,
     nz: usize,
     m_nodes: usize,
-) -> Result<ResolventJumpChernoff3D<f64>, semiflow_core::SemiflowError> {
+) -> Result<ResolventJumpChernoff3D<f64>, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let gz = Grid1D::new(zmin, zmax, nz)?;

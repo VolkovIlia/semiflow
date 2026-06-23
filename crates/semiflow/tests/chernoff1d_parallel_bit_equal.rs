@@ -21,7 +21,7 @@
 
 // Thread-count override hook (exposed under `#[doc(hidden)] pub mod parallel1d`
 // when `--features parallel`).
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, parallel1d::FORCE_THREADS_1D, ChernoffFunction,
     Diffusion4thChernoff, Diffusion6thChernoff, DiffusionChernoff, DriftReactionChernoff, Grid1D,
     GridFn1D, ShiftChernoff1D, TruncatedExp4thDiffusionChernoff, TruncatedExpDiffusionChernoff,

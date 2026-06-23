@@ -18,7 +18,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     howland::{HowlandLift, HowlandState},
     ChernoffSemigroup, Grid1D, GridFn1D,
@@ -78,7 +78,7 @@ fn build_howland_wasm(
     u0: &[f64],
     n_t: usize,
     t_horizon: f64,
-) -> Result<HowlandTuple, semiflow_core::SemiflowError> {
+) -> Result<HowlandTuple, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let diff = DiffusionChernoff::new(unit_a_hw, zero_hw, zero_hw, 1.0, grid);
     let lift = HowlandLift::new(diff, t_horizon, n_t)?;
@@ -96,7 +96,7 @@ fn build_howland_wasm(
 fn step_howland(
     lift: &HowlandKernel,
     state: &HowlandState<GridFn1D<f64>, f64>,
-) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow_core::SemiflowError> {
+) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow::SemiflowError> {
     let n_steps = lift.n_t() - 1;
     let sg = ChernoffSemigroup::new(lift.clone(), n_steps)?;
     sg.evolve(lift.delta_s() * n_steps as f64, state)

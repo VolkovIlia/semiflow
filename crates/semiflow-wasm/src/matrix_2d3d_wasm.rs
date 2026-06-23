@@ -10,7 +10,7 @@
 //! `panic = "abort"` (ADR-0028 Amendment 1): no `catch_unwind`.
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     matrix_2d3d::{MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D},
     matrix_system::MatrixDiffusionChernoff,
     ChernoffSemigroup, Grid1D, Grid2D, Grid3D,
@@ -27,7 +27,7 @@ fn build_axis_kernel(
     a_diag: f64,
     c_coupling: f64,
     axis: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     let a = a_diag;
     let c = c_coupling;
     MatrixDiffusionChernoff::<f64, 2>::new(
@@ -121,7 +121,7 @@ fn evolve_2d(
     vals: &[f64],
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
     let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
     let kernel = MatrixDiffusionChernoff2D::new(kx, ky);
@@ -143,7 +143,7 @@ fn evolve_3d(
     vals: &[f64],
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
     let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
     let kz = build_axis_kernel(a_diag, c_coupling, g.z)?;

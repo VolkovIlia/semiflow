@@ -13,7 +13,7 @@ use std::sync::Arc;
 use numpy::ToPyArray;
 use pyo3::prelude::*;
 
-use semiflow_core::{Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeatChernoff};
+use semiflow::{Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeatChernoff};
 
 use crate::dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype};
 use crate::graph_heat_f32::compute_magnus_graph_f32;
@@ -172,7 +172,7 @@ fn evolve_f64<'py>(
     t_final: f64,
     n_steps: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+    let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
         compute_magnus_graph(
             &graph,
             callback,
@@ -199,7 +199,7 @@ fn evolve_f32<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let graph2 = Arc::clone(&graph);
     let lap_f32 = make_lap_at_t_f32(callback, graph2);
-    let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+    let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
         compute_magnus_graph_f32(
             graph,
             lap_f32,
@@ -234,8 +234,8 @@ fn compute_magnus_graph(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
-    use semiflow_core::ScratchPool;
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    use semiflow::ScratchPool;
 
     let graph2 = Arc::clone(graph);
     let lap_at_t: LaplacianAtTime<f64> = Box::new(move |t: f64| {

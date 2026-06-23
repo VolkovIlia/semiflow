@@ -61,7 +61,7 @@
     clippy::too_many_lines
 )]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Grid1D, GridFn1D,
     ScratchPool,
 };

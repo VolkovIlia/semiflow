@@ -251,7 +251,7 @@ impl<F: SemiflowFloat, const D: usize> Default for GaussHermiteTensor<F, D> {
 /// # Construction
 ///
 /// ```rust,ignore
-/// # use semiflow_core::{Grid1D, AnisotropicShiftChernoffND, grid_nd::GridND};
+/// # use semiflow::{Grid1D, AnisotropicShiftChernoffND, grid_nd::GridND};
 /// # let axes = core::array::from_fn(|_| Grid1D::new(-5.0_f64, 5.0, 16).unwrap());
 /// # let grid = GridND::<f64, 2>::new(axes).unwrap();
 /// let kernel = AnisotropicShiftChernoffND::<f64, 2>::new(

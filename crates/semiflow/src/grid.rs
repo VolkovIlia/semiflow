@@ -54,7 +54,7 @@ pub(crate) use crate::boundary::{bc_value, bc_value_generic};
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, BoundaryPolicy, InterpKind};
+/// use semiflow::{Grid1D, BoundaryPolicy, InterpKind};
 /// let grid = Grid1D::new(-1.0, 1.0, 100).unwrap();
 /// assert_eq!(grid.n, 100);
 /// assert!((grid.dx() - 2.0 / 99.0).abs() < 1e-15);
@@ -292,7 +292,7 @@ impl Grid1D<f64> {
     /// Defaults: `boundary = Reflect`, `oob_policy = OobPolicy::Inherit`.
     /// Equivalent to:
     /// ```rust,ignore
-    /// # use semiflow_core::{Grid1D, InterpKind, OobPolicy};
+    /// # use semiflow::{Grid1D, InterpKind, OobPolicy};
     /// # let (xmin, xmax, n, m) = (-1.0_f64, 1.0, 16, 64);
     /// Grid1D::new(xmin, xmax, n).unwrap().with_interp(InterpKind::ChebyshevSpectralWithBC {
     ///     m,

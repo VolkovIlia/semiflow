@@ -28,7 +28,7 @@
 //!
 //! Reference: contracts/semiflow-core.math.md §9.2.3.C, ADR-0011.
 
-use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff};
+use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff};
 
 // ---------------------------------------------------------------------------
 // Gate constants

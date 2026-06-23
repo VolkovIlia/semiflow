@@ -73,7 +73,7 @@ use crate::{
 /// # Constructor
 ///
 /// ```rust
-/// use semiflow_core::{Diffusion4thChernoff, DriftReactionZeta4Chernoff, Grid1D, ChernoffFunction};
+/// use semiflow::{Diffusion4thChernoff, DriftReactionZeta4Chernoff, Grid1D, ChernoffFunction};
 /// let grid = Grid1D::new(-5.0, 5.0, 256).unwrap();
 /// let diff = Diffusion4thChernoff::new(|_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid);
 /// // b(x) = -0.3x, c = -0.3, b'(x) = -0.3

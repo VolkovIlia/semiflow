@@ -15,7 +15,7 @@
 use std::{f64::consts::PI, sync::Arc};
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_signal::GraphSignal,
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},

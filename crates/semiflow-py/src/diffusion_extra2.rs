@@ -7,7 +7,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, StrangSplit,
     TruncatedExp4thDiffusionChernoff,
 };
@@ -197,8 +197,8 @@ fn build_trunc_exp4th(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<TruncExp4thInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<TruncExp4thInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let trunc4 = TruncatedExp4thDiffusionChernoff::new(unit_a_de, zero_d_de, zero_d_de, 1.0, grid);
@@ -213,8 +213,8 @@ fn build_strang1d(
     n: usize,
     u0: &[f64],
     b_const: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Strang1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Strang1DInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_de, zero_d_de, zero_d_de, 1.0, grid);
@@ -236,7 +236,7 @@ fn evolve_trunc_exp4th(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -248,7 +248,7 @@ fn evolve_strang(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)

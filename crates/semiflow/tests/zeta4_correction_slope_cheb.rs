@@ -54,7 +54,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::similar_names)]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Grid1D, GridFn1D,
     ScratchPool,
 };

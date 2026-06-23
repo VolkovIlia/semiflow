@@ -114,7 +114,7 @@ pub(crate) const SQRT3_OVER_12_F64: f64 = 0.144_337_567_297_406_433;
 ///
 /// ```rust
 /// use std::sync::Arc;
-/// use semiflow_core::{Graph, Laplacian, LaplacianAtTime};
+/// use semiflow::{Graph, Laplacian, LaplacianAtTime};
 ///
 /// let topology = Arc::new(Graph::<f64>::path(8));
 /// let lap_at: LaplacianAtTime<f64> = {
@@ -182,7 +182,7 @@ pub type LaplacianAtTime<F> = crate::graph_traj::SegmentWeightFn<F>;
 ///
 /// ```rust
 /// use std::sync::Arc;
-/// use semiflow_core::{
+/// use semiflow::{
 ///     Graph, Laplacian, GraphSignal, LaplacianAtTime,
 ///     MagnusGraphHeatChernoff, ChernoffSemigroup,
 /// };

@@ -29,7 +29,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     manifold::{Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,
     ChernoffFunction, ChernoffSemigroup, Grid1D, Grid2D, GridFn2D, ScratchPool,
@@ -80,7 +80,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         src: &GridFn2D<f64>,
         dst: &mut GridFn2D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             ManifoldEnum::Torus(k) => k.apply_into(tau, src, dst, scratch),
             ManifoldEnum::Sphere(k) => k.apply_into(tau, src, dst, scratch),
@@ -96,7 +96,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         }
     }
 
-    fn growth(&self) -> semiflow_core::chernoff::Growth<f64> {
+    fn growth(&self) -> semiflow::chernoff::Growth<f64> {
         match self {
             ManifoldEnum::Torus(k) => k.growth(),
             ManifoldEnum::Sphere(k) => k.growth(),
@@ -302,14 +302,14 @@ fn build_manifold2d(
     ny: usize,
     u0: &[f64],
     kernel: ManifoldEnum,
-) -> Result<Manifold2DInner, semiflow_core::SemiflowError> {
+) -> Result<Manifold2DInner, semiflow::SemiflowError> {
     validate_u0_geo(u0)?;
     let gx = Grid1D::new(x0min, x0max, nx)?;
     let gy = Grid1D::new(x1min, x1max, ny)?;
     let grid = Grid2D::new(gx, gy);
     let expected = nx * ny;
     if u0.len() != expected {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0 length must equal nx * ny",
             value: u0.len() as f64,
         });
@@ -333,7 +333,7 @@ fn evolve_manifold2d(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let f = GridFn2D::new_generic(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)

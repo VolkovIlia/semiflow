@@ -8,7 +8,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D,
 };
 
@@ -133,8 +133,8 @@ fn build_expmv(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<ExpmvInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<ExpmvInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let d4 = Diffusion4thChernoff::new(unit_a_expmv, zero_expmv, zero_expmv, 1.0, grid);
@@ -150,7 +150,7 @@ fn compute_evolve(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -166,10 +166,10 @@ fn validate_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-fn validate_u0(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

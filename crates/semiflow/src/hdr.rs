@@ -11,7 +11,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use semiflow_core::HdrSnapshot;
+//! use semiflow::HdrSnapshot;
 //! let mut snap = HdrSnapshot::new(16);
 //! for ns in [10, 20, 30, 40, 50] { snap.record(ns); }
 //! assert_eq!(snap.percentile(50.0), 30); // ceil(2.5) = 3, sorted[2] = 30

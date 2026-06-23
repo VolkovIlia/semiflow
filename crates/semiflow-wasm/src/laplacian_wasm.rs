@@ -46,7 +46,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::error::make_js_error;
 use crate::graph_wasm::GraphPath;
-use semiflow_core::{Graph, Laplacian, LaplacianKind};
+use semiflow::{Graph, Laplacian, LaplacianKind};
 
 // ---------------------------------------------------------------------------
 // Laplacian JS class

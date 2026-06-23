@@ -21,7 +21,7 @@
 //! formula (6) directly and assert the contractivity bound.
 
 use proptest::prelude::*;
-use semiflow_core::{Grid1D, GridFn1D, ShiftChernoff1D, State};
+use semiflow::{Grid1D, GridFn1D, ShiftChernoff1D, State};
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -8,7 +8,7 @@
 //! convergence, which gives log-log slope -1. The gate is relaxed to -0.95
 //! to tolerate grid discretisation and boundary artifacts.
 
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
 
 const N_VALUES: [usize; 5] = [25, 50, 100, 200, 400];
 

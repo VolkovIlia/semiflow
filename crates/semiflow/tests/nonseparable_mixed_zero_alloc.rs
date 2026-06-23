@@ -20,7 +20,7 @@
 //! See ADR-0058 §"Acceptance gates", ADR-0041 AC-4 (allocation-counter pattern).
 
 use allocation_counter::{self, AllocationInfo};
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparableMixedChernoff,
 };

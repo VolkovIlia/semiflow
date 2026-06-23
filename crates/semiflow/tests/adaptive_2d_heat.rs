@@ -30,7 +30,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{AdaptivePI, Diffusion4thChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
+use semiflow::{AdaptivePI, Diffusion4thChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
 // ---------------------------------------------------------------------------
 // Grid parameters

@@ -17,7 +17,7 @@
 // Binding layer: allows for FFI/PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::cast_possible_wrap, clippy::similar_names)]
 
-use semiflow_core::{
+use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind, ReverseChernoff,
 };
 
@@ -156,7 +156,7 @@ const K_VEC: usize = 2;
 /// bug (ADR-0172). Both `_vs_k1_0ulp` and `_determinism_0ulp` merged into this gate.
 #[test]
 fn g_binding_reverse_ad_parity_sub4_wasm_kvec_fails_loud() {
-    use semiflow_core::SemiflowError;
+    use semiflow::SemiflowError;
 
     let grid_f64 = Grid1D::<f64>::new(X_MIN, X_MAX, N_GRID)
         .unwrap()

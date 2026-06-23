@@ -7,7 +7,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -142,8 +142,8 @@ fn build_reflected(
     n: usize,
     u0: &[f64],
     origin: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Reflected1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Reflected1DInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
@@ -160,7 +160,7 @@ fn evolve_reflected(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -293,8 +293,8 @@ fn build_robin(
     alpha: f64,
     beta: f64,
     origin: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Robin1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Robin1DInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     // RobinHeatChernoff::apply_into calls reflect_in_place which uses
     // sample_generic.  SepticHermite is unsupported in the generic path
@@ -322,7 +322,7 @@ fn evolve_robin(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -450,8 +450,8 @@ fn build_dirichlet_heat2nd(
     n: usize,
     u0: &[f64],
     origin: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<DirichletHeat2nd1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<DirichletHeat2nd1DInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
@@ -468,7 +468,7 @@ fn evolve_dirichlet_heat2nd(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)

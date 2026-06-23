@@ -50,7 +50,7 @@
     clippy::too_many_lines
 )]
 
-use semiflow_core::{
+use semiflow::{
     adjoint_fp::{AdjointFokkerPlanckChernoff, MeasureState},
     ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, ScratchPool,
 };

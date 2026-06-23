@@ -136,7 +136,7 @@ fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
 /// # Constructor
 ///
 /// ```rust,no_run
-/// use semiflow_core::{DiffusionExpmvChernoff, Diffusion4thChernoff, Grid1D};
+/// use semiflow::{DiffusionExpmvChernoff, Diffusion4thChernoff, Grid1D};
 /// let grid = Grid1D::new(0.0_f64, 20.0, 64).unwrap();
 /// let inner = Diffusion4thChernoff::new(
 ///     |x: f64| 1.0 + 0.3 * (2.0 * core::f64::consts::PI * x / 20.0).sin(),

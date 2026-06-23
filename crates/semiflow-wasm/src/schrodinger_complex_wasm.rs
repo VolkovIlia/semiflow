@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use js_sys::Float64Array;
 use num_complex::Complex;
-use semiflow_core::{ChernoffSemigroup, Grid1D, GridFnComplex1D, SchrödingerChernoffComplex};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFnComplex1D, SchrödingerChernoffComplex};
 use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
@@ -109,7 +109,7 @@ fn validate_evolve_cx(t: f64, n_steps: usize) -> Result<(), JsValue> {
 fn build_cx_kernel(
     v_at_node: &[f64],
     grid: Grid1D<f64>,
-) -> Result<SchrödingerChernoffComplex<C64>, semiflow_core::SemiflowError> {
+) -> Result<SchrödingerChernoffComplex<C64>, semiflow::SemiflowError> {
     let v = Arc::new(v_at_node.to_vec());
     let v2 = v.clone();
     let dx = grid.dx();

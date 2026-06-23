@@ -7,7 +7,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -181,7 +181,7 @@ fn build_robin(
     beta: f64,
     origin: f64,
     u0: &[f64],
-) -> Result<RobinState, semiflow_core::SemiflowError> {
+) -> Result<RobinState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     // CubicHermite required by RobinHeatChernoff (mirrors bc_kernels2.rs).
     let grid = Grid1D::new(xmin, xmax, n_grid)?.with_interp(InterpKind::CubicHermite);
@@ -323,7 +323,7 @@ fn build_resolvent(
     xmax: f64,
     n_grid: usize,
     n_chernoff: usize,
-) -> Result<ResolventState, semiflow_core::SemiflowError> {
+) -> Result<ResolventState, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n_grid)?;
     let diff = DiffusionChernoff::new(unit_a_bc2, zero_bc2, zero_bc2, 1.0, grid);
     let kernel =
@@ -480,7 +480,7 @@ fn build_killed_dir(
     n_grid: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<KilledDirState, semiflow_core::SemiflowError> {
+) -> Result<KilledDirState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(domain_lo, domain_hi, n_grid)?;
     let kernel = KilledDirichletChernoff::new(|_| 1.0_f64, |_| 0.0_f64, grid)?;

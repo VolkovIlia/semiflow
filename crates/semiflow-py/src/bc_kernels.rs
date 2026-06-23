@@ -32,7 +32,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -72,10 +72,10 @@ pub(crate) fn validate_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-pub(crate) fn validate_u0(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+pub(crate) fn validate_u0(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });
@@ -339,7 +339,7 @@ fn build_resolvent(
     xmax: f64,
     n: usize,
     n_chernoff: usize,
-) -> Result<Resolvent1DInner, semiflow_core::SemiflowError> {
+) -> Result<Resolvent1DInner, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
     let resolvent =
@@ -354,8 +354,8 @@ fn build_killing(
     u0: &[f64],
     lo: f64,
     hi: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Killing1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Killing1DInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
@@ -375,7 +375,7 @@ fn eval_resolvent(
     grid: Grid1D<f64>,
     g_vec: Vec<f64>,
     lambda: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let g = GridFn1D::new(grid, g_vec)?;
     Ok(resolvent.eval(lambda, &g)?.values)
 }
@@ -385,8 +385,8 @@ fn compute_residual(
     grid: Grid1D<f64>,
     g_vec: Vec<f64>,
     lambda: f64,
-) -> Result<f64, semiflow_core::SemiflowError> {
-    use semiflow_core::resolvent::LaplaceChernoffResolventResidual;
+) -> Result<f64, semiflow::SemiflowError> {
+    use semiflow::resolvent::LaplaceChernoffResolventResidual;
     let g = GridFn1D::new(grid, g_vec)?;
     let residual_gate = LaplaceChernoffResolventResidual::new(resolvent, 1e-2);
     residual_gate.verify_residual(lambda, &g)
@@ -398,7 +398,7 @@ fn evolve_killing(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)

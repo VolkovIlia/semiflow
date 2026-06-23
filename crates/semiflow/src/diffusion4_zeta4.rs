@@ -100,7 +100,7 @@ use crate::{
 /// # Constructor
 ///
 /// ```rust
-/// use semiflow_core::{ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Grid1D};
+/// use semiflow::{ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Grid1D};
 /// let grid = Grid1D::new(-10.0, 10.0, 512).unwrap();
 /// let inner = Diffusion4thChernoff::new(
 ///     |x: f64| 1.0 + 0.5 * x.tanh().powi(2),

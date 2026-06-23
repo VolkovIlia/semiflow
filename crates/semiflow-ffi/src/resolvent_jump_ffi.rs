@@ -35,7 +35,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 
 use crate::status::SemiflowStatus;
 
@@ -188,7 +188,7 @@ fn build_resolvent_jump_inner(
     xmax: f64,
     n_grid: usize,
     m_nodes: usize,
-) -> Result<ResolventJumpInnerV3, semiflow_core::SemiflowError> {
+) -> Result<ResolventJumpInnerV3, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n_grid)?;
     let chernoff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0, grid);
     let kernel = ResolventJumpChernoff::new(chernoff, m_nodes, grid)?;

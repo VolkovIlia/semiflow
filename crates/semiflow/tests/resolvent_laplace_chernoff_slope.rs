@@ -44,7 +44,7 @@
 #![allow(clippy::cast_precision_loss)] // n ≤ 4096, well within 2^52
 #![allow(clippy::doc_markdown)]        // math notation: R̃_n, n_ref, OLS slope formulae in doc
 
-use semiflow_core::{
+use semiflow::{
     resolvent::{LaplaceChernoffResolvent, LaplaceQuadrature},
     DiffusionChernoff, Grid1D, GridFn1D,
 };

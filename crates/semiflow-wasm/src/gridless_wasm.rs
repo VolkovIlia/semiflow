@@ -33,7 +33,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, GridlessChernoff, MeasureState as CoreMeasureState,
     ParticleReduction, ScratchPool,
 };

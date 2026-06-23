@@ -22,7 +22,7 @@
 use core::cell::Cell;
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, Diffusion6thChernoff, Grid1D, GridFn1D, InterpKind,
 };
 

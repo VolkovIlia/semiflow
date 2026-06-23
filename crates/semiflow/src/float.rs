@@ -47,7 +47,7 @@ use num_traits::Float;
 /// ## Example
 ///
 /// ```rust
-/// use semiflow_core::float::SemiflowFloat;
+/// use semiflow::float::SemiflowFloat;
 /// fn sum_two<F: SemiflowFloat>(a: F, b: F) -> F { a + b }
 ///
 /// // Both concrete float types work:

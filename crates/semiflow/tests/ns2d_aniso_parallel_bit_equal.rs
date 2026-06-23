@@ -20,7 +20,7 @@
 
 #![cfg(all(feature = "parallel", feature = "slow-tests"))]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparable2DAnisotropicChernoff,
 };

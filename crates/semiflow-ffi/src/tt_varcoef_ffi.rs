@@ -22,7 +22,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
-use semiflow_core::{VarCoefTt, TtState};
+use semiflow::{VarCoefTt, TtState};
 
 use crate::status::SemiflowStatus;
 use crate::tt_ffi::SmfTtState;

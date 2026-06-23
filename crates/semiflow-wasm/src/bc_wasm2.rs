@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     killing_order2::DirichletHeat2ndChernoff,
     reflection::HalfSpaceRegion,
     ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D,

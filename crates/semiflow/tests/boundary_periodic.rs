@@ -7,7 +7,7 @@
 
 use std::f64::consts::PI;
 
-use semiflow_core::{BoundaryPolicy, Grid1D, GridFn1D};
+use semiflow::{BoundaryPolicy, Grid1D, GridFn1D};
 
 // Grid parameters shared by both tests.
 const XMIN: f64 = -10.0;

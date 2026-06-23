@@ -119,7 +119,7 @@ use crate::{
 /// # Constructor
 ///
 /// ```rust,ignore
-/// use semiflow_core::{ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
+/// use semiflow::{ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
 ///     Diffusion6thZeta6Chernoff, Diffusion8thZeta8Chernoff, Grid1D};
 /// let grid = Grid1D::new(-10.0, 10.0, 512).unwrap();
 /// let k5 = Diffusion4thChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);

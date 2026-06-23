@@ -109,7 +109,7 @@ impl Heat1D {
         }
         let chernoff = self.inner.semigroup.func.clone();
         let sg =
-            semiflow_core::ChernoffSemigroup::new(chernoff, n_steps).map_err(|e| err_to_js(&e))?;
+            semiflow::ChernoffSemigroup::new(chernoff, n_steps).map_err(|e| err_to_js(&e))?;
         let next = sg
             .evolve(t, &self.inner.current)
             .map_err(|e| err_to_js(&e))?;

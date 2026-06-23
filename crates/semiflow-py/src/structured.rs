@@ -27,7 +27,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     quantum_graph::{
         QuantumGraph as CoreQuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal,
     },
@@ -258,7 +258,7 @@ impl PyQuantumGraphHeat {
             let n_per_edge = self.n_per_edge;
             // Collect flat values for GIL-free compute.
             let flat: Vec<f64> = gather_signal_to_flat(&self.current, n_per_edge);
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_quantum(kernel, graph, flat, t, n_steps));
             let out = result.map_err(|e| from_core(&e))?;
             scatter_flat_to_signal(&mut self.current, &out, self.n_per_edge);
@@ -314,7 +314,7 @@ fn evolve_quantum(
     flat: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let n_per_edge = graph.edge_grids[0].n;
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let mut src = QuantumGraphSignal::zeroed_for_graph(&graph);

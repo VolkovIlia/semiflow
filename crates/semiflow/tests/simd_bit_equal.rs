@@ -23,7 +23,7 @@
 #![cfg(feature = "simd")]
 // v7.0: QuinticHermite SIMD test removed (ADR-0109 removal clock fulfilled).
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, simd::with_force_scalar, BoundaryPolicy, Diffusion6thChernoff,
     Grid1D, GridFn1D, InterpKind,
 };
@@ -175,7 +175,7 @@ fn septic_hermite_bit_equal_all() {
 
 #[cfg(all(feature = "parallel", feature = "slow-tests"))]
 mod parallel_composition {
-    use semiflow_core::{
+    use semiflow::{
         strang2d_parallel::FORCE_THREADS, ChernoffSemigroup, Grid2D, GridFn2D, Strang2D,
     };
 

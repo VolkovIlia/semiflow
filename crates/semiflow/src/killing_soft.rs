@@ -69,7 +69,7 @@ use crate::{
 /// The simplest implementation wraps a constant `c ≥ 0`:
 ///
 /// ```rust
-/// use semiflow_core::killing_soft::KillingRate;
+/// use semiflow::killing_soft::KillingRate;
 ///
 /// struct ConstRate(f64);
 ///
@@ -94,7 +94,7 @@ pub trait KillingRate<F: SemiflowFloat = f64> {
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::killing_soft::{ClosureKillingRate, KillingRate};
+/// use semiflow::killing_soft::{ClosureKillingRate, KillingRate};
 ///
 /// let rate = ClosureKillingRate::new(|x: f64| 0.3 * x * x);
 /// assert!((rate.kappa(1.0) - 0.3).abs() < 1e-15);

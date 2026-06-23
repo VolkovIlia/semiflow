@@ -38,7 +38,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
     ScratchPool, State,
 };
@@ -204,7 +204,7 @@ fn apply_adjoint_fp_steps(
     n_steps: usize,
     positions: &[f64],
     weights: &[f64],
-) -> Result<MeasureState<f64, 1>, semiflow_core::SemiflowError> {
+) -> Result<MeasureState<f64, 1>, semiflow::SemiflowError> {
     let mut rho = build_measure_from_buffers(positions, weights);
     let mut pool = ScratchPool::<f64>::new();
     for _ in 0..n_steps {
@@ -249,15 +249,15 @@ fn build_adjoint_fp_inner(
     b: f64,
     c: f64,
     max_steps: usize,
-) -> Result<AdjointFpInnerV3, semiflow_core::SemiflowError> {
+) -> Result<AdjointFpInnerV3, semiflow::SemiflowError> {
     if !a.is_finite() || !b.is_finite() || !c.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "adjoint_fp: a, b, c must be finite",
             value: a,
         });
     }
     if max_steps == 0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "adjoint_fp: max_steps must be >= 1",
             value: 0.0,
         });

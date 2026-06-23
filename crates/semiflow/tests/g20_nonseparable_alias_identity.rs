@@ -21,7 +21,7 @@
 //!
 //! See ADR-0058 §"Acceptance gates", math.md §10.7-ter Theorem 7-bis, §18.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparable2DAnisotropicChernoff, NonSeparable2DChernoff, NonSeparableMixedChernoff,
 };

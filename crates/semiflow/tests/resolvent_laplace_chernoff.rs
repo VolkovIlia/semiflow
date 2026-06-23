@@ -4,7 +4,7 @@
 //! Heavy convergence sweep (G24) is in a separate `#[cfg(feature = "slow-tests")]`
 //! block; this file runs fast (< 1 s).
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind,
     diffusion::DiffusionChernoff,
     error::SemiflowError,

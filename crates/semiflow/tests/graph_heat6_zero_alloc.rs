@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
 
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_heat6::GraphHeat6thChernoff,
     graph_signal::GraphSignal,

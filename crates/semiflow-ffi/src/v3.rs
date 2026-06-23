@@ -39,7 +39,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, DiffusionChernoff, Evolver, Grid1D, GridFn1D, Growth, ScratchPool,
 };
 
@@ -311,7 +311,7 @@ fn build_evolver_heat_unit(
     n_grid: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<EvolverInnerV3, semiflow_core::SemiflowError> {
+) -> Result<EvolverInnerV3, semiflow::SemiflowError> {
     crate::handle::validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n_grid)?;
     let chernoff = DiffusionChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);

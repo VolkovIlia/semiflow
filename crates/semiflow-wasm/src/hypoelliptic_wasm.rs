@@ -24,7 +24,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     heisenberg_heat_kernel,
     hormander::{HypoellipticChernoff, KolmogorovPhaseSpace, VectorField},
     ChernoffFunction, Grid1D, Grid2D, GridFn2D, GridFnND, GridND, ScratchPool, SemiflowError,

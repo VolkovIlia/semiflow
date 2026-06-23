@@ -23,7 +23,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     manifold::{Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,
     ChernoffFunction, ChernoffSemigroup, Grid1D, Grid2D, GridFn2D, ScratchPool,
@@ -57,7 +57,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         src: &GridFn2D<f64>,
         dst: &mut GridFn2D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             ManifoldEnum::Sphere(k) => k.apply_into(tau, src, dst, scratch),
             ManifoldEnum::Hyperbolic(k) => k.apply_into(tau, src, dst, scratch),
@@ -73,7 +73,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         }
     }
 
-    fn growth(&self) -> semiflow_core::chernoff::Growth<f64> {
+    fn growth(&self) -> semiflow::chernoff::Growth<f64> {
         match self {
             ManifoldEnum::Sphere(k) => k.growth(),
             ManifoldEnum::Hyperbolic(k) => k.growth(),
@@ -156,9 +156,9 @@ fn build_manifold_wasm(
     x1min: f64, x1max: f64, ny: usize,
     u0: &[f64],
     kernel: ManifoldEnum,
-) -> Result<(ManifoldEnum, GridFn2D<f64>), semiflow_core::SemiflowError> {
+) -> Result<(ManifoldEnum, GridFn2D<f64>), semiflow::SemiflowError> {
     if u0.len() != nx * ny {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0 length must equal nx * ny",
             value: u0.len() as f64,
         });

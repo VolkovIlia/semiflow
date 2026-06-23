@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph_adjoint_presampled::{fill_abscissa_times, PreSampledLaplacianSeq},
     Graph, GraphSignal, LaplacianAtTime, LaplacianKind, MagnusGraphHeatChernoff, ScratchPool,
     VarCoefMagnusGraphHeatChernoff, WeightAtTime, Laplacian,

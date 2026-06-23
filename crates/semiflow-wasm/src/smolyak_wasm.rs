@@ -22,7 +22,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     smolyak::SmolyakGridND,
     ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,

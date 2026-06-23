@@ -123,7 +123,7 @@ impl<F: SemiflowFloat> Growth<F> {
 /// ## Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff, ChernoffFunction};
+/// use semiflow::{Grid1D, GridFn1D, DiffusionChernoff, ChernoffFunction};
 /// let grid = Grid1D::new(-5.0, 5.0, 64).unwrap();
 /// let diff = DiffusionChernoff::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.5, grid);
 /// let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
@@ -259,7 +259,7 @@ where
 /// ## Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff, Evolver, State, ScratchPool};
+/// use semiflow::{Grid1D, GridFn1D, DiffusionChernoff, Evolver, State, ScratchPool};
 /// let grid = Grid1D::new(-8.0, 8.0, 200).unwrap();
 /// let diff = DiffusionChernoff::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.5, grid);
 /// let evolver = Evolver::new(diff, 100).unwrap();

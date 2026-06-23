@@ -10,7 +10,7 @@
 
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     point_eval::{sample_gridfn2d as core_sample_gridfn2d, PointEval as CorePointEval},
     Grid1D, Grid2D, GridFn1D, GridFn2D,
@@ -126,7 +126,7 @@ impl PyPointEval {
             let xmin = self.xmin;
             let xmax = self.xmax;
             let n = self.n;
-            let result: Result<f64, semiflow_core::SemiflowError> =
+            let result: Result<f64, semiflow::SemiflowError> =
                 py.detach(|| eval_at_rust(xmin, xmax, n, vals, tau, x, n_steps));
             result.map_err(|e| from_core(&e))
         })
@@ -148,7 +148,7 @@ fn eval_at_rust(
     tau: f64,
     x: f64,
     n_steps: u32,
-) -> Result<f64, semiflow_core::SemiflowError> {
+) -> Result<f64, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let kernel = DiffusionChernoff::new(
         |_: f64| 1.0_f64,
@@ -167,7 +167,7 @@ fn eval_at_rust(
 
 /// Bilinear interpolation of a 2D grid function at chart position ``(cx, cy)``.
 ///
-/// This free function exposes ``semiflow_core::point_eval::sample_gridfn2d``
+/// This free function exposes ``semiflow::point_eval::sample_gridfn2d``
 /// (math §31.3, Proposition 31.1) to Python.  It is the canonical primitive for
 /// evaluating a ``GridFn2D<f64>`` at an arbitrary chart position without running
 /// further Chernoff steps.

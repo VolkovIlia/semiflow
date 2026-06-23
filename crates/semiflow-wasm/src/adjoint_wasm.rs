@@ -22,7 +22,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     AdjointChernoff, ChernoffFunction, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ScratchPool, ShiftChernoff1D,
 };
@@ -57,7 +57,7 @@ impl AdjKernel {
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             Self::Diff2(k) => k.apply_into(tau, src, dst, scratch),
             Self::Diff4(k) => k.apply_into(tau, src, dst, scratch),
@@ -170,7 +170,7 @@ fn run_adj_evolve(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn1D::new(grid, input)?;
     let mut dst = GridFn1D::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
+use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 use semiflow_ffi::{
     smf_ghc_apply_into, smf_ghc_current, smf_ghc_drop, smf_ghc_new, smf_graph_drop, smf_graph_path,
     smf_graphsig_drop, smf_graphsig_new, SemiflowStatus, SmfGhc, SmfGraph, SmfGraphSig,

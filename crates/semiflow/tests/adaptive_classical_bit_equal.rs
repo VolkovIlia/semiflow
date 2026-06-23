@@ -11,7 +11,7 @@
 //! `reject_step_factor` inline helpers so the proptest layer can do in-process
 //! comparison without the fixture file.
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, chernoff::ChernoffFunction, grid::BoundaryPolicy, AdaptivePI,
     DiffusionChernoff, Grid1D, GridFn1D, State,
 };
@@ -271,7 +271,7 @@ fn wave4_classical_final_state_bit_equal_to_v1() {
 #[cfg(test)]
 mod proptest_classical_pi {
     use super::legacy;
-    use semiflow_core::{ClassicalPI, StepController};
+    use semiflow::{ClassicalPI, StepController};
 
     /// Verify `ClassicalPI::propose_accept` is within 2 ULP of v1.0.0 `pi_step_factor`.
     ///

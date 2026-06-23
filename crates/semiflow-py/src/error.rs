@@ -7,12 +7,12 @@
 //! one exception class, discriminated by an attribute, is more forward-
 //! compatible than one class per variant.
 //!
-//! `SemiflowError::from_core` converts a `semiflow_core::SemiflowError` to a
+//! `SemiflowError::from_core` converts a `semiflow::SemiflowError` to a
 //! `PyErr`, mapping error variants to the same `kind` strings that the C ABI
 //! `smf_status_str()` returns.
 
 use pyo3::{exceptions::PyException, prelude::*};
-use semiflow_core::SemiflowError as CoreError;
+use semiflow::SemiflowError as CoreError;
 
 pyo3::create_exception!(
     semiflow,
@@ -40,7 +40,7 @@ pub(crate) fn new_panic_pyerr() -> PyErr {
     SemiflowError::new_err("[Panic] internal Rust panic — please file an issue")
 }
 
-/// Convert a `semiflow_core::SemiflowError` to a Python `SemiflowError` `PyErr`.
+/// Convert a `semiflow::SemiflowError` to a Python `SemiflowError` `PyErr`.
 ///
 /// Mirrors `crates/semiflow-ffi/src/status.rs` `From<&SemiflowError>` mapping.
 pub(crate) fn from_core(err: &CoreError) -> PyErr {

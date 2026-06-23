@@ -33,7 +33,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     howland::{HowlandLift, HowlandState},
     ChernoffSemigroup, Grid1D, GridFn1D,
@@ -227,7 +227,7 @@ fn build_howland(
     n_t: usize,
     t_horizon: f64,
     u0: &[f64],
-) -> Result<HowlandState1D, semiflow_core::SemiflowError> {
+) -> Result<HowlandState1D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?;
     let diff = DiffusionChernoff::new(unit_a_hw, zero_hw, zero_hw, 1.0, grid);
@@ -245,7 +245,7 @@ fn build_howland(
 fn evolve_howland(
     lift: &HowlandKernel,
     state: HowlandState<GridFn1D<f64>, f64>,
-) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow_core::SemiflowError> {
+) -> Result<HowlandState<GridFn1D<f64>, f64>, semiflow::SemiflowError> {
     let n_steps = lift.n_t() - 1;
     let sg = ChernoffSemigroup::new(lift.clone(), n_steps)?;
     sg.evolve(lift.delta_s() * n_steps as f64, &state)

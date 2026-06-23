@@ -63,7 +63,7 @@ semiflow = { version = "0.9", default-features = false }
 Solve `∂ₜu = ½·∂ₓₓu` from `u₀(x) = exp(-x²)` to `t = 1`:
 
 ```rust
-use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff, ChernoffSemigroup};
+use semiflow::{Grid1D, GridFn1D, DiffusionChernoff, ChernoffSemigroup};
 
 let grid = Grid1D::new(-10.0, 10.0, 1000)
     .expect("grid bounds and node count are valid");

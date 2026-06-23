@@ -12,10 +12,10 @@
 //! JS callers can match on `err.kind` without parsing the message string.
 
 use js_sys::Reflect;
-use semiflow_core::SemiflowError as CoreError;
+use semiflow::SemiflowError as CoreError;
 use wasm_bindgen::prelude::*;
 
-/// Convert a `semiflow_core::SemiflowError` to a `JsValue` error with `.kind`.
+/// Convert a `semiflow::SemiflowError` to a `JsValue` error with `.kind`.
 ///
 /// The returned value is a `js_sys::Error` extended with a `kind` property.
 pub(crate) fn err_to_js(e: &CoreError) -> JsValue {

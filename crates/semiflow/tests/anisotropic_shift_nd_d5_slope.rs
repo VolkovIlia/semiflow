@@ -18,7 +18,7 @@
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; values ≤ 512 ≤ 2^52
 #![allow(clippy::cast_lossless)]       // u32→f64 for n_steps: infallible, project idiom
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     AnisotropicShiftChernoffND, ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,
 };

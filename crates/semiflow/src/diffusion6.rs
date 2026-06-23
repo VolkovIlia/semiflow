@@ -129,7 +129,7 @@ const C3_9: [f64; 9] = [
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion6thChernoff};
+/// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion6thChernoff};
 /// let grid = Grid1D::new(-5.0, 5.0, 64).unwrap();
 /// let diff6 = Diffusion6thChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);
 /// let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
@@ -187,7 +187,7 @@ impl Diffusion6thChernoff<f64> {
     /// # Example
     ///
     /// ```rust
-    /// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion6thChernoff};
+    /// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion6thChernoff};
     /// let grid = Grid1D::new(0.0, 1.0, 32).unwrap();
     /// let diff6 = Diffusion6thChernoff::with_closure(
     ///     |_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid,

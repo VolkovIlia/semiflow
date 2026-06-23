@@ -48,7 +48,7 @@
 
 use std::{cell::Cell, f64::consts::PI};
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff,
 };
 

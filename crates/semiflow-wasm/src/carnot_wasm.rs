@@ -19,7 +19,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_possible_truncation)]
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     ComplexTripleJump, Grid1D,
 };
@@ -136,7 +136,7 @@ fn build_grid(
     lo: f64,
     hi: f64,
     n: usize,
-) -> Result<GridND<f64, D>, semiflow_core::SemiflowError> {
+) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }

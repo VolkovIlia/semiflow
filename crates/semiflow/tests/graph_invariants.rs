@@ -5,7 +5,7 @@
 //! See `contracts/v2.1/wave-a-graph-foundations.md` §1.3 / §3.2 and ADR-0048.
 
 use proptest::prelude::*;
-use semiflow_core::{Graph, Laplacian};
+use semiflow::{Graph, Laplacian};
 
 // ---------------------------------------------------------------------------
 // Invariant checkers

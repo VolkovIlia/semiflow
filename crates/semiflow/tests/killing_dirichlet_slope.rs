@@ -36,7 +36,7 @@
 
 use core::f64::consts::PI;
 
-use semiflow_core::{
+use semiflow::{
     killing::{BoxRegion, KillingChernoff},
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind,
     ScratchPool,

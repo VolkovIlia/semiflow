@@ -9,7 +9,7 @@
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ConstantObstacle, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ObstacleChernoff,
     StrangSplit,
 };
@@ -40,7 +40,7 @@ pub(crate) fn build_inner(
     c: f64,
     level: f64,
     obstacle_array: Option<&Bound<'_, PyAny>>,
-) -> Result<ObstaclePyInner, semiflow_core::SemiflowError> {
+) -> Result<ObstaclePyInner, semiflow::SemiflowError> {
     let grid = Grid1D::new(xmin, xmax, n)?;
     let current = GridFn1D::new(grid, u0.to_vec())?;
     let use_strang = b != 0.0 || c != 0.0;
@@ -61,7 +61,7 @@ fn build_const(
     level: f64,
     current: GridFn1D<f64>,
     use_strang: bool,
-) -> Result<ObstaclePyInner, semiflow_core::SemiflowError> {
+) -> Result<ObstaclePyInner, semiflow::SemiflowError> {
     let obs = ConstantObstacle::new(level)?;
     if use_strang {
         let inner = build_strang(a, b, c, current.grid);
@@ -91,15 +91,15 @@ fn build_array(
     arr: &Bound<'_, PyAny>,
     current: GridFn1D<f64>,
     use_strang: bool,
-) -> Result<ObstaclePyInner, semiflow_core::SemiflowError> {
+) -> Result<ObstaclePyInner, semiflow::SemiflowError> {
     let vals: Vec<f64> =
         arr.extract()
-            .map_err(|_| semiflow_core::SemiflowError::DomainViolation {
+            .map_err(|_| semiflow::SemiflowError::DomainViolation {
                 what: "obstacle_array must be a sequence of floats",
                 value: 0.0,
             })?;
     if vals.len() != current.grid.n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_array length must equal n",
             value: vals.len() as f64,
         });

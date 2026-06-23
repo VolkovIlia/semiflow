@@ -34,7 +34,7 @@
 use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
     Diffusion6thChernoff, Diffusion6thZeta6Chernoff, Diffusion8thZeta8Chernoff, DiffusionChernoff,
     Grid1D, GridFn1D,

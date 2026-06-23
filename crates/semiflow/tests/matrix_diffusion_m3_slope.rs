@@ -13,7 +13,7 @@
 #![allow(clippy::cast_lossless)]            // u32→f64 widening, always exact for u32
 #![allow(clippy::needless_range_loop)]      // index loops do index-cross arithmetic (matrix ops)
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
 };
 

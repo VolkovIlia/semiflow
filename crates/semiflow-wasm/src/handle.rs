@@ -27,7 +27,7 @@
 
 #![allow(unsafe_code)]
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError};
 use wasm_bindgen::JsValue;
 
 // ---------------------------------------------------------------------------

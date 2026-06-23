@@ -32,7 +32,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     hormander::HypoellipticChernoff,
     ChernoffSemigroup, Grid1D,
@@ -201,7 +201,7 @@ fn build_engel(
     xmax: f64,
     n: usize,
     u0: &[f64],
-) -> Result<EngelState, semiflow_core::SemiflowError> {
+) -> Result<EngelState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let ax = Grid1D::new(xmin, xmax, n)?;
     let grid = GridND::<f64, 4>::new([ax, ax, ax, ax])?;
@@ -219,7 +219,7 @@ fn evolve_engel(
     values: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = HypoellipticChernoff::<f64, 4, 2>::new_engel()?;
     let f = GridFnND { values, grid };
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;

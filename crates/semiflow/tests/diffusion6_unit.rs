@@ -13,7 +13,7 @@
 // v7.0: QuinticHermite removed (ADR-0109 removal clock fulfilled).
 // Tests updated to use SepticHermite (v6.0+ default).
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     Diffusion6thChernoff, Grid1D, GridFn1D, InterpKind,
 };

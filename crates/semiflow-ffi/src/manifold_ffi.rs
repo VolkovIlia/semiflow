@@ -45,7 +45,7 @@
 
 use std::os::raw::{c_double, c_uint};
 
-use semiflow_core::{
+use semiflow::{
     manifold::{Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,
     ChernoffFunction, Grid1D, Grid2D, GridFn2D, ScratchPool,
@@ -81,7 +81,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         src: &GridFn2D<f64>,
         dst: &mut GridFn2D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             ManifoldEnum::Torus(k) => k.apply_into(tau, src, dst, scratch),
             ManifoldEnum::Sphere(k) => k.apply_into(tau, src, dst, scratch),
@@ -97,7 +97,7 @@ impl ChernoffFunction<f64> for ManifoldEnum {
         }
     }
 
-    fn growth(&self) -> semiflow_core::chernoff::Growth<f64> {
+    fn growth(&self) -> semiflow::chernoff::Growth<f64> {
         match self {
             ManifoldEnum::Torus(k) => k.growth(),
             ManifoldEnum::Sphere(k) => k.growth(),
@@ -321,14 +321,14 @@ fn build_manifold2d(
     ny: usize,
     kernel: ManifoldEnum,
     u0: &[f64],
-) -> Result<ManifoldState2D, semiflow_core::SemiflowError> {
+) -> Result<ManifoldState2D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let gx = Grid1D::new(x0min, x0max, nx)?;
     let gy = Grid1D::new(x1min, x1max, ny)?;
     let grid = Grid2D::new(gx, gy);
     let size = nx * ny;
     if u0.len() != size {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0 length must equal nx * ny",
             value: u0.len() as f64,
         });
@@ -351,7 +351,7 @@ fn evolve_manifold(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn2D::new_generic(grid, input)?;
     let zero = vec![0.0f64; src.values.len()];
     let mut dst = GridFn2D::new_generic(grid, zero)?;

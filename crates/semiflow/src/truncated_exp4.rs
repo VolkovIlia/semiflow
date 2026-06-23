@@ -78,7 +78,7 @@ const FACTORIAL_INVERSE: [f64; TRUNC_ORDER_USIZE + 1] = [1.0, 1.0, 0.5, 1.0 / 6.
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff};
+/// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff};
 /// let grid = Grid1D::new(-4.0, 4.0, 64).unwrap();
 /// // CFL (4th-order tighter): tau < 3*dx²/(8*a) ≈ 0.002 for a=1.0, dx≈0.126
 /// let me4 = TruncatedExp4thDiffusionChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);

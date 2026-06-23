@@ -40,7 +40,7 @@
 
 use std::cell::Cell;
 
-use semiflow_core::{
+use semiflow::{
     grid::{BoundaryPolicy, InterpKind},
     ChernoffSemigroup, DriftReactionChernoff, Grid1D, GridFn1D, StrangSplit,
     TruncatedExpDiffusionChernoff,

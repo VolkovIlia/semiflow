@@ -26,7 +26,7 @@
 //! Reference: `contracts/semiflow-core.tensor.yaml`, `contracts/semiflow-core.math.md`
 //! §10.5(a), `docs/adr/0012-tensor-product-2d.md`.
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
 // ---------------------------------------------------------------------------
 // Gate constants (NON-NEGOTIABLE — do NOT relax)

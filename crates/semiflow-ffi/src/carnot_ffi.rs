@@ -31,7 +31,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     carnot_complex::ComplexTripleJump,
     grid_nd::{GridFnND, GridND},
     Grid1D,
@@ -207,7 +207,7 @@ fn run_apply_real(
     inner: &CarnotCtjInner,
     tau: f64,
     src: &[f64],
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let grid = build_grid(inner.domain_lo, inner.domain_hi, inner.n_per_axis)?;
     let src_fn = GridFnND::new(grid, src.to_vec())?;
     let kernel = ComplexTripleJump::new()?;
@@ -219,7 +219,7 @@ fn build_grid(
     lo: f64,
     hi: f64,
     n: usize,
-) -> Result<GridND<f64, D>, semiflow_core::SemiflowError> {
+) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }

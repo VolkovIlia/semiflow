@@ -67,7 +67,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::needless_range_loop)]
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
 };
 

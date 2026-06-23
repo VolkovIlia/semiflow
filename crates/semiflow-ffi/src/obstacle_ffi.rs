@@ -51,7 +51,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ConstantObstacle, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D,
     ObstacleChernoff, ScratchPool, StrangSplit,
 };
@@ -69,13 +69,13 @@ struct FfiArrayObstacle {
 }
 
 impl FfiArrayObstacle {
-    fn new(values: Vec<f64>) -> Result<Self, semiflow_core::SemiflowError> {
+    fn new(values: Vec<f64>) -> Result<Self, semiflow::SemiflowError> {
         validate_u0_finite(&values)?;
         Ok(Self { values })
     }
 }
 
-impl semiflow_core::Obstacle<f64> for FfiArrayObstacle {
+impl semiflow::Obstacle<f64> for FfiArrayObstacle {
     fn value_at(&self, _point: &[f64]) -> f64 {
         0.0
     }
@@ -83,9 +83,9 @@ impl semiflow_core::Obstacle<f64> for FfiArrayObstacle {
     fn project_in_place(
         &self,
         dst: &mut GridFn1D<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         if dst.values.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "FfiArrayObstacle: length mismatch",
                 value: self.values.len() as f64,
             });
@@ -102,9 +102,9 @@ impl semiflow_core::Obstacle<f64> for FfiArrayObstacle {
         &self,
         w: &GridFn1D<f64>,
         active: &mut [bool],
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         if active.len() != w.grid.n || active.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "FfiArrayObstacle::active_set_into: length mismatch",
                 value: active.len() as f64,
             });
@@ -154,8 +154,8 @@ impl ObstacleVariant {
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
-        use semiflow_core::ChernoffFunction as CF;
+    ) -> Result<(), semiflow::SemiflowError> {
+        use semiflow::ChernoffFunction as CF;
         match self {
             Self::Const(k) => k.apply_into(tau, src, dst, scratch),
             Self::Array(k) => k.apply_into(tau, src, dst, scratch),
@@ -343,7 +343,7 @@ fn build_obstacle_inner(
     level: f64,
     obs_opt: Option<&[f64]>,
     u0: &[f64],
-) -> Result<ObstacleInner, semiflow_core::SemiflowError> {
+) -> Result<ObstacleInner, semiflow::SemiflowError> {
     validate_params(a, b, c)?;
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
@@ -363,7 +363,7 @@ fn build_const_variant(
     level: f64,
     grid: Grid1D<f64>,
     use_strang: bool,
-) -> Result<ObstacleVariant, semiflow_core::SemiflowError> {
+) -> Result<ObstacleVariant, semiflow::SemiflowError> {
     let obs = ConstantObstacle::new(level)?;
     if use_strang {
         let inner = build_strang_inner(a, b, c, grid);
@@ -383,9 +383,9 @@ fn build_array_variant(
     obs: &[f64],
     grid: Grid1D<f64>,
     use_strang: bool,
-) -> Result<ObstacleVariant, semiflow_core::SemiflowError> {
+) -> Result<ObstacleVariant, semiflow::SemiflowError> {
     if obs.len() != grid.n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle array length must equal n",
             value: obs.len() as f64,
         });
@@ -413,15 +413,15 @@ fn build_strang_inner(a: f64, b: f64, c: f64, grid: Grid1D<f64>) -> StrangUnit {
     StrangSplit::new(diff, drift)
 }
 
-fn validate_params(a: f64, b: f64, c: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_params(a: f64, b: f64, c: f64) -> Result<(), semiflow::SemiflowError> {
     if !a.is_finite() || a <= 0.0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle: a must be finite and > 0",
             value: a,
         });
     }
     if !b.is_finite() || !c.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle: b and c must be finite",
             value: b,
         });
@@ -436,7 +436,7 @@ fn validate_params(a: f64, b: f64, c: f64) -> Result<(), semiflow_core::Semiflow
 fn run_obstacle_evolve(
     inner: &mut ObstacleInner,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     #[allow(clippy::cast_precision_loss)]
     let tau = t / inner.n_steps as f64;
     let grid = inner.current.grid;

@@ -32,7 +32,7 @@
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; values ≤ 512 ≤ 2^52
 #![allow(clippy::cast_lossless)]       // u32→f64 for n_steps: infallible, project idiom
 
-use semiflow_core::{
+use semiflow::{
     approximation::ApproximationSubspace,
     grid_nd::{GridFnND, GridND},
     AnisotropicShiftChernoffND, ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,
@@ -171,7 +171,7 @@ fn g_ddim_d2_slope() {
 
 #[test]
 fn g_ddim_d2_in_subspace_witness() {
-    use semiflow_core::approximation::ApproximationSubspace;
+    use semiflow::approximation::ApproximationSubspace;
     let kernel = make_kernel_d2(8);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), initial_fn);
     assert!(

@@ -33,7 +33,7 @@
 // Integration test: allows for numerical / binding wrapper patterns.
 #![allow(clippy::cast_possible_wrap)]
 
-use semiflow_core::{
+use semiflow::{
     CoupledTtChernoff, CouplingTopology, DiffusionChernoff, Evolver, Grid1D, Grid2D, Grid3D,
     GridFn2D, GridFn3D, Strang2D, Strang3D, TtChernoff, TtState,
 };

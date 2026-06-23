@@ -198,9 +198,9 @@ impl<F: SemiflowFloat> HilbertState<F> for SchrodingerState<F> {
 /// ## Usage
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState};
-/// use semiflow_core::diffusion4::Diffusion4thChernoff;
-/// use semiflow_core::ChernoffSemigroup;
+/// use semiflow::{Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState};
+/// use semiflow::diffusion4::Diffusion4thChernoff;
+/// use semiflow::ChernoffSemigroup;
 ///
 /// let grid = Grid1D::new(-5.0_f64, 5.0, 64).unwrap();
 /// // a=0.5, a'=0, a''=0, a_norm_bound=0.5.

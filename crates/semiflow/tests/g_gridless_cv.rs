@@ -34,7 +34,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
 };
 

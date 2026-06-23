@@ -40,7 +40,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{TtChernoff, TtState as CoreTtState};
+use semiflow::{TtChernoff, TtState as CoreTtState};
 
 use crate::error::make_js_error;
 

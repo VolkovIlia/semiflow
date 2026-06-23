@@ -2,7 +2,7 @@
 //!
 //! 6 tests per architect spec (ADR-0016, math.md §10.7-bis).
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     DiffusionChernoff, Grid1D, Grid2D, GridFn2D, NonSeparable2DChernoff, SemiflowError,
 };

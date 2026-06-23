@@ -18,7 +18,7 @@
 //! that is tested at the `bc_value` level in `src/boundary.rs` unit tests.
 
 use proptest::prelude::*;
-use semiflow_core::{boundary::InterpKind, BoundaryPolicy, Grid1D, GridFn1D};
+use semiflow::{boundary::InterpKind, BoundaryPolicy, Grid1D, GridFn1D};
 
 // Grid parameters: [0, 1] with n nodes.
 // n >= 4 required by the Catmull-Rom stencil invariant.

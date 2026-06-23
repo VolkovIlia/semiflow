@@ -21,7 +21,7 @@
 //!
 //! Reference: `contracts/semiflow-core.tensor.yaml`, `docs/adr/0024-tensor-3d.md`.
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D};
 
 // ---------------------------------------------------------------------------
 // Constants

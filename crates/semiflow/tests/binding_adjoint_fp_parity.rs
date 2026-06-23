@@ -25,7 +25,7 @@
 #![allow(clippy::doc_overindented_list_items, clippy::missing_panics_doc)]
 #![allow(clippy::too_many_lines)]
 
-use semiflow_core::{
+use semiflow::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
     ScratchPool,
 };

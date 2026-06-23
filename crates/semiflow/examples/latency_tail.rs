@@ -137,7 +137,7 @@ mod tracking {
     }
 }
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt,
     grid::{BoundaryPolicy, InterpKind},
     Diffusion4thChernoff, DriftReactionChernoff, Grid1D, GridFn1D, HdrSnapshot, StrangSplit,
