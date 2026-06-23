@@ -33,8 +33,8 @@ Chernoff product formula then gives:
 
 The hot loop operates entirely on `Vec<F>` buffers with reused scratch space —
 steady-state evolution is zero-allocation and cache-friendly. Generic over
-`F: SemiflowFloat` (default `f64`; `f32` supported; forward-mode AD via
-`Dual<F>`).
+`F: SemiflowFloat` (default `f64`; `f32` supported with native f32x8 AVX2 /
+f32x4 NEON kernels; forward-mode AD via `Dual<F>`).
 
 ## Install
 
@@ -133,9 +133,11 @@ let u1 = semi.evolve(1.0, &u0)
 | `BoundaryPolicy::Dirichlet { value }` | Fixed-value stencil BC |
 | `BoundaryPolicy::Neumann` | Clamp-to-boundary stencil BC |
 | `BoundaryPolicy::Robin { alpha, beta }` | Robin stencil BC |
+| `BoundaryPolicy::OddReflect` | Odd-image stencil BC (used by `DirichletHeat2ndChernoff`) |
 | `KillingChernoff<C, R, F>` | Operator-level Dirichlet via Feynman-Kac killing |
 | `Killing2ndChernoff<C, K, F>` | Order-2 soft-killing `e^{-τκ/2}·C(τ)·e^{-τκ/2}` |
 | `ReflectedHeatChernoff<C, R, F>` | Neumann via Walsh 1986 image method |
+| `DirichletHeat2ndChernoff<C, R, F>` | Order-2 absorbing wall via odd-image method (math §21.9) |
 | `ObstacleChernoff<C, O, F>` | Projective-splitting obstacle / variational-inequality evolver |
 
 ### Resolvent and nonautonomous
@@ -187,8 +189,10 @@ let u1 = semi.evolve(1.0, &u0)
 |------|-------------|
 | `ReverseChernoff<F>` | Reverse-mode AD over `(F_θ(τ))ⁿ u₀` via binomial checkpointing |
 | `CheckpointSchedule` | `O(√n)` default schedule (Griewank-Walther) |
+| `RegionMap` | DoF-aligned region partition enabling K>1 per-region parameter sensitivity |
 
-**Scope (v9.0.0):** constant-a `DiffusionChernoff<F>` only. Variable-coefficient
+**Scope:** constant-a `DiffusionChernoff<F>` only. Multi-parameter (K>1)
+sensitivity via `ReverseChernoff::with_region_map`. Variable-coefficient
 kernels are deferred.
 
 ### Tensor-train carrier
@@ -197,15 +201,20 @@ kernels are deferred.
 |------|-------------|
 | `TtChernoff<F>` | TT-Chernoff evolver; storage `O(d·n·r²)` |
 | `TtState<F>` | Tensor-train state `u(i₁,…,i_d) = G₁[i₁]·…·G_d[i_d]` |
+| `VarCoefTt<F>` | Variable-coefficient TT carrier for separable diagonal `a_j(x_j)` |
 
-**Scope (v9.0.0):** linear diagonal-A Gaussian class. Off-diagonal A and
-variable coefficients are research-track.
+**Scope:** linear diagonal-A Gaussian class (`TtChernoff`); separable diagonal
+variable coefficients (`VarCoefTt`). Non-separable variable coefficients and
+off-diagonal A are research-track. `VarCoefTt::new` returns
+`SemiflowError::VarCoefOutOfClass` when inputs fall outside the separable
+diagonal class.
 
 ### Gridless / particle-ensemble
 
 | Type | Description |
 |------|-------------|
 | `GridlessChernoff<F, const D>` | Particle-ensemble Chernoff; implements `ChernoffFunction<F>` |
+| `MeasureState<F, D>` | Particle-ensemble state; exposes `first_moment`, `variance`, `variance_per_axis` diagnostics (math §38.12) |
 | `ParticleReduction` | Particle cap policy: `WeightedVoronoi { cap }` or `GaussianBackground` |
 
 ### Executor
@@ -240,6 +249,7 @@ monomorphisations (ADR-0018).
 | `resolvent_perf.rs` | `LaplaceChernoffResolvent` L-gate bench harness |
 | `heston_pricer.rs` | Heston ρ→0 pricer via palindromic Strang |
 | `sabr_pricer.rs` | SABR-on-H² via `ManifoldChernoff<Hyperbolic2>` |
+| `rough_heston_pricer.rs` | Oracle-validated risk-neutral rough-Heston pricer (`--rate`/`--price`); honest scope: solver of a 4-factor Markov approximation, not validated vs true rough-Heston |
 
 ```bash
 cargo run -p semiflow-core --example heat_2d_demo
@@ -278,6 +288,17 @@ This crate is Rust-only. Sibling crates wrap it for other languages:
 | C | `semiflow-ffi` (cdylib) | GitHub release artifacts |
 | Python | `semiflow-pde` (PyO3, abi3-py310) | PyPI / GitHub releases |
 | JavaScript | `@semiflow/wasm` (wasm-bindgen) | npm |
+
+All three binding surfaces now cover the full user-facing operator zoo, including
+S³ carriers (`TtEvolver`, `TtCoupledEvolver`, `VarCoefTtEvolver`, `GridlessEvolver`,
+`MeasureState`), the new boundary kernel (`DirichletHeat2nd1D` in WASM/Python,
+`smf_dirichlet_heat2nd1d_*` in C), Laplacian introspection (`SmfLaplacian` with
+`row_ptr`/`col_idx`/`vals`/`to_dense`; `SmfGraphTraj`), and obstacle surfaces
+(`SmfObstacleGamma`, `SmfObstacleND2`). The `GraphAdjoint` pre-sampled time-grid
+path (`GraphAdjointPresampled` / `smf_graph_adjoint_new_presampled`) works across
+all three surfaces; the live-callback constructor is PyO3-only.
+Binding surfaces are a curated mirror of user-facing types — internal composition
+types (`AxisLift`, `StrangSplit`) are not directly exposed.
 
 See the [workspace README](https://github.com/VolkovIlia/semiflow#bindings) for
 cross-language status and build instructions.

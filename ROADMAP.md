@@ -12,33 +12,103 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
-## Binding-parity wave — DONE (follows 0.9.0-beta)
+## Post-0.9.0-beta feature wave — DONE (ADRs 0175–0181)
 
-Near-full parity between `semiflow-core` and all three binding crates
-(`semiflow-ffi`, `semiflow-py`, `semiflow-wasm`) reached as a documentation-
-and implementation follow-up to the 0.9.0-beta public release.
+Seven issues closed against the 0.9.0-beta audit, plus the rough-Heston pricer
+example. All are additive; no breaking changes to the 0.9.0-beta public surface.
 
-**Done:**
-- C ABI (`semiflow-ffi`) and WASM (`semiflow-wasm`) now expose the full engine
+**Issue #1 — Multi-parameter reverse-mode AD (ADR-0177):** `ReverseChernoff` now
+accepts a `RegionMap` (per-region θ partition) via `with_region_map`, enabling
+K>1 per-region parameter sensitivity. Math §51.10.
+
+**Issue #2 — Variable-coefficient TT carrier (ADR-0178):** `VarCoefTt<F>` supports
+separable diagonal `a_j(x_j)` on a `TtState`. Out-of-class inputs (non-separable)
+return `SemiflowError::VarCoefOutOfClass` at construction. Math §52.10.
+
+**Issue #3 — Gridless variance / MSE diagnostic (ADR — math §38.12):**
+`MeasureState` gains `first_moment`, `variance`, and `variance_per_axis` — additive
+diagnostic methods; no behavior change to `GridlessChernoff` evolution.
+
+**Issue #4 — S³ Python bindings:** `TtState`, `TtEvolver`, `TtCoupledEvolver`,
+`MeasureState`, `GridlessEvolver`, and `VarCoefTtEvolver` are now importable from
+the `semiflow` Python package (`from semiflow import ...`). Gap in ADR-0171
+S³-carrier PyO3 surface closed.
+
+**Issue #5 — Native `f32` + f32 SIMD (ADR-0175):** All leaf 1D kernels now
+implement `ChernoffFunction<f32>`. A dedicated f32x8 AVX2 / f32x4 NEON kernel
+(no FMA dependency) provides accelerated `f32` hot paths alongside the existing
+`f64` SIMD paths.
+
+**Issue #6 — Order-2 Dirichlet boundary (ADR-0176):** `DirichletHeat2ndChernoff<C, R, F>`
+using the odd-image method (`BoundaryPolicy::OddReflect`) delivers order 2 in the
+continuation region. The order-2 sibling of `ReflectedHeatChernoff` (Neumann).
+Math §21.9.
+
+**Full operator-zoo binding parity (ADRs 0028/0179):** See the updated Binding-parity
+wave section below for the complete list of newly-bound engines (`DiffusionExpmvChernoff`,
+`DriftReactionZeta4Chernoff`, `Killing2ndChernoff`, `MatrixDiffusion2D/3D`,
+`DirichletHeat2ndChernoff`) and the C/WASM parity closures for graph/obstacle
+introspection (`SmfLaplacian`, `SmfGraphTraj`, `SmfObstacleGamma`, `SmfObstacleND2`).
+
+**`GraphAdjoint` pre-sampled time-grid sampler (ADR-0180):**
+`MagnusGraphHeatChernoff::from_presampled` / `smf_graph_adjoint_new_presampled` /
+`GraphAdjointPresampled` (PyO3 + WASM) — supply a time-dependent Laplacian as a
+pre-sampled sequence (no live callback). GL4-aware: expects 2·n_steps Laplacian
+samples.
+
+**Issue #9 — Production-grade rough-Heston pricer (ADR-0181):**
+`examples/rough_heston_pricer.rs` — oracle-validated risk-neutral pricer.
+`--rate` / `--price` flags enable risk-neutral drift and discounting. Gates:
+`G_ROUGH_HESTON_MC_PARITY` (RELEASE-BLOCKING, MC oracle) and
+`A_ROUGH_HESTON_MODEL_BIAS` (ADVISORY, ~1–5% O(H)-bias of Markov approximation
+vs true rough-Heston; this is the expected model-approximation error, not a bug).
+`--rate 0.0` recovers the original latency demonstrator.
+
+---
+
+## Binding-parity wave — DONE (follows 0.9.0-beta; gaps closed post-0.9.0-beta)
+
+Full operator-zoo parity between `semiflow-core` and all three binding crates
+(`semiflow-ffi`, `semiflow-py`, `semiflow-wasm`) achieved as a follow-up to the
+0.9.0-beta public release. Binding surfaces are a curated mirror — internal
+composition types (`AxisLift`, `StrangSplit`) are intentionally not exposed.
+
+**Done (initial wave):**
+- C ABI (`semiflow-ffi`) and WASM (`semiflow-wasm`) expose the full engine
   surface: higher-order ζ-ladder, 2D/3D tensor, non-separable anisotropic,
   all boundary-condition variants, Schrödinger (real + complex), matrix
   diffusion, Howland/subordinated, manifold, hypoelliptic, graph family,
   SmolyakD6, Adjoint, AdaptivePI, ComplexTripleJump, PointEval.
-- `s3-poc` cargo feature retired; the six S³ POC evolvers are now in the
-  default core API (ADR-0169 boundary-as-type wrappers).
+- `s3-poc` cargo feature retired; the six S³ POC evolvers are in the default
+  core API (ADR-0169 boundary-as-type wrappers).
 - S³ carrier C-ABI surface (ADR-0171): `TtEvolver/TtState`,
   `TtCoupledEvolver`, `GridlessEvolver/MeasureState`.
 - WASM `full` cargo feature added: lite default ≈ 768 KB raw; `--features full`
   ≈ 1.4 MB raw.
 
-**Remaining known gaps (PyO3-only deferrals — named, not silently omitted):**
-- `ObstacleND` / `ObstacleGamma` — multi-dimensional obstacle surface.
-- `GraphTraj` — trajectory/path sampling output.
-- Laplacian introspection / `GraphAdjoint` dense read-back — dense-matrix
-  outputs not yet ABI-safe across C or WASM boundaries.
-- S³ WASM exposure — deferred pending WASM ABI design for ragged-array carriers.
+**Done (gap-closure wave — ADRs 0175–0181):**
+- Laplacian introspection now in C (`SmfLaplacian` with `row_ptr`/`col_idx`/
+  `vals`/`to_dense`) and WASM; `SmfGraphTraj` trajectory output in C/WASM.
+- Obstacle surfaces: `SmfObstacleGamma` and `SmfObstacleND2` in C/WASM.
+- `GraphAdjoint` pre-sampled time-grid path (`smf_graph_adjoint_new_presampled`
+  / `GraphAdjointPresampled`) available in all three binding surfaces (ADR-0180).
+  The live-callback constructor remains PyO3-only.
+- Newly-bound engines across C/WASM/PyO3: `DiffusionExpmvChernoff` (`smf_expmv1d_*`),
+  `DriftReactionZeta4Chernoff` (`smf_drift_reaction_zeta4_*`),
+  `Killing2ndChernoff` (`smf_killing2nd_*`), `MatrixDiffusion2D/3D` (WASM), and
+  `DirichletHeat2ndChernoff` (`DirichletHeat2nd1D` in WASM/Python).
+- S³ Python bindings (ADR-0171 gap closed): `TtState`, `TtEvolver`,
+  `TtCoupledEvolver`, `MeasureState`, `GridlessEvolver`, `VarCoefTtEvolver`
+  importable from `semiflow` (Python package `semiflow-pde`).
+- Variable coefficients cross the binding boundary as pre-sampled arrays
+  (not closures) per ADR-0028/0179.
 
-Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI).
+**One remaining PyO3-only deferral (named, not silently omitted):**
+- `GraphAdjoint` time-dependent Laplacian constructor accepting a live Python
+  callback — use the pre-sampled path (`GraphAdjointPresampled`) as the
+  cross-surface alternative.
+
+Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI), ADR-0175–0181.
 
 ---
 
