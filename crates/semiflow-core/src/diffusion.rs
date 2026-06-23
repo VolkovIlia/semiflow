@@ -337,6 +337,36 @@ impl ChernoffFunction<f64> for DiffusionChernoff<f64> {
     }
 }
 
+// Phase 5a: additive impl — delegates to generic scalar apply_f path.
+impl ChernoffFunction<f32> for DiffusionChernoff<f32> {
+    type S = GridFn1D<f32>;
+
+    /// Consistency order 2 (mirrors f64 impl).
+    fn order(&self) -> u32 {
+        2
+    }
+
+    /// Growth `(M, ω) = (1.0, 0.0)` — positivity-preserving contraction.
+    fn growth(&self) -> Growth<f32> {
+        Growth::contraction()
+    }
+
+    /// Scalar apply: delegates to `apply_f` (no SIMD — that is Phase 5b).
+    fn apply_into(
+        &self,
+        tau: f32,
+        src: &GridFn1D<f32>,
+        dst: &mut GridFn1D<f32>,
+        _scratch: &mut ScratchPool<f32>,
+    ) -> Result<(), SemiflowError> {
+        let result = self.apply_f(tau, src)?;
+        dst.values.resize(result.values.len(), 0.0);
+        dst.values.copy_from_slice(&result.values);
+        dst.grid = result.grid;
+        Ok(())
+    }
+}
+
 // Inherent convenience (v3.0 apply_chernoff = v2.x apply).
 impl DiffusionChernoff<f64> {
     /// Allocating single-step apply (v3.0 replacement for v2.x `apply`).

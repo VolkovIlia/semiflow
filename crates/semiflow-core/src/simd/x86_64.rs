@@ -15,11 +15,14 @@
 #![cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 
 use core::arch::x86_64::{
-    __m256d, _mm256_add_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_set1_pd, _mm256_storeu_pd,
+    __m256, __m256d,
+    _mm256_add_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_set1_pd, _mm256_storeu_pd,
     _mm256_sub_pd,
+    _mm256_add_ps, _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
+    _mm256_sub_ps,
 };
 
-use super::SimdF64x4;
+use super::{SimdF32x8, SimdF64x4};
 
 /// AVX2 4-lane f64 SIMD wrapper.
 #[derive(Clone, Copy)]
@@ -73,6 +76,68 @@ impl SimdF64x4 for F64x4Avx2 {
         // Safety: tmp is local, properly sized; self.0 is a valid __m256d.
         unsafe { _mm256_storeu_pd(tmp.as_mut_ptr(), self.0) };
         ((tmp[0] + tmp[1]) + tmp[2]) + tmp[3]
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ADR-0175, Phase 5b: 8-lane f32 AVX2 impl (`__m256` = 8×f32).
+// FORBIDDEN: _mm256_fmadd_ps, _mm256_fnmadd_ps, _mm256_hadd_ps, _mm256_dp_ps.
+// ---------------------------------------------------------------------------
+
+/// AVX2 8-lane f32 SIMD wrapper (ADR-0175).
+#[derive(Clone, Copy)]
+pub(crate) struct F32x8Avx2(__m256);
+
+#[allow(dead_code)]
+impl SimdF32x8 for F32x8Avx2 {
+    #[inline]
+    fn splat(x: f32) -> Self {
+        // Safety: _mm256_set1_ps has no preconditions.
+        unsafe { F32x8Avx2(_mm256_set1_ps(x)) }
+    }
+
+    #[inline]
+    fn load_unaligned(src: &[f32; 8]) -> Self {
+        // Safety: src is &[f32; 8] — non-null, 8*4 bytes valid.
+        unsafe { F32x8Avx2(_mm256_loadu_ps(src.as_ptr())) }
+    }
+
+    #[inline]
+    fn store_unaligned(self, dst: &mut [f32; 8]) {
+        // Safety: dst is &mut [f32; 8] — non-null, 8*4 bytes writable.
+        unsafe { _mm256_storeu_ps(dst.as_mut_ptr(), self.0) }
+    }
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        // Safety: both operands are valid __m256 values from prior ops.
+        unsafe { F32x8Avx2(_mm256_add_ps(self.0, rhs.0)) }
+    }
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        // Safety: both operands are valid __m256 values from prior ops.
+        unsafe { F32x8Avx2(_mm256_sub_ps(self.0, rhs.0)) }
+    }
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        // Safety: both operands are valid __m256 values from prior ops.
+        unsafe { F32x8Avx2(_mm256_mul_ps(self.0, rhs.0)) }
+    }
+
+    /// Fixed-tree horizontal sum: `(((l0+l1)+(l2+l3))+((l4+l5)+(l6+l7)))`.
+    ///
+    /// Uses store-then-scalar to avoid `_mm256_hadd_ps` reordering (ADR-0175).
+    /// The scalar fallback `F32x8Scalar` uses the IDENTICAL tree.
+    #[inline]
+    fn horizontal_sum(self) -> f32 {
+        let mut tmp = [0.0_f32; 8];
+        // Safety: tmp is local, properly sized; self.0 is a valid __m256.
+        unsafe { _mm256_storeu_ps(tmp.as_mut_ptr(), self.0) };
+        let lo = (tmp[0] + tmp[1]) + (tmp[2] + tmp[3]);
+        let hi = (tmp[4] + tmp[5]) + (tmp[6] + tmp[7]);
+        lo + hi
     }
 }
 
@@ -196,6 +261,22 @@ mod tests {
         assert!(
             result.to_bits() == exact_20.to_bits(),
             "AVX2 golden vector failed: got {result}"
+        );
+    }
+
+    #[test]
+    fn avx2_f32_golden_vector() {
+        // splat(2.0).mul(load([1..8])).horizontal_sum() == 2*(1+2+...+8) == 72
+        let data = [1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let v = F32x8Avx2::load_unaligned(&data);
+        let two = F32x8Avx2::splat(2.0_f32);
+        let result = two.mul(v).horizontal_sum();
+        // 2*(1+2+3+4+5+6+7+8) = 2*36 = 72 — exact integer in IEEE-754 f32.
+        #[allow(clippy::float_cmp)]
+        let exact_72 = 72.0_f32;
+        assert!(
+            result.to_bits() == exact_72.to_bits(),
+            "AVX2 f32 golden vector failed: got {result}"
         );
     }
 }

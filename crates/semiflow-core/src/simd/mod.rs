@@ -23,15 +23,10 @@ mod x86_64;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 mod aarch64;
 
-// Scalar is compiled on other arches AND under cfg(test) on all arches,
-// AND on x86_64 without avx2, AND on aarch64 without neon.
-#[cfg(any(
-    test,
-    not(any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "aarch64", target_feature = "neon")
-    ))
-))]
+// Scalar is always compiled. On x86_64+avx2, F32x4Scalar is still needed
+// (no native SSE f32x4 type in our trait; only F32x8 uses AVX2 on x86_64).
+// On aarch64+neon, F64x4Scalar and F32x8Scalar are still needed fallbacks.
+// Dead-code gates: #[allow(dead_code)] on the items that are unused per arch.
 mod scalar;
 
 // ---------------------------------------------------------------------------
@@ -47,6 +42,22 @@ pub(crate) use aarch64::F64x4Neon as F64x4;
 pub(crate) use scalar::F64x4Scalar as F64x4;
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 pub(crate) use x86_64::F64x4Avx2 as F64x4;
+
+// ---------------------------------------------------------------------------
+// Type alias: F32x8 (AVX2: 8 lanes) / F32x4 (NEON: 4 lanes).
+// ---------------------------------------------------------------------------
+
+/// 8-lane f32 alias — AVX2 impl on x86_64+avx2, scalar fallback elsewhere.
+#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+pub(crate) use x86_64::F32x8Avx2 as F32x8;
+#[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
+pub(crate) use scalar::F32x8Scalar as F32x8;
+
+/// 4-lane f32 alias — NEON impl on aarch64+neon, scalar fallback elsewhere.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+pub(crate) use aarch64::F32x4Neon as F32x4;
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+pub(crate) use scalar::F32x4Scalar as F32x4;
 
 // ---------------------------------------------------------------------------
 // Wave B3: G⁴ stencil SIMD kernels re-exported for truncated_exp4_cached.
@@ -108,4 +119,60 @@ pub(crate) trait SimdF64x4: Copy {
     fn mul(self, rhs: Self) -> Self;
     /// Reduce 4 lanes via deterministic order `((l0 + l1) + l2) + l3`.
     fn horizontal_sum(self) -> f64;
+}
+
+// ---------------------------------------------------------------------------
+// Trait — crate-private, 8-lane f32 SIMD (ADR-0175, Phase 5b).
+// ---------------------------------------------------------------------------
+
+/// 8-lane f32 SIMD trait, crate-private (AVX2 path; scalar fallback for other arches).
+///
+/// Determinism contract (extends ADR-0019 to f32, ADR-0175):
+/// every method is bit-equal to the corresponding scalar f32 op.
+/// FMA is FORBIDDEN — `mul` and `add` are SEPARATE rounding steps.
+/// `horizontal_sum` uses a hard-fixed addition tree matching the scalar reference.
+#[allow(dead_code)] // full trait surface mandated by contract
+pub(crate) trait SimdF32x8: Copy {
+    /// Broadcast scalar to all 8 lanes.
+    fn splat(x: f32) -> Self;
+    /// Load 8 contiguous f32 values (no alignment requirement).
+    fn load_unaligned(src: &[f32; 8]) -> Self;
+    /// Store 8 lanes to contiguous memory (no alignment requirement).
+    fn store_unaligned(self, dst: &mut [f32; 8]);
+    /// Lane-wise add. NO fused multiply-add.
+    fn add(self, rhs: Self) -> Self;
+    /// Lane-wise subtract.
+    fn sub(self, rhs: Self) -> Self;
+    /// Lane-wise multiply. NO fused multiply-add.
+    fn mul(self, rhs: Self) -> Self;
+    /// Reduce 8 lanes via deterministic fixed tree.
+    ///
+    /// Order: `(((l0+l1)+(l2+l3))+((l4+l5)+(l6+l7)))`.
+    /// The scalar fallback uses the IDENTICAL tree.
+    fn horizontal_sum(self) -> f32;
+}
+
+// ---------------------------------------------------------------------------
+// Trait — crate-private, 4-lane f32 SIMD (ADR-0175, Phase 5b, NEON path).
+// ---------------------------------------------------------------------------
+
+/// 4-lane f32 SIMD trait, crate-private (NEON path; scalar fallback for other arches).
+///
+/// Determinism contract: same as `SimdF32x8`. FMA FORBIDDEN.
+#[allow(dead_code)] // full trait surface mandated by contract
+pub(crate) trait SimdF32x4: Copy {
+    /// Broadcast scalar to all 4 lanes.
+    fn splat(x: f32) -> Self;
+    /// Load 4 contiguous f32 values (no alignment requirement).
+    fn load_unaligned(src: &[f32; 4]) -> Self;
+    /// Store 4 lanes to contiguous memory (no alignment requirement).
+    fn store_unaligned(self, dst: &mut [f32; 4]);
+    /// Lane-wise add. NO fused multiply-add.
+    fn add(self, rhs: Self) -> Self;
+    /// Lane-wise subtract.
+    fn sub(self, rhs: Self) -> Self;
+    /// Lane-wise multiply. NO fused multiply-add.
+    fn mul(self, rhs: Self) -> Self;
+    /// Reduce 4 lanes via deterministic order `((l0 + l1) + l2) + l3`.
+    fn horizontal_sum(self) -> f32;
 }
