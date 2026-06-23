@@ -8,9 +8,21 @@
 `crates/semiflow-ffi/src/lib.rs` declares the `tt_ffi`, `tt_coupled_ffi`, and
 `gridless_ffi` modules unconditionally; `crates/semiflow-wasm/src/lib.rs` mirrors
 them with wasm-bindgen JS classes (`TtState`, `TtEvolver`, `TtCoupledEvolver`,
-`MeasureState`, `GridlessEvolver`).  PyO3 wiring was already present.
+`MeasureState`, `GridlessEvolver`).  PyO3 (`semiflow-py`) S³ modules existed
+on disk but were not declared (`mod`) or registered in `lib.rs` at this point —
+that omission was corrected in issue #4 (commit `64654b9`, 2026-06-22); see
+Amendment 1 below.
 Smoke tests: `crates/semiflow-ffi/tests/ffi_s3_smoke.rs` and
 `crates/semiflow-wasm/tests/s3_smoke.rs`.
+
+## Amendment 1 — PyO3 S³ wiring completed (2026-06-22)
+
+`semiflow-py/src/lib.rs` was missing the three `mod` declarations
+(`tt_py`, `tt_coupled_py`, `gridless_py`) and their `register()` calls;
+`from semiflow import TtState` failed at import time despite the source files
+being present.  Issue #4 (feature commit `fe840b7`, merge `64654b9`) added the
+declarations, `register()` calls, and `__init__.py` re-exports; 39/39
+`test_s3_engines.py` now pass.  FFI and WASM wiring (above) was unaffected.
 
 ## Decision
 
