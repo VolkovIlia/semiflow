@@ -372,3 +372,15 @@ pub use obstacle_nd_ffi::{
     smf_obstacle_nd2_shape, smf_obstacle_nd2_apply,
     SmfObstacleND2,
 };
+
+// ADR-0180 — pre-sampled graph state-adjoint (batched time-grid, GL₄-aware)
+pub mod graph_adjoint_ffi;
+pub use graph_adjoint_ffi::{
+    smf_graph_adjoint_abscissa_times,
+    smf_graph_adjoint_new_presampled,
+    smf_graph_adjoint_new_presampled_varcoef,
+    smf_graph_adjoint_evolve_state_adjoint,
+    smf_graph_adjoint_n_nodes,
+    smf_graph_adjoint_free,
+    SmfGraphAdjoint,
+};

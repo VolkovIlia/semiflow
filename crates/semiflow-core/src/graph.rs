@@ -330,6 +330,39 @@ impl<F: SemiflowFloat> Laplacian<F> {
         assemble_laplacian(g, LaplacianKind::SymNormalized)
     }
 
+    /// Construct a [`Laplacian`] from pre-computed CSR parts (ADR-0180).
+    ///
+    /// Recomputes `spectral_radius_bound` via the Gershgorin row-sum formula
+    /// so the cached-bound invariant (L4) is preserved. The caller supplies
+    /// an already-computed Laplacian's `row_ptr`, `col_idx`, and a **fresh**
+    /// `vals` slice (time-varying weights); the shared pattern is reused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SemiflowError::DomainViolation`] if:
+    /// - `row_ptr.len() != n_nodes + 1`.
+    /// - `row_ptr` is not monotone non-decreasing.
+    /// - `col_idx.len() != vals.len() != row_ptr[n_nodes]`.
+    /// - Any `col_idx[k] >= n_nodes`.
+    pub fn from_csr_parts(
+        n_nodes: usize,
+        row_ptr: Vec<usize>,
+        col_idx: Vec<u32>,
+        vals: Vec<F>,
+        kind: LaplacianKind,
+    ) -> Result<Self, SemiflowError> {
+        validate_csr_parts(n_nodes, &row_ptr, &col_idx, &vals)?;
+        let rho_bar = gershgorin_bound_csr(&row_ptr, &vals);
+        Ok(Self {
+            n_nodes,
+            row_ptr,
+            col_idx,
+            vals,
+            spectral_radius_bound: rho_bar,
+            kind,
+        })
+    }
+
     /// `dst ← L_G · src`. Zero-alloc; `src.len() == dst.len() == self.n_nodes`.
     pub fn apply_into_slice(&self, src: &[F], dst: &mut [F]) {
         debug_assert_eq!(
@@ -470,6 +503,63 @@ fn flatten_to_csr<F: Copy>(rows: &[Vec<(u32, F)>]) -> (Vec<usize>, Vec<u32>, Vec
         row_ptr.push(ptr);
     }
     (row_ptr, col_idx, vals)
+}
+
+/// Validate CSR parts for `Laplacian::from_csr_parts` (ADR-0180).
+fn validate_csr_parts<F: SemiflowFloat>(
+    n_nodes: usize,
+    row_ptr: &[usize],
+    col_idx: &[u32],
+    vals: &[F],
+) -> Result<(), SemiflowError> {
+    if row_ptr.len() != n_nodes + 1 {
+        return Err(SemiflowError::DomainViolation {
+            what: "from_csr_parts: row_ptr.len() must equal n_nodes+1",
+            value: row_ptr.len() as f64,
+        });
+    }
+    for i in 0..n_nodes {
+        if row_ptr[i] > row_ptr[i + 1] {
+            return Err(SemiflowError::DomainViolation {
+                what: "from_csr_parts: row_ptr not monotone non-decreasing",
+                value: i as f64,
+            });
+        }
+    }
+    let nnz = row_ptr[n_nodes];
+    if col_idx.len() != nnz || vals.len() != nnz {
+        return Err(SemiflowError::DomainViolation {
+            what: "from_csr_parts: col_idx.len()/vals.len() must equal row_ptr[n_nodes]",
+            value: nnz as f64,
+        });
+    }
+    for &c in col_idx {
+        if c as usize >= n_nodes {
+            return Err(SemiflowError::DomainViolation {
+                what: "from_csr_parts: col_idx entry >= n_nodes",
+                value: f64::from(c),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Gershgorin row-sum bound from flat CSR arrays: `ρ̄ = max_i Σ_j |L[i, j]|`.
+fn gershgorin_bound_csr<F: SemiflowFloat>(row_ptr: &[usize], vals: &[F]) -> F {
+    let n = row_ptr.len().saturating_sub(1);
+    let mut max_sum = F::zero();
+    for i in 0..n {
+        let mut row_sum = F::zero();
+        for k in row_ptr[i]..row_ptr[i + 1] {
+            let v = vals[k];
+            let av = if v < F::zero() { F::zero() - v } else { v };
+            row_sum = row_sum + av;
+        }
+        if row_sum > max_sum {
+            max_sum = row_sum;
+        }
+    }
+    max_sum
 }
 
 /// Gershgorin row-sum bound: `ρ̄ = max_i Σ_j |L[i, j]|`.

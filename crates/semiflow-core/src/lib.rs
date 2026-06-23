@@ -217,6 +217,7 @@ pub mod killing_soft;
 pub mod magnus6_graph;
 pub mod magnus_graph;
 pub mod magnus_graph_adjoint;
+pub mod graph_adjoint_presampled;
 pub(crate) mod magnus_graph_helpers;
 #[cfg(test)]
 mod magnus_graph_tests;
@@ -400,6 +401,9 @@ pub use crate::{
     killing_order2::DirichletHeat2ndChernoff,
     killing_soft::{ClosureKillingRate, Killing2ndChernoff, KillingRate},
     magnus6_graph::MagnusGraphHeat6thChernoff,
+    graph_adjoint_presampled::{
+        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
+    },
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
     manifold::{BoundedGeometryManifold, Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,

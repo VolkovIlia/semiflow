@@ -107,7 +107,7 @@ fn adj_taylor_body<F: SemiflowFloat>(
 
 /// Apply degree-4 Taylor of `S⋆(τ)`: `dst ← S⋆(τ) · src`.
 /// R4 zero-alloc: 5 scratch buffers acquired and returned.
-fn apply_exp_omega4_adj_kernel<F: SemiflowFloat>(
+pub(crate) fn apply_exp_omega4_adj_kernel<F: SemiflowFloat>(
     lap1: &Laplacian<F>,
     lap2: &Laplacian<F>,
     tau: F,
@@ -304,7 +304,7 @@ fn la_adj_taylor_body<F: SemiflowFloat>(
 
 /// Adjoint kernel for variable-coefficient operator. R4 zero-alloc: 7 scratch buffers.
 #[allow(clippy::too_many_arguments)]
-fn apply_exp_omega4_la_adj_kernel<F: SemiflowFloat>(
+pub(crate) fn apply_exp_omega4_la_adj_kernel<F: SemiflowFloat>(
     lap1: &Laplacian<F>,
     sqrt_a1: &[F],
     lap2: &Laplacian<F>,
@@ -438,7 +438,7 @@ impl<F: SemiflowFloat> VarCoefMagnusGraphHeatChernoff<F> {
 // ---------------------------------------------------------------------------
 
 /// Validate `sqrt_a1`/`sqrt_a2`: all entries must be finite and positive.
-fn validate_varcoef_sqrt_a<F: SemiflowFloat>(
+pub(crate) fn validate_varcoef_sqrt_a<F: SemiflowFloat>(
     sqrt_a1: &[F],
     sqrt_a2: &[F],
 ) -> Result<(), SemiflowError> {
