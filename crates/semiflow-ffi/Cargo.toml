@@ -1,6 +1,6 @@
 [package]
 name = "semiflow-ffi"
-description = "C ABI (cdylib) bindings for semiflow-core evolution-equation / PDE engines (experimental, ABI unstable until v1.0)"
+description = "C ABI (cdylib) bindings for semiflow evolution-equation / PDE engines (experimental, ABI unstable until v1.0)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 num-complex = { version = "0.4", default-features = false, features = ["libm"] }
-semiflow-core = { path = "../semiflow-core", default-features = false, features = ["std"] }
+semiflow = { path = "../semiflow", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 cbindgen = "=0.27"

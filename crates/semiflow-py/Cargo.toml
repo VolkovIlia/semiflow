@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "PyO3 Python bindings for semiflow-core evolution-equation / PDE engines; abi3-py310 wheel (experimental)"
+description = "PyO3 Python bindings for semiflow evolution-equation / PDE engines; abi3-py310 wheel (experimental)"
 publish = false  # wheel distribution only; not on crates.io
 
 [lib]
@@ -15,7 +15,7 @@ name = "semiflow"   # MUST be the Python import name (snake_case)
 crate-type = ["cdylib"]
 
 [dependencies]
-semiflow-core = { path = "../semiflow-core", default-features = false, features = ["std"] }
+semiflow = { path = "../semiflow", default-features = false, features = ["std"] }
 pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
 numpy = "0.28"  # MUST match pyo3 major version
 tracing = "0.1"  # Wave 5 (ADR-0045): zero-copy fallback warn

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/semiflow-core", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
 
 [workspace.package]
 version = "0.9.0-beta"
@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 authors = ["Ilia Volkov <ilia.volkov@outlook.com>"]
 repository = "https://github.com/VolkovIlia/semiflow"
 homepage = "https://github.com/VolkovIlia/semiflow"
-documentation = "https://docs.rs/semiflow-core"
+documentation = "https://docs.rs/semiflow"
 readme = "README.md"
 
 [workspace.lints.rust]

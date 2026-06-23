@@ -1,5 +1,5 @@
 [package]
-name = "semiflow-core"
+name = "semiflow"
 description = "no_std Rust PDE solver: evolution equations via Chernoff approximation of operator semigroups (heat, diffusion, Schrodinger)"
 version.workspace = true
 edition.workspace = true
