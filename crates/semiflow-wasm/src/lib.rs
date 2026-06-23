@@ -108,6 +108,7 @@ mod v3;
 mod wentzell_wasm;
 mod tt_wasm;
 mod tt_coupled_wasm;
+mod tt_varcoef_wasm;
 mod gridless_wasm;
 
 #[cfg(feature = "full")]
@@ -122,6 +123,8 @@ mod schrodinger_complex_wasm;
 mod schrodinger_wasm;
 #[cfg(feature = "full")]
 mod bc_wasm;
+#[cfg(feature = "full")]
+mod bc_wasm2;
 #[cfg(feature = "full")]
 mod strang_nd_wasm;
 #[cfg(feature = "full")]
@@ -169,6 +172,7 @@ pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
 pub use wentzell_wasm::{GammaFamily, WentzellV8};
 pub use tt_wasm::{TtState, TtEvolver};
 pub use tt_coupled_wasm::TtCoupledEvolver;
+pub use tt_varcoef_wasm::WasmVarCoefTtEvolver as VarCoefTtEvolver;
 pub use gridless_wasm::{MeasureState, GridlessEvolver};
 
 #[cfg(feature = "full")]
@@ -185,6 +189,8 @@ pub use schrodinger_complex_wasm::SchrodingerComplex1D;
 pub use schrodinger_wasm::Schrodinger1D;
 #[cfg(feature = "full")]
 pub use bc_wasm::{KilledDirichlet1D, Killing1D, Reflected1D, Resolvent1D, Robin1D};
+#[cfg(feature = "full")]
+pub use bc_wasm2::DirichletHeat2nd1D;
 #[cfg(feature = "full")]
 pub use strang_nd_wasm::{Heat2D, Heat2DVarA, Heat3D, Heat3DVarA};
 #[cfg(feature = "full")]

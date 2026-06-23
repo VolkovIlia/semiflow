@@ -1,14 +1,16 @@
 //! Boundary-condition Chernoff kernels for WebAssembly (`full` feature).
 //!
-//! Exposes four JS classes mirroring the Python `semiflow-py` binding:
+//! Exposes JS classes mirroring the Python `semiflow-py` binding:
 //!
-//! | JS class        | Core type                                                         | M# |
-//! |-----------------|-------------------------------------------------------------------|----|
-//! | `Killing1D`     | `KillingChernoff<DiffusionChernoff, BoxRegion<f64,1>>`            | M8 |
-//! | `Reflected1D`   | `ReflectedHeatChernoff<DiffusionChernoff, HalfSpaceRegion<f64,1>>`| M9 |
-//! | `Robin1D`       | `RobinHeatChernoff<DiffusionChernoff, HalfSpaceRobin<f64,1>>`     | M10|
-//! | `Resolvent1D`   | `LaplaceChernoffResolvent<DiffusionChernoff, f64>`                 | M7 |
-//! | `KilledDirichlet1D` | `Evolver<KilledDirichletChernoff>`                            |    |
+//! | JS class             | Core type                                                           | M#  |
+//! |----------------------|---------------------------------------------------------------------|-----|
+//! | `Killing1D`          | `KillingChernoff<DiffusionChernoff, BoxRegion<f64,1>>`              | M8  |
+//! | `Reflected1D`        | `ReflectedHeatChernoff<DiffusionChernoff, HalfSpaceRegion<f64,1>>` | M9  |
+//! | `Robin1D`            | `RobinHeatChernoff<DiffusionChernoff, HalfSpaceRobin<f64,1>>`      | M10 |
+//! | `Resolvent1D`        | `LaplaceChernoffResolvent<DiffusionChernoff, f64>`                  | M7  |
+//! | `KilledDirichlet1D`  | `Evolver<KilledDirichletChernoff>`                                  |     |
+//!
+//! `DirichletHeat2nd1D` (M11, §21.9) lives in `bc_wasm2.rs` (suckless split).
 //!
 //! Error model: same `.kind`-tagged JS `Error` as `Heat1D` — see crate docs.
 //! `panic = "abort"` (ADR-0028 Amendment 1): no `catch_unwind`; validate first.

@@ -58,6 +58,7 @@ mod panic;
 
 pub mod bc_ffi;
 pub mod bc_ffi2;
+pub mod bc_ffi3;
 pub mod adjoint_fp_ffi;
 pub mod cdr_ffi;
 pub mod matrix_ffi;
@@ -167,6 +168,10 @@ pub use bc_ffi::{
     smf_reflected1d_evolve, smf_reflected1d_free, smf_reflected1d_new, smf_reflected1d_size,
     smf_reflected1d_values, SmfReflected1D,
 };
+pub use bc_ffi3::{
+    smf_dirichlet_heat2nd1d_evolve, smf_dirichlet_heat2nd1d_free, smf_dirichlet_heat2nd1d_new,
+    smf_dirichlet_heat2nd1d_size, smf_dirichlet_heat2nd1d_values, SmfDirichletHeat2nd1D,
+};
 pub use bc_ffi2::{
     smf_robin1d_evolve, smf_robin1d_free, smf_robin1d_new, smf_robin1d_size,
     smf_robin1d_values, SmfRobin1D,
@@ -269,6 +274,13 @@ pub use point_eval_ffi::{
 };
 
 // S³ flagship carriers (ADR-0171) — TtEvolver/TtState, TtCoupledEvolver, GridlessEvolver/MeasureState
+// VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
+pub mod tt_varcoef_ffi;
+pub use tt_varcoef_ffi::{
+    smf_varcoef_tt_evolver_new, smf_varcoef_tt_evolver_evolve,
+    smf_varcoef_tt_evolver_ndim, smf_varcoef_tt_evolver_free,
+    SmfVarCoefTtEvolver,
+};
 pub use tt_ffi::{
     smf_ttstate_new_separable, smf_ttstate_free, smf_ttstate_ndim, smf_ttstate_n_j,
     smf_ttstate_peak_rank, smf_ttstate_storage_size, smf_ttstate_inner_separable,

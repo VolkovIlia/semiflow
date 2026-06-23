@@ -45,6 +45,7 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     Killing1D,
     Reflected1D,
     Robin1D,
+    DirichletHeat2nd1D,
     # ADR-0111 Wave P4 — nonautonomous + subordinated
     Howland1D,
     Subordinated1D,
@@ -98,6 +99,7 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     TtCoupledEvolver,
     MeasureState,
     GridlessEvolver,
+    VarCoefTtEvolver,
 )
 
 __all__ = [
@@ -144,6 +146,7 @@ __all__ = [
     "Killing1D",
     "Reflected1D",
     "Robin1D",
+    "DirichletHeat2nd1D",
     # ADR-0111 Wave P4
     "Howland1D",
     "Subordinated1D",
@@ -196,4 +199,6 @@ __all__ = [
     "TtCoupledEvolver",
     "MeasureState",
     "GridlessEvolver",
+    # VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
+    "VarCoefTtEvolver",
 ]

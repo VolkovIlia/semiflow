@@ -46,7 +46,9 @@ use crate::{
     panic::catch_panic_py,
 };
 
-// Re-export Robin1D from its own module for registration.
+// Re-export bc_kernels2 pyclasses for registration.
+pub(crate) use crate::bc_kernels2::PyDirichletHeat2nd1D;
+pub(crate) use crate::bc_kernels2::PyReflected1D;
 pub(crate) use crate::bc_kernels2::PyRobin1D;
 
 // ---------------------------------------------------------------------------
@@ -114,9 +116,6 @@ struct Killing1DInner {
     semigroup: ChernoffSemigroup<KillingKernel, GridFn1D<f64>>,
     current: GridFn1D<f64>,
 }
-
-// Re-export PyReflected1D from bc_kernels2 for registration.
-pub(crate) use crate::bc_kernels2::PyReflected1D;
 
 // ---------------------------------------------------------------------------
 // Resolvent1D
@@ -416,5 +415,6 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKilling1D>()?;
     m.add_class::<PyReflected1D>()?;
     m.add_class::<PyRobin1D>()?;
+    m.add_class::<PyDirichletHeat2nd1D>()?;
     Ok(())
 }

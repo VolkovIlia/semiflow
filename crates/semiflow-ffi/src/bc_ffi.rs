@@ -1,11 +1,12 @@
 //! FFI surface for BC kernels — Part 1: `Killing1D`, `Reflected1D` (Round 5).
 //!
-//! | C handle         | Core type                                          | Python class  |
-//! |------------------|----------------------------------------------------|---------------|
-//! | `SmfKilling1D`   | `KillingChernoff<DiffUnit, BoxRegion<f64,1>>`      | `Killing1D`   |
-//! | `SmfReflected1D` | `ReflectedHeatChernoff<DiffUnit, HalfSpaceRegion>` | `Reflected1D` |
+//! | C handle                    | Core type                                                      | Python class          |
+//! |-----------------------------|----------------------------------------------------------------|-----------------------|
+//! | `SmfKilling1D`              | `KillingChernoff<DiffUnit, BoxRegion<f64,1>>`                  | `Killing1D`           |
+//! | `SmfReflected1D`            | `ReflectedHeatChernoff<DiffUnit, HalfSpaceRegion>`             | `Reflected1D`         |
 //!
 //! Part 2 (`bc_ffi2.rs`): `Robin1D`, `Resolvent1D`, `KilledDir1D`.
+//! Part 3 (`bc_ffi3.rs`): `DirichletHeat2nd1D`.
 //!
 //! ## Safety contract (all entry points)
 //!

@@ -52,6 +52,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the three `mod` declarations, `register()` calls, and `__init__.py` re-exports;
   39/39 `test_s3_engines.py` now pass.  FFI and WASM surfaces were not affected.
 
+### Added — new type bindings (Pass 2)
+
+- **`DirichletHeat2nd1D`** (order-2 absorbing Dirichlet BC, odd-image method,
+  §21.9, ADR-0176, issue #6): exposed across all three binding layers —
+  `semiflow-ffi` (`smf_dirichlet_heat2nd1d_*`, `SmfDirichletHeat2nd1D`),
+  `semiflow-py` (`DirichletHeat2nd1D` pyclass), and `semiflow-wasm`
+  (`DirichletHeat2nd1D` JS class, `--features full`).
+  PEP 561 `.pyi` stub added.
+- **`VarCoefTtEvolver`** (additive-separable variable-coefficient TT carrier,
+  §52.10, ADR-0178, issue #2): exposed across all three binding layers —
+  `semiflow-ffi` (`smf_varcoef_tt_evolver_*`, `SmfVarCoefTtEvolver` in
+  `tt_varcoef_ffi.rs`), `semiflow-py` (`VarCoefTtEvolver` pyclass in
+  `tt_varcoef_py.rs`), `semiflow-wasm` (`VarCoefTtEvolver` JS class in
+  `tt_varcoef_wasm.rs`).  Operates on the same `TtState` carrier as
+  `TtEvolver`; `VarCoefOutOfClass` → `OutOfDomain` on all surfaces.
+  PEP 561 `.pyi` stub added.
+
 ### Known gaps (documented, not silently omitted)
 
 `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and
