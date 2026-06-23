@@ -339,3 +339,36 @@ pub use adaptive_ffi::{
     smf_adaptive_pi_new, smf_adaptive_pi_evolve, smf_adaptive_pi_values,
     smf_adaptive_pi_size, smf_adaptive_pi_free, SmfAdaptivePI,
 };
+
+// C-parity pass — Laplacian introspection + GraphTraj (degenerate)
+pub mod laplacian_ffi;
+pub use laplacian_ffi::{
+    smf_graph_laplacian_combinatorial, smf_graph_laplacian_normalized,
+    smf_laplacian_free, smf_laplacian_n_nodes,
+    smf_laplacian_is_combinatorial, smf_laplacian_is_normalized,
+    smf_laplacian_spectral_bound,
+    smf_laplacian_row_ptr, smf_laplacian_col_idx, smf_laplacian_vals,
+    smf_laplacian_to_dense,
+    smf_free_buf_usize, smf_free_buf_f64,
+    SmfLaplacian,
+    smf_graph_traj_new, smf_graph_traj_free,
+    smf_graph_traj_n_nodes, smf_graph_traj_n_segments, smf_graph_traj_t_horizon,
+    SmfGraphTraj,
+};
+
+// C-parity pass — ObstacleGammaV8 + ObstacleNDV8 (ADR-0153 TIER-2)
+pub mod obstacle_gamma_ffi;
+pub use obstacle_gamma_ffi::{
+    smf_obstacle_gamma_new_const, smf_obstacle_gamma_new_array,
+    smf_obstacle_gamma_free, smf_obstacle_gamma_size,
+    smf_obstacle_gamma_inactive_gamma,
+    smf_free_buf_u8,
+    SmfObstacleGamma,
+};
+
+pub mod obstacle_nd_ffi;
+pub use obstacle_nd_ffi::{
+    smf_obstacle_nd2_new, smf_obstacle_nd2_free,
+    smf_obstacle_nd2_shape, smf_obstacle_nd2_apply,
+    SmfObstacleND2,
+};

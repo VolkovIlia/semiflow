@@ -52,6 +52,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the three `mod` declarations, `register()` calls, and `__init__.py` re-exports;
   39/39 `test_s3_engines.py` now pass.  FFI and WASM surfaces were not affected.
 
+### Added — C/WASM parity (close-c-wasm-parity wave)
+
+- **`SmfLaplacian`** opaque type: `smf_graph_laplacian_combinatorial` /
+  `smf_graph_laplacian_normalized`, introspection (`n_nodes`, `is_combinatorial`,
+  `is_normalized`, `spectral_bound`), CSR getters (`row_ptr`, `col_idx`, `vals`),
+  and dense read-back `smf_laplacian_to_dense` (n×n row-major).  WASM `Laplacian`
+  class exposes the same surface.
+- **`SmfGraphTraj`** (degenerate fixed-topology): `smf_graph_traj_new` + getters
+  `n_nodes`, `n_segments`, `t_horizon`.  WASM `GraphTraj` class.
+- **`SmfObstacleGamma`**: `new_const` / `new_array` + `size` +
+  `inactive_gamma` (dense `(gamma, defined, count)` read-back).  WASM
+  `ObstacleGammaV8` class.
+- **`SmfObstacleND2`** (D=2): `new` + `shape` + `apply` (flat buffer in/out).
+  WASM `ObstacleND2` class.
+  Together these close all prior PyO3-only deferrals for these four types.
+  46 `semiflow-ffi` tests pass; check-unsafe-scope PASS; header regenerated.
+  Cross-refs: ADR-0028, ADR-0171, ADR-0179.
+
 ### Added — new type bindings (Pass 2)
 
 - **`DirichletHeat2nd1D`** (order-2 absorbing Dirichlet BC, odd-image method,
@@ -115,12 +133,19 @@ The following 5 candidates were classified SKIP after analysis:
 
 ### Known gaps (documented, not silently omitted)
 
-`ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and
-`GraphAdjoint` dense read-back remain PyO3-only deferrals (closures and
-dense-matrix read-back are not expressible in a stable C / WASM ABI without
-additional design work).
+`ObstacleND`, `ObstacleGamma`, `GraphTraj`, and Laplacian introspection
+(including dense `to_dense` read-back) are now fully exposed across FFI and
+WASM — see "Added — C/WASM parity" below.
 
-Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI contract).
+The sole remaining PyO3-only deferral is **`GraphAdjoint`'s constructor**:
+its `lap_at_t` (time-dependent Laplacian) and optional weight callbacks are
+Rust/Python closures that cannot cross a stable C/WASM ABI (ADR-0179).  The
+`evolve_state_adjoint` method is ABI-shaped (dense vector in/out); only the
+closure-accepting constructor is blocked.  Workaround: use the pre-sampled
+array path; a batched-sampler API is specced for a future minor.
+
+Cross-refs: ADR-0028 (binding split), ADR-0171 (S³ carrier C-ABI contract),
+ADR-0179 (GraphAdjoint closure deferral).
 
 ## [0.9.0-beta] — 2026-06-19
 
