@@ -742,6 +742,16 @@ typedef struct {
   uint8_t _private[0];
 } SmfObstacleND2;
 
+/**
+ * Opaque handle to a pre-sampled graph state-adjoint (ADR-0180).
+ *
+ * Allocate with `smf_graph_adjoint_new_presampled[_varcoef]`.
+ * Free with `smf_graph_adjoint_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfGraphAdjoint;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -5783,6 +5793,108 @@ SemiflowStatus smf_obstacle_nd2_apply(const SmfObstacleND2 *ptr,
                                       uintptr_t v_len,
                                       double *out,
                                       uintptr_t out_len);
+
+/**
+ * Fill `out` (`2 * n_steps` doubles) with the GL₄ abscissa sample times in
+ * adjoint-schedule order `[(0,c₁),(0,c₂),(1,c₁),(1,c₂),…]`.
+ *
+ * The host must pre-sample the Laplacian at exactly these times before
+ * calling `smf_graph_adjoint_new_presampled`.
+ *
+ * # Safety
+ * `out` must be a valid, writable buffer of at least `2 * n_steps` doubles.
+ */
+SemiflowStatus smf_graph_adjoint_abscissa_times(double t_horizon, uintptr_t n_steps, double *out);
+
+/**
+ * Construct a pre-sampled Magnus K=4 graph state-adjoint (ADR-0180).
+ *
+ * ## Parameters
+ * - `n_nodes`: graph size (also `row_ptr_len = n_nodes + 1`).
+ * - `row_ptr` (`len row_ptr_len`), `col_idx` (`len nnz`), `vals_seq`
+ *   (`len 2*n_steps*nnz`): CSR pattern + pre-sampled Laplacian weights.
+ * - `n_steps`, `t_horizon`: must match the abscissa grid used to sample.
+ * - `rho_bar_max > 0`: Gershgorin upper bound.
+ * - `convergence_check != 0`: enable Magnus radius guard.
+ * - `kind`: 0 = combinatorial, 1 = sym-normalized.
+ * - `out`: receives the opaque handle on success.
+ *
+ * ## Return values
+ * `Ok`(0), `NullPtr`(5), `OutOfDomain`(3), `GridMismatch`(1), `Panic`(99).
+ *
+ * ## Ownership
+ * `vals_seq` is copied; caller may free it immediately.
+ * Free the handle with `smf_graph_adjoint_free`.
+ *
+ * # Safety
+ * All pointer arguments must be valid for their stated lengths.
+ */
+SemiflowStatus smf_graph_adjoint_new_presampled(uintptr_t n_nodes,
+                                                const uintptr_t *row_ptr,
+                                                uintptr_t row_ptr_len,
+                                                const uint32_t *col_idx,
+                                                uintptr_t nnz,
+                                                const double *vals_seq,
+                                                uintptr_t n_steps,
+                                                double t_horizon,
+                                                double rho_bar_max,
+                                                int32_t convergence_check,
+                                                int32_t kind,
+                                                SmfGraphAdjoint **out);
+
+/**
+ * Construct a pre-sampled VarCoef graph state-adjoint (ADR-0180).
+ *
+ * Adds `a_seq` (len `2*n_steps*n_nodes`) and `a_sup_max` over the base
+ * `smf_graph_adjoint_new_presampled` parameters.
+ *
+ * # Safety
+ * All pointer arguments must be valid for their stated lengths.
+ */
+SemiflowStatus smf_graph_adjoint_new_presampled_varcoef(uintptr_t n_nodes,
+                                                        const uintptr_t *row_ptr,
+                                                        uintptr_t row_ptr_len,
+                                                        const uint32_t *col_idx,
+                                                        uintptr_t nnz,
+                                                        const double *vals_seq,
+                                                        uintptr_t n_steps,
+                                                        const double *a_seq,
+                                                        double a_sup_max,
+                                                        double t_horizon,
+                                                        double rho_bar_max,
+                                                        int32_t kind,
+                                                        SmfGraphAdjoint **out);
+
+/**
+ * Backward costate sweep `λ_n → λ_0`.
+ *
+ * `n_steps` MUST equal the value supplied at construction.
+ *
+ * ## Return values
+ * `Ok`(0), `NullPtr`(5), `OutOfDomain`(3), `GridMismatch`(1), `Panic`(99).
+ *
+ * # Safety
+ * `lambda_n` / `out` must be valid slices of length `>= n_nodes`.
+ */
+SemiflowStatus smf_graph_adjoint_evolve_state_adjoint(const SmfGraphAdjoint *h,
+                                                      const double *lambda_n,
+                                                      uintptr_t lambda_len,
+                                                      uintptr_t n_steps,
+                                                      double *out,
+                                                      uintptr_t out_len);
+
+/**
+ * Return the number of graph nodes. Returns 0 if `h` is null.
+ */
+uintptr_t smf_graph_adjoint_n_nodes(const SmfGraphAdjoint *h);
+
+/**
+ * Free a `SmfGraphAdjoint` handle (null-safe).
+ *
+ * # Safety
+ * `h` must be null or a live pointer from `smf_graph_adjoint_new_presampled[_varcoef]`.
+ */
+void smf_graph_adjoint_free(SmfGraphAdjoint *h);
 
 #ifdef __cplusplus
 }  // extern "C"

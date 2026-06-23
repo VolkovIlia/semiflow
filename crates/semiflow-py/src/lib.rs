@@ -178,6 +178,7 @@ fn register_core_v2(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<nonseparable::NonSeparable2D>()?;
     m.add_class::<adjoint::Adjoint>()?;
     m.add_class::<graph_adjoint::GraphAdjoint>()?;
+    m.add_class::<graph_adjoint::GraphAdjointPresampled>()?;
     m.add_class::<adaptive::AdaptivePI>()?;
     m.add("SemiflowError", py.get_type::<error::SemiflowError>())?;
     m.add_function(wrap_pyfunction!(version, m)?)?;

@@ -131,6 +131,43 @@ The following 5 candidates were classified SKIP after analysis:
   `TruncatedExp4th1D`.
 - `IdentityND` — utility type not intended for direct user construction.
 
+### Added — pre-sampled graph state-adjoint (ADR-0180)
+
+- **`PreSampledLaplacianSeq<F>`** (`semiflow-core`): holds the pre-sampled CSR
+  Laplacian weight sequence (`row_ptr`, `col_idx`, `vals_seq`) consumed at
+  construction; `vals_seq.len() == 2 * n_steps * nnz` enforced — the factor-of-2
+  reflects GL₄ Magnus K=4 sampling at both abscissae (`c₁ = (3−√3)/6`,
+  `c₂ = (3+√3)/6`) per step.  One-value-per-step layout is SILENTLY WRONG at
+  O(τ²) and is rejected at construction.
+- **`fill_abscissa_times(t_horizon, n_steps, out)`**: fills a `2*n_steps` slice
+  with the GL₄ abscissa sample times in adjoint-schedule order
+  `[(step k, c₁), (step k, c₂)]` where adjoint `t_start = (n_steps−1−k)·τ`.
+  Exposed on all four surfaces so callers supply exactly the right times.
+- **`MagnusGraphHeatChernoff::from_presampled`** / **`PreSampledMagnusAdj<F>`**:
+  pre-sampled Magnus K=4 graph state-adjoint; `evolve_state_adjoint_into` takes
+  the pre-built sequence and runs the backward costate sweep without any runtime
+  callback.
+- **`VarCoefMagnusGraphHeatChernoff::from_presampled`** /
+  **`PreSampledVarCoefAdj<F>`**: variable-coefficient variant; additionally
+  accepts `a_seq` (2·n_steps scalar diffusion weights) and `a_sup_max`.
+- **RELEASE_BLOCKING gate `G_GRAPH_ADJOINT_SAMPLED_PARITY`**: closure path vs
+  pre-sampled path must be bit-exact (0 ULP).  2 tests PASS.
+- **FFI** (`semiflow-ffi`): new `SmfGraphAdjoint` opaque type with 6 functions —
+  `smf_graph_adjoint_abscissa_times`, `smf_graph_adjoint_new_presampled`,
+  `smf_graph_adjoint_new_presampled_varcoef`,
+  `smf_graph_adjoint_evolve_state_adjoint`, `smf_graph_adjoint_n_nodes`,
+  `smf_graph_adjoint_free`.  `tau` is captured at construction
+  (`t_horizon / n_steps`); `evolve` validates `n_steps` matches or returns
+  `OutOfDomain`.  C header regenerated; check-unsafe-scope PASS.
+- **PyO3** (`semiflow-py`): new `GraphAdjointPresampled` pyclass.  GIL policy
+  (ADR-0031): `lap_at_t` callback sampled once under GIL at construction;
+  `evolve_state_adjoint` runs fully in `py.detach` with no Python reattachment
+  per step.  Registered alongside the existing `GraphAdjoint` class (additive).
+- **WASM** (`semiflow-wasm`, `--features full`): new `GraphAdjointPresampled`
+  JS class with `abscissaTimes` (static), `fromPresampled`, `evolveStateAdjoint`,
+  `nNodes`, `nSteps`.  Magnus K=4 only (VarCoef deferred to a future WASM wave).
+  All code is `#[cfg(feature = "full")]`-gated.
+
 ### Known gaps (documented, not silently omitted)
 
 `ObstacleND`, `ObstacleGamma`, `GraphTraj`, and Laplacian introspection

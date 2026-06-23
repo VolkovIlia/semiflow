@@ -150,6 +150,8 @@ mod adaptive_wasm;
 #[cfg(feature = "full")]
 mod graph_heat_extra_wasm;
 #[cfg(feature = "full")]
+mod graph_adjoint_wasm;
+#[cfg(feature = "full")]
 mod graph_magnus_wasm;
 #[cfg(feature = "full")]
 mod quantum_graph_wasm;
@@ -227,6 +229,8 @@ pub use obstacle_wasm::ObstacleChernoffWasm; // Rust type name; JS sees `Obstacl
 pub use adjoint_wasm::Adjoint1D;
 #[cfg(feature = "full")]
 pub use adaptive_wasm::AdaptivePI1D;
+#[cfg(feature = "full")]
+pub use graph_adjoint_wasm::GraphAdjointPresampled;
 #[cfg(feature = "full")]
 pub use graph_heat_extra_wasm::{GraphHeat4thWasm, VarCoefGraphHeatWasm};
 #[cfg(feature = "full")]
