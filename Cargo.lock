@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "semiflow"
-version = "0.9.0-beta"
+version = "0.9.0-beta.1"
 dependencies = [
  "allocation-counter",
  "criterion",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "semiflow-ffi"
-version = "0.9.0-beta"
+version = "0.9.0-beta.1"
 dependencies = [
  "cbindgen",
  "num-complex",
@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "semiflow-py"
-version = "0.9.0-beta"
+version = "0.9.0-beta.1"
 dependencies = [
  "criterion",
  "numpy",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "semiflow-wasm"
-version = "0.9.0-beta"
+version = "0.9.0-beta.1"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

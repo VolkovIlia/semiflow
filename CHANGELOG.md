@@ -4,7 +4,17 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — binding-parity follow-up to 0.9.0-beta
+## [Unreleased]
+
+## [0.9.0-beta.1] — 2026-06-24
+
+- **Completes `semiflow-core → semiflow` rename**: the initial `0.9.0-beta`
+  published the library under the new `semiflow` crate name but shipped with
+  stale doctests and binding-crate re-exports that still referenced the old
+  `semiflow-core` path, causing `cargo test --doc` failures and `ImportError`
+  on `from semiflow import TtState`.  This patch fixes all affected doctests,
+  re-exports, and smoke tests across `semiflow-ffi`, `semiflow-py`, and
+  `semiflow-wasm` so the published crate is self-consistent.
 
 ### Changed — bindings
 
