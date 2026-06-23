@@ -36,8 +36,8 @@
 //!
 //! `Strang2D::apply` under `feature = "parallel"` requires a `pub(crate)` sealed
 //! `ParallelPool2D` trait test code cannot name.  Concrete `f64`/`f32` let the
-//! compiler monomorphise the right impl.  The `WrapDiff<F>` shim bridges
-//! `DiffusionChernoff<F>::apply_f` to `ChernoffFunction<F>`.
+//! compiler monomorphise the right impl.  After Phase 5a, `DiffusionChernoff<f32>`
+//! implements `ChernoffFunction<f32>` natively; the `WrapDiff<F>` shim is retired.
 //!
 //! Gated: `#[cfg(feature = "slow-tests")]`
 
@@ -45,51 +45,16 @@
 #![allow(clippy::cast_possible_truncation)] // f64→f32 casts are intentional (f32 precision test)
 
 use semiflow_core::{
-    chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
+    chernoff::ApplyChernoffExt,
     diffusion::DiffusionChernoff,
-    error::SemiflowError,
     grid::Grid1D,
     grid2d::Grid2D,
     grid3d::Grid3D,
-    grid_fn::GridFn1D,
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
-    scratch::ScratchPool,
     strang2d::Strang2D,
     strang3d::Strang3D,
-    SemiflowFloat,
 };
-
-// WrapDiff shim — exposes `DiffusionChernoff<F>::apply_f` as the
-// `ChernoffFunction<F>` impl so both f32 and f64 use the same code path here
-// (the production f64 impl otherwise routes through the SIMD path).
-#[derive(Clone)]
-struct WrapDiff<F: SemiflowFloat>(DiffusionChernoff<F>);
-
-impl<F: SemiflowFloat> ChernoffFunction<F> for WrapDiff<F> {
-    type S = GridFn1D<F>;
-
-    fn apply_into(
-        &self,
-        tau: F,
-        src: &GridFn1D<F>,
-        dst: &mut GridFn1D<F>,
-        _scratch: &mut ScratchPool<F>,
-    ) -> Result<(), SemiflowError> {
-        let result = self.0.apply_f(tau, src)?;
-        dst.values.copy_from_slice(&result.values);
-        Ok(())
-    }
-
-    fn order(&self) -> u32 {
-        self.0.order_val()
-    }
-
-    fn growth(&self) -> Growth<F> {
-        // DiffusionChernoff growth_val() always returns (1.0, 0.0) — contraction.
-        Growth::contraction()
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -183,27 +148,27 @@ fn assert_f32_floor_band(label: &str, errs: &[f64]) {
 // 2D runners
 // ===========================================================================
 
-/// Evolve `Strang2D<WrapDiff<f64>×2>` on an `n × n` grid (n ≤ 255) for `N_STEPS`.
+/// Evolve `Strang2D<DiffusionChernoff<f64>×2>` on an `n × n` grid (n ≤ 255) for `N_STEPS`.
 #[allow(clippy::cast_precision_loss)]
 fn run_2d_f64(n: usize) -> GridFn2D<f64> {
     let tau = T_FINAL / N_STEPS as f64;
     let gx = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D x f64");
     let gy = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D y f64");
     let g2 = Grid2D::<f64>::new(gx, gy);
-    let dx = WrapDiff(DiffusionChernoff::<f64>::new(
+    let dx = DiffusionChernoff::<f64>::new(
         a_f64,
         zero_f64,
         zero_f64,
         DIFFUSION_A,
         gx,
-    ));
-    let dy = WrapDiff(DiffusionChernoff::<f64>::new(
+    );
+    let dy = DiffusionChernoff::<f64>::new(
         a_f64,
         zero_f64,
         zero_f64,
         DIFFUSION_A,
         gy,
-    ));
+    );
     let s2 = Strang2D::<_, _, f64>::new(dx, dy);
     let mut u = GridFn2D::<f64>::from_fn(g2, |x, y| (-x * x - y * y).exp());
     for _ in 0..N_STEPS {
@@ -229,7 +194,7 @@ fn self_conv_2d_f64(n: usize) -> f64 {
     sup
 }
 
-/// Evolve `Strang2D<WrapDiff<f32>×2, f32>` on an `n × n` grid (n ≤ 255).
+/// Evolve `Strang2D<DiffusionChernoff<f32>×2, f32>` on an `n × n` grid (n ≤ 255).
 #[allow(clippy::cast_precision_loss)]
 fn run_2d_f32(n: usize) -> GridFn2D<f32> {
     let tau = (T_FINAL / N_STEPS as f64) as f32;
@@ -238,20 +203,20 @@ fn run_2d_f32(n: usize) -> GridFn2D<f32> {
     let gx = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D x f32");
     let gy = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D y f32");
     let g2 = Grid2D::<f32>::new(gx, gy);
-    let dx = WrapDiff(DiffusionChernoff::<f32>::new(
+    let dx = DiffusionChernoff::<f32>::new(
         a_f32,
         zero_f32,
         zero_f32,
         DIFFUSION_A,
         gx,
-    ));
-    let dy = WrapDiff(DiffusionChernoff::<f32>::new(
+    );
+    let dy = DiffusionChernoff::<f32>::new(
         a_f32,
         zero_f32,
         zero_f32,
         DIFFUSION_A,
         gy,
-    ));
+    );
     let s2 = Strang2D::<_, _, f32>::new(dx, dy);
     let mut u = GridFn2D::<f32>::from_fn_generic(g2, |x, y| (-x * x - y * y).exp());
     for _ in 0..N_STEPS {
@@ -283,7 +248,7 @@ fn self_conv_2d_f32(n: usize) -> f64 {
 // 3D runners
 // ===========================================================================
 
-/// Evolve `Strang3D<WrapDiff<f64>×3>` on an `n × n × n` grid for `N_STEPS` steps.
+/// Evolve `Strang3D<DiffusionChernoff<f64>×3>` on an `n × n × n` grid for `N_STEPS` steps.
 #[allow(clippy::cast_precision_loss)]
 fn run_3d_f64(n: usize) -> GridFn3D<f64> {
     let tau = T_FINAL / N_STEPS as f64;
@@ -291,27 +256,27 @@ fn run_3d_f64(n: usize) -> GridFn3D<f64> {
     let gy = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D y f64");
     let gz = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D z f64");
     let g3 = Grid3D::<f64>::new(gx, gy, gz).expect("Grid3D f64");
-    let dx = WrapDiff(DiffusionChernoff::<f64>::new(
+    let dx = DiffusionChernoff::<f64>::new(
         a_f64,
         zero_f64,
         zero_f64,
         DIFFUSION_A,
         gx,
-    ));
-    let dy = WrapDiff(DiffusionChernoff::<f64>::new(
+    );
+    let dy = DiffusionChernoff::<f64>::new(
         a_f64,
         zero_f64,
         zero_f64,
         DIFFUSION_A,
         gy,
-    ));
-    let dz = WrapDiff(DiffusionChernoff::<f64>::new(
+    );
+    let dz = DiffusionChernoff::<f64>::new(
         a_f64,
         zero_f64,
         zero_f64,
         DIFFUSION_A,
         gz,
-    ));
+    );
     let s3 = Strang3D::<_, _, _, f64>::new(dx, dy, dz);
     let mut u = GridFn3D::<f64>::from_fn(g3, |x, y, z| (-x * x - y * y - z * z).exp());
     for _ in 0..N_STEPS {
@@ -341,7 +306,7 @@ fn self_conv_3d_f64(n: usize) -> f64 {
     sup
 }
 
-/// Evolve `Strang3D<WrapDiff<f32>×3, f32>` on an `n × n × n` grid (n ≤ 255).
+/// Evolve `Strang3D<DiffusionChernoff<f32>×3, f32>` on an `n × n × n` grid (n ≤ 255).
 #[allow(clippy::cast_precision_loss)]
 fn run_3d_f32(n: usize) -> GridFn3D<f32> {
     let tau = (T_FINAL / N_STEPS as f64) as f32;
@@ -351,27 +316,27 @@ fn run_3d_f32(n: usize) -> GridFn3D<f32> {
     let gy = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D y f32");
     let gz = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D z f32");
     let g3 = Grid3D::<f32>::new_generic(gx, gy, gz).expect("Grid3D f32");
-    let dx = WrapDiff(DiffusionChernoff::<f32>::new(
+    let dx = DiffusionChernoff::<f32>::new(
         a_f32,
         zero_f32,
         zero_f32,
         DIFFUSION_A,
         gx,
-    ));
-    let dy = WrapDiff(DiffusionChernoff::<f32>::new(
+    );
+    let dy = DiffusionChernoff::<f32>::new(
         a_f32,
         zero_f32,
         zero_f32,
         DIFFUSION_A,
         gy,
-    ));
-    let dz = WrapDiff(DiffusionChernoff::<f32>::new(
+    );
+    let dz = DiffusionChernoff::<f32>::new(
         a_f32,
         zero_f32,
         zero_f32,
         DIFFUSION_A,
         gz,
-    ));
+    );
     let s3 = Strang3D::<_, _, _, f32>::new(dx, dy, dz);
     let mut u = GridFn3D::<f32>::from_fn_generic(g3, |x, y, z| (-x * x - y * y - z * z).exp());
     for _ in 0..N_STEPS {

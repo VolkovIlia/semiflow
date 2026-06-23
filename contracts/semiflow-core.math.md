@@ -11033,6 +11033,20 @@ through to the scalar Rust ops (the generic `default` code path that already bac
 `STRANG2D_PARALLEL_BIT_EQUAL` and `diffusion4_unit` SIMD regressions (constitution
 Principle 3) are untouched because no `Dual` path enters them.
 
+### §46.5.ter — f32 is a first-class SIMD carrier (NORMATIVE; ADR-0175 supersedes the f32 part of §46.5)
+
+As of issue #5 / ADR-0175, `f32` is no longer scalar-only: it is a **first-class carrier**
+with a dedicated deterministic SIMD path (AVX2 `__m256`, 8 lanes; NEON `float32x4_t`, 4 lanes),
+mirroring the `f64` `SimdF64x4` contract. The numerical kernel and consistency order are
+**identical to `f64`** — the SIMD path is a pure **performance transform, byte-equal to the
+`f32` scalar reference**, NOT an accuracy change. The same determinism contract holds: only
+add/sub/mul + a fixed-order `horizontal_sum`, **FMA forbidden**, `unsafe` confined to
+`src/simd/`. The `f32` precision floor (~1e-5 accumulated) is intrinsic to single precision and
+unchanged by vectorisation. Byte-equality `f32` SIMD ≡ `f32` scalar is pinned by the
+RELEASE-BLOCKING gate `SIMD_F32_BIT_EQUAL` (`tests/simd_bit_equal_f32.rs`), mirroring
+`SIMD_BIT_EQUAL`. **Scope note:** this lifts the "f32 falls through to scalar" wording of §46.5
+**for the leaf-kernel hot paths only**; `Dual<F>` AD paths remain scalar by design (§46.5 above).
+
 ### §46.5.bis — Interpolation-order coverage of the AD path (NORMATIVE)
 
 The forward-mode AD path runs every kernel at `F = Dual<f64>` through the

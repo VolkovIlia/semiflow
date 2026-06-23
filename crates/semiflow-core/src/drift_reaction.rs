@@ -280,6 +280,36 @@ impl ChernoffFunction<f64> for DriftReactionChernoff<f64> {
     }
 }
 
+// Phase 5a: additive impl — delegates to generic scalar apply_f path.
+impl ChernoffFunction<f32> for DriftReactionChernoff<f32> {
+    type S = GridFn1D<f32>;
+
+    /// Consistency order 2 (mirrors f64 impl).
+    fn order(&self) -> u32 {
+        2
+    }
+
+    /// Growth bound `(M, ω) = (1.0, c_norm_bound)`.
+    fn growth(&self) -> Growth<f32> {
+        Growth::new(1.0, self.c_norm_bound as f32)
+    }
+
+    /// Scalar apply: delegates to `apply_f` (generic scalar path).
+    fn apply_into(
+        &self,
+        tau: f32,
+        src: &GridFn1D<f32>,
+        dst: &mut GridFn1D<f32>,
+        _scratch: &mut ScratchPool<f32>,
+    ) -> Result<(), SemiflowError> {
+        let result = self.apply_f(tau, src)?;
+        dst.values.resize(result.values.len(), 0.0);
+        dst.values.copy_from_slice(&result.values);
+        dst.grid = result.grid;
+        Ok(())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AdjointApply marker for DriftReactionChernoff<f64>
 // ---------------------------------------------------------------------------

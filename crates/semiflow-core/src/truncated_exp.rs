@@ -278,6 +278,36 @@ impl ChernoffFunction<f64> for TruncatedExpDiffusionChernoff<f64> {
     }
 }
 
+// Phase 5a: additive impl — delegates to generic scalar apply_f path.
+impl ChernoffFunction<f32> for TruncatedExpDiffusionChernoff<f32> {
+    type S = GridFn1D<f32>;
+
+    /// Consistency order 2 (mirrors f64 impl; math.md §9.2.3.C).
+    fn order(&self) -> u32 {
+        2
+    }
+
+    /// Growth `(M, ω) = (1.0, 0.0)` — positivity-preserving contraction.
+    fn growth(&self) -> Growth<f32> {
+        Growth::contraction()
+    }
+
+    /// Scalar apply: delegates to `apply_f` (generic scalar path; no SIMD in 5a).
+    fn apply_into(
+        &self,
+        tau: f32,
+        src: &GridFn1D<f32>,
+        dst: &mut GridFn1D<f32>,
+        _scratch: &mut ScratchPool<f32>,
+    ) -> Result<(), SemiflowError> {
+        let result = self.apply_f(tau, src)?;
+        dst.values.resize(result.values.len(), 0.0);
+        dst.values.copy_from_slice(&result.values);
+        dst.grid = result.grid;
+        Ok(())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Private validation helpers — f64
 // ---------------------------------------------------------------------------

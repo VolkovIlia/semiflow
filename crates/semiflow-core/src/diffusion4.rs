@@ -453,6 +453,32 @@ impl ChernoffFunction<f64> for Diffusion4thChernoff<f64> {
     }
 }
 
+// Phase 5a: additive impl — delegates to generic scalar apply_f path.
+impl ChernoffFunction<f32> for Diffusion4thChernoff<f32> {
+    type S = GridFn1D<f32>;
+
+    /// Consistency order 2 (mirrors f64 impl; see math.md §11.1.bis).
+    fn order(&self) -> u32 {
+        2
+    }
+
+    /// Growth `(M, ω) = (1.0, 0.0)` — positivity-preserving contraction.
+    fn growth(&self) -> Growth<f32> {
+        Growth::contraction()
+    }
+
+    /// Scalar apply: delegates to `apply_into_f` (allocation-free generic path).
+    fn apply_into(
+        &self,
+        tau: f32,
+        src: &GridFn1D<f32>,
+        dst: &mut GridFn1D<f32>,
+        _scratch: &mut ScratchPool<f32>,
+    ) -> Result<(), SemiflowError> {
+        self.apply_into_f(tau, src, dst)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers — extracted to child modules to keep file under 500 lines
 // ---------------------------------------------------------------------------

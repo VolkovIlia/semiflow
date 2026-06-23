@@ -14,10 +14,13 @@
 #![cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 
 use core::arch::aarch64::{
-    float64x2_t, vaddq_f64, vdupq_n_f64, vld1q_f64, vmulq_f64, vst1q_f64, vsubq_f64,
+    float32x4_t, float64x2_t,
+    vaddq_f32, vaddq_f64, vdupq_n_f32, vdupq_n_f64,
+    vld1q_f32, vld1q_f64, vmulq_f32, vmulq_f64,
+    vst1q_f32, vst1q_f64, vsubq_f32, vsubq_f64,
 };
 
-use super::SimdF64x4;
+use super::{SimdF32x4, SimdF64x4};
 
 /// NEON 4-lane f64 SIMD wrapper (two 2-lane registers).
 #[derive(Clone, Copy)]
@@ -103,6 +106,64 @@ impl SimdF64x4 for F64x4Neon {
             vst1q_f64(tmp.as_mut_ptr(), self.lo);
             vst1q_f64(tmp.as_mut_ptr().add(2), self.hi);
         }
+        ((tmp[0] + tmp[1]) + tmp[2]) + tmp[3]
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ADR-0175, Phase 5b: 4-lane f32 NEON impl (`float32x4_t`).
+// FORBIDDEN: vfmaq_f32, vfmsq_f32, vaddvq_f32.
+// ---------------------------------------------------------------------------
+
+/// NEON 4-lane f32 SIMD wrapper (ADR-0175).
+#[derive(Clone, Copy)]
+pub(crate) struct F32x4Neon(float32x4_t);
+
+impl SimdF32x4 for F32x4Neon {
+    #[inline]
+    fn splat(x: f32) -> Self {
+        // Safety: vdupq_n_f32 has no preconditions on x.
+        unsafe { F32x4Neon(vdupq_n_f32(x)) }
+    }
+
+    #[inline]
+    fn load_unaligned(src: &[f32; 4]) -> Self {
+        // Safety: src is &[f32; 4] — non-null, 4*4 bytes valid.
+        unsafe { F32x4Neon(vld1q_f32(src.as_ptr())) }
+    }
+
+    #[inline]
+    fn store_unaligned(self, dst: &mut [f32; 4]) {
+        // Safety: dst is &mut [f32; 4] — non-null, 4*4 bytes writable.
+        unsafe { vst1q_f32(dst.as_mut_ptr(), self.0) }
+    }
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        // Safety: both operands are valid float32x4_t values from prior ops.
+        unsafe { F32x4Neon(vaddq_f32(self.0, rhs.0)) }
+    }
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        // Safety: both operands are valid float32x4_t values from prior ops.
+        unsafe { F32x4Neon(vsubq_f32(self.0, rhs.0)) }
+    }
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        // Safety: both operands are valid float32x4_t values from prior ops.
+        unsafe { F32x4Neon(vmulq_f32(self.0, rhs.0)) }
+    }
+
+    /// Deterministic horizontal sum: `((l0 + l1) + l2) + l3`.
+    ///
+    /// Uses store-then-scalar to avoid `vaddvq_f32` reordering (ADR-0175).
+    #[inline]
+    fn horizontal_sum(self) -> f32 {
+        let mut tmp = [0.0_f32; 4];
+        // Safety: tmp is local, properly sized; self.0 is a valid float32x4_t.
+        unsafe { vst1q_f32(tmp.as_mut_ptr(), self.0) };
         ((tmp[0] + tmp[1]) + tmp[2]) + tmp[3]
     }
 }
@@ -227,5 +288,20 @@ mod tests {
         let two = F64x4Neon::splat(2.0);
         let result = two.mul(v).horizontal_sum();
         assert_eq!(result, 20.0_f64, "NEON golden vector failed: got {result}");
+    }
+
+    #[test]
+    fn neon_f32_golden_vector() {
+        // splat(2.0).mul(load([1,2,3,4])).horizontal_sum() == 2*(1+2+3+4) == 20
+        let data = [1.0_f32, 2.0, 3.0, 4.0];
+        let v = F32x4Neon::load_unaligned(&data);
+        let two = F32x4Neon::splat(2.0_f32);
+        let result = two.mul(v).horizontal_sum();
+        #[allow(clippy::float_cmp)]
+        let exact_20 = 20.0_f32;
+        assert!(
+            result.to_bits() == exact_20.to_bits(),
+            "NEON f32 golden vector failed: got {result}"
+        );
     }
 }

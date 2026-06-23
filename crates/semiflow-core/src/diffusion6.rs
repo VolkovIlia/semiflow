@@ -347,6 +347,40 @@ impl ChernoffFunction<f64> for Diffusion6thChernoff<f64> {
     }
 }
 
+// Phase 5b: f32 SIMD path — uses apply_at_node_f32 (catmull_rom_f32 + fd9_f32).
+impl ChernoffFunction<f32> for Diffusion6thChernoff<f32> {
+    type S = GridFn1D<f32>;
+
+    /// Consistency order 2 (mirrors f64 impl; see math.md §11.1.bis).
+    fn order(&self) -> u32 {
+        2
+    }
+
+    /// Growth `(M, ω) = (1.0, 0.0)` — positivity-preserving contraction.
+    fn growth(&self) -> Growth<f32> {
+        Growth::contraction()
+    }
+
+    /// f32 SIMD apply (Phase 5b): uses `apply_at_node_f32` with `catmull_rom_f32`
+    /// + `fd9_f32` SIMD dispatchers. Bit-identical to scalar via `FORCE_SCALAR`.
+    fn apply_into(
+        &self,
+        tau: f32,
+        src: &GridFn1D<f32>,
+        dst: &mut GridFn1D<f32>,
+        _scratch: &mut ScratchPool<f32>,
+    ) -> Result<(), SemiflowError> {
+        helpers_f32::validate_tau_f32(tau)?;
+        let n = src.values.len();
+        dst.values.resize(n, 0.0);
+        for i in 0..n {
+            dst.values[i] = helpers_f32::apply_at_node_f32(self, tau, src, i)?;
+        }
+        dst.grid = src.grid;
+        Ok(())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers — extracted to child modules to keep file under 500 lines
 // ---------------------------------------------------------------------------
@@ -358,3 +392,6 @@ use helpers_f64::{apply_at_node_f64, validate_tau_f64};
 #[path = "diffusion6_generic.rs"]
 mod helpers_generic;
 use helpers_generic::{apply_at_node_generic, validate_tau_generic};
+
+#[path = "diffusion6_helpers_f32.rs"]
+mod helpers_f32;
