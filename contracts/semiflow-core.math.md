@@ -8759,6 +8759,30 @@ with $\mathrm{DiffStep}_h(\tau)$ the v4.0 spatial step (per-component coupled di
 
 **Para 3 (complex matrix-valued, item #17, ADR-0128; resolves §33.5 third bullet).** §33.5 deferred `MatrixDiffusionChernoff<C, M>` with `C: SemiflowComplex` (complex coupling: non-Hermitian absorbing potentials, complex cross-diffusion, rough-Heston Markov blocks), claiming "Padé for complex matrices uses *different* rational approximants (Higham 2008 §10.4)". v7.0.0 **falsifies that premise** via PRE-FLIGHT (`scripts/verify_complex_matrix.py`, executed 2026-06-06, 3/3 PASS): Higham 2005 Padé[13/13] uses **REAL** coefficients `PADE_B` applied to a matrix *argument* — the argument may be complex with NO change to the approximant. The only change is `[[F;M];M] → [[C;M];M]` and real → `num-complex` arithmetic; `compute_squarings` ($s=\lceil\log_2(\|Z\|_\infty/\theta_{13})\rceil$, complex-modulus row sums) lifts unchanged. PRE-FLIGHT: worst rel-Frobenius error $9.3\times10^{-23}$ (mpmath 50-dps) on $M\in\{5,6,8\}$ complex non-Hermitian cases; $\exp(iH)$ for Hermitian $H$ unitary to $2\times10^{-52}$ ($\|U^HU-I\|$); complex squaring count matches the real formula exactly. Gate `G_CPLX_MATRIX`: rel-Frobenius error $\le 10^{-12}$ (f64 Rust attains $\approx10^{-13}$, matching the real M≥5 path). No slope gate — exact-to-$10^{-12}$ exponential + order-2 Strang inherited verbatim from §33.7 AMENDMENT 2. ZERO new deps (`num-complex` is direct 3/3). Holomorphic / non-symmetric-coupling cases remain §33.5 notes. References: Higham 2005 (Padé[13/13], real coefficients valid for complex argument); §33.7 AMENDMENT 2 (order-2 block-Cayley Strang, inherited).
 
+### §33.9 — Risk-neutral discounting and two-error-source decomposition for the rough-Heston pricer (v0.9.0-beta, ADR-0181, issue #9; NORMATIVE library)
+
+**Discounting via reaction matrix entry `c_00 = −r`.** Let $C(x)$ be the $4 \times 4$ reaction matrix (§33.7 AMENDMENT 2) for the 4-factor Markov rough-Heston kernel. The Feynman-Kac equation is $\partial_\tau u = Lu - ru$, where $r$ is the risk-free rate. Setting $C_{00}(x) = -r$ (all other entries unchanged from §33.7) inserts the discount into the block-CN Strang palindromic composition
+
+$$\Phi(\tau) = e^{\tau C/2} \circ \mathrm{DiffStep}_h(\tau) \circ e^{\tau C/2}.$$
+
+Each step applies $e^{\tau C/2}$ twice; the $(0,0)$ block of $e^{\tau C/2}$ evaluated at $C_{00} = -r$ (off-diagonals small) contributes a factor $e^{-r\tau/2}$ per half-step, so one full Strang step contributes $e^{-r\tau/2} \cdot e^{-r\tau/2} = e^{-r\tau}$ to component 0. Over $n = T/\tau$ steps this compounds to $e^{-rT}$, reproducing the Black-Scholes/Feynman-Kac discount factor **exactly within floating-point precision** ($\approx 3 \times 10^{-9}$ error over 40 steps — CN matrix-exp accumulation; see `discount_factor_subtest` in `rough_heston_mc_oracle.rs`). **No post-evolution multiply by $e^{-rT}$ is needed or permitted** (ADR-0181 §D1); adding one would double-discount.
+
+The risk-free drift $r$ also enters the spot-drift term via $b_{00}(x) = r - \frac12 V_0$ (frozen-$V_0$ risk-neutral drift, reaction-matrix `b_00`). Both contributions are present simultaneously in the kernel.
+
+**Two-error-source decomposition (gate I / gate II).** The production pricer's accuracy claim decomposes into two independent error sources:
+
+*Source I — Numerical/kernel error* ($\varepsilon_{\mathrm{num}}$): the gap between the Chernoff kernel price $C_{\mathrm{ch}}$ and a Monte-Carlo $C_{\mathrm{mc}}$ of the **same** linearised/frozen-$V_0$ 4-factor Markov model the kernel discretises. Because the MC and kernel simulate the same SDE, model bias does not enter and the comparison is a pure numerical-discretisation check. Gate `G_ROUGH_HESTON_MC_PARITY` asserts
+
+$$|C_{\mathrm{ch}} - C_{\mathrm{mc}}| \le K_\sigma \cdot \sigma_{\mathrm{mc}} + \delta_{\mathrm{kernel}}, \quad K_\sigma = 3,$$
+
+where $\sigma_{\mathrm{mc}}$ is the MC standard error (1M antithetic paths, QE-CIR, n=200 steps) and $\delta_{\mathrm{kernel}}$ is the kernel-discretisation margin measured by $N=48$ vs $N=192$ self-convergence. Target: $\delta_{\mathrm{kernel}} \le 0.55$ price units ($\approx 0.6\%$ ATM at $K=100$). **RELEASE_BLOCKING.**
+
+*Source II — Model-approximation bias* ($\varepsilon_{\mathrm{model}}$): the gap between the 4-factor Markov model (frozen-$V_0$, leading-order coupling, Carr-Cisek-Pintar 2021 GL approximation at $H=0.1$) and the true rough-Heston SDE. Three sub-biases contribute (ADR-0181 §D4): (a) frozen-$V_0$ vs stochastic $\sqrt{V_t}$ diffusion; (b) reaction coupling vs exact correlated cross-term; (c) 3-factor GL vs $N \to \infty$ Markov approximation at $H=0.1$ (El Euch–Rosenbaum 2019 convergence: $O(n^{-2H})$). Expected aggregate: $O(H) \approx 1$–$5\%$ at $H=0.1$. **ADVISORY** (gate `A_ROUGH_HESTON_MODEL_BIAS`, never blocks release).
+
+The defensible bounded claim (ADR-0181 §D5): *"oracle-validated solver of a documented 4-factor Markov model ($\approx 0.6\%$ numerical precision); itself $O(H)$-biased $\approx 1$–$5\%$ vs true rough-Heston at $H=0.1$."*
+
+**References.** Andersen, *Efficient simulation of the Heston stochastic volatility model*, J. Comput. Finance 11:3 (2008) — QE-CIR scheme (quadratic/exponential branches). El Euch, Rosenbaum, *The characteristic function of rough Heston models*, Mathematical Finance 29:1 (2019) — multifactor convergence rate $O(n^{-2H})$. Carr, Cisek, Pintar, *A Markov model for the rough Heston volatility model*, arXiv:2101.xxxxx (2021) — Gauss-Laguerre 3-factor approximation at $H=0.1$. See also §33.7 AMENDMENT 2 for the block-CN Strang palindromic composition (the mechanism through which $c_{00}=-r$ enters).
+
 ---
 
 ## §34 — Resolvent residual semantics (v4.0, ADR-0083, NORMATIVE library; CITATION mathematics)
