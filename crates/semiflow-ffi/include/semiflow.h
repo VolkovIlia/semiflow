@@ -703,6 +703,45 @@ typedef struct {
   uint8_t _private[0];
 } SmfAdaptivePI;
 
+/**
+ * Opaque handle to a `Laplacian<f64>`.
+ *
+ * Allocate with `smf_graph_laplacian_combinatorial` or
+ * `smf_graph_laplacian_normalized`; free with `smf_laplacian_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfLaplacian;
+
+/**
+ * Opaque handle to a degenerate `GraphTraj<f64>` (fixed topology,
+ * single segment, constant Laplacian).
+ *
+ * Allocate with `smf_graph_traj_new`; free with `smf_graph_traj_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfGraphTraj;
+
+/**
+ * Opaque handle to an `ObstacleGammaV8` (inactive-set Γ = V″).
+ *
+ * Obtain from `smf_obstacle_gamma_new_const` or `smf_obstacle_gamma_new_array`.
+ * Free with `smf_obstacle_gamma_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfObstacleGamma;
+
+/**
+ * Opaque handle for a D=2 obstacle ND evolver.
+ *
+ * Obtain from `smf_obstacle_nd2_new`; free with `smf_obstacle_nd2_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfObstacleND2;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -5365,6 +5404,385 @@ uintptr_t smf_adaptive_pi_size(const SmfAdaptivePI *ev);
  * `ev` must be null or live from `smf_adaptive_pi_new`.
  */
 void smf_adaptive_pi_free(SmfAdaptivePI *ev);
+
+/**
+ * Assemble the combinatorial Laplacian `L = D − W` from `graph`.
+ *
+ * ## Preconditions
+ * - `graph` is non-null; obtained from `smf_graph_path` or similar.
+ * - `out` is a valid non-null pointer to `*mut SmfLaplacian`.
+ *
+ * ## Return values
+ * - `Ok` (0)      — success; `*out` is set.
+ * - `NullPtr` (5) — `graph` or `out` is null.
+ * - `Panic` (99)  — internal Rust panic.
+ *
+ * ## Ownership
+ * Caller owns the returned handle. Free with `smf_laplacian_free`.
+ *
+ * # Safety
+ * - `graph` must be a valid pointer from a `smf_graph_*` constructor.
+ * - `out` must be a valid pointer to `*mut SmfLaplacian`.
+ */
+SemiflowStatus smf_graph_laplacian_combinatorial(const SmfGraph *graph, SmfLaplacian **out);
+
+/**
+ * Assemble the symmetric normalized Laplacian `L_sym = I − D^{−½} W D^{−½}`
+ * from `graph`.
+ *
+ * ## Preconditions / Return values / Ownership — same as
+ * `smf_graph_laplacian_combinatorial`.
+ *
+ * # Safety
+ * - `graph` must be a valid pointer from a `smf_graph_*` constructor.
+ * - `out` must be a valid pointer to `*mut SmfLaplacian`.
+ */
+SemiflowStatus smf_graph_laplacian_normalized(const SmfGraph *graph, SmfLaplacian **out);
+
+/**
+ * Free a `SmfLaplacian` handle. Null-safe.
+ *
+ * # Safety
+ * - `lap` must be null or a live pointer from `smf_graph_laplacian_*` not yet freed.
+ */
+void smf_laplacian_free(SmfLaplacian *lap);
+
+/**
+ * Number of nodes. Returns `0` if `lap` is null.
+ *
+ * # Safety
+ * - `lap` must be null or a valid pointer from `smf_graph_laplacian_*`.
+ */
+uintptr_t smf_laplacian_n_nodes(const SmfLaplacian *lap);
+
+/**
+ * Returns `true` iff the Laplacian is combinatorial (`L = D − W`).
+ * Returns `false` if `lap` is null.
+ *
+ * # Safety
+ * - `lap` must be null or a valid pointer from `smf_graph_laplacian_*`.
+ */
+bool smf_laplacian_is_combinatorial(const SmfLaplacian *lap);
+
+/**
+ * Returns `true` iff the Laplacian is symmetric-normalized.
+ * Returns `false` if `lap` is null.
+ *
+ * # Safety
+ * - `lap` must be null or a valid pointer from `smf_graph_laplacian_*`.
+ */
+bool smf_laplacian_is_normalized(const SmfLaplacian *lap);
+
+/**
+ * Gershgorin spectral-radius upper bound `ρ̄ ≥ ρ(L_G)` (cached in core).
+ * Returns `0.0` if `lap` is null.
+ *
+ * # Safety
+ * - `lap` must be null or a valid pointer from `smf_graph_laplacian_*`.
+ */
+double smf_laplacian_spectral_bound(const SmfLaplacian *lap);
+
+/**
+ * Copy the CSR row-pointer array (`len = n_nodes + 1`) into a newly
+ * allocated `*usize` buffer.  `*out` is set to the buffer start;
+ * `*len` is set to `n_nodes + 1`.
+ *
+ * ## Return values
+ * - `Ok` (0)      — success.
+ * - `NullPtr` (5) — any argument is null.
+ * - `Panic` (99)  — internal Rust panic.
+ *
+ * ## Ownership
+ * Caller frees with `smf_free_buf_usize(*out, *len)`.
+ *
+ * # Safety
+ * - `lap` must be a valid pointer from `smf_graph_laplacian_*`.
+ * - `out` and `len` must be valid non-null write pointers.
+ */
+SemiflowStatus smf_laplacian_row_ptr(const SmfLaplacian *lap, uintptr_t **out, uintptr_t *len);
+
+/**
+ * Copy the CSR column-index array (`len = n_directed_edges`) into a newly
+ * allocated `*usize` buffer.
+ *
+ * The `col_idx` values are `u32` internally; they are widened to `usize`
+ * for a uniform index type matching `row_ptr`.
+ *
+ * ## Return values / Ownership — same as `smf_laplacian_row_ptr`.
+ *
+ * # Safety — same as `smf_laplacian_row_ptr`.
+ */
+SemiflowStatus smf_laplacian_col_idx(const SmfLaplacian *lap, uintptr_t **out, uintptr_t *len);
+
+/**
+ * Copy the CSR value array (`len = n_directed_edges`) into a newly
+ * allocated `*f64` buffer.
+ *
+ * ## Return values / Ownership — same as `smf_laplacian_row_ptr`
+ * (free with `smf_free_buf_f64`).
+ *
+ * # Safety — same as `smf_laplacian_row_ptr`.
+ */
+SemiflowStatus smf_laplacian_vals(const SmfLaplacian *lap, double **out, uintptr_t *len);
+
+/**
+ * Reconstruct the dense `n × n` row-major matrix from the Laplacian CSR.
+ *
+ * Allocates `n * n` `f64` values. `*out` is set to the buffer start;
+ * `*n` is set to the edge length of the square matrix.
+ *
+ * ## Return values
+ * - `Ok` (0)           — success.
+ * - `NullPtr` (5)      — any argument is null.
+ * - `OutOfDomain` (3)  — `n * n` would overflow `usize`.
+ * - `Panic` (99)       — internal Rust panic.
+ *
+ * ## Ownership
+ * Caller frees with `smf_free_buf_f64(*out, (*n) * (*n))`.
+ *
+ * # Safety
+ * - `lap` must be a valid pointer from `smf_graph_laplacian_*`.
+ * - `out` and `n` must be valid non-null write pointers.
+ */
+SemiflowStatus smf_laplacian_to_dense(const SmfLaplacian *lap, double **out, uintptr_t *n);
+
+/**
+ * Free a `usize` buffer previously returned by `smf_laplacian_row_ptr` or
+ * `smf_laplacian_col_idx`.  Null-safe.
+ *
+ * `len` must exactly match the length written to `*len` by the read-back
+ * function — it is used to reconstruct the correct `Box<[usize]>`.
+ *
+ * # Safety
+ * - `buf` must be null or a pointer from `smf_laplacian_row_ptr` /
+ *   `smf_laplacian_col_idx`, with the matching `len`.
+ */
+void smf_free_buf_usize(uintptr_t *buf, uintptr_t len);
+
+/**
+ * Free a `f64` buffer previously returned by `smf_laplacian_vals` or
+ * `smf_laplacian_to_dense`.  Null-safe.
+ *
+ * `len` must match the total number of elements (for `to_dense` that is `n*n`).
+ *
+ * # Safety
+ * - `buf` must be null or a pointer from `smf_laplacian_vals` /
+ *   `smf_laplacian_to_dense`, with the matching `len`.
+ */
+void smf_free_buf_f64(double *buf, uintptr_t len);
+
+/**
+ * Build a degenerate fixed-topology `GraphTraj` (1 segment, constant
+ * combinatorial Laplacian, horizon `t_horizon`).
+ *
+ * Mirrors Python `GraphTraj(graph, t_horizon)` degenerate constructor.
+ *
+ * ## Preconditions
+ * - `graph` is non-null; obtained from a `smf_graph_*` constructor.
+ * - `t_horizon > 0` and finite.
+ * - `out` is a valid non-null pointer to `*mut SmfGraphTraj`.
+ *
+ * ## Return values
+ * - `Ok` (0)           — success; `*out` is set.
+ * - `NullPtr` (5)      — `graph` or `out` is null.
+ * - `NanInf` (2)       — `t_horizon` is NaN or Inf.
+ * - `OutOfDomain` (3)  — `t_horizon <= 0`.
+ * - `Panic` (99)       — internal Rust panic.
+ *
+ * ## Ownership
+ * Caller owns the returned handle. Free with `smf_graph_traj_free`.
+ *
+ * # Safety
+ * - `graph` must be a valid pointer from a `smf_graph_*` constructor.
+ * - `out` must be a valid pointer to `*mut SmfGraphTraj`.
+ */
+SemiflowStatus smf_graph_traj_new(const SmfGraph *graph, double t_horizon, SmfGraphTraj **out);
+
+/**
+ * Free a `SmfGraphTraj` handle. Null-safe.
+ *
+ * # Safety
+ * - `traj` must be null or a pointer from `smf_graph_traj_new` not yet freed.
+ */
+void smf_graph_traj_free(SmfGraphTraj *traj);
+
+/**
+ * Number of nodes in the trajectory's graph. Returns `0` if null.
+ *
+ * # Safety
+ * - `traj` must be null or a valid pointer from `smf_graph_traj_new`.
+ */
+uintptr_t smf_graph_traj_n_nodes(const SmfGraphTraj *traj);
+
+/**
+ * Number of segments (always 1 for the degenerate constructor).
+ * Returns `0` if null.
+ *
+ * # Safety
+ * - `traj` must be null or a valid pointer from `smf_graph_traj_new`.
+ */
+uintptr_t smf_graph_traj_n_segments(const SmfGraphTraj *traj);
+
+/**
+ * Total time horizon of the trajectory. Returns `0.0` if null.
+ *
+ * # Safety
+ * - `traj` must be null or a valid pointer from `smf_graph_traj_new`.
+ */
+double smf_graph_traj_t_horizon(const SmfGraphTraj *traj);
+
+/**
+ * Allocate an `ObstacleGamma` with a constant obstacle floor.
+ *
+ * `level` must be finite.  `n >= 4` (Grid1D requirement).
+ *
+ * # Safety
+ * `out` must be a valid non-null `*mut *mut SmfObstacleGamma`.
+ */
+SemiflowStatus smf_obstacle_gamma_new_const(double xmin,
+                                            double xmax,
+                                            uintptr_t n,
+                                            double level,
+                                            SmfObstacleGamma **out);
+
+/**
+ * Allocate an `ObstacleGamma` with a per-node array obstacle floor.
+ *
+ * `obstacle` must be non-null, length `obstacle_len == n`, all finite.
+ * `n >= 4`.
+ *
+ * # Safety
+ * `obstacle` readable for `obstacle_len` f64s; `out` writable `*mut *mut SmfObstacleGamma`.
+ */
+SemiflowStatus smf_obstacle_gamma_new_array(double xmin,
+                                            double xmax,
+                                            uintptr_t n,
+                                            const double *obstacle,
+                                            uintptr_t obstacle_len,
+                                            SmfObstacleGamma **out);
+
+/**
+ * Free a `SmfObstacleGamma` handle. Null-safe.
+ *
+ * # Safety
+ * `ptr` must be null or a live pointer from `smf_obstacle_gamma_new_*`.
+ */
+void smf_obstacle_gamma_free(SmfObstacleGamma *ptr);
+
+/**
+ * Return grid size (n). Returns 0 if `ptr` is null.
+ *
+ * # Safety
+ * `ptr` must be null or a live pointer from `smf_obstacle_gamma_new_*`.
+ */
+uintptr_t smf_obstacle_gamma_size(const SmfObstacleGamma *ptr);
+
+/**
+ * Compute inactive-set Γ = V″ on the OPEN continuation set.
+ *
+ * On success:
+ * - `*gamma_out` is set to a Box-allocated `f64[v_len]` (central-diff V″;
+ *   valid where `defined[i] == 1`).
+ * - `*defined_out` is set to a Box-allocated `uint8_t[v_len]` (1 = defined,
+ *   0 = REFUSED).
+ * - `*count_out` is set to the number of nodes where Γ is defined.
+ *
+ * Caller frees `*gamma_out` with `smf_free_buf_f64(*gamma_out, v_len)` and
+ * `*defined_out` with `smf_free_buf_u8(*defined_out, v_len)`.
+ *
+ * ## Return values
+ * - `Ok` (0)           — success.
+ * - `NullPtr` (5)      — any pointer argument is null.
+ * - `GridMismatch` (1) — `v_len != n`.
+ * - `Panic` (99)       — internal Rust panic.
+ *
+ * # Safety
+ * - `ptr` live pointer from `smf_obstacle_gamma_new_*`.
+ * - `v` readable for `v_len` f64s.
+ * - `gamma_out`, `defined_out`, `count_out` writable non-null pointers.
+ */
+SemiflowStatus smf_obstacle_gamma_inactive_gamma(const SmfObstacleGamma *ptr,
+                                                 const double *v,
+                                                 uintptr_t v_len,
+                                                 double **gamma_out,
+                                                 uint8_t **defined_out,
+                                                 uintptr_t *count_out);
+
+/**
+ * Free a `uint8_t` buffer previously returned by `smf_obstacle_gamma_inactive_gamma`.
+ * Null-safe.
+ *
+ * `len` must exactly match `v_len` passed to `smf_obstacle_gamma_inactive_gamma`.
+ *
+ * # Safety
+ * `buf` must be null or a pointer from `smf_obstacle_gamma_inactive_gamma`
+ * with the matching `len`.
+ */
+void smf_free_buf_u8(uint8_t *buf, uintptr_t len);
+
+/**
+ * Allocate a D=2 obstacle evolver.
+ *
+ * `level` must be finite. Both axes must have `n >= 5` recommended
+ * (`nx * ny >= 25` required by `AnisotropicShiftChernoffND`).
+ *
+ * # Safety
+ * `out` must be a valid non-null `*mut *mut SmfObstacleND2`.
+ */
+SemiflowStatus smf_obstacle_nd2_new(double xmin,
+                                    double xmax,
+                                    uintptr_t nx,
+                                    double ymin,
+                                    double ymax,
+                                    uintptr_t ny,
+                                    double level,
+                                    SmfObstacleND2 **out);
+
+/**
+ * Free a `SmfObstacleND2` handle. Null-safe.
+ *
+ * # Safety
+ * `ptr` must be null or a live pointer from `smf_obstacle_nd2_new`.
+ */
+void smf_obstacle_nd2_free(SmfObstacleND2 *ptr);
+
+/**
+ * Return the grid shape `(nx, ny)` via out-params.
+ *
+ * ## Return values
+ * - `Ok` (0)      — success; `*nx_out` and `*ny_out` are set.
+ * - `NullPtr` (5) — any argument is null.
+ *
+ * # Safety
+ * `ptr` live from `smf_obstacle_nd2_new`; `nx_out`, `ny_out` writable.
+ */
+SemiflowStatus smf_obstacle_nd2_shape(const SmfObstacleND2 *ptr,
+                                      uintptr_t *nx_out,
+                                      uintptr_t *ny_out);
+
+/**
+ * Apply one Chernoff step `Π_g ∘ S(Δτ)` to a flat axis-0-fastest buffer.
+ *
+ * `v` and `out` have length `nx*ny` (axis-0-fastest: `idx(i,j) = i + j*nx`).
+ * `tau > 0` and finite.
+ *
+ * ## Return values
+ * - `Ok` (0)           — success.
+ * - `NullPtr` (5)      — `ptr`, `v`, or `out` is null.
+ * - `GridMismatch` (1) — `v_len != nx*ny` or `out_len != nx*ny`.
+ * - `OutOfDomain` (3)  — `tau <= 0` or non-finite.
+ * - `Panic` (99)       — internal Rust panic.
+ *
+ * # Safety
+ * - `ptr` live from `smf_obstacle_nd2_new`.
+ * - `v` readable for `v_len` f64s; `out` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_obstacle_nd2_apply(const SmfObstacleND2 *ptr,
+                                      double tau,
+                                      const double *v,
+                                      uintptr_t v_len,
+                                      double *out,
+                                      uintptr_t out_len);
 
 #ifdef __cplusplus
 }  // extern "C"

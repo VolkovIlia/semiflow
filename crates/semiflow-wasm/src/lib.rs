@@ -167,6 +167,10 @@ mod drift_reaction_zeta4_wasm;
 mod killing_soft_wasm;
 #[cfg(feature = "full")]
 mod matrix_2d3d_wasm;
+#[cfg(feature = "full")]
+mod laplacian_wasm;
+#[cfg(feature = "full")]
+mod obstacle_gamma_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -245,6 +249,10 @@ pub use drift_reaction_zeta4_wasm::DriftReaction4th1D;
 pub use killing_soft_wasm::Killing2nd1D;
 #[cfg(feature = "full")]
 pub use matrix_2d3d_wasm::{MatrixDiffusion2D, MatrixDiffusion3D};
+#[cfg(feature = "full")]
+pub use laplacian_wasm::{LaplacianWasm, GraphTrajWasm};
+#[cfg(feature = "full")]
+pub use obstacle_gamma_wasm::{ObstacleGammaV8Wasm, ObstacleND2Wasm};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///
