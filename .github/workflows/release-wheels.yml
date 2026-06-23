@@ -20,6 +20,7 @@ jobs:
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-13, macos-14, windows-latest]
     steps:
@@ -37,6 +38,11 @@ jobs:
           # Build only CPython 3.10–3.13; skip PyPy and 3.14-dev.
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           # Linux: manylinux_2_28 (glibc 2.28+) for broad compat.
+          # Restrict to x86_64 only; i686 (32-bit) lacks a rustup installer.
+          CIBW_ARCHS_LINUX: "x86_64"
+          # Skip musllinux — Rust targets for musl are not pre-installed and
+          # the musl container images pull unreliably; manylinux is sufficient.
+          CIBW_SKIP: "*-musllinux*"
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           # Ensure Rust toolchain is available inside cibuildwheel containers.
