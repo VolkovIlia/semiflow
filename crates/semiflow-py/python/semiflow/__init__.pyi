@@ -3408,6 +3408,76 @@ class Reflected1D:
 
 
 @final
+class DirichletHeat2nd1D:
+    """1-D heat equation with Dirichlet BC via the odd-image method (M11, §21.9, ADR-0176).
+
+    Order-2 absorbing Dirichlet: ``u = 0`` at ``origin``.
+    Backed by ``DirichletHeat2ndChernoff<DiffusionChernoff, HalfSpaceRegion>``.
+    Sibling of ``Reflected1D`` (Neumann) and higher-order than ``Killing1D`` (order 1).
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        n: int,
+        u0: NDArray[np.float64],
+        *,
+        origin: float = float("nan"),
+        boundary: BoundaryLiteral = "reflect",
+    ) -> None:
+        """Construct DirichletHeat2nd1D.
+
+        Parameters
+        ----------
+        xmin : float
+            Left domain boundary.
+        xmax : float
+            Right domain boundary (must be > xmin).
+        n : int
+            Number of grid nodes (must be >= 4).
+        u0 : NDArray[np.float64]
+            Initial condition; length n, all finite.
+        origin : float, optional
+            Location of the absorbing wall (default = xmin).
+        boundary : str, optional
+            Background boundary policy; default ``"reflect"``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if xmin >= xmax or n < 4 or len(u0) != n.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if boundary unrecognised.
+        """
+        ...
+
+    def order(self) -> int:
+        """Return the approximation order (2)."""
+        ...
+
+    def evolve(self, t: float, n_steps: int = 100) -> None:
+        """Advance state by time t using n_steps Chernoff iterations.
+
+        Mutates self in-place; GIL released during compute.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' if t < 0, non-finite, or n_steps == 0.
+        """
+        ...
+
+    def values(self) -> NDArray[np.float64]:
+        """Return current grid values as float64 numpy array (copy)."""
+        ...
+
+    def __len__(self) -> int:
+        """Return the number of grid nodes."""
+        ...
+
+
+@final
 class Robin1D:
     """1-D heat equation with Robin BC via the skew image method (M10).
 
@@ -4972,6 +5042,74 @@ class TtEvolver:
         SemiflowError
             kind='OutOfDomain' — ``n_steps`` == 0, ``t_final`` non-finite/negative,
             or ``evolver.ndim() != state.ndim()``.
+        """
+        ...
+
+
+@final
+class VarCoefTtEvolver:
+    """Additive-separable variable-coefficient TT evolver (ADR-0178, math §52.10, issue #2).
+
+    Evolves a ``TtState`` by ``exp(τ·L)`` where ``L = Σⱼ Lⱼ``,
+    ``Lⱼ = ∂_{xⱼ}(aⱼ·∂_{xⱼ}) + bⱼ·∂_{xⱼ} + vⱼ``.
+    Operates on the SAME ``TtState`` carrier as ``TtEvolver``.
+    Rank-1 IC → rank-1 output (bond-preserving, §52.10d).
+    """
+
+    def __init__(
+        self,
+        a_axis: list[list[float]],
+        b_axis: list[list[float]],
+        v_axis: list[list[float]],
+        domain: list[tuple[float, float]],
+        eps_round: float,
+    ) -> None:
+        """Construct a VarCoefTtEvolver.
+
+        Parameters
+        ----------
+        a_axis : list[list[float]]
+            Per-axis diffusion ``aⱼ(xⱼ)``; each inner list has length nⱼ,
+            all entries strictly positive.
+        b_axis : list[list[float]]
+            Per-axis drift ``bⱼ(xⱼ)``; each inner list length nⱼ.
+        v_axis : list[list[float]]
+            Per-axis reaction ``vⱼ(xⱼ)``; empty list means zero on that axis.
+        domain : list[tuple[float, float]]
+            Per-axis ``(lo, hi)`` bounds.
+        eps_round : float
+            TT-rounding tolerance (finite, >= 0).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``d == 0``, shape mismatch, ``nⱼ < 2``,
+            or any ``a_axis[j][i] <= 0``.
+            kind='NanInf' — non-finite coefficient or domain bound.
+        """
+        ...
+
+    def ndim(self) -> int:
+        """Number of axes this evolver was built for."""
+        ...
+
+    def evolve(self, state: TtState, t_final: float, n_steps: int) -> None:
+        """Evolve ``state`` in-place for time ``t_final`` using ``n_steps`` steps.
+
+        Parameters
+        ----------
+        state : TtState
+            Mutable carrier (same ``TtState`` as ``TtEvolver``).
+        t_final : float
+            Total evolution time (>= 0, finite).
+        n_steps : int
+            Number of time steps (>= 1).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — ``n_steps == 0``, ``t_final`` non-finite/negative,
+            or ``ev.ndim() != state.ndim()``.
         """
         ...
 

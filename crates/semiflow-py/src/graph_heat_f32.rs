@@ -203,8 +203,11 @@ extern "Rust" fn zero_deriv_f32(_: f32) -> f32 {
 
 /// 1-D heat evolution on f32, unit diffusion `a = 1`.  No GIL held.
 ///
-/// Uses `DiffusionChernoff::<f32>::apply_f` (generic, non-SIMD path) since
-/// `ChernoffFunction<f32>` is not implemented for `DiffusionChernoff<f32>`.
+/// Uses `DiffusionChernoff::<f32>::apply_f` (direct inherent method, bypasses
+/// the `ChernoffFunction` dispatch machinery).  Although
+/// `ChernoffFunction<f32>` IS now first-class for leaf kernels (ADR-0175,
+/// issue #5), `apply_f` is retained here to avoid an unnecessary intermediate
+/// `GridFn1D` allocation on the hot inner loop of the f32 graph-heat path.
 pub(crate) fn compute_heat1d_f32(
     xmin: f64,
     xmax: f64,

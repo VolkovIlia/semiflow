@@ -1,5 +1,5 @@
 """Smoke tests for v9 S³ PyO3 bindings: TtState, TtEvolver, TtCoupledEvolver,
-MeasureState, GridlessEvolver.
+MeasureState, GridlessEvolver, VarCoefTtEvolver.
 
 Exercises every class instantiation + one evolution call and checks that the
 result is finite (sanity gate only; numerical accuracy is validated by the
@@ -16,6 +16,7 @@ from semiflow import (
     TtCoupledEvolver,
     MeasureState,
     GridlessEvolver,
+    VarCoefTtEvolver,
     SemiflowError,
 )
 
@@ -374,3 +375,133 @@ class TestGridlessEvolver:
         ms = self._dirac_ms()
         ev.evolve(ms, t_final=0.1, n_steps=2)
         assert math.isfinite(ms.total_variation())
+
+
+# ---------------------------------------------------------------------------
+# VarCoefTtEvolver
+# ---------------------------------------------------------------------------
+
+class TestVarCoefTtEvolver:
+    """Smoke tests for VarCoefTtEvolver (ADR-0178, issue #2)."""
+
+    N = 16
+    D = 3
+    XS = None  # set up in helpers
+
+    def _xs(self):
+        return np.linspace(-3.0, 3.0, self.N)
+
+    def _const_coef(self, val):
+        return [np.full(self.N, val) for _ in range(self.D)]
+
+    def _zero_coef(self):
+        return [np.zeros(self.N) for _ in range(self.D)]
+
+    def _make_ev(self, a_val=0.5, b_val=0.0, v_val=0.0):
+        dom = [(-3.0, 3.0)] * self.D
+        return VarCoefTtEvolver(
+            a_axis=self._const_coef(a_val),
+            b_axis=self._const_coef(b_val),
+            v_axis=self._const_coef(v_val),
+            domain=dom,
+            eps_round=1e-10,
+        )
+
+    def _make_state(self):
+        xs = self._xs()
+        g = np.exp(-xs ** 2)
+        return TtState([g.copy() for _ in range(self.D)])
+
+    # -----------------------------------------------------------------------
+    # Oracle 1: rank-1 IC stays rank-1 after evolve (§52.10d bond-preserving).
+    # The additive-separable per-axis step operates on mode slices one at a time;
+    # no entanglement is introduced, so a rank-1 IC stays rank-1.
+    # -----------------------------------------------------------------------
+    def test_rank1_preserved_and_finite(self):
+        """Rank-1 IC stays rank-1; all values finite (§52.10d invariant)."""
+        ev = self._make_ev()
+        state = self._make_state()
+        ev.evolve(state, t_final=0.1, n_steps=4)
+        assert state.peak_rank() == 1, f"rank grew to {state.peak_rank()} (expected 1)"
+        sz = state.storage_size()
+        assert sz > 0 and math.isfinite(sz), "storage_size not finite positive"
+        n = state.n_j(0)
+        v = state.inner_separable([np.ones(n)] * self.D)
+        assert math.isfinite(v), f"inner_separable returned non-finite {v}"
+
+    # -----------------------------------------------------------------------
+    # Oracle 2: ndim attribute matches constructed dimension.
+    # -----------------------------------------------------------------------
+    def test_ndim(self):
+        ev = self._make_ev()
+        assert ev.ndim() == self.D
+
+    # -----------------------------------------------------------------------
+    # Validation: zero n_steps rejected.
+    # -----------------------------------------------------------------------
+    def test_zero_steps_rejected(self):
+        ev = self._make_ev()
+        state = self._make_state()
+        with pytest.raises(SemiflowError, match="OutOfDomain"):
+            ev.evolve(state, t_final=0.1, n_steps=0)
+
+    # -----------------------------------------------------------------------
+    # Validation: negative t_final rejected.
+    # -----------------------------------------------------------------------
+    def test_negative_t_rejected(self):
+        ev = self._make_ev()
+        state = self._make_state()
+        with pytest.raises(SemiflowError, match="OutOfDomain"):
+            ev.evolve(state, t_final=-0.1, n_steps=4)
+
+    # -----------------------------------------------------------------------
+    # Validation: ndim mismatch between evolver and state.
+    # -----------------------------------------------------------------------
+    def test_ndim_mismatch_rejected(self):
+        ev = self._make_ev()               # D=3
+        state_2d = TtState([np.ones(self.N)] * 2)  # d=2
+        with pytest.raises(SemiflowError, match="OutOfDomain"):
+            ev.evolve(state_2d, t_final=0.1, n_steps=2)
+
+    # -----------------------------------------------------------------------
+    # Fail-loud: a_axis with non-positive entry triggers VarCoefOutOfClass
+    # → OutOfDomain at Python boundary.
+    # -----------------------------------------------------------------------
+    def test_nonpositive_a_rejected(self):
+        a_bad = [np.full(self.N, -0.1)] + [np.full(self.N, 0.5)] * (self.D - 1)
+        with pytest.raises(SemiflowError, match="OutOfDomain"):
+            VarCoefTtEvolver(
+                a_axis=a_bad,
+                b_axis=self._zero_coef(),
+                v_axis=self._zero_coef(),
+                domain=[(-3.0, 3.0)] * self.D,
+                eps_round=1e-10,
+            )
+
+    # -----------------------------------------------------------------------
+    # Fail-loud: NaN in b_axis.
+    # -----------------------------------------------------------------------
+    def test_nan_b_rejected(self):
+        b_bad = [np.zeros(self.N) for _ in range(self.D)]
+        b_bad[0][3] = float("nan")
+        with pytest.raises(SemiflowError, match="NanInf"):
+            VarCoefTtEvolver(
+                a_axis=self._const_coef(0.5),
+                b_axis=b_bad,
+                v_axis=self._zero_coef(),
+                domain=[(-3.0, 3.0)] * self.D,
+                eps_round=1e-10,
+            )
+
+    # -----------------------------------------------------------------------
+    # Fail-loud: empty a_axis (d=0).
+    # -----------------------------------------------------------------------
+    def test_empty_axis_rejected(self):
+        with pytest.raises(SemiflowError):
+            VarCoefTtEvolver(
+                a_axis=[],
+                b_axis=[],
+                v_axis=[],
+                domain=[],
+                eps_round=1e-10,
+            )

@@ -129,6 +129,7 @@ mod v3;
 mod gridless_py;
 mod tt_coupled_py;
 mod tt_py;
+mod tt_varcoef_py;
 mod wentzell_helpers;
 mod wentzell_py;
 mod zeta4_py;
@@ -219,7 +220,9 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // v9 S³ flagship carriers — tensor-train + gridless particle (ADR-0171)
     tt_py::register(py, m)?;
     tt_coupled_py::register(py, m)?;
-    gridless_py::register(py, m)
+    gridless_py::register(py, m)?;
+    // VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
+    tt_varcoef_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------
