@@ -986,7 +986,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "semiflow-core"
+name = "semiflow"
 version = "0.9.0-beta"
 dependencies = [
  "allocation-counter",
@@ -1006,7 +1006,7 @@ version = "0.9.0-beta"
 dependencies = [
  "cbindgen",
  "num-complex",
- "semiflow-core",
+ "semiflow",
 ]
 
 [[package]]
@@ -1016,7 +1016,7 @@ dependencies = [
  "criterion",
  "numpy",
  "pyo3",
- "semiflow-core",
+ "semiflow",
  "static_assertions",
  "tracing",
 ]
@@ -1028,7 +1028,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "num-complex",
- "semiflow-core",
+ "semiflow",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
