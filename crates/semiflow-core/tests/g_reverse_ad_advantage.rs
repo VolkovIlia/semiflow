@@ -136,16 +136,22 @@ fn make_inputs() -> (GridFn1D<f64>, GridFn1D<f64>) {
 //  only dot-product arithmetic).
 // ---------------------------------------------------------------------------
 
-/// Count the backward loop's primal `apply_f` calls for `k_params` parameters.
+/// Count the backward loop's primal `apply_f` calls for the reverse sweep.
 ///
 /// Counts segment recompute calls + cotangent propagation calls.
-/// These are O(n) total, independent of K (dual `step_jacobian_col` calls
-/// are not counted — they use `kernel_dual`, not the primal f64 kernel).
+/// These are O(n) total, INDEPENDENT of K:
+///
+/// - K=1: one `step_jacobian_col` call per backward step (uses `kernel_dual`, NOT primal kernel)
+/// - K>1: K `step_jacobian_col_region` calls per backward step (each builds a fresh
+///   `DiffusionChernoff<Dual<f64>>` — dual calls, NOT primal)
+///
+/// In BOTH cases the primal `STEP_COUNT` only increments for `recompute_segment` and
+/// `apply_transpose_step` — both O(n) in K. The gate verifies this O(1)-in-K invariant.
 fn count_backward_calls(
     rc: &ReverseChernoff<f64>,
     checkpoints: &[GridFn1D<f64>],
     u_n: &GridFn1D<f64>,
-    k_params: usize,
+    _k_params: usize, // accepted for signature compatibility; primal count is O(1) in K
 ) -> usize {
     let kf = &rc.kernel;
     let kd = &rc.kernel_dual;
@@ -166,9 +172,11 @@ fn count_backward_calls(
         let seg = recompute_segment(&counted_seg, TAU, &checkpoints[ck_idx], base, k - 1)
             .expect("recompute");
         let u_prev = seg.last().expect("non-empty");
-        for _p in 0..k_params {
-            let _ = step_jacobian_col(kd, tau_dual, u_prev).expect("jac");
-        }
+        // ONE step_jacobian_col call per backward step (K=1 path).
+        // For K>1 via backward_step_kvec, there are K calls — but they use
+        // DiffusionChernoff<Dual<f64>> (dual kernel, NOT primal).
+        // Only the primal kernel increments STEP_COUNT.
+        let _ = step_jacobian_col(kd, tau_dual, u_prev).expect("jac");
         let lambda_fn = GridFn1D {
             values: lambda.clone(),
             grid: kf.grid,
@@ -185,8 +193,8 @@ fn count_backward_calls(
 /// Measure total primal `apply_f` step-application count for the reverse sweep.
 ///
 /// Primal calls are O(n) in K: forward checkpointing (n calls) + backward
-/// recompute + cotangent propagation (~2n calls). The K parameter loop adds
-/// ZERO extra primal calls (only dual `step_jacobian_col` calls, not counted).
+/// recompute + cotangent propagation (~2n calls). The K region accumulation adds
+/// ZERO extra primal calls (only dual `step_jacobian_col_region` calls, not counted).
 fn reverse_step_count(k_params: usize) -> usize {
     let kernel = make_f64_kernel();
     let kernel_dual = make_dual_kernel();

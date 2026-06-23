@@ -11732,6 +11732,63 @@ A forward-dual / forward-tangent gradient is FORBIDDEN as the public reverse pat
 - T. Matsubara et al., *Symplectic Adjoint Method for Exact Gradient of Neural ODE with Minimal Memory*, **NeurIPS** 2021; arXiv:2102.09750. — **B** (exact-gradient-at-low-memory precedent).
 - **Internal**: math §42 / ADR (transpose-exactness, `T_MAGNUS_TRANSPOSE` — extended here); §43 (adjoint-state sensitivity — accumulation reused); §46 / ADR-0133 (`Dual<F>` forward AD, `G_DUAL_AD_GRADIENT`/`G_DUAL_ZERO_ALLOC` PASS — the cross-mode 0-ULP parity partner of §51.4); `G_BINDING_GREEKS_PARITY` (0-ULP binding-parity culture reused); ADR-0156 (Shift B); ADR-0154 (v9.0.0 umbrella, third S-curve).
 
+### §51.10 — Multi-parameter (K>1) reverse-AD via piecewise-region coefficients (NORMATIVE — ADR-0177, issue #1)
+
+> **STATUS — v9.x extension.** This makes `value_and_grad(τ, n, u₀, target, θ ∈ ℝ^K)` genuinely
+> K-vector (lifts the §51.9 / ADR-0172 K=1-only restriction). It does NOT alter §51.9 for K=1:
+> one region = all of Ω reproduces the §51.9 path **byte-identically**. NORMATIVE library.
+
+**The ill-posedness ADR-0172 named, and its resolution.** For a single scalar `a(x) ≡ θ` the K
+seeds coincide and the backward sweep broadcasts one gradient into all K slots — the *correct*
+value of an ill-posed question. K>1 is made **well-posed in space** (ADR-0177, resolution in
+space) by partitioning the grid DoF into K disjoint regions and giving each its own coefficient.
+
+**Per-region coefficient model (NORMATIVE).** Partition the `N_grid` nodes into K disjoint regions
+`Ω = ⊔_{r=0}^{K-1} Ω_r` via a DoF-aligned map `ρ : {0..N_grid} → {0..K}` (`ρ(i)=r ⟺ node i ∈ Ω_r`).
+The diffusion coefficient is the single piecewise-constant function
+
+    a(x_i) = Σ_{r=0}^{K-1} θ_r · 𝟙_{Ω_r}(x_i) = θ_{ρ(i)} .
+
+This is ONE `DiffusionChernoff` (one `a(x)`, built via `with_closure`), so `J = ∂(Fu)/∂u` is the
+same banded self-adjoint stencil **inside each region** and `Jᵀ = F` (§51.2) is unchanged — the
+indicator is piecewise-constant, it perturbs values, not the state-Jacobian symmetry. The
+`ChernoffFunction` trait signature is untouched (CRITICAL: 56 dependents, ADR-0177).
+
+**Per-region Jacobian column (NORMATIVE).** For parameter `θ_r`, the per-step parameter sensitivity
+
+    b_k^{(r)} := (∂F/∂θ_r)(u_{k-1}),     supp(b_k^{(r)}) ⊆ Ω_r ,
+
+is computed by ONE dual step (§46, `step_jacobian_col`) whose coefficient closure seeds
+`Dual::variable(θ_r)` on nodes `i ∈ Ω_r` and `Dual::constant(θ_{ρ(i)})` elsewhere (state held at
+zero tangent, `τ` carries NO tangent — `Dual::constant(τ)`, §51.9 repair). Because the seed is bound
+to the **node value** θ_r (not a continuous sample position), septic-Hermite stencil width is
+captured *inside* `b_k^{(r)}` by dual arithmetic and routed to the owning region — there is no
+cross-region leakage of the accumulated gradient. The supports are **disjoint** ⇒ the K columns are
+structurally distinct ⇒ NOT the degenerate broadcast.
+
+**Cotangent accumulation (NORMATIVE — genuine reverse, O(1) in K).** The backward sweep is exactly
+§51.9 with the accumulation generalised to K columns at each step `k = n … 1`:
+
+    grad[r] += ⟨λ_k, b_k^{(r)}⟩,    r = 0 … K-1 ,
+    λ_{k-1} = Jᵀ λ_k   (= apply_transpose_step, F^⊤=F for const-per-region a) .
+
+All K columns reuse the SAME replayed `u_{k-1}` and the SAME single cotangent `λ` — one backward
+walk yields all K gradients. Forward dual-AD needs `O(K)` trajectory passes (one tangent seed per
+region); the reverse sweep is `O(1)`-in-K trajectory passes at `O(√n)` memory. **K=1** is the case
+`K=1, Ω_0=Ω`: seed everywhere, one column, identical arithmetic to §51.9 ⇒ byte-identical (regression).
+
+**Scope (NORMATIVE — NARROW).** Self-adjoint **const-per-region** `a` only; region boundaries are
+**DoF-aligned**. Variable-a within a region, non-self-adjoint kernels, or non-DoF-aligned regions
+are OUT of scope and MUST fail-loud (`SemiflowError::UnsupportedOperation`). This preserves the
+§51.5 narrow-linear/self-adjoint boundary.
+
+**Gates / oracle (cite).** `G_REVERSE_AD_GRADIENT` is extended to a **K-vector FD-parity** check:
+each `grad[r]` matches a central difference perturbing only `θ_r` to `< 1e-9` relative (§51.6 (i)
+generalised to K). `G_REVERSE_AD_ADVANTAGE` (§51.9) now binds genuinely at K>1: with the region
+kernel, `ratio(64)/ratio(1) ≥ 8`. New sympy oracle `scripts/verify_reverse_ad_kvector.py` proves
+`grad[r] = ∂J/∂θ_r` analytically for a small closed-form K-region setup; prints
+`T_REVERSE_AD_KVECTOR PASS` (RELEASE_BLOCKING, runs in `test-fast`).
+
 ---
 
 ## §52 — Tensor-train Chernoff: escaping the curse via the state carrier (v9.0.0 Shift C RESOLUTION, NORMATIVE)

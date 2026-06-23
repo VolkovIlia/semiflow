@@ -263,6 +263,8 @@ pub(crate) mod resolvent_quad;
 /// Residual gate-wrapper and `Sampleable<GridFn1D>` impl (suckless split from `resolvent`).
 pub(crate) mod resolvent_residual;
 pub mod reverse_ad;
+/// DoF-aligned region partition for K>1 reverse-AD (§51.10, ADR-0177).
+pub mod reverse_region;
 /// Backward sweep internals for `reverse_ad` (additive split, ≤500-line cap).
 pub(crate) mod reverse_sweep;
 pub mod robin;
@@ -426,6 +428,7 @@ pub use crate::{
         forward_with_checkpoints, recompute_segment, step_jacobian_col, CheckpointSchedule,
         ReverseChernoff, TransposeApply,
     },
+    reverse_region::RegionMap,
     robin::{HalfSpaceRobin, RobinHeatChernoff, RobinRegion},
     schrodinger::{SchrodingerChernoff, SchrodingerState},
     schrodinger_complex::SchrödingerChernoffComplex,
