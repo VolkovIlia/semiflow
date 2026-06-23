@@ -83,6 +83,30 @@ pub mod wentzell_ffi;
 pub mod tt_ffi;
 pub mod tt_coupled_ffi;
 pub mod gridless_ffi;
+pub mod expmv_ffi;
+pub mod drift_reaction_zeta4_ffi;
+pub mod killing_soft_ffi;
+pub mod matrix_2d3d_ffi;
+
+pub use expmv_ffi::{
+    smf_expmv1d_new, smf_expmv1d_evolve, smf_expmv1d_values,
+    smf_expmv1d_size, smf_expmv1d_free, SmfExpmv1D,
+};
+pub use drift_reaction_zeta4_ffi::{
+    smf_drift_reaction_zeta4_new, smf_drift_reaction_zeta4_evolve,
+    smf_drift_reaction_zeta4_values, smf_drift_reaction_zeta4_size,
+    smf_drift_reaction_zeta4_free, SmfDriftReactionZeta4,
+};
+pub use killing_soft_ffi::{
+    smf_killing2nd_new, smf_killing2nd_evolve, smf_killing2nd_values,
+    smf_killing2nd_size, smf_killing2nd_free, SmfKilling2nd,
+};
+pub use matrix_2d3d_ffi::{
+    smf_matrix2d_new, smf_matrix2d_evolve, smf_matrix2d_values,
+    smf_matrix2d_size, smf_matrix2d_free, SmfMatrix2D,
+    smf_matrix3d_new, smf_matrix3d_evolve, smf_matrix3d_values,
+    smf_matrix3d_size, smf_matrix3d_free, SmfMatrix3D,
+};
 
 pub use adjoint_fp_ffi::{
     smf_adjoint_fp_free_v3, smf_adjoint_fp_new_brownian_1d_v3, smf_adjoint_fp_step_v3,

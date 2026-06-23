@@ -159,6 +159,14 @@ mod strang_graph_wasm;
 mod carnot_wasm;
 #[cfg(feature = "full")]
 mod point_eval_wasm;
+#[cfg(feature = "full")]
+mod expmv_wasm;
+#[cfg(feature = "full")]
+mod drift_reaction_zeta4_wasm;
+#[cfg(feature = "full")]
+mod killing_soft_wasm;
+#[cfg(feature = "full")]
+mod matrix_2d3d_wasm;
 
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
 pub use graph_wasm::{GraphHeat, GraphPath};
@@ -229,6 +237,14 @@ pub use strang_graph_wasm::StrangGraphWasm;
 pub use carnot_wasm::ComplexTripleJumpWasm;
 #[cfg(feature = "full")]
 pub use point_eval_wasm::PointEvalWasm;
+#[cfg(feature = "full")]
+pub use expmv_wasm::DiffusionExpmv1D;
+#[cfg(feature = "full")]
+pub use drift_reaction_zeta4_wasm::DriftReaction4th1D;
+#[cfg(feature = "full")]
+pub use killing_soft_wasm::Killing2nd1D;
+#[cfg(feature = "full")]
+pub use matrix_2d3d_wasm::{MatrixDiffusion2D, MatrixDiffusion3D};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///

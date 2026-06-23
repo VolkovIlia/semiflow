@@ -69,6 +69,50 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `TtEvolver`; `VarCoefOutOfClass` → `OutOfDomain` on all surfaces.
   PEP 561 `.pyi` stub added.
 
+### Added — new type bindings (bind-remaining-operators wave)
+
+- **`DiffusionExpmv1D`** (tolerance-driven Al-Mohy & Higham expmv, ADR-0121,
+  `order() = u32::MAX`): exposed across all three binding layers —
+  `semiflow-ffi` (`smf_expmv1d_*`, `SmfExpmv1D`), `semiflow-py` (`DiffusionExpmv1D`
+  pyclass), and `semiflow-wasm` (`DiffusionExpmv1D` JS class, `--features full`).
+  Uses static unit-a / zero-drift fn-pointers; no closures.  PEP 561 `.pyi` stub added.
+
+- **`DriftReaction4th1D`** (order-4 palindromic Strang drift-reaction, ADR-0127):
+  exposed across all three binding layers — `semiflow-ffi`
+  (`smf_drift_reaction_zeta4_*`, `SmfDriftReactionZeta4`), `semiflow-py`
+  (`DriftReaction4th1D` pyclass), and `semiflow-wasm` (`DriftReaction4th1D`
+  JS class, `--features full`).  Fixed `b=0.5`, `b'=0.0`, `c=0.0` via static
+  fn-pointers (closure API is a separate architect task).  PEP 561 `.pyi` stub added.
+
+- **`Killing2nd1D`** (order-2 soft-killing Feynman-Kac, ADR-0126): exposed across
+  all three binding layers — `semiflow-ffi` (`smf_killing2nd_*`, `SmfKilling2nd`),
+  `semiflow-py` (`Killing2nd1D` pyclass), and `semiflow-wasm` (`Killing2nd1D`
+  JS class, `--features full`).  Constant `κ ≥ 0` via `ConstKappa`/`ConstKappaWasm`
+  newtype implementing `KillingRate<f64>`.  PEP 561 `.pyi` stub added.
+
+- **`MatrixDiffusion2D`** (coupled 2-component 2D palindromic Strang, ADR-0124):
+  exposed across all three binding layers — `semiflow-ffi` (`smf_matrix2d_*`,
+  `SmfMatrix2D`), `semiflow-py` (`MatrixDiffusion2D` pyclass), and `semiflow-wasm`
+  (`MatrixDiffusion2D` JS class, `--features full`).  Buffer layout:
+  `2*nx*ny` f64, index `(j*nx+i)*2+component`.  PEP 561 `.pyi` stub added.
+
+- **`MatrixDiffusion3D`** (coupled 2-component 3D palindromic Strang, ADR-0124):
+  exposed across all three binding layers — `semiflow-ffi` (`smf_matrix3d_*`,
+  `SmfMatrix3D`), `semiflow-py` (`MatrixDiffusion3D` pyclass), and `semiflow-wasm`
+  (`MatrixDiffusion3D` JS class, `--features full`).  Buffer layout:
+  `2*nx*ny*nz` f64, index `(k*nx*ny+j*nx+i)*2+component`.  PEP 561 `.pyi` stub added.
+
+### Intentionally skipped (bind-remaining-operators wave)
+
+The following 5 candidates were classified SKIP after analysis:
+- `AnisotropicShiftAdaptiveQ` / `AnisotropicShiftZeta2ND` — internal variant
+  types; public surface is `AnisotropicShiftND2` / `AnisotropicShiftND3`.
+- `QuantumSchrödingerChernoff` — internal builder pattern; public surface is
+  `Schrodinger1D` / `SchrodingerComplex1D`.
+- `TruncatedExp4WithCache` — internal optimisation shim; public surface is
+  `TruncatedExp4th1D`.
+- `IdentityND` — utility type not intended for direct user construction.
+
 ### Known gaps (documented, not silently omitted)
 
 `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and

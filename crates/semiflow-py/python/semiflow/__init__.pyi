@@ -5317,3 +5317,223 @@ class GridlessEvolver:
             kind='OutOfDomain' — ``n_steps`` == 0 or ``t_final`` non-finite/negative.
         """
         ...
+
+# ---------------------------------------------------------------------------
+# bind-remaining-operators wave
+# ---------------------------------------------------------------------------
+
+class DiffusionExpmv1D:
+    """1-D heat equation with tolerance-driven expmv Chernoff kernel (ADR-0121).
+
+    Solves ``∂_t u = ∂²u`` (unit diffusion ``a = 1``) using
+    ``DiffusionExpmvChernoff`` — scaled truncated-Taylor Al-Mohy & Higham (2011).
+    ``order()`` returns ``2**32 - 1``; this is not a convergence order.
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        n: int,
+        u0: NDArray[np.float64],
+        *,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> None:
+        """Create state on [xmin, xmax] with n grid nodes and initial datum u0.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if xmin >= xmax or n < 4 or len(u0) != n.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if boundary is not recognised.
+        """
+        ...
+
+    def order(self) -> int:
+        """Return u32::MAX — tolerance-driven; not a fixed convergence order."""
+        ...
+
+    def evolve(self, t: float, n_steps: int = 100) -> None:
+        """Advance state by time t using n_steps Chernoff iterations.
+
+        Mutates self in-place; GIL released during Rust compute (ADR-0031).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' if t < 0, non-finite, or n_steps == 0.
+        """
+        ...
+
+    def values(self) -> NDArray[np.float64]:
+        """Return the current grid values as a 1-D float64 numpy array (copy)."""
+        ...
+
+    def __len__(self) -> int:
+        """Return the number of grid nodes."""
+        ...
+
+
+class DriftReaction4th1D:
+    """1-D drift + reaction with order-4 palindromic Strang-K5 Chernoff kernel.
+
+    Solves ``∂_t u = b(x)∂_x u + c(x)u`` using ``DriftReactionZeta4Chernoff``
+    (palindromic R_sym(τ/2) ∘ K5(τ) ∘ R_sym(τ/2); order 4, ADR-0127).
+    Default: ``b(x) = 0.5``, ``b'(x) = 0.0``, ``c(x) = 0.0``.
+    Variable-coefficient closure API is deferred (separate architect task).
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        n: int,
+        u0: NDArray[np.float64],
+        *,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> None:
+        """Create state on [xmin, xmax] with n grid nodes and initial datum u0.
+
+        Uses default coefficients: b = 0.5, b' = 0.0, c = 0.0.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if xmin >= xmax or n < 4 or len(u0) != n.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if boundary is not recognised.
+        """
+        ...
+
+    def order(self) -> int:
+        """Return the approximation order (always 4)."""
+        ...
+
+    def evolve(self, t: float, n_steps: int = 100) -> None:
+        """Advance state by time t using n_steps Chernoff iterations.
+
+        Mutates self in-place; GIL released during Rust compute (ADR-0031).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' if t < 0, non-finite, or n_steps == 0.
+        """
+        ...
+
+    def values(self) -> NDArray[np.float64]:
+        """Return the current grid values as a 1-D float64 numpy array (copy)."""
+        ...
+
+    def __len__(self) -> int:
+        """Return the number of grid nodes."""
+        ...
+
+@final
+class Killing2nd1D:
+    """Order-2 soft-killing 1-D Chernoff for Feynman-Kac e^{t(L-kappa)} (ADR-0126, math 21.8).
+
+    Solves d_t u = d^2 u - kappa*u for constant kappa >= 0.
+    Palindromic Strang e^{-tau*kappa/2} C(tau) e^{-tau*kappa/2}; order 2.
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        n: int,
+        u0: NDArray[np.float64],
+        *,
+        kappa: float = 0.0,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> None:
+        """Create state on [xmin, xmax] with n nodes, killing rate kappa >= 0.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if xmin >= xmax or n < 4 or len(u0) != n.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if kappa < 0 or boundary unrecognised.
+        """
+        ...
+
+    def order(self) -> int: ...
+    def evolve(self, t: float, n_steps: int = 100) -> None: ...
+    def values(self) -> NDArray[np.float64]: ...
+    def __len__(self) -> int: ...
+
+@final
+class MatrixDiffusion2D:
+    """Coupled 2-component 2D diffusion via palindromic Strang (ADR-0124, math 33.2).
+
+    Solves d_t u = a*d^2 u + c*u (M=2) on [xmin,xmax]x[ymin,ymax].
+    Buffer: flat float64 length 2*nx*ny. Index (j*nx+i)*2+component.
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        u0: NDArray[np.float64],
+        *,
+        a_diag: float = 1.0,
+        c_coupling: float = 0.0,
+    ) -> None:
+        """Create 2D matrix-diffusion state.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if grid params invalid or len(u0) != 2*nx*ny.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if nx < 5 or ny < 5 or a_diag <= 0.
+        """
+        ...
+
+    def order(self) -> int: ...
+    def evolve(self, t: float, n_steps: int = 100) -> None: ...
+    def values(self) -> NDArray[np.float64]: ...
+
+@final
+class MatrixDiffusion3D:
+    """Coupled 2-component 3D diffusion via palindromic 5-leg Strang (ADR-0124, math 33.3).
+
+    Buffer: flat float64 length 2*nx*ny*nz. Index (k*nx*ny+j*nx+i)*2+component.
+    """
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        zmin: float,
+        zmax: float,
+        nz: int,
+        u0: NDArray[np.float64],
+        *,
+        a_diag: float = 1.0,
+        c_coupling: float = 0.0,
+    ) -> None:
+        """Create 3D matrix-diffusion state.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if grid params invalid or len(u0) != 2*nx*ny*nz.
+            kind='NanInf' if u0 contains NaN or Inf.
+            kind='OutOfDomain' if any of nx/ny/nz < 5 or a_diag <= 0.
+        """
+        ...
+
+    def order(self) -> int: ...
+    def evolve(self, t: float, n_steps: int = 100) -> None: ...
+    def values(self) -> NDArray[np.float64]: ...
