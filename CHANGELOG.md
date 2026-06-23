@@ -43,6 +43,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Cargo.toml description fields** updated to reflect broad engine surface
   (no longer say "1D heat, unit diffusion only").
 
+### Fixed — PyO3 S³ wiring (issue #4, 2026-06-22)
+
+- **`semiflow-py` S³ modules were orphaned** after ADR-0171 wiring (2026-06-20):
+  `tt_py.rs`, `tt_coupled_py.rs`, and `gridless_py.rs` existed but were never
+  declared (`mod`) or registered in `lib.rs`, so `from semiflow import TtState`
+  raised `ImportError` at runtime.  Commit `64654b9` (feature `fe840b7`) adds
+  the three `mod` declarations, `register()` calls, and `__init__.py` re-exports;
+  39/39 `test_s3_engines.py` now pass.  FFI and WASM surfaces were not affected.
+
 ### Known gaps (documented, not silently omitted)
 
 `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection, and
