@@ -35,7 +35,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::doc_overindented_list_items, clippy::missing_panics_doc)]
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 
 // ---------------------------------------------------------------------------
 // Canonical smoke parameters (§1.1, V8_1_TIER3_BINDING_DESIGN.md)

@@ -53,7 +53,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, ScratchPool,
     Strang3D,
 };
@@ -371,7 +371,7 @@ fn build_inner_3d_unit(
     zmin: f64,
     zmax: f64,
     nz: usize,
-) -> Result<Inner3D, semiflow_core::SemiflowError> {
+) -> Result<Inner3D, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
     let gz = Grid1D::new(zmin, zmax, nz)?.with_boundary(BoundaryPolicy::Reflect);
@@ -396,7 +396,7 @@ fn build_inner_3d_vara(
     ax_vals: &[f64],
     ay_vals: &[f64],
     az_vals: &[f64],
-) -> Result<Inner3DVarA, semiflow_core::SemiflowError> {
+) -> Result<Inner3DVarA, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
     let gz = Grid1D::new(zmin, zmax, nz)?.with_boundary(BoundaryPolicy::Reflect);
@@ -439,7 +439,7 @@ fn evolve_3d(
     u0: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn3D::new(grid, u0.to_vec())?;
     let mut dst = GridFn3D::new(grid, vec![0.0; u0.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

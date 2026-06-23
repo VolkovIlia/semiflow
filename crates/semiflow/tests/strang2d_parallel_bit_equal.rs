@@ -21,7 +21,7 @@
 #![cfg(all(feature = "parallel", feature = "slow-tests"))]
 
 // Thread-count override hook (pub(crate) in strang2d_parallel).
-use semiflow_core::{
+use semiflow::{
     strang2d_parallel::FORCE_THREADS, ChernoffFunction, ChernoffSemigroup, Diffusion4thChernoff,
     DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D,
 };
@@ -70,8 +70,8 @@ fn run_with_threads<X, Y>(
     thread_count: usize,
 ) -> Vec<f64>
 where
-    X: ChernoffFunction<S = semiflow_core::GridFn1D> + Clone + Send + Sync,
-    Y: ChernoffFunction<S = semiflow_core::GridFn1D> + Clone + Send + Sync,
+    X: ChernoffFunction<S = semiflow::GridFn1D> + Clone + Send + Sync,
+    Y: ChernoffFunction<S = semiflow::GridFn1D> + Clone + Send + Sync,
 {
     FORCE_THREADS.with(|c| c.set(Some(thread_count)));
     let semi = ChernoffSemigroup::new(phi2d, n_steps).expect("n_steps >= 1");

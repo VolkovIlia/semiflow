@@ -39,7 +39,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     magnus6_graph::MagnusGraphHeat6thChernoff, magnus_graph::LaplacianAtTime, Graph, GraphSignal,
     Laplacian, ScratchPool,
 };

@@ -35,7 +35,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::assertions_on_constants, clippy::too_many_lines)]
 
-use semiflow_core::{
+use semiflow::{
     reverse_ad::{forward_with_checkpoints, recompute_segment, step_jacobian_col},
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, ReverseChernoff,
 };

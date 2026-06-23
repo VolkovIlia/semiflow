@@ -41,7 +41,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // f64→f32: diagnostic sweep, small test values
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction, Growth},
     diffusion::DiffusionChernoff,
     error::SemiflowError,

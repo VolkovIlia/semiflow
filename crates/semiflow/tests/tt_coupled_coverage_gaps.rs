@@ -20,7 +20,7 @@
 //!
 //! `non_adjacent_pair_is_rejected_v9_1` asserts the panic fires with the expected message.
 
-use semiflow_core::{CoupledTtChernoff, CouplingTopology};
+use semiflow::{CoupledTtChernoff, CouplingTopology};
 
 // ===========================================================================
 // §A — Gap 1: drift b!=0 is now rejected at construction

@@ -35,7 +35,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     ChernoffSemigroup, Grid1D,
 };
@@ -235,21 +235,21 @@ fn build_matrix(
     c_coupling: f64,
     u0: &[f64],
     n_steps: usize,
-) -> Result<InnerMatrix, semiflow_core::SemiflowError> {
+) -> Result<InnerMatrix, semiflow::SemiflowError> {
     if n < 5 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "n must be >= 5 (block-CN stencil, ADR-0082)",
             value: n as f64,
         });
     }
     if !a_diag.is_finite() || a_diag <= 0.0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "a_diag must be finite and > 0",
             value: a_diag,
         });
     }
     if u0.len() != 2 * n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0_len must equal 2*n",
             value: u0.len() as f64,
         });
@@ -268,7 +268,7 @@ fn build_matrix_kernel(
     a_diag: f64,
     c_coupling: f64,
     grid: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     let a_d = a_diag;
     let c_c = c_coupling;
     MatrixDiffusionChernoff::<f64, 2>::new(
@@ -297,7 +297,7 @@ fn build_matrix_kernel(
 fn evolve_matrix(
     inner: &mut InnerMatrix,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let kernel = build_matrix_kernel(inner.a_diag, inner.c_coupling, inner.grid)?;
     let sg = ChernoffSemigroup::new(kernel, inner.n_steps)?;
     let mut src = MatrixGridFn1D::<f64, 2>::new(inner.grid);

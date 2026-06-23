@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, ChernoffFunction, Graph, GraphHeatChernoff, GraphSignal,
     StrangSplitGraph,
 };

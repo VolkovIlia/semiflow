@@ -11,7 +11,7 @@
 //! `diffusion4_unit.rs::order_is_4` and `truncated_exp4_unit.rs::order_is_2` (both
 //! assert 2) — those names reflect the v0.6.1 axis-distinction clarification.
 
-use semiflow_core::{
+use semiflow::{
     AdaptivePI, ChernoffFunction, Diffusion4thChernoff, DiffusionChernoff, Grid1D, Strang2D,
     TruncatedExp4thDiffusionChernoff, TruncatedExpDiffusionChernoff,
 };

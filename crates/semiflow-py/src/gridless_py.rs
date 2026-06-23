@@ -29,7 +29,7 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow_core::{chernoff::ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction,
+use semiflow::{chernoff::ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction,
                     ScratchPool};
 
 use crate::error::new_pyerr;

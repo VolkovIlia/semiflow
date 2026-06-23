@@ -7,7 +7,7 @@
 //! Variable-coefficient closure API deferred (separate architect task).
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Diffusion4thChernoff, DriftReactionZeta4Chernoff, Grid1D, GridFn1D,
 };
 use wasm_bindgen::prelude::*;

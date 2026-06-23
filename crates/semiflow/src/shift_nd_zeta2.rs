@@ -53,7 +53,7 @@ use crate::{
 /// # Construction
 ///
 /// ```rust,ignore
-/// # use semiflow_core::{
+/// # use semiflow::{
 /// #     Grid1D, AnisotropicShiftChernoffND, AnisotropicShiftZeta2ND,
 /// #     grid_nd::GridND,
 /// # };

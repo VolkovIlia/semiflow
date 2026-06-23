@@ -110,7 +110,7 @@ pub unsafe extern "C" fn smf_evolve(
         }
         // Rebuild semigroup with requested n_steps.
         let chernoff = inner.semigroup.func.clone();
-        match semiflow_core::ChernoffSemigroup::new(chernoff, n_steps) {
+        match semiflow::ChernoffSemigroup::new(chernoff, n_steps) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(sg) => match sg.evolve(t, &inner.current) {
                 Err(e) => SemiflowStatus::from(&e),
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn smf_evolve_inplace(
         // Copy caller buf → internal state, run evolve, copy back.
         inner.current.values.copy_from_slice(buf_slice);
         let chernoff = inner.semigroup.func.clone();
-        match semiflow_core::ChernoffSemigroup::new(chernoff, n_steps) {
+        match semiflow::ChernoffSemigroup::new(chernoff, n_steps) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(sg) => match sg.evolve(tau, &inner.current) {
                 Err(e) => SemiflowStatus::from(&e),

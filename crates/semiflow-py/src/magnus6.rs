@@ -37,7 +37,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeat6thChernoff, ScratchPool,
 };
 
@@ -166,7 +166,7 @@ impl MagnusGraphHeat6 {
             let n_steps_usize = n_steps as usize;
 
             // Phase 2: compute (GIL released); callbacks via Python::attach.
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+            let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
                 compute_magnus6(
                     &graph,
                     callback,
@@ -202,7 +202,7 @@ fn compute_magnus6(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let graph2 = Arc::clone(graph);
     let graph3 = Arc::clone(graph);
 

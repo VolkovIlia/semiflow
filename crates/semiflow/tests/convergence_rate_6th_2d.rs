@@ -36,7 +36,7 @@
 #![allow(clippy::doc_markdown)]             // err_sup, SepticHermite in doc: LaTeX-like math terms
 // v7.0: QuinticHermite removed (ADR-0109 removal clock fulfilled); using SepticHermite default.
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Diffusion6thChernoff, Grid1D, Grid2D, GridFn2D, InterpKind, Strang2D,
 };
 

@@ -34,13 +34,13 @@ use wasm_bindgen::prelude::*;
 use crate::error::{err_to_js, make_js_error};
 use crate::graph_wasm::GraphPath;
 
-use semiflow_core::{
+use semiflow::{
     Graph, GraphSignal, Laplacian, ScratchPool,
     MagnusGraphHeatChernoff as CoreMagnusK4,
     MagnusGraphHeat6thChernoff as CoreMagnusK6,
 };
-use semiflow_core::magnus_graph::LaplacianAtTime;
-use semiflow_core::varcoef_magnus_graph::{
+use semiflow::magnus_graph::LaplacianAtTime;
+use semiflow::varcoef_magnus_graph::{
     VarCoefMagnusGraphHeatChernoff as CoreVarCoefMagnus, WeightAtTime,
 };
 

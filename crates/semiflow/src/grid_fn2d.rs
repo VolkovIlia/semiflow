@@ -40,7 +40,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, Grid2D, GridFn2D};
+/// use semiflow::{Grid1D, Grid2D, GridFn2D};
 /// let gx = Grid1D::new(-1.0, 1.0, 8).unwrap();
 /// let gy = Grid1D::new(-1.0, 1.0, 8).unwrap();
 /// let grid = Grid2D::new(gx, gy);

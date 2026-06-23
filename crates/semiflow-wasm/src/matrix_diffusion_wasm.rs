@@ -24,7 +24,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     ChernoffSemigroup, Grid1D,
 };
@@ -70,7 +70,7 @@ fn build_kernel(
     a_diag: f64,
     c_coupling: f64,
     grid: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     let a_d = a_diag;
     let c_c = c_coupling;
     MatrixDiffusionChernoff::<f64, 2>::new(
@@ -104,7 +104,7 @@ fn evolve_matrix(
     vals: &[f64],
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = build_kernel(a_diag, c_coupling, grid)?;
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let mut src = MatrixGridFn1D::<f64, 2>::new(grid);

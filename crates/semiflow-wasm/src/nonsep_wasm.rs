@@ -20,7 +20,7 @@ use alloc::sync::Arc;
 extern crate alloc;
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     nonseparable_mixed_closure, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     ScratchPool,
 };
@@ -32,7 +32,7 @@ use crate::error::{err_to_js, make_js_error};
 // Shared type alias
 // ---------------------------------------------------------------------------
 
-type Nsm = semiflow_core::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
+type Nsm = semiflow::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
 
 // ---------------------------------------------------------------------------
 // Shared helpers (mirrors strang_nd_wasm.rs)

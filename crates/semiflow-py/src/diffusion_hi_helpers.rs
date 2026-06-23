@@ -21,7 +21,7 @@ fn build_heat4th_from_arrays(
     let (policy, slice, a_fn, ap_fn, app_fn, norm) =
         extract_abc_arrays(xmin, xmax, n, a, u0, a_prime, a_double_prime, a_norm_bound, boundary)?;
     validate_u0_finite(&slice).map_err(|e| from_core(&e))?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);
     let chernoff = Diffusion4thChernoff::with_closure(a_fn, ap_fn, app_fn, norm, grid);
@@ -48,7 +48,7 @@ fn build_heat6th_from_arrays(
     let (policy, slice, a_fn, ap_fn, app_fn, norm) =
         extract_abc_arrays(xmin, xmax, n, a, u0, a_prime, a_double_prime, a_norm_bound, boundary)?;
     validate_u0_finite(&slice).map_err(|e| from_core(&e))?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);
     let chernoff = Diffusion6thChernoff::with_closure(a_fn, ap_fn, app_fn, norm, grid);
@@ -64,7 +64,7 @@ fn build_heat6th_from_arrays(
 // ---------------------------------------------------------------------------
 
 type CoeffTriple = (
-    semiflow_core::BoundaryPolicy,
+    semiflow::BoundaryPolicy,
     Vec<f64>,
     crate::handle::CoeffClosure,
     crate::handle::CoeffClosure,
@@ -166,11 +166,11 @@ fn build_vec_closure(
 /// Propagates `SemiflowError` from `ChernoffSemigroup`.
 fn compute_evolve_4th(
     func: Diffusion4thChernoff<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, input)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -182,11 +182,11 @@ fn compute_evolve_4th(
 /// Propagates `SemiflowError` from `ChernoffSemigroup`.
 fn compute_evolve_6th(
     func: Diffusion6thChernoff<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, input)?;
     Ok(sg.evolve(t, &f)?.values)

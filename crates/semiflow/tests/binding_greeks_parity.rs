@@ -31,7 +31,7 @@
 // Integration test: allows for numerical / binding wrapper patterns.
 #![allow(clippy::doc_overindented_list_items, clippy::missing_panics_doc)]
 
-use semiflow_core::{DiffusionChernoff, Dual, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Dual, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Canonical smoke parameters (§5, V8_PHASE5_BINDING_GREEKS_DESIGN.md)

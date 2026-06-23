@@ -19,7 +19,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     matrix_2d3d::{MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D},
     matrix_system::MatrixDiffusionChernoff,
     BoundaryPolicy, ChernoffSemigroup, Grid1D, Grid2D, Grid3D,
@@ -36,7 +36,7 @@ fn build_matrix_kernel(
     a_diag: f64,
     c_coupling: f64,
     axis: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     let a = a_diag;
     let c = c_coupling;
     MatrixDiffusionChernoff::<f64, 2>::new(
@@ -217,7 +217,7 @@ fn build_matrix2d(
     ymin: f64, ymax: f64, ny: usize,
     a_diag: f64, c_coupling: f64, n_steps: usize,
     u0: &[f64],
-) -> Result<InnerMatrix2D, semiflow_core::SemiflowError> {
+) -> Result<InnerMatrix2D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
@@ -227,7 +227,7 @@ fn build_matrix2d(
     Ok(InnerMatrix2D { a_diag, c_coupling, grid2d, n_steps, current: u0.to_vec() })
 }
 
-fn evolve_matrix2d(inner: &mut InnerMatrix2D, t: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn evolve_matrix2d(inner: &mut InnerMatrix2D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let g = inner.grid2d;
     let kx = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.x)?;
     let ky = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.y)?;
@@ -393,7 +393,7 @@ fn build_matrix3d(
     zmin: f64, zmax: f64, nz: usize,
     a_diag: f64, c_coupling: f64, n_steps: usize,
     u0: &[f64],
-) -> Result<InnerMatrix3D, semiflow_core::SemiflowError> {
+) -> Result<InnerMatrix3D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
@@ -403,7 +403,7 @@ fn build_matrix3d(
     Ok(InnerMatrix3D { a_diag, c_coupling, grid3d, n_steps, current: u0.to_vec() })
 }
 
-fn evolve_matrix3d(inner: &mut InnerMatrix3D, t: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn evolve_matrix3d(inner: &mut InnerMatrix3D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let g = inner.grid3d;
     let kx = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.x)?;
     let ky = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.y)?;

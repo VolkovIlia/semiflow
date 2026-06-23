@@ -58,7 +58,7 @@ use num_traits::Float;
 /// ## Example (v2.0 style)
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, State};
+/// use semiflow::{Grid1D, GridFn1D, State};
 /// let grid = Grid1D::new(-1.0, 1.0, 8).unwrap();
 /// let mut u = GridFn1D::from_fn(grid, |x| x);
 /// let v     = GridFn1D::from_fn(grid, |x| x * x);

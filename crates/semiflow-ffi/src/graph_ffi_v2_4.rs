@@ -17,8 +17,8 @@
 
 use std::sync::Arc;
 
-use semiflow_core::scratch::ScratchPool;
-use semiflow_core::{
+use semiflow::scratch::ScratchPool;
+use semiflow::{
     varcoef_magnus_graph::{VarCoefMagnusGraphHeatChernoff, WeightAtTime},
     ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian, LaplacianAtTime,
 };

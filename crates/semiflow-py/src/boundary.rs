@@ -1,8 +1,8 @@
 //! Translate the Python-facing `boundary='...'` kwarg into
-//! `semiflow_core::BoundaryPolicy`.
+//! `semiflow::BoundaryPolicy`.
 
 use pyo3::prelude::*;
-use semiflow_core::BoundaryPolicy;
+use semiflow::BoundaryPolicy;
 
 use crate::error::new_pyerr;
 

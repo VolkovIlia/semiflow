@@ -77,7 +77,7 @@ pub enum Axis {
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{
+/// use semiflow::{
 ///     chernoff::ApplyChernoffExt, Grid1D, Grid2D, GridFn2D, DiffusionChernoff, AxisLift, Axis,
 /// };
 /// let gx = Grid1D::new(-3.0, 3.0, 16).unwrap();

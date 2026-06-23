@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 use crate::graph_wasm::GraphPath;
-use semiflow_core::{ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian};
+use semiflow::{ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian};
 
 // ---------------------------------------------------------------------------
 // GraphHeat6

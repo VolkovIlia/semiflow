@@ -16,7 +16,7 @@
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::cast_possible_wrap)]
 
-use semiflow_core::{ClosureObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff};
+use semiflow::{ClosureObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff};
 
 // ---------------------------------------------------------------------------
 // Canonical parameters (mirror binding_obstacle_gamma_parity.rs)

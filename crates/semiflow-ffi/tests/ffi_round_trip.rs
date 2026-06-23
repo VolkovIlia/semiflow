@@ -7,7 +7,7 @@
 
 #![allow(unsafe_code)]
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D};
 use semiflow_ffi::{
     smf_evolve, smf_state_free, smf_state_new_heat_1d_unit,
     smf_state_new_with_closure, smf_state_size, smf_state_values, smf_status_str,

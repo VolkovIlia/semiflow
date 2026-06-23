@@ -19,7 +19,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ScratchPool,
     Strang2D, Strang3D,
 };
@@ -172,7 +172,7 @@ fn evolve_strang_2d(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut state = GridFn2D::new(grid, input)?;
     let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();
@@ -318,7 +318,7 @@ fn evolve_strang_3d(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut state = GridFn3D::new(grid, input)?;
     let mut dst = GridFn3D::new(grid, vec![0.0; state.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();
@@ -340,13 +340,13 @@ fn build_strang2d(
     ny: usize,
     ax_vals: Vec<f64>,
     ay_vals: Vec<f64>,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> Result<
     (
         Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>,
         Grid2D<f64>,
     ),
-    semiflow_core::SemiflowError,
+    semiflow::SemiflowError,
 > {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(policy);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(policy);
@@ -390,13 +390,13 @@ fn build_strang3d(
     ax_vals: Vec<f64>,
     ay_vals: Vec<f64>,
     az_vals: Vec<f64>,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> Result<
     (
         Strang3D<DiffusionChernoff<f64>, DiffusionChernoff<f64>, DiffusionChernoff<f64>>,
         Grid3D<f64>,
     ),
-    semiflow_core::SemiflowError,
+    semiflow::SemiflowError,
 > {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(policy);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(policy);

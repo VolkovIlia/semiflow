@@ -31,7 +31,7 @@
     clippy::similar_names
 )]
 
-use semiflow_core::{
+use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind, ReverseChernoff,
 };
 
@@ -262,7 +262,7 @@ fn g_binding_reverse_ad_parity_grad_fd_anchor() {
 /// boundary.
 #[test]
 fn g_binding_reverse_ad_parity_kvec_fails_loud() {
-    use semiflow_core::SemiflowError;
+    use semiflow::SemiflowError;
 
     let rc = build_canonical_rc();
     let grid = Grid1D::<f64>::new(X_MIN, X_MAX, N_GRID)

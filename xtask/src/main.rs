@@ -1,4 +1,4 @@
-//! xtask — build/lint helpers for semiflow-core workspace.
+//! xtask — build/lint helpers for semiflow workspace.
 //!
 //! Subcommands:
 //!   check-lints        — walk `crates/*/src/**/*.rs`, check ≤50 lines/fn, ≤500 lines/file
@@ -354,7 +354,7 @@ fn gen_stubs() -> Result<()> {
 
     let stubs_dir = root
         .join("crates")
-        .join("semiflow-core")
+        .join("semiflow")
         .join("src")
         .join("_stubs");
     std::fs::create_dir_all(&stubs_dir)?;
@@ -428,12 +428,12 @@ fn build_stub_text(contract: &Path) -> Result<String> {
 // bench-baseline: run cargo bench and archive criterion output.
 // ---------------------------------------------------------------------------
 
-/// Run `cargo bench -p semiflow-core` and copy criterion output to bench/baseline.json.
+/// Run `cargo bench -p semiflow` and copy criterion output to bench/baseline.json.
 fn bench_baseline() -> Result<()> {
     let root = workspace_root()?;
 
     let status = process::Command::new("cargo")
-        .args(["bench", "-p", "semiflow-core"])
+        .args(["bench", "-p", "semiflow"])
         .current_dir(&root)
         .status()?;
 
@@ -475,7 +475,7 @@ fn bench_baseline() -> Result<()> {
 ///
 /// Equivalent to:
 /// ```text
-/// RUSTFLAGS="-C target-cpu=native" cargo bench -p semiflow-core \
+/// RUSTFLAGS="-C target-cpu=native" cargo bench -p semiflow \
 ///   --features parallel,simd \
 ///   --bench strang2d_parallel \
 ///   --bench strang3d_parallel \
@@ -494,7 +494,7 @@ fn bench_parallel() -> Result<()> {
     let cmd_args = [
         "bench",
         "-p",
-        "semiflow-core",
+        "semiflow",
         "--features",
         "parallel,simd",
         "--bench",

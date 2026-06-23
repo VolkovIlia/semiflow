@@ -14,7 +14,7 @@
 #![allow(clippy::needless_range_loop)]   // Matrix loops use cross-index arithmetic (i,j,k)
 #![allow(clippy::unusual_byte_groupings)] // 0xC0FFEE_BABE_DEAD_BEEF is a mnemonic seed constant
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
 };
 

@@ -39,7 +39,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 use crate::graph_wasm::GraphPath;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Graph, GraphSignal, Laplacian,
     GraphHeat4thChernoff as CoreGraphHeat4th,
     VarCoefGraphHeatChernoff as CoreVarCoefGraphHeat,

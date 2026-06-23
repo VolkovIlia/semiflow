@@ -6,7 +6,7 @@
 //! - Closed-over state is accessible inside the closure.
 //! - `DiffusionChernoff<f64>: Send + Sync` still holds.
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -20,7 +20,7 @@
 //! the Mickens-improvement: M4 error ≤ 1.05×M2 error (no regression), optionally
 //! ≤ 0.5×M2 (3× tighter, demonstrating the constant reduction).
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff,
     TruncatedExpDiffusionChernoff,
 };
@@ -47,7 +47,7 @@ const T_FINAL: f64 = 0.5;
 /// Helper for `variable_a_no_regression_vs_trunc_exp_v040` to keep it ≤50 lines.
 #[allow(clippy::cast_precision_loss)] // N_REF_STEPS = 8000; well within f64 mantissa
 fn build_reference(n_ref: usize, n_ref_steps: usize) -> (Grid1D, crate::GridFn1D) {
-    use semiflow_core::GridFn1D;
+    use semiflow::GridFn1D;
     let grid_ref = Grid1D::new(X_MIN, X_MAX, n_ref).expect("ref grid valid");
     let dx_ref = grid_ref.dx();
     let tau_ref = T_FINAL / n_ref_steps as f64;

@@ -20,7 +20,7 @@
 // Integration test/example: allows for numerical patterns.
 #![allow(clippy::cast_precision_loss, clippy::needless_pass_by_value)]
 
-use semiflow_core::{Evolver, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal};
+use semiflow::{Evolver, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal};
 
 const MASS_TOL: f64 = 0.03; // 3% drift tolerance
 const T_FINAL: f64 = 0.8; // long enough to exercise diffusion through hub

@@ -10,7 +10,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -188,11 +188,11 @@ fn build_killing2nd(
     n: usize,
     kappa: f64,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Killing2ndInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Killing2ndInner, semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });
@@ -213,7 +213,7 @@ fn compute_killing2nd(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let src = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &src)?.values)

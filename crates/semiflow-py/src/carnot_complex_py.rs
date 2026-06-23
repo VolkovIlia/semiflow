@@ -30,7 +30,7 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     ComplexTripleJump, Grid1D,
 };
@@ -149,7 +149,7 @@ impl PyComplexTripleJumpV8 {
             let hi = self.inner.domain_hi;
             let n = self.inner.n_per_axis;
             // Phase 2: pure-Rust compute — release GIL.
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| run_cplx_triple(lo, hi, n, tau, &u0_vec));
             let out = result.map_err(|e| from_core(&e))?;
             // Phase 3: marshal to numpy under GIL.
@@ -183,7 +183,7 @@ fn run_cplx_triple(
     n: usize,
     tau: f64,
     u0: &[f64],
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let grid = build_grid(lo, hi, n)?;
     let src = GridFnND::new(grid, u0.to_vec())?;
     let kernel = ComplexTripleJump::new()?;
@@ -195,7 +195,7 @@ fn run_cplx_triple(
 // Builders (per-crate dup, ADR-0028 Amdt 2)
 // ---------------------------------------------------------------------------
 
-fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow_core::SemiflowError> {
+fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }

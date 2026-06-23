@@ -10,7 +10,7 @@
 //!
 //! Reference: v0.5.0 tag (commit 120262a).
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn1D, GridFn2D, Strang2D,
 };
 

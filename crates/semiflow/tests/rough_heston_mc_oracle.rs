@@ -39,7 +39,7 @@
 // Numerical patterns expected in financial/MC code.
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, Grid1D, MatrixDiffusionChernoff,
     MatrixGridFn1D,
 };

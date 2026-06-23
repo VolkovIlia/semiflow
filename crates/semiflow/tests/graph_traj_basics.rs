@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph_traj::{GraphTraj, SegmentWeightFn, MAX_GRAPH_TRAJ_SEGMENTS},
     Graph, Laplacian, SemiflowError,
 };

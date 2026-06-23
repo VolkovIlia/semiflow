@@ -15,7 +15,7 @@
 //! `contracts/semiflow-core.properties.yaml` `grid_fn_2d_axpy_separability`.
 
 use proptest::prelude::*;
-use semiflow_core::{Grid1D, Grid2D, GridFn2D, State};
+use semiflow::{Grid1D, Grid2D, GridFn2D, State};
 
 // ---------------------------------------------------------------------------
 // Helpers

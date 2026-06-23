@@ -10,7 +10,7 @@
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     ChernoffSemigroup, Grid1D,
 };
@@ -134,7 +134,7 @@ impl PyMatrixDiffusion1D {
             let a_d = self.a_diag;
             let c_c = self.c_coupling;
             let vals: Vec<f64> = self.current.values.clone();
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_matrix(a_d, c_c, grid, vals, t, n_steps));
             let out = result.map_err(|e| from_core(&e))?;
             self.current.values.copy_from_slice(&out);
@@ -176,7 +176,7 @@ pub(crate) fn build_matrix_kernel(
     a_diag: f64,
     c_coupling: f64,
     grid: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     let a_d = a_diag;
     let c_c = c_coupling;
     MatrixDiffusionChernoff::<f64, 2>::new(
@@ -210,7 +210,7 @@ fn evolve_matrix(
     vals: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = build_matrix_kernel(a_diag, c_coupling, grid)?;
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let mut src = MatrixGridFn1D::<f64, 2>::new(grid);

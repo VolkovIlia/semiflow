@@ -11,7 +11,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines, clippy::unused_self)]
 
-use semiflow_core::{
+use semiflow::{
     grid::{BoundaryPolicy, InterpKind},
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, StrangSplit,
 };

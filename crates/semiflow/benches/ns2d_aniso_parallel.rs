@@ -27,7 +27,7 @@ use std::time::Duration;
 use criterion::{
     black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
-use semiflow_core::{
+use semiflow::{
     strang2d_parallel::FORCE_THREADS, ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D,
     GridFn2D, NonSeparable2DAnisotropicChernoff,
 };

@@ -38,7 +38,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, Diffusion4thChernoff, Diffusion4thZeta4Chernoff,
     Diffusion6thZeta6Chernoff, Diffusion8thZeta8Chernoff, Grid1D, GridFn1D, ScratchPool,
 };

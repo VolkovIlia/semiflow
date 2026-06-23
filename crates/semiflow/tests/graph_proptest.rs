@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use proptest::prelude::*;
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,

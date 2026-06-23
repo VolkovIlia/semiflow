@@ -47,7 +47,7 @@ use std::sync::Arc;
 use numpy::ToPyArray;
 use pyo3::prelude::*;
 
-use semiflow_core::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
+use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 
 use crate::dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype};
 use crate::graph_heat_f32::compute_graph_heat_f32;
@@ -186,7 +186,7 @@ impl GraphHeat {
                 Dtype::F64 => {
                     let chernoff = self.chernoff.clone();
                     let graph = Arc::clone(&self.graph);
-                    let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+                    let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
                         compute_graph_heat(chernoff, graph, &input, t_final, n_steps_usize)
                     });
                     let arr = result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py);
@@ -194,7 +194,7 @@ impl GraphHeat {
                 }
                 Dtype::F32 => {
                     let graph = Arc::clone(&self.graph);
-                    let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+                    let result: Result<Vec<f64>, semiflow::SemiflowError> =
                         py.detach(|| compute_graph_heat_f32(graph, &input, t_final, n_steps_usize));
                     let out_f64 = result.map_err(|e| from_core(&e))?;
                     let out_f32: Vec<f32> = cast_f64_to_f32(&out_f64);
@@ -220,7 +220,7 @@ fn compute_graph_heat(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(chernoff, n_steps)?;
     let f0 = GraphSignal::from_fn(graph, |i| input[i as usize]);
     let result = sg.evolve(t_final, &f0)?;
@@ -433,7 +433,7 @@ pub(crate) fn build_graph_heat_from_laplacian_any(obj: &Bound<'_, PyAny>) -> PyR
 pub(crate) fn make_lap_at_t_f32(
     callback: Py<PyAny>,
     graph: Arc<Graph<f64>>,
-) -> semiflow_core::LaplacianAtTime<f32> {
+) -> semiflow::LaplacianAtTime<f32> {
     use crate::graph_heat_f32::build_lap_f32_from_lap_f64;
     // LaplacianAtTime<f32> = Box<dyn Fn(f32) -> Arc<Laplacian<f32>> + ...>
     Box::new(move |t: f32| {

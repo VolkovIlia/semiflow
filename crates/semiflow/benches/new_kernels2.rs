@@ -32,7 +32,7 @@
 use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use semiflow_core::{
+use semiflow::{
     howland::{HowlandLift, HowlandState},
     ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn1D, GridFn2D, Hyperbolic2,
     ManifoldChernoff, ScratchPool, Sphere2,

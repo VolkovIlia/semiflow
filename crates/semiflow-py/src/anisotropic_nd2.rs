@@ -14,7 +14,7 @@
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     nonseparable_mixed_closure, ChernoffFunction, DiffusionChernoff, Grid2D, GridFn2D, ScratchPool,
 };
 
@@ -29,7 +29,7 @@ use crate::{
 
 /// Concrete `NonSeparableMixed` type for the aniso variant.
 type NsmAniso =
-    semiflow_core::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
+    semiflow::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
 
 // ===========================================================================
 // NonSeparable2DAniso — position-dependent beta coupling (M20)
@@ -192,7 +192,7 @@ fn evolve_nonsep_aniso(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut state = GridFn2D::new(grid, input)?;
     let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

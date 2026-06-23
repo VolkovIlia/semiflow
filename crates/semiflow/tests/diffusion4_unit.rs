@@ -9,7 +9,7 @@
 
 use core::cell::Cell;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     BoundaryPolicy, Diffusion4thChernoff, DiffusionChernoff, Grid1D, GridFn1D,
 };

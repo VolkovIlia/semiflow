@@ -50,8 +50,8 @@
 
 use core::f64::consts::PI;
 
-use semiflow_core::killing::{BoxRegion, KillingChernoff};
-use semiflow_core::{
+use semiflow::killing::{BoxRegion, KillingChernoff};
+use semiflow::{
     BoundaryPolicy, ChernoffFunction, ClosureObstacle, ConstantObstacle, DiffusionChernoff,
     DriftReactionChernoff, Grid1D, GridFn1D, ObstacleChernoff, ScratchPool,
 };
@@ -633,7 +633,7 @@ fn g_obstacle_gamma() {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "slow-tests")]
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     obstacle_nd::ObstacleChernoffND,
 };
@@ -653,15 +653,15 @@ impl ChernoffFunction<f64> for IdentityND2D {
         src: &Self::S,
         dst: &mut Self::S,
         _s: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::error::SemiflowError> {
+    ) -> Result<(), semiflow::error::SemiflowError> {
         dst.values.clone_from(&src.values);
         Ok(())
     }
     fn order(&self) -> u32 {
         1
     }
-    fn growth(&self) -> semiflow_core::chernoff::Growth<f64> {
-        semiflow_core::chernoff::Growth::contraction()
+    fn growth(&self) -> semiflow::chernoff::Growth<f64> {
+        semiflow::chernoff::Growth::contraction()
     }
 }
 
@@ -691,7 +691,7 @@ impl ChernoffFunction<f64> for HeatND2D {
         src: &Self::S,
         dst: &mut Self::S,
         _s: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::error::SemiflowError> {
+    ) -> Result<(), semiflow::error::SemiflowError> {
         let nx = self.axes[0].n;
         let ny = self.axes[1].n;
         let dx = (self.axes[0].xmax - self.axes[0].xmin) / (nx - 1) as f64;
@@ -719,8 +719,8 @@ impl ChernoffFunction<f64> for HeatND2D {
     fn order(&self) -> u32 {
         1
     }
-    fn growth(&self) -> semiflow_core::chernoff::Growth<f64> {
-        semiflow_core::chernoff::Growth::contraction()
+    fn growth(&self) -> semiflow::chernoff::Growth<f64> {
+        semiflow::chernoff::Growth::contraction()
     }
 }
 

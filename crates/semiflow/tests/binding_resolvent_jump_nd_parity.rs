@@ -30,7 +30,7 @@
 // Integration test: allows for numerical / binding wrapper patterns.
 #![allow(clippy::missing_panics_doc)]
 
-use semiflow_core::{
+use semiflow::{
     Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ResolventJumpChernoff2D, ResolventJumpChernoff3D,
 };
 

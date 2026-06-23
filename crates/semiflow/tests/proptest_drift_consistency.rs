@@ -22,7 +22,7 @@
 use core::cell::Cell;
 
 use proptest::prelude::*;
-use semiflow_core::{chernoff::ApplyChernoffExt, DriftReactionChernoff, Grid1D, GridFn1D};
+use semiflow::{chernoff::ApplyChernoffExt, DriftReactionChernoff, Grid1D, GridFn1D};
 
 // Thread-local slots for the constant coefficient values per proptest case.
 thread_local! {

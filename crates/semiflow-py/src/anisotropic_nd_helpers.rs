@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     grid_nd::GridND, shift_nd::AnisotropicShiftChernoffND, BoundaryPolicy, Grid1D, Grid2D,
 };
 
@@ -210,7 +210,7 @@ pub(crate) fn build_aniso_nd3_kernel(
     a_raw: Vec<f64>,
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
-) -> Result<AnisotropicShiftChernoffND<f64, 3>, semiflow_core::SemiflowError> {
+) -> Result<AnisotropicShiftChernoffND<f64, 3>, semiflow::SemiflowError> {
     let grid_nd = build_grid_nd3(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz)?;
     let (a_arc2, b_arc2, c_arc2, ns, axes, axes2, axes3) = pack_nd3_arcs(
         nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw,
@@ -250,7 +250,7 @@ fn build_grid_nd3(
     zmin: f64,
     zmax: f64,
     nz: usize,
-) -> Result<GridND<f64, 3>, semiflow_core::SemiflowError> {
+) -> Result<GridND<f64, 3>, semiflow::SemiflowError> {
     GridND::<f64, 3>::new([
         Grid1D::new(xmin, xmax, nx)?,
         Grid1D::new(ymin, ymax, ny)?,

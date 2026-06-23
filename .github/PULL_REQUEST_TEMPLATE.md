@@ -13,7 +13,7 @@
 
 ## Affected crates
 
-- [ ] `semiflow-core`
+- [ ] `semiflow`
 - [ ] `semiflow-ffi`
 - [ ] `semiflow-py`
 - [ ] `semiflow-wasm`
@@ -22,7 +22,7 @@
 
 - [ ] Updates `contracts/semiflow-core.math.md` §___
 - [ ] New ADR: `docs/adr/NNNN-___.md`
-- [ ] Sympy gate added/updated: `crates/semiflow-core/sympy/___.py`
+- [ ] Sympy gate added/updated: `crates/semiflow/sympy/___.py`
 
 ## Verification
 

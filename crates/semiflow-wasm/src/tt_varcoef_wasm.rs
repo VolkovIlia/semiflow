@@ -34,7 +34,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use js_sys::{Float64Array, Uint32Array};
-use semiflow_core::VarCoefTt;
+use semiflow::VarCoefTt;
 use wasm_bindgen::prelude::*;
 
 use crate::error::make_js_error;

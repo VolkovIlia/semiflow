@@ -62,7 +62,7 @@ pub use crate::schrodinger_complex_state::GridFnComplex1D;
 /// ## Construction
 ///
 /// ```rust,no_run
-/// # use semiflow_core::{Grid1D, schrodinger_complex::{SchrödingerChernoffComplex, GridFnComplex1D}};
+/// # use semiflow::{Grid1D, schrodinger_complex::{SchrödingerChernoffComplex, GridFnComplex1D}};
 /// # use num_complex::Complex;
 /// let grid  = Grid1D::<f64>::new(-10.0, 10.0, 512).unwrap();
 /// let v_fn  = |x: f64| 0.5 * x * x;                      // harmonic oscillator

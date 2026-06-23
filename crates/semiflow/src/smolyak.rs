@@ -222,7 +222,7 @@ type ReactionFn<F, const D: usize> = alloc::boxed::Box<dyn Fn(&[F; D]) -> F + Se
 /// # Construction
 ///
 /// ```rust,ignore
-/// # use semiflow_core::{Grid1D, smolyak::SmolyakGridND, grid_nd::GridND};
+/// # use semiflow::{Grid1D, smolyak::SmolyakGridND, grid_nd::GridND};
 /// # let ax = Grid1D::new(-5.0_f64, 5.0, 8).unwrap();
 /// # let grid = GridND::<f64, 5>::new([ax; 5]).unwrap();
 /// let kernel = SmolyakGridND::<f64, 5>::new(

@@ -39,7 +39,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     AnisotropicShiftChernoffND, ChernoffFunction, ConstantObstacle, DiffusionChernoff, Grid1D,
     GridFn1D, GridFnND, GridND, ObstacleChernoff, ObstacleChernoffND, ScratchPool, SquareMatrix,
 };
@@ -71,7 +71,7 @@ impl GammaVariant {
         v: &GridFn1D<f64>,
         gamma: &mut GridFn1D<f64>,
         defined: &mut [bool],
-    ) -> Result<usize, semiflow_core::SemiflowError> {
+    ) -> Result<usize, semiflow::SemiflowError> {
         match self {
             Self::Const(k) => k.apply_inactive_gamma_into(v, gamma, defined),
             Self::Array(k) => k.apply_inactive_gamma_into(v, gamma, defined),
@@ -352,7 +352,7 @@ fn run_nd_step_2d(
     v_vals: &[f64],
     level: f64,
     tau: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let src = GridFnND::new(grid_nd.clone(), v_vals.to_vec())?;
     let mut dst = GridFnND::new(grid_nd.clone(), vec![0.0_f64; v_vals.len()])?;
     // Unit-isotropic diffusion inner: a = I, b = 0, c = 0.

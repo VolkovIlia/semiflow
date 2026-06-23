@@ -17,7 +17,7 @@
 //! When `ChernoffFunction<f32>` is implemented for `DiffusionChernoff<f32>` in
 //! a future wave, add `AdaptivePI::<_, f32>` integration tests here.
 
-use semiflow_core::{
+use semiflow::{
     grid::BoundaryPolicy, AdaptivePI, ClassicalPI, DiffusionChernoff, Grid1D, GridFn1D,
     H211bFilter, State, StepController,
 };

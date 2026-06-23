@@ -18,7 +18,7 @@
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; len ≤ 4 ≤ 2^52
 #![allow(clippy::similar_names)]       // u_n/u_2n are standard PDE convergence names
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, Grid2D, Grid3D, MatrixDiffusionChernoff, MatrixDiffusionChernoff2D,
     MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D, ScratchPool,
 };

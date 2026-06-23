@@ -29,7 +29,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-use semiflow_core::{TtChernoff, TtState};
+use semiflow::{TtChernoff, TtState};
 
 use crate::error::new_pyerr;
 use crate::panic::catch_panic_py;

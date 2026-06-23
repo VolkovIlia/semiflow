@@ -2,11 +2,11 @@
 //!
 //! Policy (directory-level):
 //!
-//! **semiflow-core** — STRICT.  `unsafe` is permitted only in:
-//! - `crates/semiflow-core/src/simd/`  — AVX2/NEON intrinsics (ADR-0019)
-//! - `crates/semiflow-core/examples/cev_european_call.rs`  — GlobalAlloc instrumentation
-//! - `crates/semiflow-core/examples/latency_tail.rs`       — GlobalAlloc instrumentation
-//! - `crates/semiflow-core/tests/`  — prose in test comments references the word "unsafe"
+//! **semiflow** — STRICT.  `unsafe` is permitted only in:
+//! - `crates/semiflow/src/simd/`  — AVX2/NEON intrinsics (ADR-0019)
+//! - `crates/semiflow/examples/cev_european_call.rs`  — GlobalAlloc instrumentation
+//! - `crates/semiflow/examples/latency_tail.rs`       — GlobalAlloc instrumentation
+//! - `crates/semiflow/tests/`  — prose in test comments references the word "unsafe"
 //!
 //! **Binding crates** — ALLOWED crate-wide (ADR-0028).  Each binding crate carries a
 //! crate-level `#![allow(unsafe_code)]` because every file is an FFI / PyO3 /
@@ -24,19 +24,19 @@ use walkdir::WalkDir;
 /// Directory-level prefixes (relative to workspace root) where `unsafe` is
 /// permitted in source files.
 ///
-/// semiflow-core is STRICT: only the simd/ subtree, two GlobalAlloc examples,
+/// semiflow is STRICT: only the simd/ subtree, two GlobalAlloc examples,
 /// and tests/ (prose references) are allowed (ADR-0019).
 ///
 /// Binding crates carry a crate-level `#![allow(unsafe_code)]` and are allowed
 /// crate-wide because every file is an FFI / PyO3 / wasm-bindgen boundary
 /// (ADR-0028).
 const ALLOWED_PREFIXES: &[&str] = &[
-    // semiflow-core: STRICT — unsafe permitted only in SIMD intrinsics (ADR-0019),
+    // semiflow: STRICT — unsafe permitted only in SIMD intrinsics (ADR-0019),
     // two GlobalAlloc instrumentation examples, and test prose.
-    "crates/semiflow-core/src/simd/",
-    "crates/semiflow-core/examples/cev_european_call.rs",
-    "crates/semiflow-core/examples/latency_tail.rs",
-    "crates/semiflow-core/tests/",
+    "crates/semiflow/src/simd/",
+    "crates/semiflow/examples/cev_european_call.rs",
+    "crates/semiflow/examples/latency_tail.rs",
+    "crates/semiflow/tests/",
     // Binding crates are FFI/PyO3/wasm-bindgen boundaries — unsafe is expected
     // crate-wide (each carries crate-level #![allow(unsafe_code)] per ADR-0028).
     "crates/semiflow-ffi/",

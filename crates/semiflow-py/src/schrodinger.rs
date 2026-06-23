@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use numpy::{Complex64, PyArray1};
 use pyo3::prelude::*;
-use semiflow_core::{SchrodingerChernoff, SchrodingerState};
+use semiflow::{SchrodingerChernoff, SchrodingerState};
 
 use crate::{
     boundary::parse_boundary,

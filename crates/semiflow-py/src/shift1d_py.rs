@@ -23,7 +23,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::{prelude::*, types::PyAnyMethods};
-use semiflow_core::{ChernoffFunction, ChernoffSemigroup, GridFn1D, ScratchPool, ShiftChernoff1D};
+use semiflow::{ChernoffFunction, ChernoffSemigroup, GridFn1D, ScratchPool, ShiftChernoff1D};
 
 use crate::{
     boundary::parse_boundary,
@@ -263,10 +263,10 @@ pub(crate) fn build_shift_scalar(
     a_val: f64,
     b_val: f64,
     c_val: f64,
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Shift1DInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Shift1DInner, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let a_fn = move |_: f64| a_val;
     let b_fn = move |_: f64| b_val;
     let c_fn = move |_: f64| c_val;
@@ -300,7 +300,7 @@ fn build_shift_from_arrays(
     let a_fn = closure_from_array(a, xmin, xmax, n)?;
     let b_fn = closure_from_array(b, xmin, xmax, n)?;
     let c_fn = closure_from_array(c, xmin, xmax, n)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);
     let chernoff = ShiftChernoff1D::with_closure(a_fn, b_fn, c_fn, c_norm_bound, grid);
@@ -321,11 +321,11 @@ fn build_shift_from_arrays(
 /// Propagates `SemiflowError` from `ChernoffSemigroup`.
 fn compute_evolve_shift(
     func: ShiftChernoff1D<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, input)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -338,14 +338,14 @@ fn compute_evolve_shift(
 /// ``a_k`` and runs ``n_steps_per_segment`` `apply_into` steps.
 /// No Python objects are captured; safe to call inside `py.detach`.
 fn compute_shift_time_schedule(
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     t_final: f64,
     n_steps_per_segment: usize,
     a_schedule: Vec<f64>,
     b_val: f64,
     c_val: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let n_segments = a_schedule.len();
     #[allow(clippy::cast_precision_loss)]
     let dt = t_final / n_segments as f64;
@@ -382,10 +382,10 @@ fn validate_evolve_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

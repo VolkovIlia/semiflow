@@ -9,7 +9,7 @@
 //!    `AdaptiveStepRejected`.
 //! 6. `last_tau_is_finite` — `outcome.last_tau` is always finite after clean run.
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, AdaptivePI, BoundaryPolicy, Diffusion4thChernoff, DiffusionChernoff,
     Grid1D, GridFn1D, SemiflowError,
 };

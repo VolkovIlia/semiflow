@@ -40,7 +40,7 @@ fn make_u0() -> Vec<f64> {
 }
 
 fn run_sweep_wasm_mirror(schedule: &[f64], u0: &[f64], c: f64, t: f64, t_offset: f64) -> Vec<f64> {
-    use semiflow_core::{
+    use semiflow::{
         error::SemiflowError,
         reflection::{HalfSpaceRegion, ReflectingRegion},
         robin::RobinRegion,

@@ -31,7 +31,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, Grid1D, ScratchPool,
@@ -157,7 +157,7 @@ impl PyAnisotropicShiftND2 {
             let kernel = std::sync::Arc::clone(&self.kernel);
             let grid = self.grid.clone();
             let input = self.current.clone();
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_nd_2(kernel, grid, input, tau, n_steps));
             self.current = result.map_err(|e| from_core(&e))?;
             Ok(())
@@ -193,7 +193,7 @@ fn evolve_nd_2(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFnND::<f64, 2>::new(grid.clone(), input)?;
     let mut dst = GridFnND::<f64, 2>::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();
@@ -215,7 +215,7 @@ fn build_aniso_nd2_kernel(
     a_raw: Vec<f64>,
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
-) -> Result<AnisotropicShiftChernoffND<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<AnisotropicShiftChernoffND<f64, 2>, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let grid_nd = GridND::<f64, 2>::new([gx, gy])?;
@@ -358,7 +358,7 @@ impl PyAnisotropicShiftND3 {
             let kernel = std::sync::Arc::clone(&self.kernel);
             let grid = self.grid.clone();
             let input = self.current.clone();
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_nd_3(kernel, grid, input, tau, n_steps));
             self.current = result.map_err(|e| from_core(&e))?;
             Ok(())
@@ -394,7 +394,7 @@ fn evolve_nd_3(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFnND::<f64, 3>::new(grid.clone(), input)?;
     let mut dst = GridFnND::<f64, 3>::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

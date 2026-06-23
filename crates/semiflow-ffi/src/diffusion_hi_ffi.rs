@@ -30,7 +30,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff, Grid1D,
     GridFn1D,
 };
@@ -333,7 +333,7 @@ fn build_inner4(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<Inner4th, semiflow_core::SemiflowError> {
+) -> Result<Inner4th, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let chernoff = Diffusion4thChernoff::new(unit_a_hi, zero_d_hi, zero_d_hi, 1.0, grid);
@@ -348,7 +348,7 @@ fn build_inner6(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<Inner6th, semiflow_core::SemiflowError> {
+) -> Result<Inner6th, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let chernoff = Diffusion6thChernoff::new(unit_a_hi, zero_d_hi, zero_d_hi, 1.0, grid);
@@ -360,7 +360,7 @@ fn build_inner6(
 fn evolve_4th(
     inner: &mut Inner4th,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())
@@ -369,7 +369,7 @@ fn evolve_4th(
 fn evolve_6th(
     inner: &mut Inner6th,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

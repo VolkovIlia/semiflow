@@ -36,7 +36,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},
     robin::RobinRegion,

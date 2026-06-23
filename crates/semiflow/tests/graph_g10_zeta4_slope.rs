@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_heat4::GraphHeat4thChernoff,
     graph_signal::GraphSignal,

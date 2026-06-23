@@ -24,7 +24,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::cast_possible_truncation)] // D as u32: D=5, well within u32
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     ComplexTripleJump, Grid1D,
 };

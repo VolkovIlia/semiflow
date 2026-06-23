@@ -34,7 +34,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, ConstantObstacle, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D,
     ObstacleChernoff, ScratchPool, StrangSplit,
 };
@@ -57,10 +57,10 @@ pub(crate) struct ArrayObstacle {
 
 impl ArrayObstacle {
     /// Validate that `values` has no NaN/Inf.
-    pub(crate) fn new(values: Vec<f64>) -> Result<Self, semiflow_core::SemiflowError> {
+    pub(crate) fn new(values: Vec<f64>) -> Result<Self, semiflow::SemiflowError> {
         for &v in &values {
             if !v.is_finite() {
-                return Err(semiflow_core::SemiflowError::DomainViolation {
+                return Err(semiflow::SemiflowError::DomainViolation {
                     what: "ArrayObstacle: obstacle_array contains NaN or Inf",
                     value: v,
                 });
@@ -70,14 +70,14 @@ impl ArrayObstacle {
     }
 }
 
-impl semiflow_core::Obstacle<f64> for ArrayObstacle {
+impl semiflow::Obstacle<f64> for ArrayObstacle {
     fn value_at(&self, _point: &[f64]) -> f64 {
         0.0
     }
 
-    fn project_in_place(&self, dst: &mut GridFn1D<f64>) -> Result<(), semiflow_core::SemiflowError> {
+    fn project_in_place(&self, dst: &mut GridFn1D<f64>) -> Result<(), semiflow::SemiflowError> {
         if dst.values.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "ArrayObstacle::project_in_place: obstacle length != grid n",
                 value: self.values.len() as f64,
             });
@@ -94,9 +94,9 @@ impl semiflow_core::Obstacle<f64> for ArrayObstacle {
         &self,
         w: &GridFn1D<f64>,
         active: &mut [bool],
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         if active.len() != w.grid.n || active.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "ArrayObstacle::active_set_into: length mismatch",
                 value: active.len() as f64,
             });
@@ -149,7 +149,7 @@ impl ObstacleVariant {
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             Self::Const(k) => k.apply_into(tau, src, dst, scratch),
             Self::Array(k) => k.apply_into(tau, src, dst, scratch),
@@ -165,7 +165,7 @@ impl ObstacleVariant {
         lam: &GridFn1D<f64>,
         lam_next: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             Self::Const(k) => k.apply_active_set_adjoint_into(tau, w_fwd, lam, lam_next, scratch),
             Self::Array(k) => k.apply_active_set_adjoint_into(tau, w_fwd, lam, lam_next, scratch),
@@ -325,7 +325,7 @@ fn run_evolve(
     input: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     #[allow(clippy::cast_precision_loss)]
     let tau = t / n_steps as f64;
     let mut src = GridFn1D::new(grid, input)?;
@@ -344,7 +344,7 @@ fn run_adjoint_step(
     w_fwd_vals: Vec<f64>,
     lam_vals: Vec<f64>,
     tau: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let w_fwd = GridFn1D::new(grid, w_fwd_vals)?;
     let lam = GridFn1D::new(grid, lam_vals)?;
     let mut lam_next = lam.zeroed_like();
@@ -367,10 +367,10 @@ fn validate_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-fn validate_u0(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

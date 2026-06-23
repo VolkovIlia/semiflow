@@ -34,8 +34,8 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow_core::chernoff::ApplyChernoffExt;
-use semiflow_core::{
+use semiflow::chernoff::ApplyChernoffExt;
+use semiflow::{
     Diffusion4thChernoff, DiffusionChernoff, DriftReactionChernoff, Dual, Grid1D, GridFn1D,
     InterpKind,
 };
@@ -117,7 +117,7 @@ where
     K: Fn(
         Dual<f64>,
         &GridFn1D<Dual<f64>>,
-    ) -> Result<GridFn1D<Dual<f64>>, semiflow_core::error::SemiflowError>,
+    ) -> Result<GridFn1D<Dual<f64>>, semiflow::error::SemiflowError>,
 {
     let mut u = u0.clone();
     for _ in 0..N_STEPS {

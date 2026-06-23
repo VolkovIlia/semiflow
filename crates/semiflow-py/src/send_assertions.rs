@@ -15,7 +15,7 @@
 
 #[cfg(test)]
 mod tests {
-    use semiflow_core::{
+    use semiflow::{
         AdaptivePI, AdjointChernoff, ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff,
         DiffusionChernoff, DriftReactionChernoff, Graph, GraphHeatChernoff, GraphSignal, Grid1D,
         Grid2D, Grid3D, GridFn1D, GridFn3D, NonSeparableMixedChernoff, SchrodingerChernoff,
@@ -103,47 +103,47 @@ mod tests {
 
     // Phase 5 graph types (v2.3 Phase 5).
     // `Laplacian<f64>` holds `Vec<usize>`, `Vec<u32>`, `Vec<f64>`, scalar — auto Send+Sync.
-    assert_impl_all!(semiflow_core::Laplacian<f64>: Send, Sync);
+    assert_impl_all!(semiflow::Laplacian<f64>: Send, Sync);
     // `GraphHeat4thChernoff<f64>` holds `Arc<Laplacian<f64>>` — auto Send+Sync.
-    assert_impl_all!(semiflow_core::GraphHeat4thChernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::GraphHeat4thChernoff<f64>: Send, Sync);
     // `ChernoffSemigroup<GraphHeat4thChernoff<f64>, GraphSignal<f64>>` inherits.
     assert_impl_all!(
-        ChernoffSemigroup<semiflow_core::GraphHeat4thChernoff<f64>, GraphSignal<f64>>: Send, Sync
+        ChernoffSemigroup<semiflow::GraphHeat4thChernoff<f64>, GraphSignal<f64>>: Send, Sync
     );
     // `VarCoefGraphHeatChernoff<f64>` holds `Arc<Graph>`, `Arc<Laplacian>`, `Vec<f64>` — Send+Sync.
-    assert_impl_all!(semiflow_core::VarCoefGraphHeatChernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::VarCoefGraphHeatChernoff<f64>: Send, Sync);
     assert_impl_all!(
-        ChernoffSemigroup<semiflow_core::VarCoefGraphHeatChernoff<f64>, GraphSignal<f64>>: Send, Sync
+        ChernoffSemigroup<semiflow::VarCoefGraphHeatChernoff<f64>, GraphSignal<f64>>: Send, Sync
     );
 
     // ADR-0111 Wave P1 types.
     // All four kernel types are f64 fn-pointer / scalar structs — auto Send+Sync.
-    assert_impl_all!(semiflow_core::Diffusion8thZeta8Chernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::Diffusion8thZeta8Chernoff<f64>: Send, Sync);
     assert_impl_all!(
-        ChernoffSemigroup<semiflow_core::Diffusion8thZeta8Chernoff<f64>, GridFn1D<f64>>:
+        ChernoffSemigroup<semiflow::Diffusion8thZeta8Chernoff<f64>, GridFn1D<f64>>:
             Send, Sync
     );
-    assert_impl_all!(semiflow_core::TruncatedExpDiffusionChernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::TruncatedExpDiffusionChernoff<f64>: Send, Sync);
     assert_impl_all!(
-        ChernoffSemigroup<semiflow_core::TruncatedExpDiffusionChernoff<f64>, GridFn1D<f64>>:
+        ChernoffSemigroup<semiflow::TruncatedExpDiffusionChernoff<f64>, GridFn1D<f64>>:
             Send, Sync
     );
-    assert_impl_all!(semiflow_core::TruncatedExp4thDiffusionChernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::TruncatedExp4thDiffusionChernoff<f64>: Send, Sync);
     assert_impl_all!(
-        ChernoffSemigroup<semiflow_core::TruncatedExp4thDiffusionChernoff<f64>, GridFn1D<f64>>:
+        ChernoffSemigroup<semiflow::TruncatedExp4thDiffusionChernoff<f64>, GridFn1D<f64>>:
             Send, Sync
     );
     assert_impl_all!(
-        semiflow_core::StrangSplit<
-            semiflow_core::DiffusionChernoff<f64>,
-            semiflow_core::DriftReactionChernoff<f64>,
+        semiflow::StrangSplit<
+            semiflow::DiffusionChernoff<f64>,
+            semiflow::DriftReactionChernoff<f64>,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::StrangSplit<
-                semiflow_core::DiffusionChernoff<f64>,
-                semiflow_core::DriftReactionChernoff<f64>,
+            semiflow::StrangSplit<
+                semiflow::DiffusionChernoff<f64>,
+                semiflow::DriftReactionChernoff<f64>,
             >,
             GridFn1D<f64>,
         >: Send, Sync
@@ -152,63 +152,63 @@ mod tests {
     // ADR-0111 Wave P2 — SchrodingerComplex1D (SchrödingerChernoffComplex).
     // `SchrödingerChernoffComplex<C>` holds Vec<C::Real>, Grid1D<C::Real>, PhantomData<C>.
     // All fields are Send+Sync when C: Send+Sync (Complex<f64> is Send+Sync).
-    assert_impl_all!(semiflow_core::SchrödingerChernoffComplex<numpy::Complex64>: Send, Sync);
+    assert_impl_all!(semiflow::SchrödingerChernoffComplex<numpy::Complex64>: Send, Sync);
     // `GridFnComplex1D<C>` holds Vec<C> + Grid1D<C::Real> — auto Send+Sync.
-    assert_impl_all!(semiflow_core::GridFnComplex1D<numpy::Complex64>: Send, Sync);
+    assert_impl_all!(semiflow::GridFnComplex1D<numpy::Complex64>: Send, Sync);
 
     // ADR-0111 Wave P3 — BC kernels (Resolvent1D, Killing1D, Reflected1D, Robin1D).
     // All four kernel types wrap fn-pointer DiffusionChernoff<f64> + scalar region — auto Send+Sync.
     assert_impl_all!(
-        semiflow_core::resolvent::LaplaceChernoffResolvent<
-            semiflow_core::DiffusionChernoff<f64>, f64
+        semiflow::resolvent::LaplaceChernoffResolvent<
+            semiflow::DiffusionChernoff<f64>, f64
         >: Send, Sync
     );
     assert_impl_all!(
-        semiflow_core::killing::KillingChernoff<
-            semiflow_core::DiffusionChernoff<f64>,
-            semiflow_core::killing::BoxRegion<f64, 1>,
+        semiflow::killing::KillingChernoff<
+            semiflow::DiffusionChernoff<f64>,
+            semiflow::killing::BoxRegion<f64, 1>,
             f64,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::killing::KillingChernoff<
-                semiflow_core::DiffusionChernoff<f64>,
-                semiflow_core::killing::BoxRegion<f64, 1>,
+            semiflow::killing::KillingChernoff<
+                semiflow::DiffusionChernoff<f64>,
+                semiflow::killing::BoxRegion<f64, 1>,
                 f64,
             >,
             GridFn1D<f64>,
         >: Send, Sync
     );
     assert_impl_all!(
-        semiflow_core::reflection::ReflectedHeatChernoff<
-            semiflow_core::DiffusionChernoff<f64>,
-            semiflow_core::reflection::HalfSpaceRegion<f64, 1>,
+        semiflow::reflection::ReflectedHeatChernoff<
+            semiflow::DiffusionChernoff<f64>,
+            semiflow::reflection::HalfSpaceRegion<f64, 1>,
             f64,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::reflection::ReflectedHeatChernoff<
-                semiflow_core::DiffusionChernoff<f64>,
-                semiflow_core::reflection::HalfSpaceRegion<f64, 1>,
+            semiflow::reflection::ReflectedHeatChernoff<
+                semiflow::DiffusionChernoff<f64>,
+                semiflow::reflection::HalfSpaceRegion<f64, 1>,
                 f64,
             >,
             GridFn1D<f64>,
         >: Send, Sync
     );
     assert_impl_all!(
-        semiflow_core::robin::RobinHeatChernoff<
-            semiflow_core::DiffusionChernoff<f64>,
-            semiflow_core::robin::HalfSpaceRobin<f64, 1>,
+        semiflow::robin::RobinHeatChernoff<
+            semiflow::DiffusionChernoff<f64>,
+            semiflow::robin::HalfSpaceRobin<f64, 1>,
             f64,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::robin::RobinHeatChernoff<
-                semiflow_core::DiffusionChernoff<f64>,
-                semiflow_core::robin::HalfSpaceRobin<f64, 1>,
+            semiflow::robin::RobinHeatChernoff<
+                semiflow::DiffusionChernoff<f64>,
+                semiflow::robin::HalfSpaceRobin<f64, 1>,
                 f64,
             >,
             GridFn1D<f64>,
@@ -221,31 +221,31 @@ mod tests {
     // QuantumGraphHeatChernoff<f64>: Clone + Send + Sync (all fields are
     //   QuantumGraph<f64> + Vec<KirchhoffVertex<f64>> + Vec<ShiftChernoff1D<f64>>
     //   + Option<(ShiftChernoff1D<f64>, usize)>; all Send+Sync per fn-ptr invariant).
-    assert_impl_all!(semiflow_core::quantum_graph::QuantumGraphHeatChernoff<f64>: Send, Sync);
-    assert_impl_all!(semiflow_core::quantum_graph::QuantumGraphSignal<f64>: Send, Sync);
+    assert_impl_all!(semiflow::quantum_graph::QuantumGraphHeatChernoff<f64>: Send, Sync);
+    assert_impl_all!(semiflow::quantum_graph::QuantumGraphSignal<f64>: Send, Sync);
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::quantum_graph::QuantumGraphHeatChernoff<f64>,
-            semiflow_core::quantum_graph::QuantumGraphSignal<f64>,
+            semiflow::quantum_graph::QuantumGraphHeatChernoff<f64>,
+            semiflow::quantum_graph::QuantumGraphSignal<f64>,
         >: Send, Sync
     );
     // StrangSplitGraph<GraphHeatChernoff<f64>, GraphHeatChernoff<f64>, f64>:
     //   both inner kernels are Send+Sync.
     assert_impl_all!(
-        semiflow_core::strang_graph::StrangSplitGraph<
-            semiflow_core::graph_heat::GraphHeatChernoff<f64>,
-            semiflow_core::graph_heat::GraphHeatChernoff<f64>,
+        semiflow::strang_graph::StrangSplitGraph<
+            semiflow::graph_heat::GraphHeatChernoff<f64>,
+            semiflow::graph_heat::GraphHeatChernoff<f64>,
             f64,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::strang_graph::StrangSplitGraph<
-                semiflow_core::graph_heat::GraphHeatChernoff<f64>,
-                semiflow_core::graph_heat::GraphHeatChernoff<f64>,
+            semiflow::strang_graph::StrangSplitGraph<
+                semiflow::graph_heat::GraphHeatChernoff<f64>,
+                semiflow::graph_heat::GraphHeatChernoff<f64>,
                 f64,
             >,
-            semiflow_core::graph_signal::GraphSignal<f64>,
+            semiflow::graph_signal::GraphSignal<f64>,
         >: Send, Sync
     );
 
@@ -253,8 +253,8 @@ mod tests {
     //                    Strang2D/3D with closure DiffusionChernoff.
     // AnisotropicShiftChernoffND<f64,D> holds Box<dyn Fn+Send+Sync> closures +
     // Vec<SquareMatrix> + GaussHermiteTensor + GridND — all Send+Sync.
-    assert_impl_all!(semiflow_core::shift_nd::AnisotropicShiftChernoffND<f64, 2>: Send, Sync);
-    assert_impl_all!(semiflow_core::shift_nd::AnisotropicShiftChernoffND<f64, 3>: Send, Sync);
+    assert_impl_all!(semiflow::shift_nd::AnisotropicShiftChernoffND<f64, 2>: Send, Sync);
+    assert_impl_all!(semiflow::shift_nd::AnisotropicShiftChernoffND<f64, 3>: Send, Sync);
 
     // ADR-0111 Wave P5 — geometry types (Manifold2D, Kolmogorov, Engel).
     // ManifoldEnum is Send+Sync (unsafe impl in geometry.rs; all three backends
@@ -270,28 +270,28 @@ mod tests {
     // HowlandLift<DiffusionChernoff<f64>, f64> holds DiffusionChernoff<f64> + f64 scalars.
     // All fields are Send + Sync.
     assert_impl_all!(
-        semiflow_core::howland::HowlandLift<
-            semiflow_core::DiffusionChernoff<f64>,
+        semiflow::howland::HowlandLift<
+            semiflow::DiffusionChernoff<f64>,
             f64,
         >: Send, Sync
     );
     // HowlandState<GridFn1D<f64>, f64> holds Vec<GridFn1D<f64>> — auto Send + Sync.
     assert_impl_all!(
-        semiflow_core::howland::HowlandState<GridFn1D<f64>, f64>: Send, Sync
+        semiflow::howland::HowlandState<GridFn1D<f64>, f64>: Send, Sync
     );
     // SubordinatedChernoff<DiffUnit, SubordinatorEnum, f64>:
     // DiffUnit is Send+Sync; SubordinatorEnum wraps three f64-scalar types — Send+Sync.
     assert_impl_all!(
-        semiflow_core::subordinated::SubordinatedChernoff<
-            semiflow_core::DiffusionChernoff<f64>,
+        semiflow::subordinated::SubordinatedChernoff<
+            semiflow::DiffusionChernoff<f64>,
             crate::subordinated_py::SubordinatorEnum,
             f64,
         >: Send, Sync
     );
     assert_impl_all!(
         ChernoffSemigroup<
-            semiflow_core::subordinated::SubordinatedChernoff<
-                semiflow_core::DiffusionChernoff<f64>,
+            semiflow::subordinated::SubordinatedChernoff<
+                semiflow::DiffusionChernoff<f64>,
                 crate::subordinated_py::SubordinatorEnum,
                 f64,
             >,

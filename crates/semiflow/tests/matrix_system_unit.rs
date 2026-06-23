@@ -1,7 +1,7 @@
 //! Unit tests for `MatrixDiffusionChernoff` and `MatrixGridFn1D` public API.
 //! Tests that previously lived in `matrix_system.rs` inline `mod tests`.
 
-use semiflow_core::{
+use semiflow::{
     ApproximationSubspace, ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D,
     ScratchPool, State,
 };

@@ -27,7 +27,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     AdjointChernoff, ChernoffFunction, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, GridFn1D, ScratchPool, ShiftChernoff1D,
 };
@@ -67,7 +67,7 @@ impl KernelVariant {
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             Self::Diff2(k) => k.apply_into(tau, src, dst, scratch),
             Self::Diff4(k) => k.apply_into(tau, src, dst, scratch),
@@ -239,11 +239,11 @@ impl Adjoint {
 /// Advance `n_steps` adjoint steps of size `tau`.
 fn evolve_adjoint(
     kv: &KernelVariant,
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn1D::new(grid, input)?;
     let mut dst = GridFn1D::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();
@@ -264,9 +264,9 @@ fn build_initial_state(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    policy: semiflow_core::BoundaryPolicy,
-) -> Result<GridFn1D<f64>, semiflow_core::SemiflowError> {
-    use semiflow_core::Grid1D;
+    policy: semiflow::BoundaryPolicy,
+) -> Result<GridFn1D<f64>, semiflow::SemiflowError> {
+    use semiflow::Grid1D;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(policy);
     GridFn1D::new(grid, u0.to_vec())
 }
@@ -279,9 +279,9 @@ fn build_kernel(
     u0: &[f64],
     kernel: &str,
     self_adjoint: bool,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<KernelVariant> {
-    use semiflow_core::Grid1D;
+    use semiflow::Grid1D;
     let grid = Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);
@@ -299,7 +299,7 @@ fn build_kernel(
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn build_kernel_heat2(grid: semiflow_core::Grid1D<f64>) -> PyResult<KernelVariant> {
+fn build_kernel_heat2(grid: semiflow::Grid1D<f64>) -> PyResult<KernelVariant> {
     let inner = unit_diffusion_1d(grid);
     Ok(KernelVariant::Diff2(AdjointChernoff::new_self_adjoint(
         inner,
@@ -311,7 +311,7 @@ fn build_kernel_heat4(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<KernelVariant> {
     let st = build_diff4_unit(xmin, xmax, n, 1, u0, policy).map_err(|e| from_core(&e))?;
     Ok(KernelVariant::Diff4(AdjointChernoff::new_self_adjoint(
@@ -324,7 +324,7 @@ fn build_kernel_heat6(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<KernelVariant> {
     let st = build_diff6_unit(xmin, xmax, n, 1, u0, policy).map_err(|e| from_core(&e))?;
     Ok(KernelVariant::Diff6(AdjointChernoff::new_self_adjoint(
@@ -338,7 +338,7 @@ fn build_kernel_drift(
     n: usize,
     u0: &[f64],
     self_adjoint: bool,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<KernelVariant> {
     let st =
         build_drift_scalar(xmin, xmax, n, 1, u0, 0.5, 0.0, policy).map_err(|e| from_core(&e))?;
@@ -356,8 +356,8 @@ fn build_kernel_shift(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    policy: semiflow_core::BoundaryPolicy,
-    grid: semiflow_core::Grid1D<f64>,
+    policy: semiflow::BoundaryPolicy,
+    grid: semiflow::Grid1D<f64>,
 ) -> PyResult<KernelVariant> {
     // ShiftChernoff1D with a=0.5, b=0, c=0 is a symmetric isotropic diffusion.
     // AdjointApply is not implemented for ShiftChernoff1D; use new_self_adjoint.

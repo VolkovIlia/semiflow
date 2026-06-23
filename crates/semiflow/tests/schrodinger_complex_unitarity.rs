@@ -17,7 +17,7 @@
 use std::f64::consts::PI;
 
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction,
     grid::Grid1D,
     schrodinger_complex::{GridFnComplex1D, SchrödingerChernoffComplex},
@@ -99,7 +99,7 @@ fn g_schrod_b_unitarity_harmonic_oscillator_gaussian() {
 #[test]
 #[ignore = "advisory: cross-representation Option A vs B; investigate on failure but does not block"]
 fn schrodinger_option_a_vs_b_sup_norm() {
-    use semiflow_core::{
+    use semiflow::{
         diffusion4::Diffusion4thChernoff, grid_fn::GridFn1D, schrodinger::SchrodingerChernoff,
         schrodinger::SchrodingerState, ChernoffFunction,
     };

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
 
-use semiflow_core::{
+use semiflow::{
     graph_traj::{GraphTraj, SegmentWeightFn},
     magnus_graph::MagnusGraphHeatChernoff,
     Graph, GraphSignal, Laplacian, ScratchPool,
@@ -63,7 +63,7 @@ fn make_traj(n: usize) -> (GraphTraj<f64>, Arc<Graph<f64>>) {
 /// radius of the trajectory Laplacians.  `rho_bar = 3.0` covers max-degree 2 *
 /// max-weight 1.2 = 2.4 with margin.
 fn make_magnus(n: usize) -> MagnusGraphHeatChernoff<f64> {
-    use semiflow_core::magnus_graph::LaplacianAtTime;
+    use semiflow::magnus_graph::LaplacianAtTime;
     let topology = Arc::new(Graph::<f64>::path(n));
     let lap0 = make_lap_uniform(n, 1.0);
     let lap_at: LaplacianAtTime<f64> = Box::new(move |_t: f64| Arc::clone(&lap0));

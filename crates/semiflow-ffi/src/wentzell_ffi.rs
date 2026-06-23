@@ -40,7 +40,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},
     robin::RobinRegion,

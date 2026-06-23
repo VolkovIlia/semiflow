@@ -46,7 +46,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     varcoef_magnus_graph::{
         compute_rho_bar as core_compute_rho_bar, VarCoefMagnusGraphHeatChernoff, WeightAtTime,
     },
@@ -138,7 +138,7 @@ impl GraphHeat6 {
             let lap = Arc::clone(&self.laplacian);
             let graph = Arc::clone(&self.graph);
             let n_st = n_steps as usize;
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| compute_heat6(lap, graph, &input, t_final, n_st));
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))
         })
@@ -158,7 +158,7 @@ fn compute_heat6(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let chernoff = GraphHeat6thChernoff::new(lap);
     let sg = ChernoffSemigroup::new(chernoff, n_steps)?;
     let f0 = GraphSignal::from_fn(graph, |i| input[i as usize]);
@@ -276,7 +276,7 @@ impl VarCoefMagnusGraph {
             let a_cb = self.a_callback.clone_ref(py);
             let n_st = n_steps as usize;
             let n = self.n_nodes;
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py.detach(|| {
+            let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
                 compute_varcoef_magnus(
                     &graph,
                     lap_cb,
@@ -378,7 +378,7 @@ fn compute_varcoef_magnus(
     t_final: f64,
     t_start: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let lap_fn = make_lap_at_t_py(lap_cb, Arc::clone(graph));
     let a_fn = make_a_at_t_py(a_cb, n_nodes);
     let mc =

@@ -168,7 +168,7 @@ fn ffi_wentzell_free_null_is_safe() {
 // ---------------------------------------------------------------------------
 
 fn derive_core_golden_inline() -> Vec<f64> {
-    use semiflow_core::{
+    use semiflow::{
         error::SemiflowError,
         reflection::{HalfSpaceRegion, ReflectingRegion},
         robin::RobinRegion,

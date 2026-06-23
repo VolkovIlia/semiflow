@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction,
     magnus6_graph::{MagnusGraphHeat6thChernoff, GL6_B1, GL6_B2, GL6_B3, GL6_C1, GL6_C2, GL6_C3},
     magnus_graph::LaplacianAtTime,

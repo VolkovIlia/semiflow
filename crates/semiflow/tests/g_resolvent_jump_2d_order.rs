@@ -26,7 +26,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{Grid1D, Grid2D, GridFn2D, ResolventJumpChernoff2D};
+use semiflow::{Grid1D, Grid2D, GridFn2D, ResolventJumpChernoff2D};
 
 // ---------------------------------------------------------------------------
 // Gate constants — do NOT relax without ADR + properties.yaml bump.

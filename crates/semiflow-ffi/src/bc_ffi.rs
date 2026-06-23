@@ -20,7 +20,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -204,7 +204,7 @@ fn build_killing(
     lo: f64,
     hi: f64,
     u0: &[f64],
-) -> Result<KillingState, semiflow_core::SemiflowError> {
+) -> Result<KillingState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n_grid)?;
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
@@ -366,7 +366,7 @@ fn build_reflected(
     n_chernoff: usize,
     origin: f64,
     u0: &[f64],
-) -> Result<ReflectedState, semiflow_core::SemiflowError> {
+) -> Result<ReflectedState, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n_grid)?;
     let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);

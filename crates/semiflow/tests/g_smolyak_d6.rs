@@ -29,7 +29,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     smolyak::SmolyakGridND,
     ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,

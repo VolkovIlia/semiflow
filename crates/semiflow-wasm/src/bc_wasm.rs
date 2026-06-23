@@ -18,7 +18,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     killing::{BoxRegion, KillingChernoff},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff},
     resolvent::{LaplaceChernoffResolvent, LaplaceQuadrature},
@@ -84,7 +84,7 @@ type KillingKernel = KillingChernoff<DiffUnit, BoxRegion<f64, 1>>;
 type ReflectedKernel = ReflectedHeatChernoff<DiffUnit, HalfSpaceRegion<f64, 1>>;
 type RobinKernel = RobinHeatChernoff<DiffUnit, HalfSpaceRobin<f64, 1>>;
 type ResolventKernel = LaplaceChernoffResolvent<DiffUnit, f64>;
-type KilledDirichletKernel = semiflow_core::killed_dirichlet::KilledDirichletChernoff;
+type KilledDirichletKernel = semiflow::killed_dirichlet::KilledDirichletChernoff;
 
 // ===========================================================================
 // Killing1D

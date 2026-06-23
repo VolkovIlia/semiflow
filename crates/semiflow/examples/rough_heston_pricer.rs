@@ -66,7 +66,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, Grid1D, HdrSnapshot, MatrixDiffusionChernoff,
     MatrixGridFn1D,
 };

@@ -26,7 +26,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-use semiflow_core::VarCoefTt;
+use semiflow::VarCoefTt;
 
 use crate::error::{from_core, new_pyerr};
 use crate::panic::catch_panic_py;

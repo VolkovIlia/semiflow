@@ -10,7 +10,7 @@
 //! The `allocation-counter` crate overrides the global allocator (test-only).
 
 use allocation_counter::{self, AllocationInfo};
-use semiflow_core::{
+use semiflow::{
     scratch::ScratchPool, ChernoffFunction, ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D,
     TruncatedExp4thDiffusionChernoff,
 };

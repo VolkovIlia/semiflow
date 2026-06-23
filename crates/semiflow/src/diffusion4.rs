@@ -96,7 +96,7 @@ const C3: [f64; 7] = [
 /// # Caller invariants: `a(x) > 0`; `a ∈ C⁵(ℝ)`.
 ///
 /// ```rust
-/// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion4thChernoff};
+/// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion4thChernoff};
 /// let grid = Grid1D::new(-5.0, 5.0, 64).unwrap();
 /// let diff4 = Diffusion4thChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);
 /// let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
@@ -179,7 +179,7 @@ impl Diffusion4thChernoff<f64> {
     /// # Example
     ///
     /// ```rust
-    /// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion4thChernoff};
+    /// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, Diffusion4thChernoff};
     /// let grid = Grid1D::new(0.0, 1.0, 32).unwrap();
     /// let diff4 = Diffusion4thChernoff::with_closure(
     ///     |_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid,

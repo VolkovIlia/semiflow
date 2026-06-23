@@ -11,7 +11,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in sweep/OLS; n ≤ 256 ≤ 2^52
 
-use semiflow_core::{
+use semiflow::{
     heisenberg_heat_kernel, hormander::HypoellipticChernoff, ChernoffFunction, Grid1D, Grid3D,
     GridFn3D, ScratchPool,
 };

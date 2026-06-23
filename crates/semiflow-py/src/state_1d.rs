@@ -164,7 +164,7 @@ impl Heat1D {
                         py.detach(|| compute_evolve(chernoff_func, grid, input_values, t, n_steps));
                     let vals = res.map_err(|e| from_core(&e))?;
                     // Rebuild semigroup for next call.
-                    let sg = semiflow_core::ChernoffSemigroup::new(chernoff_for_sg, n_steps)
+                    let sg = semiflow::ChernoffSemigroup::new(chernoff_for_sg, n_steps)
                         .map_err(|e| from_core(&e))?;
                     self.inner.semigroup = sg;
                     vals
@@ -251,7 +251,7 @@ impl Heat1D {
                 }
             }
             // Rebuild semigroup for next call (mirrors evolve pattern).
-            let sg = semiflow_core::ChernoffSemigroup::new(chernoff_func, total_steps)
+            let sg = semiflow::ChernoffSemigroup::new(chernoff_func, total_steps)
                 .map_err(|e| from_core(&e))?;
             self.inner.semigroup = sg;
             self.inner.current.values = buf;
@@ -449,15 +449,15 @@ pub(crate) fn validate_evolve_params(t: f64, n_steps: usize) -> PyResult<()> {
 /// No Python types cross this boundary.  All parameters are `Send + Sync`.
 ///
 /// # Errors
-/// Propagates [`semiflow_core::SemiflowError`] from `ChernoffSemigroup`.
+/// Propagates [`semiflow::SemiflowError`] from `ChernoffSemigroup`.
 fn compute_evolve(
-    chernoff_func: semiflow_core::DiffusionChernoff<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    chernoff_func: semiflow::DiffusionChernoff<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
-    use semiflow_core::{ChernoffSemigroup, GridFn1D};
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    use semiflow::{ChernoffSemigroup, GridFn1D};
     let sg = ChernoffSemigroup::new(chernoff_func, n_steps)?;
     let f = GridFn1D::new(grid, input)?;
     let result = sg.evolve(t, &f)?;

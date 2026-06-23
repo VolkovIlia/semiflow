@@ -35,7 +35,7 @@
 #![allow(clippy::cast_precision_loss)]
 
 use allocation_counter;
-use semiflow_core::{
+use semiflow::{
     grid::Grid1D, grid_nd::GridND, smolyak::SmolyakGridND, ChernoffFunction, GridlessChernoff,
     MeasureState, ParticleReduction, ScratchPool,
 };

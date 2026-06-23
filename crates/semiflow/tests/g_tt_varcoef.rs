@@ -48,10 +48,10 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use semiflow_core::TtState;
+use semiflow::TtState;
 // ENGINEER WIRING POINT (ADR-0178): the additive-separable variable-coef TT evolver.
 // `VarCoefTt::new(a_axis, b_axis, v_axis, domain, eps_round)` + `.evolve(T, n_steps, &mut state)`.
-use semiflow_core::VarCoefTt;
+use semiflow::VarCoefTt;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §A — Pre-registered parameters (FIXED — do not weaken)

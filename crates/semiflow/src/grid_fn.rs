@@ -34,7 +34,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, State};
+/// use semiflow::{Grid1D, GridFn1D, State};
 /// let grid = Grid1D::new(-2.0, 2.0, 32).unwrap();
 /// let u = GridFn1D::from_fn(grid, |x| x * x);
 /// assert_eq!(u.values.len(), 32);

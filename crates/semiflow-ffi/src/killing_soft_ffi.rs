@@ -14,7 +14,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,
@@ -217,7 +217,7 @@ fn build_killing2nd(
     kappa: f64,
     n_steps: usize,
     u0: &[f64],
-) -> Result<InnerKilling2nd, semiflow_core::SemiflowError> {
+) -> Result<InnerKilling2nd, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let diff = DiffusionChernoff::new(unit_a_killing2nd, zero_killing2nd, zero_killing2nd, 1.0, grid);
@@ -231,7 +231,7 @@ fn build_killing2nd(
 fn evolve_killing2nd(
     inner: &mut InnerKilling2nd,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

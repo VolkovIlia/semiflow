@@ -67,7 +67,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, DriftReactionChernoff};
+/// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, DriftReactionChernoff};
 /// let grid = Grid1D::new(-4.0, 4.0, 64).unwrap();
 /// // Pure advection: b=0.5, c=0
 /// let drift = DriftReactionChernoff::new(|_| 0.5, |_| 0.0, 0.0, grid);
@@ -115,7 +115,7 @@ impl DriftReactionChernoff<f64> {
     /// # Example
     ///
     /// ```rust
-    /// use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, DriftReactionChernoff};
+    /// use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, DriftReactionChernoff};
     /// let grid = Grid1D::new(-1.0, 1.0, 32).unwrap();
     /// let dr = DriftReactionChernoff::with_closure(
     ///     |_| 0.5_f64, |_| -0.1, 0.1, grid,

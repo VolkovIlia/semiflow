@@ -83,7 +83,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{
+/// use semiflow::{
 ///     chernoff::ApplyChernoffExt,
 ///     Grid1D, Grid3D, GridFn3D, DiffusionChernoff, Strang3D,
 /// };

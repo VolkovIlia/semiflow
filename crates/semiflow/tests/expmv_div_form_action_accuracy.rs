@@ -35,7 +35,7 @@
 
 extern crate alloc;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ChernoffFunction, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D,
     ScratchPool,
 };

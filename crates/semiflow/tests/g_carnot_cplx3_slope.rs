@@ -57,7 +57,7 @@
 
 use std::io::Write as _;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     ComplexTripleJump, Grid1D,
 };

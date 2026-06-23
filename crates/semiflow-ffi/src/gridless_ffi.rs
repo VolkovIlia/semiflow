@@ -22,7 +22,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
-use semiflow_core::{GridlessChernoff, MeasureState, ParticleReduction, ScratchPool};
+use semiflow::{GridlessChernoff, MeasureState, ParticleReduction, ScratchPool};
 
 use crate::status::SemiflowStatus;
 
@@ -296,7 +296,7 @@ pub unsafe extern "C" fn smf_gridless_apply(
         return SemiflowStatus::OutOfDomain;
     }
     catch_panic!({
-        use semiflow_core::chernoff::ChernoffFunction;
+        use semiflow::chernoff::ChernoffFunction;
         let evolver = unsafe { &*ev.cast::<GridlessChernoff<f64, 1>>() };
         let src_ms = unsafe { &*src.cast::<MeasureState<f64, 1>>() };
         let dst_ms = unsafe { &mut *dst.cast::<MeasureState<f64, 1>>() };
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn smf_gridless_evolve(
         return SemiflowStatus::OutOfDomain;
     }
     catch_panic!({
-        use semiflow_core::chernoff::ChernoffFunction;
+        use semiflow::chernoff::ChernoffFunction;
         let evolver = unsafe { &*ev.cast::<GridlessChernoff<f64, 1>>() };
         let ms = unsafe { &mut *state.cast::<MeasureState<f64, 1>>() };
         let tau = t_final / n_steps as f64;

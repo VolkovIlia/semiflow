@@ -34,7 +34,7 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
     ScratchPool, State,
 };
@@ -220,7 +220,7 @@ fn run_steps(
     pos_in: &[f64],
     wts_in: &[f64],
     n_steps: usize,
-) -> Result<(Vec<f64>, Vec<f64>), semiflow_core::SemiflowError> {
+) -> Result<(Vec<f64>, Vec<f64>), semiflow::SemiflowError> {
     let grid = Grid1D::new(-4.0_f64, 4.0, 32)?;
     let fwd = DiffusionChernoff::new_const_a(a, a, grid);
     let kernel = AdjointFokkerPlanckChernoff::new(fwd, a, b, c);
@@ -238,9 +238,9 @@ fn run_steps(
 // Builder and validators
 // ---------------------------------------------------------------------------
 
-fn build_inner(a: f64, b: f64, c: f64) -> Result<AdjointFpInner, semiflow_core::SemiflowError> {
+fn build_inner(a: f64, b: f64, c: f64) -> Result<AdjointFpInner, semiflow::SemiflowError> {
     if !a.is_finite() || !b.is_finite() || !c.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "adjoint_fp: a, b, c must be finite",
             value: a,
         });

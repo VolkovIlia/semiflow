@@ -37,7 +37,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffFunction, Diffusion4thChernoff, Grid1D, GridFn1D, SchrodingerChernoff,
     SchrodingerState, ScratchPool,
 };
@@ -238,7 +238,7 @@ fn build_schrodinger(
     v_slice: Option<&[f64]>,
     psi0: &[f64],
     n_steps: usize,
-) -> Result<InnerSchrodinger, semiflow_core::SemiflowError> {
+) -> Result<InnerSchrodinger, semiflow::SemiflowError> {
     validate_psi_interleaved(psi0, n)?;
     let (psi_re, psi_im) = deinterleave(psi0);
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
@@ -251,16 +251,16 @@ fn build_schrodinger(
 fn validate_psi_interleaved(
     psi0: &[f64],
     n: usize,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     if psi0.len() != 2 * n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "psi0_len must equal 2*n (interleaved re/im)",
             value: psi0.len() as f64,
         });
     }
     for &v in psi0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "psi0 contains NaN or Inf",
                 value: v,
             });
@@ -293,19 +293,19 @@ fn interleave_into(dst: &mut [f64], re: &[f64], im: &[f64]) {
 fn build_v_at_node(
     v_slice: Option<&[f64]>,
     n: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     match v_slice {
         None => Ok(vec![0.0_f64; n]),
         Some(arr) => {
             if arr.len() != n {
-                return Err(semiflow_core::SemiflowError::DomainViolation {
+                return Err(semiflow::SemiflowError::DomainViolation {
                     what: "v_len must equal n",
                     value: arr.len() as f64,
                 });
             }
             for &vi in arr {
                 if !vi.is_finite() {
-                    return Err(semiflow_core::SemiflowError::DomainViolation {
+                    return Err(semiflow::SemiflowError::DomainViolation {
                         what: "v contains NaN or Inf",
                         value: vi,
                     });
@@ -320,7 +320,7 @@ fn build_v_at_node(
 fn build_kernel(
     v_at_node: &[f64],
     grid: Grid1D<f64>,
-) -> Result<SchrodingerChernoff<f64>, semiflow_core::SemiflowError> {
+) -> Result<SchrodingerChernoff<f64>, semiflow::SemiflowError> {
     let kinetic = Diffusion4thChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
     let v = v_at_node.to_vec();
     let dx = grid.dx();
@@ -335,7 +335,7 @@ fn build_kernel(
 fn evolve_schrodinger(
     inner: &mut InnerSchrodinger,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let kernel = build_kernel(&inner.v_at_node, inner.grid)?;
     let tau = t / inner.n_steps as f64;
     let psi_re = GridFn1D::new(inner.grid, inner.psi_re.clone())?;

@@ -15,7 +15,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, DriftReactionZeta4Chernoff, Grid1D,
     GridFn1D,
 };
@@ -200,7 +200,7 @@ fn build_dr_zeta4(
     n: usize,
     n_steps: usize,
     u0: &[f64],
-) -> Result<InnerDrZeta4, semiflow_core::SemiflowError> {
+) -> Result<InnerDrZeta4, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let d4 =
@@ -218,7 +218,7 @@ fn build_dr_zeta4(
     Ok(InnerDrZeta4 { semigroup, current })
 }
 
-fn evolve_dr_zeta4(inner: &mut InnerDrZeta4, t: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn evolve_dr_zeta4(inner: &mut InnerDrZeta4, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

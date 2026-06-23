@@ -9,8 +9,8 @@
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_lossless)]
 
-use semiflow_core::diffusion4::Diffusion4thChernoff;
-use semiflow_core::{
+use semiflow::diffusion4::Diffusion4thChernoff;
+use semiflow::{
     state::{HilbertState, State},
     ChernoffFunction, Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState, ScratchPool,
 };

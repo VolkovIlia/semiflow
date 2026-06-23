@@ -23,7 +23,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph::{Graph, Laplacian},
     graph_signal::GraphSignal,
     varcoef_magnus_graph::{VarCoefMagnusGraphHeatChernoff, WeightAtTime},

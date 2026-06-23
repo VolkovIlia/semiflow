@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     adjoint_state_gradient, EdgeWeightSensitivity, Graph, GraphSignal, Laplacian, LaplacianAtTime,
     MagnusGraphHeatChernoff, ScratchPool,
 };
@@ -106,7 +106,7 @@ pub fn edge_weight_grad<'py>(
         #[allow(clippy::cast_precision_loss)]
         let tau = t / n as f64;
 
-        let result: Result<Vec<f64>, semiflow_core::SemiflowError> = {
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = {
             let gc = Arc::clone(&g);
             py.detach(move || compute_edge_weight_grad(gc, u0_v, dj_v, tau, n, rho_bar, edge_pairs))
         };
@@ -163,7 +163,7 @@ fn compute_edge_weight_grad(
     n_steps: usize,
     rho_bar: f64,
     edge_pairs: Vec<(usize, usize)>,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let g2 = Arc::clone(&graph);
     let lap: LaplacianAtTime<f64> =
         Box::new(move |_t| Arc::new(Laplacian::assemble_combinatorial(&g2)));

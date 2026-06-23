@@ -30,7 +30,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use semiflow_core::{DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind};
+use semiflow::{DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind};
 
 // ---------------------------------------------------------------------------
 // Counting allocator

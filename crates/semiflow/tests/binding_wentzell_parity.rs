@@ -28,7 +28,7 @@
 // Integration test/bench: allows for numerical patterns.
 #![allow(clippy::missing_panics_doc, clippy::needless_range_loop)]
 
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},
     robin::RobinRegion,

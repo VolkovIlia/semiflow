@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph_traj::{GraphTraj, SegmentWeightFn},
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
     state::HilbertState,

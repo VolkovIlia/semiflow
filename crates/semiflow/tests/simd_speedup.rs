@@ -16,7 +16,7 @@
 
 use std::time::Instant;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, simd::with_force_scalar, BoundaryPolicy, Diffusion6thChernoff,
     Grid1D, GridFn1D,
 };

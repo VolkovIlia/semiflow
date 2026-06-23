@@ -14,7 +14,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines)]
 
-use semiflow_core::{
+use semiflow::{
     boundary::InterpKind, grid::BoundaryPolicy, DiffusionChernoff, Grid1D, GridFn1D,
 };
 
@@ -28,7 +28,7 @@ fn capture_taus_v1(
     tol_rel: f64,
 ) -> Vec<f64> {
     use libm::pow;
-    use semiflow_core::{chernoff::ChernoffFunction, State};
+    use semiflow::{chernoff::ChernoffFunction, State};
 
     let p_u32 = diff.order();
     let p = f64::from(p_u32);

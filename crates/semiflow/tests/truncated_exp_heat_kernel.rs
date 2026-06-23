@@ -26,7 +26,7 @@
 
 use core::f64::consts::PI;
 
-use semiflow_core::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff};
+use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff};
 
 // ---------------------------------------------------------------------------
 // Gate constants

@@ -23,7 +23,7 @@ use numpy::{IntoPyArray, PyArray1, PyArray2, ToPyArray};
 use pyo3::prelude::*;
 use std::sync::Arc;
 
-use semiflow_core::Laplacian;
+use semiflow::Laplacian;
 
 use crate::error::new_pyerr;
 

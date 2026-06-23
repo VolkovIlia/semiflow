@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 
-use semiflow_core::{Graph, Laplacian, LaplacianKind};
+use semiflow::{Graph, Laplacian, LaplacianKind};
 
 use crate::{
     error::{from_core, new_pyerr},

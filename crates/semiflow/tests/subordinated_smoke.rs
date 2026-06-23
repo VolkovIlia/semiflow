@@ -7,7 +7,7 @@
 //! **ADR**: 0103; **math**: §37; **properties.yaml**: `T_SUBORD` (symbolic oracle,
 //! separate script `scripts/verify_subordinated_chernoff.py`).
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     error::SemiflowError,
     grid::Grid1D,

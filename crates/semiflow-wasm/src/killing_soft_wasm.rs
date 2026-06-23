@@ -9,7 +9,7 @@
 //! `panic = "abort"` (ADR-0028 Amendment 1): no `catch_unwind`.
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     grid::Grid1D,
     grid_fn::GridFn1D,

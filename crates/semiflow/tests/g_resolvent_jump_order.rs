@@ -37,7 +37,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS/sweep; values ≤ 40 ≤ 2^52
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
 
 // ---------------------------------------------------------------------------
 // Gate constants — do NOT relax without ADR + properties.yaml bump.

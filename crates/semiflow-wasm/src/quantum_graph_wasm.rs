@@ -18,7 +18,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_possible_truncation)]
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, GridFn1D, QuantumGraph as CoreQuantumGraph,
     QuantumGraphHeatChernoff, QuantumGraphSignal,
 };

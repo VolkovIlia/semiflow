@@ -123,7 +123,7 @@
 //! ## Quick start
 //!
 //! ```rust
-//! use semiflow_core::{Grid1D, GridFn1D, ShiftChernoff1D, ChernoffSemigroup};
+//! use semiflow::{Grid1D, GridFn1D, ShiftChernoff1D, ChernoffSemigroup};
 //!
 //! // Heat equation: ∂_t u = 0.5 ∂_xx u
 //! let grid  = Grid1D::new(-10.0, 10.0, 1000)
@@ -137,7 +137,7 @@
 //!
 //! // Oracle: u(1,x) = (3)^{-1/2} exp(-x²/3)
 //! let oracle = GridFn1D::from_fn(grid, |x| (3.0_f64).sqrt().recip() * (-(x*x)/3.0).exp());
-//! use semiflow_core::State;
+//! use semiflow::State;
 //! let mut diff = u1.clone();
 //! diff.axpy(-1.0, &oracle);
 //! assert!(diff.norm_sup() < 5e-4, "G1 tolerance exceeded: {}", diff.norm_sup());

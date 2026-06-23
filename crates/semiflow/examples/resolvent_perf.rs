@@ -18,7 +18,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use semiflow_core::{
+use semiflow::{
     DiffusionChernoff, Grid1D, GridFn1D, HdrSnapshot, LaplaceChernoffResolvent, LaplaceQuadrature,
 };
 

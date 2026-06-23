@@ -25,7 +25,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
 
-use semiflow_core::{
+use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, RegionMap, ReverseChernoff,
 };
 

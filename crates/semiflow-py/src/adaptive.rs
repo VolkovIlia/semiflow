@@ -1,6 +1,6 @@
 //! `AdaptivePI` — Python-accessible PI adaptive integrator (v2.3 Phase 4).
 //!
-//! Wraps `semiflow_core::AdaptivePI<C, f64>` for each of the 5 supported 1-D
+//! Wraps `semiflow::AdaptivePI<C, f64>` for each of the 5 supported 1-D
 //! kernels via a concrete enum.  `AdaptivePI` is NOT a `ChernoffFunction` and
 //! MUST NOT be wrapped in a `ChernoffSemigroup` — it integrates via adaptive
 //! substeps, not a fixed-n product (see `adaptive.rs` module doc, ADR-0044).
@@ -11,7 +11,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     AdaptiveOutcome, Diffusion4thChernoff, Diffusion6thChernoff, DiffusionChernoff,
     DriftReactionChernoff, GridFn1D, ShiftChernoff1D,
 };
@@ -25,7 +25,7 @@ use crate::{
 };
 
 // Re-export the core type with f64 specialised.
-type CoreAdaptivePI<C> = semiflow_core::AdaptivePI<C, f64>;
+type CoreAdaptivePI<C> = semiflow::AdaptivePI<C, f64>;
 
 // ---------------------------------------------------------------------------
 // 5-kernel enum (avoids Box<dyn ChernoffFunction>)
@@ -78,7 +78,7 @@ impl AdaptiveVariant {
         &mut self,
         t: f64,
         u0: &GridFn1D<f64>,
-    ) -> Result<AdaptiveOutcome<GridFn1D<f64>>, semiflow_core::SemiflowError> {
+    ) -> Result<AdaptiveOutcome<GridFn1D<f64>>, semiflow::SemiflowError> {
         match self {
             Self::Diff2(k) => k.evolve_adaptive(t, u0),
             Self::Diff4(k) => k.evolve_adaptive(t, u0),
@@ -205,9 +205,9 @@ fn build_initial(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    policy: semiflow_core::BoundaryPolicy,
-) -> Result<GridFn1D<f64>, semiflow_core::SemiflowError> {
-    use semiflow_core::Grid1D;
+    policy: semiflow::BoundaryPolicy,
+) -> Result<GridFn1D<f64>, semiflow::SemiflowError> {
+    use semiflow::Grid1D;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(policy);
     GridFn1D::new(grid, u0.to_vec())
 }
@@ -219,9 +219,9 @@ fn build_adaptive(
     n: usize,
     u0: &[f64],
     kernel: &str,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
 ) -> PyResult<AdaptiveVariant> {
-    use semiflow_core::{AdaptivePI as CorePI, Grid1D};
+    use semiflow::{AdaptivePI as CorePI, Grid1D};
     let grid = Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);

@@ -34,7 +34,7 @@
 
 use std::os::raw::{c_double, c_uint};
 
-use semiflow_core::{
+use semiflow::{
     diffusion::DiffusionChernoff,
     subordinated::{
         GammaSubordinator, InverseGaussianSubordinator, LevySubordinator, StableSubordinator,
@@ -295,7 +295,7 @@ fn build_subordinated(
     sub: SubEnum,
     n_nodes: usize,
     u0: &[f64],
-) -> Result<SubordinatedState1D, semiflow_core::SemiflowError> {
+) -> Result<SubordinatedState1D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?;
     let diff = DiffusionChernoff::new(unit_a_sub, zero_sub, zero_sub, 1.0, grid);

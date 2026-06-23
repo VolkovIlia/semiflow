@@ -18,7 +18,7 @@
 #![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
 #![allow(clippy::float_cmp)]               // byte-identity assertion requires exact f64 equality
 
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
 };
 

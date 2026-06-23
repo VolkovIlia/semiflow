@@ -16,7 +16,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
     StrangSplit, TruncatedExp4thDiffusionChernoff, TruncatedExpDiffusionChernoff,
 };

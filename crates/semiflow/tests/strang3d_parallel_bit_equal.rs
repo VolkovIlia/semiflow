@@ -24,7 +24,7 @@
 #![cfg(all(feature = "parallel", feature = "slow-tests"))]
 
 // Thread-count override hook (pub in strang3d_parallel).
-use semiflow_core::{
+use semiflow::{
     strang3d_parallel::FORCE_THREADS_3D, ChernoffFunction, ChernoffSemigroup, DiffusionChernoff,
     Grid1D, Grid3D, GridFn3D, Strang3D,
 };
@@ -68,9 +68,9 @@ fn run_with_threads<X, Y, Z>(
     thread_count: usize,
 ) -> Vec<f64>
 where
-    X: ChernoffFunction<S = semiflow_core::GridFn1D> + Clone + Send + Sync,
-    Y: ChernoffFunction<S = semiflow_core::GridFn1D> + Clone + Send + Sync,
-    Z: ChernoffFunction<S = semiflow_core::GridFn1D> + Clone + Send + Sync,
+    X: ChernoffFunction<S = semiflow::GridFn1D> + Clone + Send + Sync,
+    Y: ChernoffFunction<S = semiflow::GridFn1D> + Clone + Send + Sync,
+    Z: ChernoffFunction<S = semiflow::GridFn1D> + Clone + Send + Sync,
 {
     FORCE_THREADS_3D.with(|c| c.set(Some(thread_count)));
     let semi = ChernoffSemigroup::new(phi3d, n_steps).expect("n_steps >= 1");

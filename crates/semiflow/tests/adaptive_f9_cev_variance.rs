@@ -18,7 +18,7 @@
 
 use std::cell::Cell;
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt,
     grid::{BoundaryPolicy, InterpKind},
     AdaptivePI, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, H211bFilter, State,

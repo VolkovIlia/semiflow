@@ -26,8 +26,8 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines)]
 
-use semiflow_core::diffusion4::Diffusion4thChernoff;
-use semiflow_core::{
+use semiflow::diffusion4::Diffusion4thChernoff;
+use semiflow::{
     ChernoffFunction, Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState, ScratchPool,
 };
 

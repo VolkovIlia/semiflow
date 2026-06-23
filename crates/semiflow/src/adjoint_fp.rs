@@ -441,7 +441,7 @@ where
 /// # Example
 ///
 /// ```rust,no_run
-/// use semiflow_core::{AdjointFokkerPlanckChernoff, DiffusionChernoff, Grid1D, MeasureState};
+/// use semiflow::{AdjointFokkerPlanckChernoff, DiffusionChernoff, Grid1D, MeasureState};
 /// let grid = Grid1D::new(-4.0, 4.0, 64).unwrap();
 /// let fwd = DiffusionChernoff::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.5, grid);
 /// let adj = AdjointFokkerPlanckChernoff::new(fwd, 0.5, 0.0, 0.0);

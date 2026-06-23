@@ -38,8 +38,8 @@
 
 use std::sync::Arc;
 
-use semiflow_core::scratch::ScratchPool;
-use semiflow_core::{
+use semiflow::scratch::ScratchPool;
+use semiflow::{
     ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian, LaplacianAtTime,
     MagnusGraphHeatChernoff,
 };

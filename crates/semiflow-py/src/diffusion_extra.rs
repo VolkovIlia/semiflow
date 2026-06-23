@@ -23,7 +23,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Diffusion6thZeta6Chernoff,
     Diffusion8thZeta8Chernoff, Grid1D, GridFn1D, TruncatedExpDiffusionChernoff,
 };
@@ -223,8 +223,8 @@ fn build_zeta8(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Zeta8Inner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Zeta8Inner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let k5 = Diffusion4thChernoff::new(unit_a_de, zero_d_de, zero_d_de, 1.0, grid);
@@ -241,8 +241,8 @@ fn build_trunc_exp(
     xmax: f64,
     n: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<TruncExpInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<TruncExpInner, semiflow::SemiflowError> {
     validate_u0(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let trunc = TruncatedExpDiffusionChernoff::new(unit_a_de, zero_d_de, zero_d_de, 1.0, grid);
@@ -261,7 +261,7 @@ fn evolve_zeta8(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -273,7 +273,7 @@ fn evolve_trunc_exp(
     values: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(func, n_steps)?;
     let f = GridFn1D::new(grid, values)?;
     Ok(sg.evolve(t, &f)?.values)
@@ -293,10 +293,10 @@ pub(crate) fn validate_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-pub(crate) fn validate_u0(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+pub(crate) fn validate_u0(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

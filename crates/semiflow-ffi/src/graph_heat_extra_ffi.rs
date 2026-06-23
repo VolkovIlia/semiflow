@@ -19,8 +19,8 @@
 
 use std::sync::Arc;
 
-use semiflow_core::scratch::ScratchPool;
-use semiflow_core::{
+use semiflow::scratch::ScratchPool;
+use semiflow::{
     ChernoffSemigroup, GraphHeat4thChernoff, GraphSignal, LaplacianAtTime,
     MagnusGraphHeat6thChernoff, Graph, Laplacian,
 };

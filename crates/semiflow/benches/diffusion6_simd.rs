@@ -16,7 +16,7 @@
 #![allow(missing_docs)]
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, Diffusion6thChernoff, Grid1D, GridFn1D,
 };
 

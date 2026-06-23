@@ -18,7 +18,7 @@
 //!
 //! Gate: sup-error < 1e-3 at T=0.05 with n=100 grid, N=200 steps.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     NonSeparable2DAnisotropicChernoff,
 };

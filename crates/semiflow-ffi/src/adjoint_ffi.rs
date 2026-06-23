@@ -45,7 +45,7 @@
 use std::ffi::CStr;
 use std::os::raw::{c_double, c_int};
 
-use semiflow_core::{
+use semiflow::{
     AdjointChernoff, BoundaryPolicy, ChernoffFunction, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ScratchPool, ShiftChernoff1D,
 };
@@ -87,7 +87,7 @@ impl AdjKernelVariant {
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
         scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         match self {
             Self::Diff2(k) => k.apply_into(tau, src, dst, scratch),
             Self::Diff4(k) => k.apply_into(tau, src, dst, scratch),
@@ -288,7 +288,7 @@ fn build_adjoint_inner(
     kernel: &str,
     self_adjoint: bool,
     u0: &[f64],
-) -> Result<AdjointInner, semiflow_core::SemiflowError> {
+) -> Result<AdjointInner, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let current = GridFn1D::new(grid, u0.to_vec())?;
@@ -300,7 +300,7 @@ fn build_kernel_variant(
     grid: Grid1D<f64>,
     kernel: &str,
     self_adjoint: bool,
-) -> Result<AdjKernelVariant, semiflow_core::SemiflowError> {
+) -> Result<AdjKernelVariant, semiflow::SemiflowError> {
     match kernel {
         "heat2" => {
             let inner = DiffusionChernoff::new(unit_a_adj, zero_adj, zero_adj, 1.0, grid);
@@ -327,7 +327,7 @@ fn build_kernel_variant(
             let inner = ShiftChernoff1D::new(half_a_adj, zero_adj, zero_adj, 0.5, grid);
             Ok(AdjKernelVariant::Shift(AdjointChernoff::new_self_adjoint(inner)))
         }
-        _ => Err(semiflow_core::SemiflowError::DomainViolation {
+        _ => Err(semiflow::SemiflowError::DomainViolation {
             what: "adjoint: unknown kernel; expected heat2|heat4|heat6|drift|shift",
             value: 0.0,
         }),
@@ -341,7 +341,7 @@ fn build_kernel_variant(
 fn run_adjoint_evolve(
     inner: &mut AdjointInner,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let tau = t / inner.n_steps as f64;
     let grid = inner.current.grid;
     let src_vals = inner.current.values.clone();

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, Graph, GraphHeat4thChernoff, GraphSignal, Laplacian,
     VarCoefGraphHeatChernoff,
 };
@@ -97,7 +97,7 @@ impl GraphHeat4th {
             let lap = Arc::clone(&self.laplacian);
             let graph = Arc::clone(&self.graph);
             let n_st = n_steps as usize;
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| compute_heat4(lap, graph, &input, t_final, n_st));
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))
         })
@@ -188,13 +188,13 @@ impl VarCoefGraphHeat {
             let n_st = n_steps as usize;
             match self.dtype {
                 Dtype::F64 => {
-                    let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+                    let result: Result<Vec<f64>, semiflow::SemiflowError> =
                         py.detach(|| compute_var_coef(graph, a_vec, rho, &input, t_final, n_st));
                     let arr = result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py);
                     Ok(arr.into_any())
                 }
                 Dtype::F32 => {
-                    let result: Result<Vec<f64>, semiflow_core::SemiflowError> = py
+                    let result: Result<Vec<f64>, semiflow::SemiflowError> = py
                         .detach(|| compute_var_coef_f32(graph, &a_vec, rho, &input, t_final, n_st));
                     let out_f32: Vec<f32> = cast_f64_to_f32(&result.map_err(|e| from_core(&e))?);
                     let arr = out_f32.as_slice().to_pyarray(py);
@@ -216,7 +216,7 @@ fn compute_heat4(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let chernoff = GraphHeat4thChernoff::new(lap);
     let sg = ChernoffSemigroup::new(chernoff, n_steps)?;
     let f0 = GraphSignal::from_fn(graph, |i| input[i as usize]);
@@ -232,7 +232,7 @@ fn compute_var_coef(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let g2 = Arc::clone(&graph);
     let chernoff = VarCoefGraphHeatChernoff::new(graph, a, rho_bar)?;
     let sg = ChernoffSemigroup::new(chernoff, n_steps)?;

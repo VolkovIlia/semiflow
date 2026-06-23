@@ -12,7 +12,7 @@
 
 use numpy::Complex64;
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Diffusion4thChernoff, GridFn1D, SchrodingerChernoff, SchrodingerState,
 };
 
@@ -62,13 +62,13 @@ pub(crate) fn assemble_complex128<'py>(
 /// Propagates `SemiflowError` from grid/state construction or `apply_into`.
 pub(crate) fn compute_schrodinger(
     chernoff: SchrodingerChernoff<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    grid: semiflow::Grid1D<f64>,
     re_in: Vec<f64>,
     im_in: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<(Vec<f64>, Vec<f64>), semiflow_core::SemiflowError> {
-    use semiflow_core::ScratchPool;
+) -> Result<(Vec<f64>, Vec<f64>), semiflow::SemiflowError> {
+    use semiflow::ScratchPool;
 
     #[allow(clippy::cast_precision_loss)]
     let tau = t / n_steps as f64;
@@ -98,12 +98,12 @@ pub(crate) fn build_schrodinger_zero_v(
     xmin: f64,
     xmax: f64,
     n: usize,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
     re: &[f64],
     im: &[f64],
-) -> Result<Schrodinger1DInner, semiflow_core::SemiflowError> {
+) -> Result<Schrodinger1DInner, semiflow::SemiflowError> {
     validate_psi_finite(re, im)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)?.with_boundary(policy);
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)?.with_boundary(policy);
     let kinetic = Diffusion4thChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
     let chernoff = SchrodingerChernoff::new(kinetic, |_| 0.0)?;
     let psi_re = GridFn1D::new(grid, re.to_vec())?;
@@ -120,14 +120,14 @@ pub(crate) fn build_schrodinger_with_v(
     xmin: f64,
     xmax: f64,
     n: usize,
-    policy: semiflow_core::BoundaryPolicy,
+    policy: semiflow::BoundaryPolicy,
     v_arr: &Bound<'_, PyAny>,
     re: &[f64],
     im: &[f64],
 ) -> PyResult<Schrodinger1DInner> {
     validate_psi_finite(re, im).map_err(|e| from_core(&e))?;
     let v_closure = closure_from_array(v_arr, xmin, xmax, n)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)
         .map_err(|e| from_core(&e))?
         .with_boundary(policy);
     let kinetic = Diffusion4thChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
@@ -185,10 +185,10 @@ pub(crate) fn extract_f64_vec(obj: &Bound<'_, PyAny>, name: &str) -> PyResult<Ve
 pub(crate) fn validate_psi_finite(
     re: &[f64],
     im: &[f64],
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     for &v in re.iter().chain(im.iter()) {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "psi0 contains NaN or Inf",
                 value: v,
             });

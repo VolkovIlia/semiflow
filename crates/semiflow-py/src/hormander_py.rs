@@ -12,7 +12,7 @@
 #![allow(clippy::unused_self)]
 
 use pyo3::prelude::*;
-use semiflow_core::{heisenberg_heat_kernel, HypoellipticChernoff};
+use semiflow::{heisenberg_heat_kernel, HypoellipticChernoff};
 
 use crate::error::from_core;
 use crate::panic::catch_panic_py;
@@ -69,7 +69,7 @@ impl PyHypoellipticChernoffHeisenberg {
     /// int
     ///     Approximation order = 2.
     fn order(&self) -> u32 {
-        use semiflow_core::ChernoffFunction;
+        use semiflow::ChernoffFunction;
         self.inner.order()
     }
 

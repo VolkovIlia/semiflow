@@ -37,7 +37,7 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError, scratch::ScratchPool, DiffusionChernoff, DynamicWentzellChernoff, Grid1D,
     GridFn1D, TimedChernoffFunction,
 };

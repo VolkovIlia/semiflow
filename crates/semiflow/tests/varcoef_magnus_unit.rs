@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     error::SemiflowError,
     graph::{Graph, Laplacian},
     graph_signal::GraphSignal,

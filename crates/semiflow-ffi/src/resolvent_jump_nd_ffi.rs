@@ -46,7 +46,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ResolventJumpChernoff2D, ResolventJumpChernoff3D,
 };
 
@@ -341,7 +341,7 @@ fn build_inner_2d(
     ymax: f64,
     ny: usize,
     m_nodes: usize,
-) -> Result<Inner2D, semiflow_core::SemiflowError> {
+) -> Result<Inner2D, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let grid = Grid2D::new(gx, gy);
@@ -360,7 +360,7 @@ fn build_inner_3d(
     zmax: f64,
     nz: usize,
     m_nodes: usize,
-) -> Result<Inner3D, semiflow_core::SemiflowError> {
+) -> Result<Inner3D, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let gz = Grid1D::new(zmin, zmax, nz)?;

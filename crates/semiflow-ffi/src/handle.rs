@@ -5,7 +5,7 @@
 //! `ffi.rs` performs the `Box::into_raw` / `Box::from_raw` round-trip.
 //! All raw pointer operations are confined to `ffi.rs` (the sole `allow` site).
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError};
 
 // ---------------------------------------------------------------------------
 // Opaque C handle

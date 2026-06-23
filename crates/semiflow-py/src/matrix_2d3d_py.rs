@@ -16,7 +16,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::{
+use semiflow::{
     matrix_2d3d::{MatrixDiffusionChernoff2D, MatrixGridFn2D},
     matrix_system::MatrixDiffusionChernoff,
     ChernoffSemigroup, Grid1D, Grid2D,
@@ -111,7 +111,7 @@ impl MatrixDiffusion2D {
             let c = self.c_coupling;
             let g = self.grid2d;
             let vals = self.current.clone();
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_2d(a, c, g, vals, t, n_steps));
             self.current = result.map_err(|e| from_core(&e))?;
             Ok(())
@@ -140,7 +140,7 @@ impl MatrixDiffusion2D {
 // MatrixDiffusion3D — coupled 2-component 3D diffusion
 // ===========================================================================
 
-use semiflow_core::{
+use semiflow::{
     matrix_2d3d::{MatrixDiffusionChernoff3D, MatrixGridFn3D},
     Grid3D,
 };
@@ -217,7 +217,7 @@ impl MatrixDiffusion3D {
             let c = self.c_coupling;
             let g = self.grid3d;
             let vals = self.current.clone();
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| evolve_3d(a, c, g, vals, t, n_steps));
             self.current = result.map_err(|e| from_core(&e))?;
             Ok(())
@@ -318,7 +318,7 @@ fn build_grid2d(
     ymin: f64,
     ymax: f64,
     ny: usize,
-) -> Result<Grid2D<f64>, semiflow_core::SemiflowError> {
+) -> Result<Grid2D<f64>, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     Ok(Grid2D::new(gx, gy))
@@ -334,7 +334,7 @@ fn build_grid3d(
     zmin: f64,
     zmax: f64,
     nz: usize,
-) -> Result<Grid3D<f64>, semiflow_core::SemiflowError> {
+) -> Result<Grid3D<f64>, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let gz = Grid1D::new(zmin, zmax, nz)?;
@@ -345,7 +345,7 @@ fn build_axis_kernel(
     a_diag: f64,
     c_coupling: f64,
     axis: Grid1D<f64>,
-) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow_core::SemiflowError> {
+) -> Result<MatrixDiffusionChernoff<f64, 2>, semiflow::SemiflowError> {
     build_matrix_kernel(a_diag, c_coupling, axis)
 }
 
@@ -356,7 +356,7 @@ fn evolve_2d(
     vals: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
     let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
     let kernel = MatrixDiffusionChernoff2D::new(kx, ky);
@@ -374,7 +374,7 @@ fn evolve_3d(
     vals: Vec<f64>,
     t: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
     let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
     let kz = build_axis_kernel(a_diag, c_coupling, g.z)?;

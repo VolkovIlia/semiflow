@@ -88,7 +88,7 @@ pub(super) const W2: f64 = 1.0 / 48.0;
 /// # Example
 ///
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff};
+/// use semiflow::{Grid1D, GridFn1D, DiffusionChernoff};
 /// let grid = Grid1D::new(-5.0, 5.0, 64).unwrap();
 /// // Constant-a diffusion: a=1.0
 /// let diff = DiffusionChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);
@@ -212,7 +212,7 @@ impl<F: SemiflowFloat> DiffusionChernoff<F> {
     /// # Example
     ///
     /// ```rust
-    /// use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff};
+    /// use semiflow::{Grid1D, GridFn1D, DiffusionChernoff};
     /// let grid = Grid1D::new(-5.0, 5.0, 64).unwrap();
     /// // Constant-a diffusion a=0.5 (heat equation).
     /// let diff = DiffusionChernoff::new_const_a(0.5, 1.0, grid);

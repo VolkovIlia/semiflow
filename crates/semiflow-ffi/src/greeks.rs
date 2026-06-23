@@ -46,7 +46,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{DiffusionChernoff, Dual, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Dual, Grid1D, GridFn1D};
 
 use crate::status::SemiflowStatus;
 
@@ -217,7 +217,7 @@ fn build_greeks_inner(
     n_chernoff: usize,
     scale_theta: f64,
     u0_f64: &[f64],
-) -> Result<GreeksInnerV3, semiflow_core::SemiflowError> {
+) -> Result<GreeksInnerV3, semiflow::SemiflowError> {
     crate::handle::validate_u0_finite(u0_f64)?;
     validate_n_chernoff(n_chernoff)?;
     validate_scale(scale_theta)?;
@@ -260,9 +260,9 @@ fn build_greeks_inner(
 fn run_hyper_dual_sweep(
     inner: &GreeksInnerV3,
     t: f64,
-) -> Result<GridFn1D<HyperDual>, semiflow_core::SemiflowError> {
+) -> Result<GridFn1D<HyperDual>, semiflow::SemiflowError> {
     if !t.is_finite() || t < 0.0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "t must be finite and >= 0",
             value: t,
         });
@@ -319,9 +319,9 @@ fn hd_const(v: Dual<f64>) -> HyperDual {
 }
 
 /// Validate `n_chernoff >= 1`.
-fn validate_n_chernoff(n: usize) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_n_chernoff(n: usize) -> Result<(), semiflow::SemiflowError> {
     if n == 0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "n_chernoff must be >= 1",
             value: 0.0,
         });
@@ -330,9 +330,9 @@ fn validate_n_chernoff(n: usize) -> Result<(), semiflow_core::SemiflowError> {
 }
 
 /// Validate `scale_theta` is finite and positive.
-fn validate_scale(theta: f64) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_scale(theta: f64) -> Result<(), semiflow::SemiflowError> {
     if !theta.is_finite() || theta <= 0.0 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "scale_theta must be finite and positive",
             value: theta,
         });
@@ -341,10 +341,10 @@ fn validate_scale(theta: f64) -> Result<(), semiflow_core::SemiflowError> {
 }
 
 /// Validate `u0.len() == n_grid`.
-fn validate_u0_len(u0: &[f64], n_grid: usize) -> Result<(), semiflow_core::SemiflowError> {
+fn validate_u0_len(u0: &[f64], n_grid: usize) -> Result<(), semiflow::SemiflowError> {
     if u0.len() != n_grid {
         #[allow(clippy::cast_precision_loss)]
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "u0_len must equal n_grid",
             value: u0.len() as f64,
         });

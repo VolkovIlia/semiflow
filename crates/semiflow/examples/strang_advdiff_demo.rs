@@ -11,7 +11,7 @@
 //!
 //! Run with:  `cargo run --release --example strang_advdiff_demo -p semiflow-core`
 
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
     StrangSplit,
 };

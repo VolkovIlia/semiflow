@@ -21,7 +21,7 @@
 use core::cell::Cell;
 
 use proptest::prelude::*;
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D};
 
 // Fourier-symbol weights (match diffusion.rs constants).
 const W0: f64 = 7.0 / 12.0;

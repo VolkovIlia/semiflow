@@ -57,7 +57,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     killing_soft::{ClosureKillingRate, Killing2ndChernoff},
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, ScratchPool,
 };

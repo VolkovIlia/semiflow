@@ -8,7 +8,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::{prelude::*, types::PyAnyMethods};
-use semiflow_core::{ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff, GridFn1D};
+use semiflow::{ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff, GridFn1D};
 
 use crate::{
     boundary::parse_boundary,
@@ -262,10 +262,10 @@ pub(crate) fn build_diff4_unit(
     n: usize,
     n_steps: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Diff4StateInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Diff4StateInner, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let chernoff = Diffusion4thChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
     let semigroup = ChernoffSemigroup::new(chernoff, n_steps)?;
     let current = GridFn1D::new(grid, u0.to_vec())?;
@@ -282,10 +282,10 @@ pub(crate) fn build_diff6_unit(
     n: usize,
     n_steps: usize,
     u0: &[f64],
-    boundary: semiflow_core::BoundaryPolicy,
-) -> Result<Diff6StateInner, semiflow_core::SemiflowError> {
+    boundary: semiflow::BoundaryPolicy,
+) -> Result<Diff6StateInner, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
-    let grid = semiflow_core::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
+    let grid = semiflow::Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let chernoff = Diffusion6thChernoff::new(unit_a, zero_d, zero_d, 1.0, grid);
     let semigroup = ChernoffSemigroup::new(chernoff, n_steps)?;
     let current = GridFn1D::new(grid, u0.to_vec())?;
@@ -306,10 +306,10 @@ pub(super) fn validate_evolve_params(t: f64, n_steps: usize) -> PyResult<()> {
     Ok(())
 }
 
-pub(super) fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow_core::SemiflowError> {
+pub(super) fn validate_u0_finite(u0: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in u0 {
         if !v.is_finite() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "u0 contains NaN or Inf",
                 value: v,
             });

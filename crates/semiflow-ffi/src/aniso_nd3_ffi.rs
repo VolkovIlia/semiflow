@@ -38,7 +38,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, Grid1D, ScratchPool,
@@ -228,7 +228,7 @@ fn make_kernel_nd3(
     ns: [usize; 3],
     axes: Axes3,
     grid_nd: GridND<f64, 3>,
-) -> Result<AnisotropicShiftChernoffND<f64, 3>, semiflow_core::SemiflowError> {
+) -> Result<AnisotropicShiftChernoffND<f64, 3>, semiflow::SemiflowError> {
     let a2 = Arc::clone(&a_arc);
     let b2 = Arc::clone(&b_arc);
     let c2 = Arc::clone(&c_arc);
@@ -263,7 +263,7 @@ fn build_nd3(
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
     u0: &[f64],
-) -> Result<InnerND3, semiflow_core::SemiflowError> {
+) -> Result<InnerND3, semiflow::SemiflowError> {
     let grid_nd = GridND::<f64, 3>::new([
         Grid1D::new(xmin, xmax, nx)?,
         Grid1D::new(ymin, ymax, ny)?,
@@ -287,7 +287,7 @@ fn run_nd3(
     input: Vec<f64>,
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFnND::<f64, 3>::new(grid.clone(), input)?;
     let mut dst = GridFnND::<f64, 3>::new(grid, vec![0.0; src.values.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

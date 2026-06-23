@@ -152,15 +152,15 @@ pub(crate) fn build_presampled_closure(
 /// No Python types cross this boundary.  All parameters are `Send + Sync`.
 ///
 /// # Errors
-/// Propagates [`semiflow_core::SemiflowError`] from `apply_into`.
+/// Propagates [`semiflow::SemiflowError`] from `apply_into`.
 pub(crate) fn compute_chunk(
-    chernoff_func: semiflow_core::DiffusionChernoff<f64>,
-    grid: semiflow_core::Grid1D<f64>,
+    chernoff_func: semiflow::DiffusionChernoff<f64>,
+    grid: semiflow::Grid1D<f64>,
     input: Vec<f64>,
     tau: f64,
     k: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
-    use semiflow_core::{ChernoffFunction, GridFn1D, ScratchPool, State};
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    use semiflow::{ChernoffFunction, GridFn1D, ScratchPool, State};
     let mut buf_a: GridFn1D<f64> = GridFn1D::new(grid, input)?;
     let mut buf_b: GridFn1D<f64> = buf_a.clone();
     buf_b.zero_into();

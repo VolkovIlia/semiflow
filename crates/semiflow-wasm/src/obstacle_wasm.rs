@@ -29,7 +29,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, Obstacle,
     ObstacleChernoff, ScratchPool, SemiflowError,
 };

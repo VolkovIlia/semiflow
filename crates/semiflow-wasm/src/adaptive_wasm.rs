@@ -23,7 +23,7 @@
 #![allow(unsafe_code)]
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     AdaptivePI, Diffusion4thChernoff, Diffusion6thChernoff, DiffusionChernoff,
     DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
 };
@@ -66,7 +66,7 @@ impl AdpiKernel {
         &mut self,
         t: f64,
         u0: &GridFn1D<f64>,
-    ) -> Result<(Vec<f64>, usize, usize), semiflow_core::SemiflowError> {
+    ) -> Result<(Vec<f64>, usize, usize), semiflow::SemiflowError> {
         let outcome = match self {
             Self::Diff2(k) => k.evolve_adaptive(t, u0)?,
             Self::Diff4(k) => k.evolve_adaptive(t, u0)?,

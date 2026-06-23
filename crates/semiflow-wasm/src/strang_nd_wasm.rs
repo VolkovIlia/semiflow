@@ -25,7 +25,7 @@
 use std::sync::Arc;
 
 use js_sys::Float64Array;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ScratchPool,
     Strang2D, Strang3D,
 };

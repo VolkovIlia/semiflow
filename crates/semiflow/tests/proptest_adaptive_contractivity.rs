@@ -11,7 +11,7 @@
 //! 200 cases, Proptest 1.4.0.
 
 use proptest::prelude::*;
-use semiflow_core::{state::State, AdaptivePI, BoundaryPolicy, DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{state::State, AdaptivePI, BoundaryPolicy, DiffusionChernoff, Grid1D, GridFn1D};
 
 // Thread-local amplitude so fn-pointer is compatible with proptest lambdas.
 // We re-build the grid/IC inside each test case from the proptest parameters.

@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph_heat::GraphHeatChernoff, AdjointChernoff, ChernoffFunction, Graph, GraphSignal,
     Laplacian, ScratchPool,
 };

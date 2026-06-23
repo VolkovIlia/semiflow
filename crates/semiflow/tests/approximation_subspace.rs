@@ -28,7 +28,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{
+use semiflow::{
     approximation::{assert_in_subspace, ApproximationSubspace},
     Diffusion4thChernoff, DiffusionChernoff, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff,
 };

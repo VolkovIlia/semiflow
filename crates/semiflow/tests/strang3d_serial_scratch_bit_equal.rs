@@ -19,7 +19,7 @@
 //! See `docs/adr/0022-scratch-pool.md` Amendment 1 and
 //! `src/strang3d.rs` `apply_serial`.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D,
 };
 

@@ -40,7 +40,7 @@
 
 use core::f64::consts::PI;
 
-use semiflow_core::{
+use semiflow::{
     killing_order2::DirichletHeat2ndChernoff,
     reflection::HalfSpaceRegion,
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind,

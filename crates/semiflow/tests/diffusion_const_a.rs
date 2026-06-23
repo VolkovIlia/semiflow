@@ -3,7 +3,7 @@
 //! Gate: `CONST_A_BIT_EQUAL` — output of `new_const_a` must be bit-identical to
 //! `new` with `|_| 0.0` derivative args for the same `a_value`, grid, and `tau`.
 
-use semiflow_core::{DiffusionChernoff, Grid1D, GridFn1D};
+use semiflow::{DiffusionChernoff, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Helpers

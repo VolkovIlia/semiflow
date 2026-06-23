@@ -51,7 +51,7 @@
 use std::os::raw::c_double;
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, ScratchPool,
     Strang2D,
 };
@@ -355,7 +355,7 @@ fn build_inner_2d_unit(
     ymin: f64,
     ymax: f64,
     ny: usize,
-) -> Result<Inner2D, semiflow_core::SemiflowError> {
+) -> Result<Inner2D, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
     let grid = Grid2D::new(gx, gy);
@@ -374,7 +374,7 @@ fn build_inner_2d_vara(
     ny: usize,
     ax_vals: &[f64],
     ay_vals: &[f64],
-) -> Result<Inner2DVarA, semiflow_core::SemiflowError> {
+) -> Result<Inner2DVarA, semiflow::SemiflowError> {
     let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(BoundaryPolicy::Reflect);
     let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(BoundaryPolicy::Reflect);
     let grid = Grid2D::new(gx, gy);
@@ -415,7 +415,7 @@ fn evolve_2d(
     u0: &[f64],
     tau: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let mut src = GridFn2D::new(grid, u0.to_vec())?;
     let mut dst = GridFn2D::new(grid, vec![0.0; u0.len()])?;
     let mut scratch = ScratchPool::<f64>::new();

@@ -20,7 +20,7 @@
 
 #![cfg(feature = "simd")]
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt,
     diffusion6::Diffusion6thChernoff,
     simd::with_force_scalar,

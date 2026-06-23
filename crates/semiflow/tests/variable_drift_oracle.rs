@@ -15,7 +15,7 @@
 //!
 //! Reference: `contracts/semiflow-core.math.md §9.3`, `contracts/semiflow-core.traits.yaml` I2.
 
-use semiflow_core::{ChernoffSemigroup, DriftReactionChernoff, Grid1D, GridFn1D};
+use semiflow::{ChernoffSemigroup, DriftReactionChernoff, Grid1D, GridFn1D};
 
 // ---------------------------------------------------------------------------
 // Oracle parameters (NON-NEGOTIABLE — match math.md §9.3)

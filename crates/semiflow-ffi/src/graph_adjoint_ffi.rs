@@ -22,13 +22,13 @@
 
 use std::sync::Arc;
 
-use semiflow_core::{
+use semiflow::{
     graph_adjoint_presampled::{
         fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
     },
     Graph, GraphSignal, LaplacianKind, MagnusGraphHeatChernoff, VarCoefMagnusGraphHeatChernoff,
 };
-use semiflow_core::scratch::ScratchPool;
+use semiflow::scratch::ScratchPool;
 
 use crate::status::SemiflowStatus;
 

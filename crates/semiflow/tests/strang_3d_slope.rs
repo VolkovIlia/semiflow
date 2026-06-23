@@ -23,7 +23,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow_core::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D};
+use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D};
 
 // ---------------------------------------------------------------------------
 // Gate constants

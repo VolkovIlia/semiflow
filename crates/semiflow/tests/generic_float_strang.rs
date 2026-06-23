@@ -44,7 +44,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // f64→f32 casts are intentional (f32 precision test)
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt,
     diffusion::DiffusionChernoff,
     grid::Grid1D,

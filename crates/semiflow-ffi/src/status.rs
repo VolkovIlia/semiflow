@@ -4,7 +4,7 @@
 //! `#[repr(C)]` and **not** `#[non_exhaustive]` — the C ABI requires a stable
 //! integer representation.
 
-use semiflow_core::SemiflowError;
+use semiflow::SemiflowError;
 
 /// Status codes returned by all `smf_*` C functions.
 ///

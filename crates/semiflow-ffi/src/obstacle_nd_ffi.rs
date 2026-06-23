@@ -30,7 +30,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, ConstantObstacle, Grid1D, ObstacleChernoffND, ScratchPool, SquareMatrix,
@@ -207,7 +207,7 @@ fn run_nd2_step(
     v_vals: &[f64],
     level: f64,
     tau: f64,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let src = GridFnND::new(grid_nd.clone(), v_vals.to_vec())?;
     let mut dst = GridFnND::new(grid_nd.clone(), vec![0.0_f64; v_vals.len()])?;
     // Unit-isotropic diffusion inner: a = I, b = 0, c = 0.
@@ -244,7 +244,7 @@ fn build_nd2_inner(
     ymax: f64,
     ny: usize,
     level: f64,
-) -> Result<Nd2Inner, semiflow_core::SemiflowError> {
+) -> Result<Nd2Inner, semiflow::SemiflowError> {
     validate_nd2_domain(xmin, xmax, ymin, ymax, level)?;
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
@@ -258,27 +258,27 @@ fn validate_nd2_domain(
     ymin: f64,
     ymax: f64,
     level: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     if !xmin.is_finite() || !xmax.is_finite() || !ymin.is_finite() || !ymax.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_nd2: domain bounds must be finite",
             value: f64::NAN,
         });
     }
     if xmin >= xmax {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "xmin must be < xmax",
             value: xmin,
         });
     }
     if ymin >= ymax {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "ymin must be < ymax",
             value: ymin,
         });
     }
     if !level.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_nd2: level must be finite",
             value: level,
         });

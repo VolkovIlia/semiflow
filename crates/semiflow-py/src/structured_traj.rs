@@ -12,7 +12,7 @@ use std::sync::Arc;
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 
-use semiflow_core::{
+use semiflow::{
     graph::Graph, graph_heat::GraphHeatChernoff, graph_signal::GraphSignal, graph_traj::GraphTraj,
     strang_graph::StrangSplitGraph, ChernoffFunction, ChernoffSemigroup,
 };
@@ -70,8 +70,8 @@ impl PyGraphTraj {
             // Validate via core constructor (fixed-topology degenerate).
             let g = Arc::clone(&graph.inner);
             let g2 = Arc::clone(&g);
-            let wfn: semiflow_core::graph_traj::SegmentWeightFn<f64> = Box::new(move |_t| {
-                Arc::new(semiflow_core::graph::Laplacian::assemble_combinatorial(&g2))
+            let wfn: semiflow::graph_traj::SegmentWeightFn<f64> = Box::new(move |_t| {
+                Arc::new(semiflow::graph::Laplacian::assemble_combinatorial(&g2))
             });
             let _traj = GraphTraj::fixed_topology(Arc::clone(&g), wfn, t_horizon)
                 .map_err(|e| from_core(&e))?;
@@ -225,7 +225,7 @@ impl PyStrangGraph {
             let strang = self.strang.clone();
             let graph = Arc::clone(&self.graph);
             let n_st = n_steps as usize;
-            let result: Result<Vec<f64>, semiflow_core::SemiflowError> =
+            let result: Result<Vec<f64>, semiflow::SemiflowError> =
                 py.detach(|| compute_strang(strang, graph, &input, t_final, n_st));
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))
         })
@@ -261,7 +261,7 @@ fn compute_strang(
     input: &[f64],
     t_final: f64,
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let sg = ChernoffSemigroup::new(strang, n_steps)?;
     let f0 = GraphSignal::from_fn(Arc::clone(&graph), |i| input[i as usize]);
     let result = sg.evolve(t_final, &f0)?;

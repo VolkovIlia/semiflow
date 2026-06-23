@@ -38,7 +38,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     grid_nd::{GridFnND, GridND},
     smolyak::SmolyakGridND,
     ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,
@@ -208,7 +208,7 @@ fn run_smolyak(
     tau: f64,
     u0: &[f64],
     n_steps: usize,
-) -> Result<Vec<f64>, semiflow_core::SemiflowError> {
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
     let kernel = build_kernel(lo, hi, n)?;
     let grid = build_grid(lo, hi, n)?;
     let mut src = GridFnND::new(grid.clone(), u0.to_vec())?;
@@ -225,7 +225,7 @@ fn run_smolyak(
 // Builders
 // ---------------------------------------------------------------------------
 
-fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow_core::SemiflowError> {
+fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }
@@ -234,7 +234,7 @@ fn build_kernel(
     lo: f64,
     hi: f64,
     n: usize,
-) -> Result<SmolyakGridND<f64, D>, semiflow_core::SemiflowError> {
+) -> Result<SmolyakGridND<f64, D>, semiflow::SemiflowError> {
     let grid = build_grid(lo, hi, n)?;
     SmolyakGridND::with_level(
         |_x: &[f64; D], a: &mut SquareMatrix<f64, D>| {

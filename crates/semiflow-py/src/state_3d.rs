@@ -11,7 +11,7 @@
 
 use numpy::{PyArray1, PyReadwriteArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow_core::ScratchPool;
+use semiflow::ScratchPool;
 
 use crate::{
     boundary::parse_boundary,

@@ -7,7 +7,7 @@
 //! Slope must be **> -1.0** (strictly first-order difference).
 //! This is the negative result that aborted the C2 fused dispatch.
 
-use semiflow_core::{
+use semiflow::{
     chernoff::ApplyChernoffExt, diffusion::DiffusionChernoff, grid::Grid1D, grid2d::Grid2D,
     grid_fn2d::GridFn2D, Strang2D,
 };
@@ -17,7 +17,7 @@ fn apply_fused(
     s: &Strang2D<DiffusionChernoff, DiffusionChernoff, f64>,
     tau: f64,
     f: &GridFn2D<f64>,
-) -> Result<GridFn2D<f64>, semiflow_core::SemiflowError> {
+) -> Result<GridFn2D<f64>, semiflow::SemiflowError> {
     let f1 = s.x.apply_chernoff(tau, f)?;
     s.y.apply_chernoff(tau, &f1)
 }

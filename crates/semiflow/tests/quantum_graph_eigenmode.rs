@@ -27,7 +27,7 @@
 
 use core::f64::consts::PI;
 
-use semiflow_core::{Evolver, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal, State};
+use semiflow::{Evolver, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal, State};
 
 // ---------------------------------------------------------------------------
 // Gate constant (NON-NEGOTIABLE per ADR-0078 G30 spec)

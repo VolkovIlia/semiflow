@@ -253,7 +253,7 @@ fn g_adaptive_q_vs_fixed32() {
 /// Smoke: `order()` == 1 for the adaptive wrapper.
 #[test]
 fn g_adaptive_q_order_is_1() {
-    use semiflow_core::{
+    use semiflow::{
         grid_nd::GridND, shift_nd_adaptive::AnisotropicShiftAdaptiveQ, Grid1D, SquareMatrix,
     };
     let ax = Grid1D::new(-5.0_f64, 5.0, 8).unwrap();
@@ -274,14 +274,14 @@ fn g_adaptive_q_order_is_1() {
         1e-10_f64,
     )
     .unwrap();
-    use semiflow_core::ChernoffFunction;
+    use semiflow::ChernoffFunction;
     assert_eq!(k.order(), 1, "AnisotropicShiftAdaptiveQ::order() must be 1");
 }
 
 /// Smoke: adaptive kernel produces finite output on Gaussian IC.
 #[test]
 fn g_adaptive_q_apply_smoke() {
-    use semiflow_core::{
+    use semiflow::{
         grid_nd::{GridFnND, GridND},
         shift_nd_adaptive::AnisotropicShiftAdaptiveQ,
         ChernoffFunction, Grid1D, ScratchPool, SquareMatrix,
@@ -319,7 +319,7 @@ fn g_adaptive_q_apply_smoke() {
 /// Smoke: tol=0 must be rejected.
 #[test]
 fn g_adaptive_q_tol_zero_rejected() {
-    use semiflow_core::{
+    use semiflow::{
         grid_nd::GridND, shift_nd_adaptive::AnisotropicShiftAdaptiveQ, Grid1D, SquareMatrix,
     };
     let ax = Grid1D::new(-5.0_f64, 5.0, 8).unwrap();

@@ -19,7 +19,7 @@
 #![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
 
 use num_complex::Complex;
-use semiflow_core::{
+use semiflow::{
     ChernoffFunction, Grid1D, MatrixDiffusionChernoffComplex, MatrixGridFnComplex1D, ScratchPool,
 };
 

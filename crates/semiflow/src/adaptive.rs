@@ -75,7 +75,7 @@ use crate::{
 ///
 /// Default (`ClassicalPI`, f64 — v1.0.0 equivalent):
 /// ```rust
-/// use semiflow_core::{Grid1D, GridFn1D, DiffusionChernoff, AdaptivePI};
+/// use semiflow::{Grid1D, GridFn1D, DiffusionChernoff, AdaptivePI};
 /// let grid = Grid1D::new(-4.0, 4.0, 64).unwrap();
 /// let diff = DiffusionChernoff::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.5, grid);
 /// let mut ctrl = AdaptivePI::new(diff).with_tolerance(1e-6, 1e-4);

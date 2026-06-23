@@ -23,7 +23,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
 };
 
@@ -322,7 +322,7 @@ fn build_drift_reaction(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerDriftReaction, semiflow_core::SemiflowError> {
+) -> Result<InnerDriftReaction, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     // Default: b = 0.5, c = 0; c_norm_bound = 0.5.
@@ -338,7 +338,7 @@ fn build_shift1d(
     n: usize,
     n_chernoff: usize,
     u0: &[f64],
-) -> Result<InnerShift1D, semiflow_core::SemiflowError> {
+) -> Result<InnerShift1D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     // Default: a = 0.5, b = 0, c = 0; c_norm_bound = 0.5.
@@ -355,7 +355,7 @@ fn build_shift1d(
 fn evolve_drift_reaction(
     inner: &mut InnerDriftReaction,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())
@@ -364,7 +364,7 @@ fn evolve_drift_reaction(
 fn evolve_shift1d(
     inner: &mut InnerShift1D,
     t: f64,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

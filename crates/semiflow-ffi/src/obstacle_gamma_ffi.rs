@@ -34,7 +34,7 @@
 
 use std::os::raw::c_double;
 
-use semiflow_core::{
+use semiflow::{
     ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff,
 };
 
@@ -50,13 +50,13 @@ struct GammaArrayObstacle {
 }
 
 impl GammaArrayObstacle {
-    fn new(values: Vec<f64>) -> Result<Self, semiflow_core::SemiflowError> {
+    fn new(values: Vec<f64>) -> Result<Self, semiflow::SemiflowError> {
         validate_u0_finite(&values)?;
         Ok(Self { values })
     }
 }
 
-impl semiflow_core::Obstacle<f64> for GammaArrayObstacle {
+impl semiflow::Obstacle<f64> for GammaArrayObstacle {
     fn value_at(&self, _point: &[f64]) -> f64 {
         0.0
     }
@@ -64,9 +64,9 @@ impl semiflow_core::Obstacle<f64> for GammaArrayObstacle {
     fn project_in_place(
         &self,
         dst: &mut GridFn1D<f64>,
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         if dst.values.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "GammaArrayObstacle: length mismatch",
                 value: self.values.len() as f64,
             });
@@ -83,9 +83,9 @@ impl semiflow_core::Obstacle<f64> for GammaArrayObstacle {
         &self,
         w: &GridFn1D<f64>,
         active: &mut [bool],
-    ) -> Result<(), semiflow_core::SemiflowError> {
+    ) -> Result<(), semiflow::SemiflowError> {
         if active.len() != w.grid.n || active.len() != self.values.len() {
-            return Err(semiflow_core::SemiflowError::DomainViolation {
+            return Err(semiflow::SemiflowError::DomainViolation {
                 what: "GammaArrayObstacle::active_set_into: length mismatch",
                 value: active.len() as f64,
             });
@@ -127,7 +127,7 @@ impl GammaVariant {
         v: &GridFn1D<f64>,
         gamma: &mut GridFn1D<f64>,
         defined: &mut [bool],
-    ) -> Result<usize, semiflow_core::SemiflowError> {
+    ) -> Result<usize, semiflow::SemiflowError> {
         match self {
             Self::Const(k) => k.apply_inactive_gamma_into(v, gamma, defined),
             Self::Array(k) => k.apply_inactive_gamma_into(v, gamma, defined),
@@ -355,10 +355,10 @@ fn build_gamma_const(
     xmax: f64,
     n: usize,
     level: f64,
-) -> Result<GammaInner, semiflow_core::SemiflowError> {
+) -> Result<GammaInner, semiflow::SemiflowError> {
     validate_gamma_domain(xmin, xmax, n)?;
     if !level.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: level must be finite",
             value: level,
         });
@@ -375,10 +375,10 @@ fn build_gamma_array(
     xmax: f64,
     n: usize,
     obstacle: &[f64],
-) -> Result<GammaInner, semiflow_core::SemiflowError> {
+) -> Result<GammaInner, semiflow::SemiflowError> {
     validate_gamma_domain(xmin, xmax, n)?;
     if obstacle.len() != n {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: obstacle_array length must equal n",
             value: obstacle.len() as f64,
         });
@@ -395,21 +395,21 @@ fn validate_gamma_domain(
     xmin: f64,
     xmax: f64,
     n: usize,
-) -> Result<(), semiflow_core::SemiflowError> {
+) -> Result<(), semiflow::SemiflowError> {
     if !xmin.is_finite() || !xmax.is_finite() {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: domain bounds must be finite",
             value: f64::NAN,
         });
     }
     if xmin >= xmax {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: xmin must be < xmax",
             value: xmin,
         });
     }
     if n < 4 {
-        return Err(semiflow_core::SemiflowError::DomainViolation {
+        return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: n must be >= 4 (Grid1D requirement)",
             value: n as f64,
         });
