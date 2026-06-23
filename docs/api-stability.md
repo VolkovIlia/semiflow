@@ -19,7 +19,7 @@ dependencies:
   - docs/adr/0162-tt-coupled-spectral.md
   - docs/adr/0169-s3-honest-scope-public-api-promotion.md
   - Cargo.toml
-  - crates/semiflow-core/src/lib.rs
+  - crates/semiflow/src/lib.rs
 changelog:
   - 1.0.0: Initial API stability policy, effective at v1.0.0 release
   - 1.1.0: Add §11 surface changes v4.6.0–v5.0.0 (OobPolicy, ChebyshevSpectralWithBC, Grid1D::cheb_m, SubordinatedChernoff, LevySubordinator, LadderRung, Robin BC; schema 2.0.0)
@@ -31,7 +31,7 @@ changelog:
 # API Stability Policy
 
 **Effective from**: v1.0.0
-**Scope**: All four public surfaces — `semiflow-core` Rust rlib, `semiflow-ffi`
+**Scope**: All four public surfaces — `semiflow` Rust rlib, `semiflow-ffi`
 C ABI, `semiflow-py` PyO3 wheel, `semiflow-wasm` npm package.
 **Cross-refs**: ADR-0028 §"API stability", ADR-0033, ADR-0034, ADR-0035
 (v1.0.0 freeze inventory; written concurrently).
@@ -40,7 +40,7 @@ C ABI, `semiflow-py` PyO3 wheel, `semiflow-wasm` npm package.
 
 ## 1. Status and Scope
 
-This document is the authoritative stability contract for the semiflow-core
+This document is the authoritative stability contract for the semiflow
 workspace after the v1.0.0 tag. It supersedes the pre-1.0 "research preview"
 disclaimer in `README.md` (which is removed at v1.0.0 by task S2.7).
 
@@ -48,7 +48,7 @@ Coverage:
 
 | Crate | Artifact | Distribution |
 |-------|----------|-------------|
-| `semiflow-core` | `rlib` | crates.io |
+| `semiflow` | `rlib` | crates.io |
 | `semiflow-ffi` | `cdylib + staticlib + remizov.h` | GitHub Releases |
 | `semiflow-py` | `abi3-py310` wheel | PyPI / GitHub Releases |
 | `semiflow-wasm` | `wasm-pack` npm package | npm registry |
@@ -77,7 +77,7 @@ behaviour.
 improvements that do not change documented behaviour. No API changes of any
 kind. Panic message text may change in a PATCH.
 
-All four crates bump in lockstep: a MINOR change to `semiflow-core` that has
+All four crates bump in lockstep: a MINOR change to `semiflow` that has
 no binding impact still increments the workspace version. Crates are not
 independently versioned after v1.0.0.
 
@@ -108,17 +108,17 @@ the CHANGELOG under a `### Changed` heading.
 
 ## 4. Cross-Binding Synchronization
 
-`semiflow-core` is the source of truth. Binding crates (`semiflow-ffi`,
+`semiflow` is the source of truth. Binding crates (`semiflow-ffi`,
 `semiflow-py`, `semiflow-wasm`) mirror it and may lag by at most one MINOR
 release; they may not lead.
 
 Rules:
 
-- A **MAJOR** change to `semiflow-core` triggers simultaneous MAJOR bumps
+- A **MAJOR** change to `semiflow` triggers simultaneous MAJOR bumps
   for all four crates, regardless of whether the binding surfaces are
   directly affected. Bindings are locked to the core's API contract.
 
-- A **MINOR** addition to `semiflow-core` that is not yet reflected in any
+- A **MINOR** addition to `semiflow` that is not yet reflected in any
   binding is permitted. The binding catches up at the next MINOR bump.
 
 - A **MINOR** addition partially mirrored across bindings is permitted
@@ -208,8 +208,8 @@ The following are explicitly outside the stability guarantee:
 
 The following are covered by this policy starting at v1.0.0:
 
-**`semiflow-core` Rust rlib** — all `pub use` re-exports in
-`crates/semiflow-core/src/lib.rs` (lines 134–157 at v1.0.0), which include:
+**`semiflow` Rust rlib** — all `pub use` re-exports in
+`crates/semiflow/src/lib.rs` (lines 134–157 at v1.0.0), which include:
 
 | Export | Module |
 |--------|--------|
@@ -433,7 +433,7 @@ No removals, no deprecations, no signature changes. All six new public types are
 strictly additive. Cross-refs: ADR-0154 (binding parity), ADR-0155
 (GridlessChernoff), ADR-0156 (ReverseChernoff), ADR-0159 (TtChernoff).
 
-**New public items in `semiflow-core` Rust rlib:**
+**New public items in `semiflow` Rust rlib:**
 
 | Item | Kind | Module | ADR |
 |------|------|--------|-----|
@@ -480,7 +480,7 @@ strictly additive. Cross-refs: ADR-0154 (binding parity), ADR-0155
 No removals, no deprecations, no signature changes. One new public type; all existing
 types and their methods are unchanged. Cross-ref: ADR-0162 (`CoupledTtChernoff`).
 
-**New public items in `semiflow-core` Rust rlib:**
+**New public items in `semiflow` Rust rlib:**
 
 | Item | Kind | Module | ADR |
 |------|------|--------|-----|
@@ -521,7 +521,7 @@ but carry explicit "Proven boundary" narrow-scope documentation and are expected
 evolve as the research matures. The feature flag itself will not be removed without a
 MAJOR bump.
 
-**New public items in `semiflow-core` Rust rlib (all `#[cfg(feature = "s3-poc")]`):**
+**New public items in `semiflow` Rust rlib (all `#[cfg(feature = "s3-poc")]`):**
 
 | Item | Kind | Module | ADR |
 |------|------|--------|-----|

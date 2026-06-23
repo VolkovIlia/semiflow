@@ -1,6 +1,6 @@
 # Precision Policy
 
-semiflow-core's composition types (`Strang2D`, `Strang3D`, `AdaptivePI`, …) are
+semiflow's composition types (`Strang2D`, `Strang3D`, `AdaptivePI`, …) are
 generic over `F: SemiflowFloat ∈ {f32, f64}`. The math is the same; the
 floating-point guarantees differ.
 
@@ -36,7 +36,7 @@ floating-point guarantees differ.
 
 ## What is and is not gated
 
-semiflow-core ships two classes of correctness gate:
+semiflow ships two classes of correctness gate:
 
 1. **Sympy oracle gates** (`T9N_*`, `T10N_*`, `T11N_*`) probe the *mathematical*
    structure of the Chernoff formula using arbitrary-precision symbolic

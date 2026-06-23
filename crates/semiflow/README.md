@@ -1,8 +1,8 @@
-# semiflow-core
+# semiflow
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/VolkovIlia/semiflow/actions)
-[![Docs.rs](https://img.shields.io/badge/docs.rs-semiflow--core-blue)](https://docs.rs/semiflow-core)
-[![Crates.io](https://img.shields.io/crates/v/semiflow-core)](https://crates.io/crates/semiflow-core)
+[![Docs.rs](https://img.shields.io/badge/docs.rs-semiflow-blue)](https://docs.rs/semiflow)
+[![Crates.io](https://img.shields.io/crates/v/semiflow)](https://crates.io/crates/semiflow)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](../../LICENSE-MIT)
 
 `no_std` Rust solver for linear evolution equations (`∂ₜu = Lu`) via Chernoff
@@ -40,13 +40,13 @@ f32x4 NEON kernels; forward-mode AD via `Dual<F>`).
 
 ```toml
 [dependencies]
-semiflow-core = "0.9"
+semiflow = "0.9"
 ```
 
 Or:
 
 ```bash
-cargo add semiflow-core
+cargo add semiflow
 ```
 
 MSRV: **Rust 1.78**. Default feature: `simd` (AVX2 on x86_64, NEON on aarch64;
@@ -55,7 +55,7 @@ default features.
 
 ```toml
 # no_std build
-semiflow-core = { version = "0.9", default-features = false }
+semiflow = { version = "0.9", default-features = false }
 ```
 
 ## Quickstart
@@ -252,7 +252,7 @@ monomorphisations (ADR-0018).
 | `rough_heston_pricer.rs` | Oracle-validated risk-neutral rough-Heston pricer (`--rate`/`--price`); honest scope: solver of a 4-factor Markov approximation, not validated vs true rough-Heston |
 
 ```bash
-cargo run -p semiflow-core --example heat_2d_demo
+cargo run -p semiflow --example heat_2d_demo
 ```
 
 ## Mathematical references

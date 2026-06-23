@@ -1,12 +1,12 @@
 # SemiFlow Bindings Guide
 
-SemiFlow's numerical core (`semiflow-core`, Rust) is exposed to three other
+SemiFlow's numerical core (`semiflow`, Rust) is exposed to three other
 ecosystems. All bindings wrap the same kernels and pass the same convergence
 gates; the Rust crate is the source of truth for behaviour.
 
 | Language | Package | Import / header | Crate |
 |----------|---------|-----------------|-------|
-| Rust | `semiflow-core` (crates.io) | `use semiflow_core::…;` | `crates/semiflow-core` |
+| Rust | `semiflow` (crates.io) | `use semiflow_core::…;` | `crates/semiflow` |
 | C / C++ | release artifact (cdylib) | `#include "semiflow.h"` | `crates/semiflow-ffi` |
 | Python | `semiflow-pde` (PyPI) | `import semiflow` | `crates/semiflow-py` |
 | JS / TS / WASM | `semiflow` (npm) | `import … from "semiflow"` | `crates/semiflow-wasm` |

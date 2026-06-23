@@ -3,7 +3,7 @@ version: 1.4.0
 last_updated: 2026-06-19
 freshness_score: 1.0
 dependencies:
-  - crates/semiflow-core/src/lib.rs
+  - crates/semiflow/src/lib.rs
   - crates/semiflow-py/src/
   - crates/semiflow-ffi/src/
   - crates/semiflow-wasm/src/
@@ -28,9 +28,9 @@ graph-unverified: false
 # Python Coverage Matrix
 
 This document tracks binding parity across the four public surfaces of the
-`semiflow-core` workspace. It was created at **v2.3.0** and has been updated
+`semiflow` workspace. It was created at **v2.3.0** and has been updated
 through **v9.2.0** (ADR-0169, 2026-06-19). The Python expansion follows the
-lockstep SemVer rule of ADR-0035: all four crates (`semiflow-core`, `semiflow-ffi`,
+lockstep SemVer rule of ADR-0035: all four crates (`semiflow`, `semiflow-ffi`,
 `semiflow-py`, `semiflow-wasm`) bump together at the final tag. See
 [`docs/audit-findings-v2_3_0.md`](audit-findings-v2_3_0.md) for the companion
 math-fidelity and gate report.
