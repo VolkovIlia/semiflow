@@ -212,6 +212,7 @@ pub(crate) mod hormander_heisenberg;
 pub mod howland;
 pub mod killed_dirichlet;
 pub mod killing;
+pub mod killing_order2;
 pub mod killing_soft;
 pub mod magnus6_graph;
 pub mod magnus_graph;
@@ -393,6 +394,7 @@ pub use crate::{
     howland::{HowlandLift, HowlandState, TimedChernoffFunction},
     killed_dirichlet::KilledDirichletChernoff,
     killing::{BallRegion, BoxRegion, KillingChernoff, KillingRegion},
+    killing_order2::DirichletHeat2ndChernoff,
     killing_soft::{ClosureKillingRate, Killing2ndChernoff, KillingRate},
     magnus6_graph::MagnusGraphHeat6thChernoff,
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},

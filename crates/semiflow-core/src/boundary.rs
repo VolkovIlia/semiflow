@@ -82,6 +82,17 @@ pub enum BoundaryPolicy<F: SemiflowFloat = f64> {
         /// β > 0 (coefficient on ∂_n u at boundary).
         beta: F,
     },
+    /// Odd (antisymmetric) image: out-of-range ghost = `−(mirrored interior value)`.
+    ///
+    /// Realises the Dirichlet odd extension (math §21.9 (21.9.1)); the minus-sign
+    /// mirror of `Reflect`. `bc_index` folds the index identically to `Reflect`, but
+    /// `bc_value`/`bc_value_generic` negate the reflected value. At any boundary
+    /// node `x₀ ∈ ∂R` where `σ_R(x₀) = x₀`, the ghost equals `−value(x₀)` and the
+    /// antisymmetric extension forces `u(x₀) = 0` automatically (Dirichlet BC).
+    ///
+    /// Consumed by `DirichletHeat2ndChernoff` (killing_order2.rs, §21.9, ADR-0176).
+    /// **NOT for non-self-adjoint operators** — use `KillingChernoff` (§21.3) instead.
+    OddReflect,
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +130,13 @@ pub(crate) enum BoundaryHit<F: SemiflowFloat = f64> {
         reflected: usize,
         /// Integer distance beyond boundary (d ≥ 1).
         depth: u32,
+    },
+    /// Odd-image mirror (ADR-0176, math §21.9): `bc_value` = `−values[reflected]`.
+    /// `reflected` is the same fold index produced by `reflect_index` (identical
+    /// to `Reflect`). Only the sign of the returned value differs.
+    OddReflected {
+        /// Mirror index in `[0, n)`.
+        reflected: usize,
     },
 }
 
@@ -275,6 +293,9 @@ pub(crate) fn bc_index<F: SemiflowFloat>(
             }
         }
         BoundaryPolicy::Robin { alpha: _, beta: _ } => robin_skew_hit(n, n_i64, idx),
+        BoundaryPolicy::OddReflect => BoundaryHit::OddReflected {
+            reflected: reflect_index(n, idx),
+        },
     }
 }
 
@@ -337,6 +358,8 @@ pub(crate) fn bc_value(
             };
             libm::exp(-2.0 * (alpha / beta) * f64::from(depth) * dx) * values[reflected]
         }
+        // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
+        BoundaryHit::OddReflected { reflected } => -values[reflected],
     }
 }
 
@@ -386,6 +409,8 @@ pub(crate) fn bc_value_generic<F: SemiflowFloat>(
             let exponent = -(two * (alpha / beta) * d_f * dx);
             exponent.exp() * values[reflected]
         }
+        // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
+        BoundaryHit::OddReflected { reflected } => F::zero() - values[reflected],
     }
 }
 
