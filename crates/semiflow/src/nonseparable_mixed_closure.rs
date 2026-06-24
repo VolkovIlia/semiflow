@@ -186,3 +186,10 @@ fn validate_norm_bound(val: f64, name: &'static str) -> Result<(), SemiflowError
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("nonseparable_mixed_closure_tests_mod.rs");
+}

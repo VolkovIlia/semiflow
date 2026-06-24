@@ -445,3 +445,10 @@ fn apply_divergence_form_op_te4<F: SemiflowFloat>(
     let a_fn = dc.a;
     apply_div_form_fn(&|x| a_fn(x), grid, f, out)
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("approximation_tests_mod.rs");
+}

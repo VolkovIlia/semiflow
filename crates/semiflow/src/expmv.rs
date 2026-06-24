@@ -332,3 +332,10 @@ fn take_three_gridfn1d(
         },
     )
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("expmv_tests_mod.rs");
+}

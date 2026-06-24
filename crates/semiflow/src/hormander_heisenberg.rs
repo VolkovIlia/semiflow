@@ -345,3 +345,10 @@ impl Default for HeisenbergY<f64> {
         Self { _f: PhantomData }
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("hormander_heisenberg_tests_mod.rs");
+}

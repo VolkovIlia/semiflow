@@ -162,3 +162,9 @@ fn cblock_inv<C: SemiflowComplex, const M: usize>(
 ) -> Result<[[C; M]; M], SemiflowError> {
     crate::matrix_pade_complex::cmat_inv_complex_dispatch::<C, M>(a)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    include!("matrix_system_complex_tests_mod.rs");
+}
