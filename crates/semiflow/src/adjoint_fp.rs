@@ -1,23 +1,10 @@
-//! Adjoint Fokker-Planck Chernoff on the weak-* topology of M(ℝ^D).
+//! Adjoint Fokker-Planck Chernoff on M(ℝ^D), weak-* topology (ADR-0107 AMD1, §38).
 //!
-//! v8.0.0 Phase-4 C2 (ADR-0107 AMENDMENT 1, math.md §38).
+//! `⟨f, S*(τ)ρ⟩ := ⟨S(τ)f, ρ⟩` (Theorem A.2). Lemma A.1 (§38.3):
+//! `S*(τ)δ_x = ¼δ_{x+h} + ¼δ_{x-h} + ½δ_{x+k} + τc·δ_x`, h=2√(aτ), k=2bτ.
 //!
-//! For any forward Chernoff function `S(t) : C_b → C_b`, the dual pairing
-//! `⟨f, S*(t) ρ⟩ := ⟨S(t) f, ρ⟩` defines the ADJOINT Chernoff function for
-//! `e^{tL*}` on M(ℝ^D) under vague topology σ(M, `C_b`) — Theorem A.2 (§38.4).
-//!
-//! **Lemma A.1** (§38.3): for the Theorem 4 Chernoff function with coefficients
-//! `a, b, c` and `h = 2√(aτ)`, `k = 2bτ`, the adjoint pushes each Dirac:
-//!
-//! ```text
-//! S*(τ) δ_x = (1/4)δ_{x+h} + (1/4)δ_{x-h} + (1/2)δ_{x+k} + τc · δ_x
-//! ```
-//!
-//! Mass conservation: Σ coefficients = 1 + τc. Exact when c = 0.
-//!
-//! **Not** to be confused with [`crate::AdjointChernoff`] (§15, ADR-0114):
-//! that operates on the SAME `L²/C_b` function space; this module operates on
-//! the MEASURE space M(ℝ^D) — different state type (`MeasureState` vs `GridFn`).
+//! Not [`crate::AdjointChernoff`] (§15, ADR-0114): that is on `C_b`/`L²`;
+//! this is on the MEASURE space M(ℝ^D) (`MeasureState` vs `GridFn`).
 
 // Grid/index/count values (usize) cast to f64 for coordinate and coefficient computations;
 // all values are grid sizes or step counts ≪ 2^52, so precision loss is impossible in practice.
@@ -34,10 +21,7 @@ use crate::{
     state::State,
 };
 
-// ---------------------------------------------------------------------------
 // GaussianComponent (private helper for Dirac-count reduction in long-time use)
-// ---------------------------------------------------------------------------
-
 #[derive(Clone)]
 struct GaussianComponent<F: SemiflowFloat, const D: usize> {
     mean: [F; D],
@@ -159,6 +143,9 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
     ///
     /// If `mass = 0`, returns all-zeros (undefined mean for the zero measure).
     #[must_use]
+    // Const-generic array loops: `result[d]` must stay index-based because
+    // the inner body also references `pos[d]` / `g.mean[d]` by the same `d`.
+    #[allow(clippy::needless_range_loop)]
     pub fn first_moment(&self) -> [F; D] {
         let mass = self.total_variation();
         if mass == F::zero() {
@@ -167,16 +154,16 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
         let mut result = [F::zero(); D];
         for (pos, w) in &self.diracs {
             for d in 0..D {
-                result[d] = result[d] + pos[d] * *w;
+                result[d] += pos[d] * *w;
             }
         }
         for g in &self.gaussians {
             for d in 0..D {
-                result[d] = result[d] + g.mean[d] * g.weight;
+                result[d] += g.mean[d] * g.weight;
             }
         }
         for d in 0..D {
-            result[d] = result[d] / mass;
+            result[d] /= mass;
         }
         result
     }
@@ -201,6 +188,9 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
     ///
     /// Returns all-zeros if `mass = 0`.
     #[must_use]
+    // Const-generic loops: `e_x2_per[d]` and `result[d]` must stay
+    // index-based since the body also accesses `pos[d]` / `g.mean[d]`.
+    #[allow(clippy::needless_range_loop)]
     pub fn variance_per_axis(&self) -> [F; D] {
         let mass = self.total_variation();
         if mass == F::zero() {
@@ -210,12 +200,12 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
         let mut e_x2_per = [F::zero(); D];
         for (pos, w) in &self.diracs {
             for d in 0..D {
-                e_x2_per[d] = e_x2_per[d] + pos[d] * pos[d] * *w;
+                e_x2_per[d] += pos[d] * pos[d] * *w;
             }
         }
         for g in &self.gaussians {
             for d in 0..D {
-                e_x2_per[d] = e_x2_per[d] + (g.mean[d] * g.mean[d] + g.variance) * g.weight;
+                e_x2_per[d] += (g.mean[d] * g.mean[d] + g.variance) * g.weight;
             }
         }
         let mu = self.first_moment();
@@ -226,14 +216,9 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
         result
     }
 
-    /// Extract Dirac positions and weights as flat `Vec<F>` buffers (D=1 binding ABI).
-    ///
-    /// Returns `(positions, weights)` where both have length `n_diracs()`.
-    /// Position of Dirac `i` is `positions[i]` (scalar for D=1).
-    /// Gaussians are not included; use only on pure-Dirac states from `apply_into`.
-    ///
-    /// Used by binding integration tests to extract the golden vector for
-    /// 0-ULP cross-surface comparison (`G_BINDING_ADJOINT_FP_PARITY`).
+    /// Extract Dirac positions and weights as `(positions, weights)` (D=1 binding ABI).
+    /// Gaussians are not included; use on pure-Dirac states from `apply_into`.
+    /// Used by `G_BINDING_ADJOINT_FP_PARITY` integration tests.
     #[must_use]
     pub fn to_flat_buffers_d1(&self) -> (Vec<F>, Vec<F>)
     where
@@ -267,21 +252,11 @@ impl<F: SemiflowFloat, const D: usize> MeasureState<F, D> {
     }
 }
 
-/// `State<F>` impl for `MeasureState<F, D>`.
+/// `State<F>` impl for `MeasureState<F, D>` (dynamic-length signed measure).
 ///
-/// **Dynamic-length measure** — deliberately exempt from the dense-state
-/// invariants documented in `state.rs`:
-///
-/// - `len()` returns the current atom count (grows after each `axpy_into`
-///   call, not fixed at construction).
-/// - `axpy_into` APPENDS atoms rather than overwriting; this is correct for
-///   signed measures (superposition of weighted Diracs / Gaussians).
-/// - `norm_sup()` returns the TV-norm `‖ρ‖_TV = Σ|wᵢ|`, which is the
-///   natural measure-space norm — NOT the pointwise sup-norm of a function.
-///
-/// Shape-match / length-invariant preconditions from the dense `GridFn1D`
-/// `State` impl do NOT apply here.  Callers that manipulate `MeasureState`
-/// through the `State` trait must not assume fixed `len()`.
+/// `len()` = atom count (grows after `axpy_into`). `axpy_into` APPENDS atoms;
+/// `norm_sup()` returns `‖ρ‖_TV`. Fixed-length invariants from `GridFn1D`
+/// do NOT apply here.
 impl<F: SemiflowFloat, const D: usize> State<F> for MeasureState<F, D> {
     fn len(&self) -> usize {
         self.diracs.len() + self.gaussians.len()
@@ -324,11 +299,7 @@ impl<F: SemiflowFloat, const D: usize> State<F> for MeasureState<F, D> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Lemma A.1 push (§38.3) — 1D constant-coefficient 4-Dirac kernel
-// (defined before Adjointable trait to avoid scanner false-positive, batch H8)
-// ---------------------------------------------------------------------------
-
+// Lemma A.1 push (§38.3) — 1D 4-Dirac kernel; defined before Adjointable (batch H8).
 // a, b, c are generator coefficients per Lemma A.1; single-char names match math notation.
 #[allow(clippy::many_single_char_names)]
 fn lemma_a1_push<F: SemiflowFloat>(
@@ -372,14 +343,8 @@ fn lemma_a1_push<F: SemiflowFloat>(
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Adjointable<F, D> supertrait
-// ---------------------------------------------------------------------------
-
-/// Supertrait of `ChernoffFunction<F>`: admits a pushforward adjoint on M(ℝ^D).
-///
-/// The blanket impl (D=1) provides the default 4-Dirac pushforward via
-/// Lemma A.1 (§38.3). Per-backend overrides allowed for performance.
+/// Supertrait of `ChernoffFunction<F>`: admits a weak-* adjoint on M(ℝ^D).
+/// Blanket impl (D=1) = Lemma A.1 4-Dirac push; override for performance.
 pub trait Adjointable<F: SemiflowFloat, const D: usize>: ChernoffFunction<F> {
     /// Push-forward one Chernoff step on the measure side (Lemma A.1, §38.3).
     ///
@@ -400,10 +365,7 @@ pub trait Adjointable<F: SemiflowFloat, const D: usize>: ChernoffFunction<F> {
     ) -> Result<(), SemiflowError>;
 }
 
-// ---------------------------------------------------------------------------
-// Blanket Adjointable impl for D = 1
-// ---------------------------------------------------------------------------
-
+// Blanket Adjointable impl for D = 1 via Lemma A.1.
 impl<C, F> Adjointable<F, 1> for C
 where
     C: ChernoffFunction<F>,
@@ -422,23 +384,10 @@ where
     }
 }
 
-// ---------------------------------------------------------------------------
-// AdjointFokkerPlanckChernoff<C, F, D>
-// ---------------------------------------------------------------------------
-
-/// Adjoint Fokker-Planck Chernoff on M(ℝ^D).
+/// Adjoint Fokker-Planck Chernoff on M(ℝ^D) (Theorem A.2, §38.4).
 ///
-/// Generic over any forward Chernoff function `C: Adjointable<F, D>` (e.g.
-/// `DiffusionChernoff`, `DriftReactionChernoff`, or any custom kernel).
-/// The gate instantiates `C = DiffusionChernoff` (Brownian motion benchmark).
-///
-/// Per Theorem A.2 (§38.4) the adjoint rate equals the forward rate modulated
-/// by `‖ρ‖_TV`. Any forward Chernoff function auto-lifts to its dual via this
-/// wrapper — COMPOSITIONAL, no per-backend re-derivation needed.
-///
-/// `order()` inherits from the forward kernel `C`. `type S = MeasureState<F, D>`.
-///
-/// # Example
+/// Wraps any `C: Adjointable<F, D>` via `⟨f, S*(τ)ρ⟩ := ⟨S(τ)f, ρ⟩`.
+/// `order()` and `growth()` inherit from `C`. `type S = MeasureState<F, D>`.
 ///
 /// ```rust,no_run
 /// use semiflow::{AdjointFokkerPlanckChernoff, DiffusionChernoff, Grid1D, MeasureState};
@@ -531,10 +480,6 @@ where
         self.forward.growth()
     }
 }
-
-// ---------------------------------------------------------------------------
-// In-module unit tests (split to adjoint_fp_tests.rs, batch H8)
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 include!(concat!(

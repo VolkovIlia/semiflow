@@ -11,10 +11,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use crate::{
-    float::SemiflowFloat,
-    tt_drift_spectral::apply_drift_spectral_axis,
-};
+use crate::{float::SemiflowFloat, tt_drift_spectral::apply_drift_spectral_axis};
 
 /// Solver-free constant-coefficient diffusion + drift evolver (S³ POC).
 ///
@@ -65,11 +62,7 @@ impl<F: SemiflowFloat> S3DriftSpectralEvolver<F> {
     ///
     /// # Errors
     /// Returns [`crate::SemiflowError::S3OutOfClass`] if `u0.len() != n^d`.
-    pub fn evolve(
-        &self,
-        u0: &[F],
-        tau: F,
-    ) -> Result<(Vec<F>, F), crate::SemiflowError> {
+    pub fn evolve(&self, u0: &[F], tau: F) -> Result<(Vec<F>, F), crate::SemiflowError> {
         let nd = self.n.pow(self.d as u32);
         if u0.len() != nd {
             return Err(crate::SemiflowError::S3OutOfClass {
@@ -103,10 +96,14 @@ fn validate_drift_spectral<F: SemiflowFloat>(
         });
     }
     if n < 2 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "n must be >= 2" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "n must be >= 2",
+        });
     }
     if dx <= F::zero() {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "dx must be > 0" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "dx must be > 0",
+        });
     }
     for &aj in a {
         if aj <= F::zero() {

@@ -81,9 +81,9 @@ struct Killing2ndInner {
 /// Raises
 /// ------
 /// `SemiflowError`
-///     kind='GridMismatch' if xmin >= xmax, n < 4, or len(u0) != n.
-///     kind='NanInf' if u0 contains NaN or Inf.
-///     kind='OutOfDomain' if kappa < 0.
+///     kind='`GridMismatch`' if xmin >= xmax, n < 4, or len(u0) != n.
+///     kind='`NanInf`' if u0 contains NaN or Inf.
+///     kind='`OutOfDomain`' if kappa < 0.
 #[pyclass(name = "Killing2nd1D")]
 pub struct Killing2nd1D {
     inner: Killing2ndInner,
@@ -103,10 +103,7 @@ impl Killing2nd1D {
     ) -> PyResult<Self> {
         catch_panic_py!({
             if !kappa.is_finite() || kappa < 0.0 {
-                return Err(new_pyerr(
-                    "OutOfDomain",
-                    "kappa must be finite and >= 0",
-                ));
+                return Err(new_pyerr("OutOfDomain", "kappa must be finite and >= 0"));
             }
             let policy = parse_boundary(boundary)?;
             let u0_vec: Vec<f64> = u0.extract().map_err(|_| {

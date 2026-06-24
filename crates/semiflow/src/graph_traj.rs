@@ -162,10 +162,12 @@ impl<F: SemiflowFloat> GraphTraj<F> {
     /// # Errors
     /// - `DomainViolation` if `t < breakpoints[0]` or `t > breakpoints[K]`.
     pub fn laplacian_at(&self, t: F) -> Result<Arc<Laplacian<F>>, SemiflowError> {
-        let k = self.segment_index(t).ok_or(SemiflowError::DomainViolation {
-            what: "GraphTraj::laplacian_at: t out of trajectory range",
-            value: t.to_f64().unwrap_or(f64::NAN),
-        })?;
+        let k = self
+            .segment_index(t)
+            .ok_or(SemiflowError::DomainViolation {
+                what: "GraphTraj::laplacian_at: t out of trajectory range",
+                value: t.to_f64().unwrap_or(f64::NAN),
+            })?;
         Ok((self.weight_fns[k])(t))
     }
 

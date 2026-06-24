@@ -47,8 +47,10 @@ use semiflow::{
     ChernoffFunction, DiffusionChernoff, Evolver, Grid1D, GridFn1D, Growth, ScratchPool,
 };
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // GrowthV3 — Python mirror of Growth<f64>

@@ -330,7 +330,7 @@ impl ChernoffFunction<f64> for Diffusion6thChernoff<f64> {
 
     /// Allocation-free override: writes directly into `dst.values` via `parallel_eval_into`.
     ///
-    /// Bit-identical to [`apply`] by construction: same `apply_at_node_f64` per node.
+    /// Bit-identical to [`Self::apply_f`] by construction: same `apply_at_node_f64` per node.
     fn apply_into(
         &self,
         tau: f64,

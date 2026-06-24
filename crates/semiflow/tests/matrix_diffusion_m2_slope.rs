@@ -8,15 +8,13 @@
 //! Probe runs n∈{256..2048} valid for all step sizes.
 
 #![cfg(feature = "slow-tests")]
-#![allow(clippy::cast_precision_loss)]   // usize/u32→f64 in math; values ≤ N_REF ≤ 8192 ≤ 2^52
-#![allow(clippy::cast_lossless)]         // u32/usize→f64 widening casts in test helpers
+#![allow(clippy::cast_precision_loss)] // usize/u32→f64 in math; values ≤ N_REF ≤ 8192 ≤ 2^52
+#![allow(clippy::cast_lossless)] // u32/usize→f64 widening casts in test helpers
 #![allow(clippy::cast_possible_truncation)] // PCG64 u128→u64 shift: intentional, per O'Neill 2014
-#![allow(clippy::needless_range_loop)]   // Matrix loops use cross-index arithmetic (i,j,k)
+#![allow(clippy::needless_range_loop)] // Matrix loops use cross-index arithmetic (i,j,k)
 #![allow(clippy::unusual_byte_groupings)] // 0xC0FFEE_BABE_DEAD_BEEF is a mnemonic seed constant
 
-use semiflow::{
-    ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
 const M: usize = 2;
 const N_GRID: usize = 128;

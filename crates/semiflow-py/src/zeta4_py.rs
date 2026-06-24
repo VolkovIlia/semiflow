@@ -16,9 +16,11 @@ use semiflow::{
     ChernoffSemigroup, Diffusion4thChernoff, Diffusion4thZeta4Chernoff, Grid1D, GridFn1D,
 };
 
-use crate::boundary::parse_boundary;
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    boundary::parse_boundary,
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Inner state

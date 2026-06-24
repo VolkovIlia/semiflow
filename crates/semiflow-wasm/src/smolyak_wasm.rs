@@ -74,7 +74,11 @@ impl SmolyakD6 {
     #[wasm_bindgen(constructor)]
     pub fn new(domain_lo: f64, domain_hi: f64, n_per_axis: usize) -> Result<SmolyakD6, JsValue> {
         validate_domain(domain_lo, domain_hi, n_per_axis)?;
-        Ok(SmolyakD6 { domain_lo, domain_hi, n_per_axis })
+        Ok(SmolyakD6 {
+            domain_lo,
+            domain_hi,
+            n_per_axis,
+        })
     }
 
     /// Apply `n_steps` Smolyak Chernoff steps to flat `u0` and return the result.
@@ -87,7 +91,12 @@ impl SmolyakD6 {
     ///
     /// # Errors
     /// Throws JS `Error` with `.kind`.
-    pub fn apply(&self, u0: &Float64Array, tau: f64, n_steps: usize) -> Result<Float64Array, JsValue> {
+    pub fn apply(
+        &self,
+        u0: &Float64Array,
+        tau: f64,
+        n_steps: usize,
+    ) -> Result<Float64Array, JsValue> {
         validate_tau(tau, n_steps)?;
         let expected = self.n_per_axis.pow(D as u32);
         if u0.length() as usize != expected {
@@ -118,16 +127,22 @@ impl SmolyakD6 {
 
     /// Smolyak level ℓ (always `D + 3 = 9`).
     #[must_use]
-    pub fn level(&self) -> usize { DEFAULT_LEVEL }
+    pub fn level(&self) -> usize {
+        DEFAULT_LEVEL
+    }
 
     /// Total number of grid points (`n_per_axis^6`).
     #[must_use]
-    pub fn size(&self) -> usize { self.n_per_axis.pow(D as u32) }
+    pub fn size(&self) -> usize {
+        self.n_per_axis.pow(D as u32)
+    }
 
     /// Nodes per axis.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn n_per_axis(&self) -> usize { self.n_per_axis }
+    pub fn n_per_axis(&self) -> usize {
+        self.n_per_axis
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -135,8 +150,12 @@ impl SmolyakD6 {
 // ---------------------------------------------------------------------------
 
 fn run_smolyak(
-    lo: f64, hi: f64, n: usize,
-    tau: f64, u0: &[f64], n_steps: usize,
+    lo: f64,
+    hi: f64,
+    n: usize,
+    tau: f64,
+    u0: &[f64],
+    n_steps: usize,
 ) -> Result<Vec<f64>, JsValue> {
     let kernel = build_kernel(lo, hi, n)?;
     let grid = build_grid(lo, hi, n)?;
@@ -144,7 +163,9 @@ fn run_smolyak(
     let mut dst = GridFnND::new(grid, vec![0.0f64; u0.len()]).map_err(|e| err_to_js(&e))?;
     let mut pool = ScratchPool::<f64>::new();
     for _ in 0..n_steps {
-        kernel.apply_into(tau, &src, &mut dst, &mut pool).map_err(|e| err_to_js(&e))?;
+        kernel
+            .apply_into(tau, &src, &mut dst, &mut pool)
+            .map_err(|e| err_to_js(&e))?;
         core::mem::swap(&mut src, &mut dst);
     }
     Ok(src.values)
@@ -168,12 +189,15 @@ fn build_kernel(lo: f64, hi: f64, n: usize) -> Result<SmolyakGridND<f64, D>, JsV
             }
         },
         |_x: &[f64; D], b: &mut [f64; D]| {
-            for v in b.iter_mut() { *v = 0.0; }
+            for v in b.iter_mut() {
+                *v = 0.0;
+            }
         },
         |_x: &[f64; D]| 0.0_f64,
         grid,
         DEFAULT_LEVEL,
-    ).map_err(|e| err_to_js(&e))
+    )
+    .map_err(|e| err_to_js(&e))
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +209,10 @@ fn validate_domain(lo: f64, hi: f64, n: usize) -> Result<(), JsValue> {
         return Err(make_js_error("OutOfDomain", "domain bounds must be finite"));
     }
     if lo >= hi {
-        return Err(make_js_error("GridMismatch", "domain_lo must be < domain_hi"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "domain_lo must be < domain_hi",
+        ));
     }
     if n < 4 {
         return Err(make_js_error("GridMismatch", "n_per_axis must be >= 4"));

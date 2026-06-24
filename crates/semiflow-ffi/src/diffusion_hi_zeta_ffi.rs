@@ -16,8 +16,7 @@ use semiflow::{
     Diffusion6thZeta6Chernoff, Diffusion8thZeta8Chernoff, Grid1D, GridFn1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 extern "Rust" fn unit_a_z(_: f64) -> f64 {
     1.0
@@ -471,24 +470,15 @@ fn build_zeta8(
     Ok(InnerZeta8 { semigroup, current })
 }
 
-fn run_evolve4(
-    i: &mut InnerZeta4,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn run_evolve4(i: &mut InnerZeta4, t: f64) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }
-fn run_evolve6(
-    i: &mut InnerZeta6,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn run_evolve6(i: &mut InnerZeta6, t: f64) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }
-fn run_evolve8(
-    i: &mut InnerZeta8,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn run_evolve8(i: &mut InnerZeta8, t: f64) -> Result<(), semiflow::SemiflowError> {
     i.current.values = i.semigroup.evolve(t, &i.current)?.values;
     Ok(())
 }

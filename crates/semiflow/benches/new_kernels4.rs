@@ -30,8 +30,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::cast_possible_truncation)]
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use semiflow::{

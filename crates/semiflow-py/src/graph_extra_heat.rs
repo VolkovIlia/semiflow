@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     ChernoffSemigroup, Graph, GraphHeat4thChernoff, GraphSignal, Laplacian,
     VarCoefGraphHeatChernoff,

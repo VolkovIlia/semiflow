@@ -14,24 +14,22 @@
 #![allow(clippy::cast_precision_loss)]
 
 extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
+pub use crate::quantum_graph_data::KirchhoffVertex;
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     grid::Grid1D,
     grid_fn::GridFn1D,
+    quantum_graph_data::{
+        apply_kirchhoff_projection, build_adjacency, build_edge_grids, max_vertex_index,
+        validate_graph_inputs,
+    },
     scratch::ScratchPool,
     shift1d::ShiftChernoff1D,
     state::State,
-};
-
-pub use crate::quantum_graph_data::KirchhoffVertex;
-use crate::quantum_graph_data::{
-    apply_kirchhoff_projection, build_adjacency, build_edge_grids, max_vertex_index,
-    validate_graph_inputs,
 };
 
 // ── Public types ──────────────────────────────────────────────────────────────

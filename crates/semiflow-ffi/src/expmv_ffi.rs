@@ -19,8 +19,7 @@ use semiflow::{
     GridFn1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Static coefficient fn-pointers

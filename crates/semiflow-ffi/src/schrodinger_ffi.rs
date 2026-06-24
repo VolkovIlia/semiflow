@@ -32,7 +32,7 @@
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 use std::os::raw::c_double;
@@ -245,13 +245,16 @@ fn build_schrodinger(
     let v_at_node = build_v_at_node(v_slice, n)?;
     // Validate kernel construction eagerly.
     build_kernel(&v_at_node, grid)?;
-    Ok(InnerSchrodinger { v_at_node, n_steps, grid, psi_re, psi_im })
+    Ok(InnerSchrodinger {
+        v_at_node,
+        n_steps,
+        grid,
+        psi_re,
+        psi_im,
+    })
 }
 
-fn validate_psi_interleaved(
-    psi0: &[f64],
-    n: usize,
-) -> Result<(), semiflow::SemiflowError> {
+fn validate_psi_interleaved(psi0: &[f64], n: usize) -> Result<(), semiflow::SemiflowError> {
     if psi0.len() != 2 * n {
         return Err(semiflow::SemiflowError::DomainViolation {
             what: "psi0_len must equal 2*n (interleaved re/im)",
@@ -290,10 +293,7 @@ fn interleave_into(dst: &mut [f64], re: &[f64], im: &[f64]) {
 }
 
 /// Sample V at each grid node (zero potential when `v_slice` is `None`).
-fn build_v_at_node(
-    v_slice: Option<&[f64]>,
-    n: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
+fn build_v_at_node(v_slice: Option<&[f64]>, n: usize) -> Result<Vec<f64>, semiflow::SemiflowError> {
     match v_slice {
         None => Ok(vec![0.0_f64; n]),
         Some(arr) => {
@@ -332,10 +332,7 @@ fn build_kernel(
 }
 
 /// One full evolution by time `t`: `n_steps` Chernoff steps of size `t/n_steps`.
-fn evolve_schrodinger(
-    inner: &mut InnerSchrodinger,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_schrodinger(inner: &mut InnerSchrodinger, t: f64) -> Result<(), semiflow::SemiflowError> {
     let kernel = build_kernel(&inner.v_at_node, inner.grid)?;
     let tau = t / inner.n_steps as f64;
     let psi_re = GridFn1D::new(inner.grid, inner.psi_re.clone())?;

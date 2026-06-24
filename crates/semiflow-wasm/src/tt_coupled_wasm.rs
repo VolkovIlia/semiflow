@@ -26,12 +26,10 @@
     clippy::too_many_arguments
 )]
 
+use semiflow::{CoupledTtChernoff, CouplingTopology};
 use wasm_bindgen::prelude::*;
 
-use semiflow::{CoupledTtChernoff, CouplingTopology};
-
-use crate::error::make_js_error;
-use crate::tt_wasm::TtState;
+use crate::{error::make_js_error, tt_wasm::TtState};
 
 // ---------------------------------------------------------------------------
 // TtCoupledEvolver JS class
@@ -83,7 +81,10 @@ impl TtCoupledEvolver {
     ) -> Result<TtCoupledEvolver, JsValue> {
         let n = a.length() as usize;
         if n == 0 {
-            return Err(make_js_error("GridMismatch", "TtCoupledEvolver: n_axes must be >= 1"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "TtCoupledEvolver: n_axes must be >= 1",
+            ));
         }
         for arr in &[b, dom_min, dom_max] {
             if arr.length() as usize != n {
@@ -94,22 +95,29 @@ impl TtCoupledEvolver {
             }
         }
         if !c.is_finite() || !eps_round.is_finite() {
-            return Err(make_js_error("NanInf", "TtCoupledEvolver: c and epsRound must be finite"));
+            return Err(make_js_error(
+                "NanInf",
+                "TtCoupledEvolver: c and epsRound must be finite",
+            ));
         }
         let ev = build_coupled_evolver_wasm(
-            a, b, c, coupling_tag, tridiag_rho, pairs_jk, pairs_rho, dom_min, dom_max, n,
+            a,
+            b,
+            c,
+            coupling_tag,
+            tridiag_rho,
+            pairs_jk,
+            pairs_rho,
+            dom_min,
+            dom_max,
+            n,
             eps_round,
         )?;
         Ok(TtCoupledEvolver { inner: ev })
     }
 
     /// Evolve `state` in-place for time `t_final` with `n_steps` Chernoff steps.
-    pub fn evolve(
-        &self,
-        state: &mut TtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> Result<(), JsValue> {
+    pub fn evolve(&self, state: &mut TtState, t_final: f64, n_steps: usize) -> Result<(), JsValue> {
         if n_steps == 0 {
             return Err(make_js_error(
                 "OutOfDomain",
@@ -143,6 +151,45 @@ impl TtCoupledEvolver {
 // Private helpers
 // ---------------------------------------------------------------------------
 
+/// Decode `Pairs` coupling topology from WASM JS typed arrays.
+fn decode_topology_pairs_wasm(
+    pairs_jk: &js_sys::Uint32Array,
+    pairs_rho: &js_sys::Float64Array,
+    n_axes: usize,
+) -> Result<CouplingTopology<f64>, JsValue> {
+    let n_pairs = pairs_rho.length() as usize;
+    if pairs_jk.length() as usize != 2 * n_pairs {
+        return Err(make_js_error(
+            "GridMismatch",
+            "TtCoupledEvolver: pairsJk.length must equal 2 * pairsRho.length",
+        ));
+    }
+    let mut jk = vec![0u32; 2 * n_pairs];
+    let mut rho = vec![0.0f64; n_pairs];
+    pairs_jk.copy_to(&mut jk);
+    pairs_rho.copy_to(&mut rho);
+    let mut pairs = Vec::with_capacity(n_pairs);
+    for i in 0..n_pairs {
+        let j = jk[2 * i] as usize;
+        let k = jk[2 * i + 1] as usize;
+        let r = rho[i];
+        if !r.is_finite() {
+            return Err(make_js_error(
+                "NanInf",
+                "TtCoupledEvolver: pairsRho contains NaN/Inf",
+            ));
+        }
+        if j >= n_axes || k >= n_axes {
+            return Err(make_js_error(
+                "GridMismatch",
+                "TtCoupledEvolver: pair index out of range",
+            ));
+        }
+        pairs.push((j, k, r));
+    }
+    Ok(CouplingTopology::Pairs(pairs))
+}
+
 /// Decode `CouplingTopology<f64>` from JS tag + pair arrays.
 fn decode_topology_wasm(
     coupling_tag: u32,
@@ -155,41 +202,18 @@ fn decode_topology_wasm(
         0 => Ok(CouplingTopology::None),
         1 => {
             if !tridiag_rho.is_finite() {
-                return Err(make_js_error("NanInf", "TtCoupledEvolver: tridiagRho must be finite"));
+                return Err(make_js_error(
+                    "NanInf",
+                    "TtCoupledEvolver: tridiagRho must be finite",
+                ));
             }
             Ok(CouplingTopology::Tridiagonal(tridiag_rho))
         }
-        2 => {
-            let n_pairs = pairs_rho.length() as usize;
-            if pairs_jk.length() as usize != 2 * n_pairs {
-                return Err(make_js_error(
-                    "GridMismatch",
-                    "TtCoupledEvolver: pairsJk.length must equal 2 * pairsRho.length",
-                ));
-            }
-            let mut jk = vec![0u32; 2 * n_pairs];
-            let mut rho = vec![0.0f64; n_pairs];
-            pairs_jk.copy_to(&mut jk);
-            pairs_rho.copy_to(&mut rho);
-            let mut pairs = Vec::with_capacity(n_pairs);
-            for i in 0..n_pairs {
-                let j = jk[2 * i] as usize;
-                let k = jk[2 * i + 1] as usize;
-                let r = rho[i];
-                if !r.is_finite() {
-                    return Err(make_js_error("NanInf", "TtCoupledEvolver: pairsRho contains NaN/Inf"));
-                }
-                if j >= n_axes || k >= n_axes {
-                    return Err(make_js_error(
-                        "GridMismatch",
-                        "TtCoupledEvolver: pair index out of range",
-                    ));
-                }
-                pairs.push((j, k, r));
-            }
-            Ok(CouplingTopology::Pairs(pairs))
-        }
-        _ => Err(make_js_error("OutOfDomain", "TtCoupledEvolver: unknown couplingTag")),
+        2 => decode_topology_pairs_wasm(pairs_jk, pairs_rho, n_axes),
+        _ => Err(make_js_error(
+            "OutOfDomain",
+            "TtCoupledEvolver: unknown couplingTag",
+        )),
     }
 }
 
@@ -228,6 +252,76 @@ fn precheck_walls_wasm(
     Ok(())
 }
 
+/// Validate that all values are finite and `a_j >= 0`.
+fn validate_coupled_coeffs(
+    a_v: &[f64],
+    b_v: &[f64],
+    lo_v: &[f64],
+    hi_v: &[f64],
+) -> Result<(), JsValue> {
+    for &v in a_v
+        .iter()
+        .chain(b_v.iter())
+        .chain(lo_v.iter())
+        .chain(hi_v.iter())
+    {
+        if !v.is_finite() {
+            return Err(make_js_error(
+                "NanInf",
+                "TtCoupledEvolver: coefficient/domain is NaN/Inf",
+            ));
+        }
+    }
+    for &ai in a_v {
+        if ai < 0.0 {
+            return Err(make_js_error(
+                "NanInf",
+                "TtCoupledEvolver: diffusion a_j must be >= 0",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Build domain pairs; returns error if any `lo >= hi`.
+fn build_coupled_domain(lo_v: &[f64], hi_v: &[f64]) -> Result<Vec<(f64, f64)>, JsValue> {
+    lo_v.iter()
+        .zip(hi_v.iter())
+        .map(|(&lo, &hi)| {
+            if lo >= hi {
+                Err(make_js_error(
+                    "NanInf",
+                    "TtCoupledEvolver: dom_min must be < dom_max",
+                ))
+            } else {
+                Ok((lo, hi))
+            }
+        })
+        .collect()
+}
+
+/// Extract and validate coefficient/domain arrays for `TtCoupledEvolver`.
+#[allow(clippy::type_complexity)]
+fn extract_coupled_vecs(
+    a_js: &js_sys::Float64Array,
+    b_js: &js_sys::Float64Array,
+    dom_min: &js_sys::Float64Array,
+    dom_max: &js_sys::Float64Array,
+    n: usize,
+) -> Result<(Vec<f64>, Vec<f64>, Vec<(f64, f64)>), JsValue> {
+    let mut a_v = vec![0.0f64; n];
+    let mut b_v = vec![0.0f64; n];
+    let mut lo_v = vec![0.0f64; n];
+    let mut hi_v = vec![0.0f64; n];
+    a_js.copy_to(&mut a_v);
+    b_js.copy_to(&mut b_v);
+    dom_min.copy_to(&mut lo_v);
+    dom_max.copy_to(&mut hi_v);
+    validate_coupled_coeffs(&a_v, &b_v, &lo_v, &hi_v)?;
+    let domain = build_coupled_domain(&lo_v, &hi_v)?;
+    Ok((a_v, b_v, domain))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_coupled_evolver_wasm(
     a_js: &js_sys::Float64Array,
@@ -242,36 +336,10 @@ fn build_coupled_evolver_wasm(
     n: usize,
     eps_round: f64,
 ) -> Result<CoupledTtChernoff<f64>, JsValue> {
-    let mut a_v = vec![0.0f64; n];
-    let mut b_v = vec![0.0f64; n];
-    let mut lo_v = vec![0.0f64; n];
-    let mut hi_v = vec![0.0f64; n];
-    a_js.copy_to(&mut a_v);
-    b_js.copy_to(&mut b_v);
-    dom_min.copy_to(&mut lo_v);
-    dom_max.copy_to(&mut hi_v);
-    for &v in a_v.iter().chain(b_v.iter()).chain(lo_v.iter()).chain(hi_v.iter()) {
-        if !v.is_finite() {
-            return Err(make_js_error("NanInf", "TtCoupledEvolver: coefficient/domain is NaN/Inf"));
-        }
-    }
-    for &ai in &a_v {
-        if ai < 0.0 {
-            return Err(make_js_error("NanInf", "TtCoupledEvolver: diffusion a_j must be >= 0"));
-        }
-    }
-    let domain: Vec<(f64, f64)> = lo_v
-        .iter()
-        .zip(hi_v.iter())
-        .map(|(&lo, &hi)| {
-            if lo >= hi {
-                Err(make_js_error("NanInf", "TtCoupledEvolver: dom_min must be < dom_max"))
-            } else {
-                Ok((lo, hi))
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let (a_v, b_v, domain) = extract_coupled_vecs(a_js, b_js, dom_min, dom_max, n)?;
     let topology = decode_topology_wasm(coupling_tag, tridiag_rho, pairs_jk, pairs_rho, n)?;
     precheck_walls_wasm(&b_v, &topology, &a_v)?;
-    Ok(CoupledTtChernoff::new(a_v, b_v, c, topology, domain, eps_round))
+    Ok(CoupledTtChernoff::new(
+        a_v, b_v, c, topology, domain, eps_round,
+    ))
 }

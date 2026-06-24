@@ -47,11 +47,10 @@
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::similar_names,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
-use std::os::raw::c_double;
-use std::sync::Arc;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, ScratchPool,
@@ -380,7 +379,11 @@ fn build_inner_3d_unit(
     let dy = DiffusionChernoff::new(unit_a_3d, zero_3d, zero_3d, 1.0, gy);
     let dz = DiffusionChernoff::new(unit_a_3d, zero_3d, zero_3d, 1.0, gz);
     let strang = Strang3D::new(dx, dy, dz);
-    Ok(Inner3D { strang, grid, size: nx * ny * nz })
+    Ok(Inner3D {
+        strang,
+        grid,
+        size: nx * ny * nz,
+    })
 }
 
 fn build_inner_3d_vara(
@@ -405,7 +408,11 @@ fn build_inner_3d_vara(
     let dy = build_axis_diffusion(ay_vals, ymin, ymax, ny, gy);
     let dz = build_axis_diffusion(az_vals, zmin, zmax, nz, gz);
     let strang = Strang3D::new(dx, dy, dz);
-    Ok(Inner3DVarA { strang, grid, size: nx * ny * nz })
+    Ok(Inner3DVarA {
+        strang,
+        grid,
+        size: nx * ny * nz,
+    })
 }
 
 /// Build a `DiffusionChernoff` from a tabulated 1D coefficient array.

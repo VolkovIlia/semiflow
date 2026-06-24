@@ -35,19 +35,17 @@ use semiflow::{
     ChernoffFunction, ChernoffSemigroup, Grid1D, Grid2D, GridFn2D, ScratchPool,
 };
 
-use crate::{
-    error::{from_core, new_pyerr},
-    panic::catch_panic_py,
+// Shared helpers used by geometry_hypoelliptic.rs.
+pub(crate) use crate::geometry_hypoelliptic::{
+    extract_f64_vec_geo, validate_params_geo, validate_u0_geo,
 };
-
 // Re-export hypoelliptic classes for registration.
 pub(crate) use crate::geometry_hypoelliptic::{
     PyHypoellipticChernoffEngel, PyHypoellipticChernoffKolmogorov,
 };
-
-// Shared helpers used by geometry_hypoelliptic.rs.
-pub(crate) use crate::geometry_hypoelliptic::{
-    extract_f64_vec_geo, validate_params_geo, validate_u0_geo,
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
 };
 
 // ---------------------------------------------------------------------------

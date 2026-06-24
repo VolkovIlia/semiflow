@@ -11,7 +11,9 @@
 
 use js_sys::Float64Array;
 use semiflow::{
-    matrix_2d3d::{MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D},
+    matrix_2d3d::{
+        MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D,
+    },
     matrix_system::MatrixDiffusionChernoff,
     ChernoffSemigroup, Grid1D, Grid2D, Grid3D,
 };
@@ -213,7 +215,10 @@ impl MatrixDiffusion2D {
             return Err(make_js_error("OutOfDomain", "ny must be >= 5"));
         }
         if !a_diag.is_finite() || a_diag <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "a_diag must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "a_diag must be finite and > 0",
+            ));
         }
         let vals = validate_2d_u0(u0, nx, ny)?;
         let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
@@ -221,7 +226,14 @@ impl MatrixDiffusion2D {
         let grid2d = Grid2D::new(gx, gy);
         // Validate kernel eagerly.
         build_axis_kernel(a_diag, c_coupling, gx).map_err(|e| err_to_js(&e))?;
-        Ok(MatrixDiffusion2D { a_diag, c_coupling, grid2d, current: vals, nx, ny })
+        Ok(MatrixDiffusion2D {
+            a_diag,
+            c_coupling,
+            grid2d,
+            current: vals,
+            nx,
+            ny,
+        })
     }
 
     /// Advance by time `t` using `n_steps` Chernoff iterations.
@@ -230,8 +242,15 @@ impl MatrixDiffusion2D {
     /// Throws JS `Error` with `.kind`.
     pub fn evolve(&mut self, t: f64, n_steps: usize) -> Result<(), JsValue> {
         validate_evolve(t, n_steps)?;
-        let out = evolve_2d(self.a_diag, self.c_coupling, self.grid2d, &self.current, t, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let out = evolve_2d(
+            self.a_diag,
+            self.c_coupling,
+            self.grid2d,
+            &self.current,
+            t,
+            n_steps,
+        )
+        .map_err(|e| err_to_js(&e))?;
         self.current = out;
         Ok(())
     }
@@ -308,7 +327,10 @@ impl MatrixDiffusion3D {
             return Err(make_js_error("OutOfDomain", "nx, ny, nz must be >= 5"));
         }
         if !a_diag.is_finite() || a_diag <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "a_diag must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "a_diag must be finite and > 0",
+            ));
         }
         let vals = validate_3d_u0(u0, nx, ny, nz)?;
         let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
@@ -316,7 +338,15 @@ impl MatrixDiffusion3D {
         let gz = Grid1D::new(zmin, zmax, nz).map_err(|e| err_to_js(&e))?;
         let grid3d = Grid3D::new(gx, gy, gz).map_err(|e| err_to_js(&e))?;
         build_axis_kernel(a_diag, c_coupling, gx).map_err(|e| err_to_js(&e))?;
-        Ok(MatrixDiffusion3D { a_diag, c_coupling, grid3d, current: vals, nx, ny, nz })
+        Ok(MatrixDiffusion3D {
+            a_diag,
+            c_coupling,
+            grid3d,
+            current: vals,
+            nx,
+            ny,
+            nz,
+        })
     }
 
     /// Advance by time `t` using `n_steps` Chernoff iterations.
@@ -325,8 +355,15 @@ impl MatrixDiffusion3D {
     /// Throws JS `Error` with `.kind`.
     pub fn evolve(&mut self, t: f64, n_steps: usize) -> Result<(), JsValue> {
         validate_evolve(t, n_steps)?;
-        let out = evolve_3d(self.a_diag, self.c_coupling, self.grid3d, &self.current, t, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let out = evolve_3d(
+            self.a_diag,
+            self.c_coupling,
+            self.grid3d,
+            &self.current,
+            t,
+            n_steps,
+        )
+        .map_err(|e| err_to_js(&e))?;
         self.current = out;
         Ok(())
     }

@@ -106,8 +106,8 @@ impl HypoellipticChernoffHeisenberg {
     /// Throws JS `Error` with `.kind = "OutOfDomain"` on bracket failure.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<HypoellipticChernoffHeisenberg, JsValue> {
-        let inner = HypoellipticChernoff::<f64, 3, 2>::new_heisenberg()
-            .map_err(|e| err_to_js(&e))?;
+        let inner =
+            HypoellipticChernoff::<f64, 3, 2>::new_heisenberg().map_err(|e| err_to_js(&e))?;
         Ok(HypoellipticChernoffHeisenberg { inner })
     }
 
@@ -202,8 +202,7 @@ impl HypoellipticChernoffKolmogorov {
     ) -> Result<Float64Array, JsValue> {
         validate_tau_steps(tau, n_steps)?;
         let input = extract_flat(u0, self.nx * self.nv)?;
-        let result = run_kolmogorov(self.grid, input, tau, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let result = run_kolmogorov(self.grid, input, tau, n_steps).map_err(|e| err_to_js(&e))?;
         Ok(vec_to_js(&result))
     }
 
@@ -260,11 +259,7 @@ impl HypoellipticChernoffEngel {
     /// # Errors
     /// Throws JS `Error` with `.kind`.
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        xmin: f64,
-        xmax: f64,
-        n: usize,
-    ) -> Result<HypoellipticChernoffEngel, JsValue> {
+    pub fn new(xmin: f64, xmax: f64, n: usize) -> Result<HypoellipticChernoffEngel, JsValue> {
         let ax = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let grid = GridND::<f64, 4>::new([ax, ax, ax, ax]).map_err(|e| err_to_js(&e))?;
         // Verify Engel bracket condition at construction (mirrors Python).
@@ -294,8 +289,8 @@ impl HypoellipticChernoffEngel {
         validate_tau_steps(tau, n_steps)?;
         let total = self.n * self.n * self.n * self.n;
         let input = extract_flat(u0, total)?;
-        let result = run_engel(self.grid.clone(), input, tau, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let result =
+            run_engel(self.grid.clone(), input, tau, n_steps).map_err(|e| err_to_js(&e))?;
         Ok(vec_to_js(&result))
     }
 
@@ -319,12 +314,9 @@ impl HypoellipticChernoffEngel {
 // ---------------------------------------------------------------------------
 
 /// Build the canonical Kolmogorov kernel (cheap bracket check at origin).
-fn make_kolmogorov_kernel(
-) -> Result<HypoellipticChernoff<f64, 2, 1>, SemiflowError> {
-    let x0: Box<dyn VectorField<f64, 2>> =
-        Box::new(KolmogorovPhaseSpace::<f64>::x0_drift());
-    let x1: Box<dyn VectorField<f64, 2>> =
-        Box::new(KolmogorovPhaseSpace::<f64>::x1_diffusion());
+fn make_kolmogorov_kernel() -> Result<HypoellipticChernoff<f64, 2, 1>, SemiflowError> {
+    let x0: Box<dyn VectorField<f64, 2>> = Box::new(KolmogorovPhaseSpace::<f64>::x0_drift());
+    let x1: Box<dyn VectorField<f64, 2>> = Box::new(KolmogorovPhaseSpace::<f64>::x1_diffusion());
     HypoellipticChernoff::<f64, 2, 1>::new(x0, [x1])
 }
 

@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use semiflow::{
-    ChernoffSemigroup, Graph, GraphSignal, VarCoefGraphHeatChernoff,
-};
+use semiflow::{ChernoffSemigroup, Graph, GraphSignal, VarCoefGraphHeatChernoff};
 
-use crate::graph_ffi::{SmfGraph, SmfGraphSig};
-use crate::status::SemiflowStatus;
+use crate::{
+    graph_ffi::{SmfGraph, SmfGraphSig},
+    status::SemiflowStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque handle
@@ -104,8 +104,7 @@ pub unsafe extern "C" fn smf_vc_ghc_new(
         }
         let a_vec: Vec<f64> = a_slice.to_vec();
         // Validate eagerly; kernel is reconstructed cheaply in apply_into.
-        if let Err(e) =
-            VarCoefGraphHeatChernoff::new(Arc::clone(&g.graph), a_vec.clone(), rho_bar)
+        if let Err(e) = VarCoefGraphHeatChernoff::new(Arc::clone(&g.graph), a_vec.clone(), rho_bar)
         {
             return SemiflowStatus::from(&e);
         }

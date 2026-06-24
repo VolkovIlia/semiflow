@@ -89,25 +89,25 @@ mod tests {
     ///   Gaussian mean=[2.0, 0.0], var=1.0, weight=2.0
     ///
     /// mass = 1 + 1 + 2 = 4
-    /// mu_x = (1·1 + 1·3 + 2·2) / 4 = 8/4 = 2.0
-    /// mu_y = 0.0
+    /// `mu_x` = (1·1 + 1·3 + 2·2) / 4 = 8/4 = 2.0
+    /// `mu_y` = 0.0
     /// E[x²] = (1·1 + 1·9 + 2·(4 + 1·2)) / 4 = (1+9+12)/4 = 22/4 = 5.5
     ///   (D=2 Gaussian contribution: w·(|mean|²+D·var) = 2·(4+2) = 12)
-    /// Var = E[x²] - (mu_x²+mu_y²) = 5.5 - 4.0 = 1.5
+    /// Var = E[x²] - (`mu_x²+mu_y²`) = 5.5 - 4.0 = 1.5
     ///
     /// Per-axis:
-    ///   E[x_0²] = (1·1 + 1·9 + 2·(4+1)) / 4 = (1+9+10)/4 = 5.0
-    ///   Var_0 = 5.0 - 4.0 = 1.0
-    ///   E[x_1²] = (0+0 + 2·(0+1)) / 4 = 2/4 = 0.5
-    ///   Var_1 = 0.5 - 0.0 = 0.5
-    ///   Var_0 + Var_1 = 1.5 ✓
+    ///   E[`x_0²`] = (1·1 + 1·9 + 2·(4+1)) / 4 = (1+9+10)/4 = 5.0
+    ///   `Var_0` = 5.0 - 4.0 = 1.0
+    ///   E[`x_1²`] = (0+0 + 2·(0+1)) / 4 = 2/4 = 0.5
+    ///   `Var_1` = 0.5 - 0.0 = 0.5
+    ///   `Var_0` + `Var_1` = 1.5 ✓
     #[test]
     fn variance_dirac_gaussian_d2() {
+        use crate::state::State;
         let mut rho = MeasureState::<f64, 2>::dirac([1.0, 0.0], 1.0);
         rho.push_dirac_raw([3.0, 0.0], 1.0);
         let gauss = MeasureState::<f64, 2>::gaussian([2.0, 0.0], 1.0, 2.0).unwrap();
         // Merge by axpy (α=1, so weights transfer unchanged)
-        use crate::state::State;
         rho.axpy_into(1.0, &gauss);
 
         let tol = 1e-12_f64;
@@ -130,6 +130,8 @@ mod tests {
         assert!((var_s - (var_ax[0] + var_ax[1])).abs() < tol, "Var≠Σ_d Var_d");
     }
 
+    // float_cmp: comparisons to 0.0 are exact by construction (zero-mass empty measure).
+    #[allow(clippy::float_cmp)]
     #[test]
     fn variance_zero_mass_returns_zero() {
         // Empty measure: first_moment/variance/variance_per_axis must not NaN.

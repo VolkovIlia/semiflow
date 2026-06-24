@@ -22,9 +22,7 @@
 use core::cell::Cell;
 
 use proptest::prelude::*;
-use semiflow::{
-    chernoff::ApplyChernoffExt, Diffusion6thChernoff, Grid1D, GridFn1D, InterpKind,
-};
+use semiflow::{chernoff::ApplyChernoffExt, Diffusion6thChernoff, Grid1D, GridFn1D, InterpKind};
 
 thread_local! {
     static A0_CELL: Cell<f64> = const { Cell::new(1.0) };

@@ -8,11 +8,11 @@
 //! Operator: `DirichletHeat2ndChernoff` wrapping `DiffusionChernoff(a=0.5)`.
 //! Equation: ∂_t u = ½ ∂_xx u, with hard absorbing wall u|_{x∈{0,1}} = 0.
 //!
-//! Oracle: u(t, x) = Σ_{k=1}^{8} a_k sin(kπx) exp(−(kπ)² t/2)
+//! Oracle: u(t, x) = Σ_{k=1}^{8} `a_k` sin(kπx) exp(−(kπ)² t/2)
 //!   Each mode is an exact Dirichlet eigenfunction of ½∂_xx on (0,1):
 //!   ½ ∂_xx sin(kπx) = −½(kπ)² sin(kπx),  sin(kπ·0) = sin(kπ·1) = 0.
 //!
-//! IC: u_0(x) = Σ_{k=1}^{8} a_k sin(kπx)   (oracle at t=0).
+//! IC: `u_0(x)` = Σ_{k=1}^{8} `a_k` sin(kπx)   (oracle at t=0).
 //!
 //! ## Convergence design
 //!
@@ -29,7 +29,7 @@
 //! enforces u=0 at both walls via the odd-extension mechanism (21.9.3).
 //! Grid boundary is set to `ZeroExtend` before passing into the wrapper so
 //! that the IC sampling is well-defined at boundary nodes (eigenmode IC has
-//! u₀(0)=u₀(1)=0 by construction, so ZeroExtend produces the same IC values
+//! u₀(0)=u₀(1)=0 by construction, so `ZeroExtend` produces the same IC values
 //! as the analytical formula).
 //!
 //! Feature gate: `slow-tests`.
@@ -41,10 +41,8 @@
 use core::f64::consts::PI;
 
 use semiflow::{
-    killing_order2::DirichletHeat2ndChernoff,
-    reflection::HalfSpaceRegion,
-    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind,
-    ScratchPool,
+    killing_order2::DirichletHeat2ndChernoff, reflection::HalfSpaceRegion, BoundaryPolicy,
+    ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind, ScratchPool,
 };
 
 // ---------------------------------------------------------------------------

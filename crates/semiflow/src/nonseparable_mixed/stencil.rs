@@ -97,7 +97,12 @@ pub(crate) fn bc2d_val<F: SemiflowFloat>(
 }
 
 /// 1D boundary value for a row/column slice.
-pub(crate) fn bc1d_val<F: SemiflowFloat>(bc: BoundaryPolicy<F>, row: &[F], n: usize, idx: i64) -> F {
+pub(crate) fn bc1d_val<F: SemiflowFloat>(
+    bc: BoundaryPolicy<F>,
+    row: &[F],
+    n: usize,
+    idx: i64,
+) -> F {
     match resolve_axis(bc, n, idx) {
         AxisHit::Inside(i) => row[i],
         AxisHit::Zero => F::zero(),
@@ -137,7 +142,9 @@ pub(crate) fn resolve_axis<F: SemiflowFloat>(bc: BoundaryPolicy<F>, n: usize, id
         return AxisHit::Inside(idx as usize);
     }
     match bc {
-        BoundaryPolicy::Reflect => {
+        // OddReflect: fold index same as Reflect for stencil purposes.
+        // Sign negation is applied at value resolution level by the caller.
+        BoundaryPolicy::Reflect | BoundaryPolicy::OddReflect => {
             let nn = n as i64;
             let period = 2 * (nn - 1);
             let mut k = ((idx % period) + period) % period;
@@ -169,17 +176,6 @@ pub(crate) fn resolve_axis<F: SemiflowFloat>(bc: BoundaryPolicy<F>, n: usize, id
             } else {
                 AxisHit::Inside(n - 1)
             }
-        }
-        // Odd-image: fold index same as Reflect. Sign negation applied at value resolution level.
-        // For nonseparable_mixed stencil purposes, treat as reflect (the caller must negate).
-        BoundaryPolicy::OddReflect => {
-            let nn = n as i64;
-            let period = 2 * (nn - 1);
-            let mut k = ((idx % period) + period) % period;
-            if k >= nn {
-                k = period - k;
-            }
-            AxisHit::Inside(k as usize)
         }
     }
 }

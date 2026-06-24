@@ -31,11 +31,10 @@
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
-use std::sync::Arc;
-use std::os::raw::c_double;
+use std::{os::raw::c_double, sync::Arc};
 
 use num_complex::Complex;
 use semiflow::{
@@ -254,13 +253,16 @@ fn build_schrodinger_cx(
     // Validate kernel construction eagerly.
     build_cx_kernel(&v_at_node, grid, xmin)?;
     let state = GridFnComplex1D::<C64>::new(grid, psi_vec)?;
-    Ok(InnerSchrodingerCx { v_at_node, n_steps, grid, xmin, state })
+    Ok(InnerSchrodingerCx {
+        v_at_node,
+        n_steps,
+        grid,
+        xmin,
+        state,
+    })
 }
 
-fn validate_psi_interleaved(
-    psi0: &[f64],
-    n: usize,
-) -> Result<(), semiflow::SemiflowError> {
+fn validate_psi_interleaved(psi0: &[f64], n: usize) -> Result<(), semiflow::SemiflowError> {
     if psi0.len() != 2 * n {
         return Err(semiflow::SemiflowError::DomainViolation {
             what: "psi0_len must equal 2*n (interleaved re/im)",
@@ -278,10 +280,7 @@ fn validate_psi_interleaved(
     Ok(())
 }
 
-fn build_v_at_node(
-    v_slice: Option<&[f64]>,
-    n: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
+fn build_v_at_node(v_slice: Option<&[f64]>, n: usize) -> Result<Vec<f64>, semiflow::SemiflowError> {
     match v_slice {
         None => Ok(vec![0.0_f64; n]),
         Some(arr) => {

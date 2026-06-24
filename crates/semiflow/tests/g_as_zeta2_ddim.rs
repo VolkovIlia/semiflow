@@ -36,9 +36,9 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; values ≤ 512 ≤ 2^52
-#![allow(clippy::cast_lossless)]       // u32→f64 for n_steps: infallible, project idiom
+#![allow(clippy::cast_lossless)] // u32→f64 for n_steps: infallible, project idiom
 #![allow(clippy::items_after_statements)] // type alias GradBox after let statements
-#![allow(clippy::similar_names)]       // tau3/taus: standard math variable names
+#![allow(clippy::similar_names)] // tau3/taus: standard math variable names
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},

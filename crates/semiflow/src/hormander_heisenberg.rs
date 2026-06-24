@@ -16,14 +16,16 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use crate::chernoff::{ChernoffFunction, Growth};
-use crate::error::SemiflowError;
-use crate::grid::Grid1D;
-use crate::grid_fn3d::GridFn3D;
-use crate::hormander::{
-    bracket_central_diff, HeisenbergX, HeisenbergY, HypoellipticChernoff, VectorField,
+use crate::{
+    chernoff::{ChernoffFunction, Growth},
+    error::SemiflowError,
+    grid::Grid1D,
+    grid_fn3d::GridFn3D,
+    hormander::{
+        bracket_central_diff, HeisenbergX, HeisenbergY, HypoellipticChernoff, VectorField,
+    },
+    scratch::ScratchPool,
 };
-use crate::scratch::ScratchPool;
 
 // ─── Heisenberg Chernoff D=3 M=2 (math.md §28 AMENDMENT 2, ADR-0087) ─────────
 

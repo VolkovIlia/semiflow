@@ -29,6 +29,8 @@
 //! keeps all existing call-sites compiling unchanged. `TruncatedExp4thDiffusionChernoff<f64>`
 //! implements `ChernoffFunction`. Other `F` types use `apply_f` (scalar path).
 
+// Wave B2 cache types live in a sibling module (constitution Override #1, ≤700 lines).
+pub use crate::truncated_exp4_cached::{HalfNodeCoeffCache, TruncatedExp4WithCache};
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
@@ -37,9 +39,6 @@ use crate::{
     grid_fn::GridFn1D,
     scratch::ScratchPool,
 };
-
-// Wave B2 cache types live in a sibling module (constitution Override #1, ≤700 lines).
-pub use crate::truncated_exp4_cached::{HalfNodeCoeffCache, TruncatedExp4WithCache};
 
 // ---------------------------------------------------------------------------
 // Constants

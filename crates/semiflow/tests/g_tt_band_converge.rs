@@ -45,11 +45,11 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_possible_truncation)] // f64→usize n_steps: rounded positive value
-#![allow(clippy::cast_sign_loss)]           // f64→usize n_steps: .round().max(1.0) is positive
-#![allow(clippy::cast_possible_wrap)]       // usize→isize n: n ≤ 512 on all supported targets
-#![allow(clippy::needless_range_loop)]      // DFT inner loops use index arithmetic (k*j)
-#![allow(clippy::many_single_char_names)]   // n, a, l, k, j are standard math variable names
-#![allow(clippy::too_many_lines)]           // g_tt_band_converge is a single cohesive gate
+#![allow(clippy::cast_sign_loss)] // f64→usize n_steps: .round().max(1.0) is positive
+#![allow(clippy::cast_possible_wrap)] // usize→isize n: n ≤ 512 on all supported targets
+#![allow(clippy::needless_range_loop)] // DFT inner loops use index arithmetic (k*j)
+#![allow(clippy::many_single_char_names)] // n, a, l, k, j are standard math variable names
+#![allow(clippy::too_many_lines)] // g_tt_band_converge is a single cohesive gate
 
 extern crate alloc;
 use alloc::vec::Vec;

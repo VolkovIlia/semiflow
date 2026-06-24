@@ -12,7 +12,7 @@
 //! - `vals_seq` is **copied** at construction; caller may free immediately.
 //! - No new `SemiflowStatus` variants (ADR-0171); mismatches → `OutOfDomain`.
 //!
-//! ## evolve n_steps / tau discipline
+//! ## evolve `n_steps` / tau discipline
 //!
 //! `t_horizon` is captured at construction (`tau = t_horizon / n_steps`).
 //! `evolve_state_adjoint` MUST pass the same `n_steps` used at construction;
@@ -26,9 +26,9 @@ use semiflow::{
     graph_adjoint_presampled::{
         fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
     },
+    scratch::ScratchPool,
     Graph, GraphSignal, LaplacianKind, MagnusGraphHeatChernoff, VarCoefMagnusGraphHeatChernoff,
 };
-use semiflow::scratch::ScratchPool;
 
 use crate::status::SemiflowStatus;
 
@@ -61,7 +61,7 @@ struct GraphAdjointInner {
     scratch: ScratchPool<f64>,
     /// Captured at construction: `tau = t_horizon / n_steps`.
     tau: f64,
-    /// n_steps captured at construction; checked in evolve.
+    /// `n_steps` captured at construction; checked in evolve.
     n_steps: usize,
 }
 
@@ -166,9 +166,14 @@ pub unsafe extern "C" fn smf_graph_adjoint_new_presampled(
             Err(e) => return SemiflowStatus::from(&e),
         };
         let graph = Arc::new(Graph::<f64>::path(n_nodes.max(1)));
-        let tau = t_horizon / n_steps as f64;
+        #[allow(clippy::cast_precision_loss)]
+        let tau = t_horizon / n_steps as f64; // n_steps < 2^52 in practice
         let inner = GraphAdjointInner {
-            graph, variant: AdjVariant::Magnus(ps), scratch: ScratchPool::new(), tau, n_steps,
+            graph,
+            variant: AdjVariant::Magnus(ps),
+            scratch: ScratchPool::new(),
+            tau,
+            n_steps,
         };
         let raw = Box::into_raw(Box::new(inner)).cast::<SmfGraphAdjoint>();
         unsafe { *out = raw };
@@ -176,11 +181,64 @@ pub unsafe extern "C" fn smf_graph_adjoint_new_presampled(
     })
 }
 
+/// Build a `VarCoefMagnusGraphHeatChernoff` from raw pointer data already validated by caller.
+///
+/// # Safety
+/// Caller must ensure all pointer/length pairs are valid.
+#[allow(clippy::too_many_arguments)]
+unsafe fn build_varcoef_adjoint_inner(
+    n_nodes: usize,
+    row_ptr: *const usize,
+    row_ptr_len: usize,
+    col_idx: *const u32,
+    nnz: usize,
+    vals_seq: *const f64,
+    n_steps: usize,
+    a_seq: *const f64,
+    a_sup_max: f64,
+    t_horizon: f64,
+    rho_bar_max: f64,
+    kind: i32,
+    out: *mut *mut SmfGraphAdjoint,
+) -> SemiflowStatus {
+    let rp = unsafe { core::slice::from_raw_parts(row_ptr, row_ptr_len) }.to_vec();
+    let ci = unsafe { core::slice::from_raw_parts(col_idx, nnz) }.to_vec();
+    let vs = unsafe { core::slice::from_raw_parts(vals_seq, 2 * n_steps * nnz) }.to_vec();
+    let a_v = unsafe { core::slice::from_raw_parts(a_seq, 2 * n_steps * n_nodes) }.to_vec();
+    let lk = kind_from_i32(kind);
+    let seq = match PreSampledLaplacianSeq::new(rp, ci, vs, n_steps, lk) {
+        Ok(s) => s,
+        Err(e) => return SemiflowStatus::from(&e),
+    };
+    let ps = match VarCoefMagnusGraphHeatChernoff::<f64>::from_presampled(
+        seq,
+        a_v,
+        rho_bar_max,
+        a_sup_max,
+    ) {
+        Ok(p) => p,
+        Err(e) => return SemiflowStatus::from(&e),
+    };
+    let graph = Arc::new(Graph::<f64>::path(n_nodes.max(1)));
+    #[allow(clippy::cast_precision_loss)]
+    let tau = t_horizon / n_steps as f64;
+    let inner = GraphAdjointInner {
+        graph,
+        variant: AdjVariant::VarCoef(ps),
+        scratch: ScratchPool::new(),
+        tau,
+        n_steps,
+    };
+    let raw = Box::into_raw(Box::new(inner)).cast::<SmfGraphAdjoint>();
+    unsafe { *out = raw };
+    SemiflowStatus::Ok
+}
+
 // ---------------------------------------------------------------------------
 // smf_graph_adjoint_new_presampled_varcoef — VarCoef variant
 // ---------------------------------------------------------------------------
 
-/// Construct a pre-sampled VarCoef graph state-adjoint (ADR-0180).
+/// Construct a pre-sampled `VarCoef` graph state-adjoint (ADR-0180).
 ///
 /// Adds `a_seq` (len `2*n_steps*n_nodes`) and `a_sup_max` over the base
 /// `smf_graph_adjoint_new_presampled` parameters.
@@ -204,41 +262,33 @@ pub unsafe extern "C" fn smf_graph_adjoint_new_presampled_varcoef(
     kind: i32,
     out: *mut *mut SmfGraphAdjoint,
 ) -> SemiflowStatus {
-    if row_ptr.is_null() || col_idx.is_null() || vals_seq.is_null()
-        || a_seq.is_null() || out.is_null()
+    if row_ptr.is_null()
+        || col_idx.is_null()
+        || vals_seq.is_null()
+        || a_seq.is_null()
+        || out.is_null()
     {
         return SemiflowStatus::NullPtr;
     }
     if n_steps == 0 || !t_horizon.is_finite() || t_horizon <= 0.0 {
         return SemiflowStatus::OutOfDomain;
     }
-    catch_panic!({
-        let rp = unsafe { core::slice::from_raw_parts(row_ptr, row_ptr_len) }.to_vec();
-        let ci = unsafe { core::slice::from_raw_parts(col_idx, nnz) }.to_vec();
-        let vs_len = 2 * n_steps * nnz;
-        let vs = unsafe { core::slice::from_raw_parts(vals_seq, vs_len) }.to_vec();
-        let a_v = unsafe {
-            core::slice::from_raw_parts(a_seq, 2 * n_steps * n_nodes)
-        }.to_vec();
-        let lk = kind_from_i32(kind);
-        let seq = match PreSampledLaplacianSeq::new(rp, ci, vs, n_steps, lk) {
-            Ok(s) => s,
-            Err(e) => return SemiflowStatus::from(&e),
-        };
-        let ps = match VarCoefMagnusGraphHeatChernoff::<f64>::from_presampled(
-            seq, a_v, rho_bar_max, a_sup_max,
-        ) {
-            Ok(p) => p,
-            Err(e) => return SemiflowStatus::from(&e),
-        };
-        let graph = Arc::new(Graph::<f64>::path(n_nodes.max(1)));
-        let tau = t_horizon / n_steps as f64;
-        let inner = GraphAdjointInner {
-            graph, variant: AdjVariant::VarCoef(ps), scratch: ScratchPool::new(), tau, n_steps,
-        };
-        let raw = Box::into_raw(Box::new(inner)).cast::<SmfGraphAdjoint>();
-        unsafe { *out = raw };
-        SemiflowStatus::Ok
+    catch_panic!(unsafe {
+        build_varcoef_adjoint_inner(
+            n_nodes,
+            row_ptr,
+            row_ptr_len,
+            col_idx,
+            nnz,
+            vals_seq,
+            n_steps,
+            a_seq,
+            a_sup_max,
+            t_horizon,
+            rho_bar_max,
+            kind,
+            out,
+        )
     })
 }
 
@@ -284,14 +334,10 @@ pub unsafe extern "C" fn smf_graph_adjoint_evolve_state_adjoint(
         let tau = inner.tau;
         let result = match &inner.variant {
             AdjVariant::Magnus(ps) => {
-                ps.evolve_state_adjoint_into(
-                    tau, n_steps, &src, &mut dst, &mut inner.scratch,
-                )
+                ps.evolve_state_adjoint_into(tau, n_steps, &src, &mut dst, &mut inner.scratch)
             }
             AdjVariant::VarCoef(ps) => {
-                ps.evolve_state_adjoint_into(
-                    tau, n_steps, &src, &mut dst, &mut inner.scratch,
-                )
+                ps.evolve_state_adjoint_into(tau, n_steps, &src, &mut dst, &mut inner.scratch)
             }
         };
         match result {
@@ -309,6 +355,10 @@ pub unsafe extern "C" fn smf_graph_adjoint_evolve_state_adjoint(
 // ---------------------------------------------------------------------------
 
 /// Return the number of graph nodes. Returns 0 if `h` is null.
+///
+/// # Safety
+/// `h` must be null or a valid pointer to a live `SmfGraphAdjoint` returned by
+/// a constructor. No aliasing or use-after-free.
 #[no_mangle]
 pub unsafe extern "C" fn smf_graph_adjoint_n_nodes(h: *const SmfGraphAdjoint) -> usize {
     if h.is_null() {
@@ -337,5 +387,9 @@ pub unsafe extern "C" fn smf_graph_adjoint_free(h: *mut SmfGraphAdjoint) {
 // ---------------------------------------------------------------------------
 
 fn kind_from_i32(kind: i32) -> LaplacianKind {
-    if kind == 1 { LaplacianKind::SymNormalized } else { LaplacianKind::Combinatorial }
+    if kind == 1 {
+        LaplacianKind::SymNormalized
+    } else {
+        LaplacianKind::Combinatorial
+    }
 }

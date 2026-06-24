@@ -1,8 +1,9 @@
 // Helpers for schrodinger.rs — moved here in batch H5 to keep functions ≤50 lines.
 // All float operations are verbatim moves; bit-identity is preserved exactly.
 
-use crate::float::SemiflowFloat;
 use alloc::vec::Vec;
+
+use crate::float::SemiflowFloat;
 
 /// First half-step V-rotation: `src → w[0] (r_d), w[1] (m_d)` (f64).
 ///
@@ -110,5 +111,19 @@ pub(crate) fn pentadiag_forward_elim(n: usize, w: &mut [Vec<f64>; 12]) {
             w[11][k + 2] -= m2 * w[11][k];
             // Fill (k+2, k+1) is lower-triangle only — sup1[k+1] NOT updated here.
         }
+    }
+}
+
+/// Tridiagonal matrix-vector product (f64, Dirichlet BCs).
+///
+/// A[i,i] = `diag`, A[i,i±1] = `off`; boundary off-diags are 0.
+#[inline]
+pub(super) fn tridiag_matvec_f64(n: usize, diag: f64, off: f64, v: &[f64], out: &mut Vec<f64>) {
+    debug_assert_eq!(v.len(), n);
+    out.resize(n, 0.0);
+    for i in 0..n {
+        let left = if i == 0 { 0.0 } else { off * v[i - 1] };
+        let right = if i == n - 1 { 0.0 } else { off * v[i + 1] };
+        out[i] = diag * v[i] + left + right;
     }
 }

@@ -9,13 +9,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64 next_u64; intentional bit-extraction
-#![allow(clippy::cast_precision_loss)]      // usize→f64 for index arithmetic; values ≤ N_GRID
-#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic
-#![allow(clippy::unusual_byte_groupings)]   // 0xC0FFEE_BABE_DEAD_BEEF is a named seed constant
+#![allow(clippy::cast_precision_loss)] // usize→f64 for index arithmetic; values ≤ N_GRID
+#![allow(clippy::needless_range_loop)] // index loops use cross-index arithmetic
+#![allow(clippy::unusual_byte_groupings)] // 0xC0FFEE_BABE_DEAD_BEEF is a named seed constant
 
-use semiflow::{
-    ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
 const M: usize = 4;
 const N_GRID: usize = 128;

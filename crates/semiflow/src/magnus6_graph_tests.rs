@@ -1,6 +1,6 @@
-use super::*;
 use alloc::sync::Arc;
 
+use super::*;
 use crate::{
     chernoff::ChernoffFunction,
     graph::{Graph, Laplacian},

@@ -43,7 +43,11 @@ pub(crate) fn mat_inv_lu<F: SemiflowFloat, const M: usize>(
 }
 
 /// Write `src` vector into column `cidx` of `mat`.
-fn write_column<F: SemiflowFloat, const M: usize>(mat: &mut [[F; M]; M], cidx: usize, src: &[F; M]) {
+fn write_column<F: SemiflowFloat, const M: usize>(
+    mat: &mut [[F; M]; M],
+    cidx: usize,
+    src: &[F; M],
+) {
     for (row, &val) in mat.iter_mut().zip(src.iter()) {
         row[cidx] = val;
     }

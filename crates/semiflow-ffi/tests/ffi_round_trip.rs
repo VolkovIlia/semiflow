@@ -9,9 +9,8 @@
 
 use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, GridFn1D};
 use semiflow_ffi::{
-    smf_evolve, smf_state_free, smf_state_new_heat_1d_unit,
-    smf_state_new_with_closure, smf_state_size, smf_state_values, smf_status_str,
-    smf_version, SemiflowState, SemiflowStatus,
+    smf_evolve, smf_state_free, smf_state_new_heat_1d_unit, smf_state_new_with_closure,
+    smf_state_size, smf_state_values, smf_status_str, smf_version, SemiflowState, SemiflowStatus,
 };
 
 // ---------------------------------------------------------------------------
@@ -52,9 +51,8 @@ fn test_new_evolve_values() {
     let u0 = make_u0();
     let mut state_ptr: *mut SemiflowState = std::ptr::null_mut();
 
-    let status = unsafe {
-        smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut state_ptr)
-    };
+    let status =
+        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut state_ptr) };
     assert_eq!(status, SemiflowStatus::Ok, "new_heat_1d_unit failed");
     assert!(!state_ptr.is_null());
 
@@ -163,9 +161,8 @@ fn test_nan_in_u0_returns_error() {
 fn test_xmin_ge_xmax_returns_grid_mismatch() {
     let u0 = vec![0.0_f64; 1000];
     let mut ptr = std::ptr::null_mut();
-    let st = unsafe {
-        smf_state_new_heat_1d_unit(10.0, -10.0, 1000, u0.as_ptr(), u0.len(), &mut ptr)
-    };
+    let st =
+        unsafe { smf_state_new_heat_1d_unit(10.0, -10.0, 1000, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_eq!(st, SemiflowStatus::GridMismatch);
     assert!(ptr.is_null());
 }

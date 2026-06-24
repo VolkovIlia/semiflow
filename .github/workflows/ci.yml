@@ -1,8 +1,8 @@
 name: CI
-# Toolchain note: fmt uses nightly (rustfmt.toml has nightly-only options
-# imports_granularity/group_imports). All other non-FFI jobs use stable.
-# MSRV documented in Cargo.toml rust-version = "1.78" is for downstream users;
-# CI tracks stable to avoid transitive dep edition2024 breakage.
+# Toolchain note: all jobs use stable. rustfmt.toml was cleaned of nightly-only
+# options (imports_granularity/group_imports removed in ADR-0182) so fmt now
+# runs on stable. MSRV documented in Cargo.toml rust-version = "1.78" is for
+# downstream users; CI tracks stable to avoid transitive dep edition2024 breakage.
 on:
   push:
     branches: [main, master]
@@ -11,12 +11,9 @@ on:
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: nightly
     steps:
       - uses: actions/checkout@v4
-      # nightly required: rustfmt.toml uses imports_granularity/group_imports
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with: { components: rustfmt }
       - run: cargo fmt --all --check
 
@@ -54,7 +51,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.78
       - uses: Swatinem/rust-cache@v2
-      - run: cargo +1.78 test --workspace --lib
+      # MSRV applies to the core library only. Binding crates (semiflow-ffi,
+      # semiflow-py, semiflow-wasm) depend on cbindgen/pyo3/wasm-bindgen which
+      # require rustc > 1.78; their own MSRV is gated by those upstreams.
+      - run: cargo +1.78 test -p semiflow --lib
 
   doc:
     runs-on: ubuntu-latest

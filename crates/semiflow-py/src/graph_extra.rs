@@ -31,9 +31,10 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
-
 use semiflow::{Graph, Laplacian, LaplacianKind};
 
+// Re-export heat kernels from their own module.
+pub(crate) use crate::graph_extra_heat::{GraphHeat4th, VarCoefGraphHeat};
 use crate::{
     error::{from_core, new_pyerr},
     graph_py::extract_edges_flat,
@@ -42,9 +43,6 @@ use crate::{
     },
     panic::catch_panic_py,
 };
-
-// Re-export heat kernels from their own module.
-pub(crate) use crate::graph_extra_heat::{GraphHeat4th, VarCoefGraphHeat};
 
 // ---------------------------------------------------------------------------
 // Graph — factory + introspection

@@ -7,7 +7,6 @@
 //! - `extract_f64_vec`
 
 use pyo3::prelude::*;
-
 use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},

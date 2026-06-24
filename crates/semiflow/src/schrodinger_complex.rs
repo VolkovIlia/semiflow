@@ -19,7 +19,7 @@
 //!
 //! `GridFn1D<F: SemiflowFloat>` has a hard `SemiflowFloat` bound. Option B requires
 //! complex state; we introduce [`GridFnComplex1D<C>`] — a thin wrapper holding
-//! `Vec<C>` plus a `Grid1D<C::Real>`. It implements [`State<C::Real>`] so it
+//! `Vec<C>` plus a `Grid1D<C::Real>`. It implements [`crate::state::State`]`<C::Real>` so it
 //! plugs into the standard Chernoff iteration machinery.
 //!
 //! ## Citations
@@ -39,6 +39,7 @@ use core::marker::PhantomData;
 
 use num_traits::{Float, One, Zero};
 
+pub use crate::schrodinger_complex_state::GridFnComplex1D;
 use crate::{
     approximation::ApproximationSubspace,
     chernoff::{ChernoffFunction, Growth},
@@ -47,8 +48,6 @@ use crate::{
     grid::Grid1D,
     scratch::ScratchPool,
 };
-
-pub use crate::schrodinger_complex_state::GridFnComplex1D;
 
 // ---------------------------------------------------------------------------
 // SchrödingerChernoffComplex<C>
@@ -318,8 +317,9 @@ pub(crate) fn thomas_solve<C: SemiflowComplex>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use num_complex::Complex;
+
+    use super::*;
 
     type C64 = Complex<f64>;
     type Kern = SchrödingerChernoffComplex<C64>;

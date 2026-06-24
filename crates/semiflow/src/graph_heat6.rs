@@ -227,12 +227,14 @@ fn apply_zeta6_into<F: SemiflowFloat>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::sync::Arc;
 
-    use crate::graph::{Graph, Laplacian};
-    use crate::graph_signal::GraphSignal;
-    use crate::state::State;
+    use super::*;
+    use crate::{
+        graph::{Graph, Laplacian},
+        graph_signal::GraphSignal,
+        state::State,
+    };
 
     #[test]
     fn apply_at_zero_tau_returns_src() {

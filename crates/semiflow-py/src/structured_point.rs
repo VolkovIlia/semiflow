@@ -9,7 +9,6 @@
 #![allow(clippy::too_many_arguments)]
 
 use pyo3::prelude::*;
-
 use semiflow::{
     diffusion::DiffusionChernoff,
     point_eval::{sample_gridfn2d as core_sample_gridfn2d, PointEval as CorePointEval},

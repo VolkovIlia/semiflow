@@ -5,9 +5,7 @@
 //!
 //! See `contracts/v2.1/wave-a-graph-foundations.md` §2 and ADR-0047.
 
-use alloc::sync::Arc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec, vec::Vec};
 
 use num_traits::Float;
 

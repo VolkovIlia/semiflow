@@ -40,11 +40,10 @@
     clippy::too_many_arguments
 )]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ResolventJumpChernoff2D, ResolventJumpChernoff3D,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

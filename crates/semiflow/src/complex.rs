@@ -245,8 +245,9 @@ impl SemiflowComplex for num_complex::Complex<f32> {
 // Exact float comparisons in tests verify round-trip identity or sentinel values.
 #[allow(clippy::float_cmp)]
 mod tests {
-    use super::SemiflowComplex;
     use num_complex::Complex;
+
+    use super::SemiflowComplex;
 
     type C = Complex<f64>;
     type C32 = Complex<f32>;

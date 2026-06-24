@@ -58,15 +58,14 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use crate::chernoff::{ChernoffFunction, Growth};
-use crate::error::SemiflowError;
-use crate::float::SemiflowFloat;
-use crate::grid_nd::GridFnND;
-use crate::hormander::{bracket_central_diff, HypoellipticChernoff, VectorField};
-use crate::scratch::ScratchPool;
-
-use crate::hormander_engel_helpers::{
-    sample_4d, sample_axis0, GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL,
+use crate::{
+    chernoff::{ChernoffFunction, Growth},
+    error::SemiflowError,
+    float::SemiflowFloat,
+    grid_nd::GridFnND,
+    hormander::{bracket_central_diff, HypoellipticChernoff, VectorField},
+    hormander_engel_helpers::{sample_4d, sample_axis0, GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL},
+    scratch::ScratchPool,
 };
 
 // ─── Engel left-invariant vector fields ──────────────────────────────────────

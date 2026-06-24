@@ -37,8 +37,10 @@ const N_STEPS: usize = 256;
 #[cfg(feature = "tracking-alloc")]
 #[allow(unsafe_code)]
 mod tracking {
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::*};
+    use std::{
+        alloc::{GlobalAlloc, Layout, System},
+        sync::atomic::{AtomicU64, AtomicUsize, Ordering::*},
+    };
     pub struct Alloc;
     static CUR: AtomicUsize = AtomicUsize::new(0);
     static PEAK: AtomicUsize = AtomicUsize::new(0);

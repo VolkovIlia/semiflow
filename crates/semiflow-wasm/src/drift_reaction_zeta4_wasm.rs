@@ -103,13 +103,8 @@ impl DriftReaction4th1D {
     ) -> Result<DriftReaction4th1D, JsValue> {
         let buf = extract_u0(u0, n)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
-        let d4 = Diffusion4thChernoff::new(
-            unit_a_dr4_wasm,
-            zero_dr4_wasm,
-            zero_dr4_wasm,
-            1.0,
-            grid,
-        );
+        let d4 =
+            Diffusion4thChernoff::new(unit_a_dr4_wasm, zero_dr4_wasm, zero_dr4_wasm, 1.0, grid);
         let kernel = DriftReactionZeta4Chernoff::new(
             d4,
             half_b_dr4_wasm,

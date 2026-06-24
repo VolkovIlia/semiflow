@@ -125,7 +125,10 @@ impl Killing2nd1D {
         kappa: f64,
     ) -> Result<Killing2nd1D, JsValue> {
         if !kappa.is_finite() || kappa < 0.0 {
-            return Err(make_js_error("OutOfDomain", "kappa must be finite and >= 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "kappa must be finite and >= 0",
+            ));
         }
         let buf = extract_u0(u0, n)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;

@@ -578,7 +578,11 @@ fn g_gridless_ttrank() {
     for &d in &D_LIST {
         let sigma_t = sigma_t_regime_l(d);
         let res = measure_regime(d, &sigma_t);
-        let sr_str: Vec<String> = res.split_ranks.iter().map(std::string::ToString::to_string).collect();
+        let sr_str: Vec<String> = res
+            .split_ranks
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         println!(
             "  {:>2} | {:>6} | {:47} | {:9.3e} | {}",
             res.d,
@@ -627,7 +631,11 @@ fn g_gridless_ttrank() {
     for &d in &D_LIST {
         let sigma_t = sigma_t_regime_h(d);
         let res = measure_regime(d, &sigma_t);
-        let sr_str: Vec<String> = res.split_ranks.iter().map(std::string::ToString::to_string).collect();
+        let sr_str: Vec<String> = res
+            .split_ranks
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         println!(
             "  {:>2} | {:>6} | {:47} | {:9.3e} | {}",
             res.d,

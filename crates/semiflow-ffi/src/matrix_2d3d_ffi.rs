@@ -20,13 +20,14 @@
 use std::os::raw::c_double;
 
 use semiflow::{
-    matrix_2d3d::{MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D},
+    matrix_2d3d::{
+        MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D,
+    },
     matrix_system::MatrixDiffusionChernoff,
     BoundaryPolicy, ChernoffSemigroup, Grid1D, Grid2D, Grid3D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Shared kernel builder (same as structured_matrix pattern)
@@ -113,7 +114,9 @@ pub unsafe extern "C" fn smf_matrix2d_new(
     }
     catch_panic!({
         let slice = unsafe { std::slice::from_raw_parts(u0, u0_len) };
-        match build_matrix2d(xmin, xmax, nx, ymin, ymax, ny, a_diag, c_coupling, n_steps, slice) {
+        match build_matrix2d(
+            xmin, xmax, nx, ymin, ymax, ny, a_diag, c_coupling, n_steps, slice,
+        ) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(inner) => {
                 let raw = Box::into_raw(Box::new(inner)).cast::<SmfMatrix2D>();
@@ -213,9 +216,15 @@ pub unsafe extern "C" fn smf_matrix2d_free(ev: *mut SmfMatrix2D) {
 // ---------------------------------------------------------------------------
 
 fn build_matrix2d(
-    xmin: f64, xmax: f64, nx: usize,
-    ymin: f64, ymax: f64, ny: usize,
-    a_diag: f64, c_coupling: f64, n_steps: usize,
+    xmin: f64,
+    xmax: f64,
+    nx: usize,
+    ymin: f64,
+    ymax: f64,
+    ny: usize,
+    a_diag: f64,
+    c_coupling: f64,
+    n_steps: usize,
     u0: &[f64],
 ) -> Result<InnerMatrix2D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
@@ -224,7 +233,13 @@ fn build_matrix2d(
     let grid2d = Grid2D::new(gx, gy);
     // Validate kernel construction.
     build_matrix_kernel(a_diag, c_coupling, gx)?;
-    Ok(InnerMatrix2D { a_diag, c_coupling, grid2d, n_steps, current: u0.to_vec() })
+    Ok(InnerMatrix2D {
+        a_diag,
+        c_coupling,
+        grid2d,
+        n_steps,
+        current: u0.to_vec(),
+    })
 }
 
 fn evolve_matrix2d(inner: &mut InnerMatrix2D, t: f64) -> Result<(), semiflow::SemiflowError> {
@@ -267,9 +282,15 @@ struct InnerMatrix3D {
 /// `out` must be a valid `*mut *mut SmfMatrix3D`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_matrix3d_new(
-    xmin: c_double, xmax: c_double, nx: usize,
-    ymin: c_double, ymax: c_double, ny: usize,
-    zmin: c_double, zmax: c_double, nz: usize,
+    xmin: c_double,
+    xmax: c_double,
+    nx: usize,
+    ymin: c_double,
+    ymax: c_double,
+    ny: usize,
+    zmin: c_double,
+    zmax: c_double,
+    nz: usize,
     a_diag: c_double,
     c_coupling: c_double,
     u0: *const c_double,
@@ -288,7 +309,9 @@ pub unsafe extern "C" fn smf_matrix3d_new(
     }
     catch_panic!({
         let slice = unsafe { std::slice::from_raw_parts(u0, u0_len) };
-        match build_matrix3d(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, a_diag, c_coupling, n_steps, slice) {
+        match build_matrix3d(
+            xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, a_diag, c_coupling, n_steps, slice,
+        ) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(inner) => {
                 let raw = Box::into_raw(Box::new(inner)).cast::<SmfMatrix3D>();
@@ -388,10 +411,18 @@ pub unsafe extern "C" fn smf_matrix3d_free(ev: *mut SmfMatrix3D) {
 // ---------------------------------------------------------------------------
 
 fn build_matrix3d(
-    xmin: f64, xmax: f64, nx: usize,
-    ymin: f64, ymax: f64, ny: usize,
-    zmin: f64, zmax: f64, nz: usize,
-    a_diag: f64, c_coupling: f64, n_steps: usize,
+    xmin: f64,
+    xmax: f64,
+    nx: usize,
+    ymin: f64,
+    ymax: f64,
+    ny: usize,
+    zmin: f64,
+    zmax: f64,
+    nz: usize,
+    a_diag: f64,
+    c_coupling: f64,
+    n_steps: usize,
     u0: &[f64],
 ) -> Result<InnerMatrix3D, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
@@ -400,7 +431,13 @@ fn build_matrix3d(
     let gz = Grid1D::new(zmin, zmax, nz)?.with_boundary(BoundaryPolicy::Reflect);
     let grid3d = Grid3D::new(gx, gy, gz)?;
     build_matrix_kernel(a_diag, c_coupling, gx)?;
-    Ok(InnerMatrix3D { a_diag, c_coupling, grid3d, n_steps, current: u0.to_vec() })
+    Ok(InnerMatrix3D {
+        a_diag,
+        c_coupling,
+        grid3d,
+        n_steps,
+        current: u0.to_vec(),
+    })
 }
 
 fn evolve_matrix3d(inner: &mut InnerMatrix3D, t: f64) -> Result<(), semiflow::SemiflowError> {

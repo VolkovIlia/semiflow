@@ -108,7 +108,11 @@ pub unsafe extern "C" fn smf_smolyak_d6_new(
         if let Err(e) = build_kernel(domain_lo, domain_hi, n_per_axis) {
             return SemiflowStatus::from(&e);
         }
-        let inner = InnerSmolyakD6 { domain_lo, domain_hi, n_per_axis };
+        let inner = InnerSmolyakD6 {
+            domain_lo,
+            domain_hi,
+            n_per_axis,
+        };
         let raw = Box::into_raw(Box::new(inner)).cast::<SmfSmolyakD6>();
         unsafe { *out_ev = raw };
         SemiflowStatus::Ok
@@ -149,7 +153,14 @@ pub unsafe extern "C" fn smf_smolyak_d6_apply(
             return st;
         }
         let u0_sl = unsafe { std::slice::from_raw_parts(u0, u0_len) };
-        match run_smolyak(inner.domain_lo, inner.domain_hi, inner.n_per_axis, tau, u0_sl, n_steps) {
+        match run_smolyak(
+            inner.domain_lo,
+            inner.domain_hi,
+            inner.n_per_axis,
+            tau,
+            u0_sl,
+            n_steps,
+        ) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(result) => {
                 let sl = unsafe { std::slice::from_raw_parts_mut(out, out_len) };
@@ -166,7 +177,9 @@ pub unsafe extern "C" fn smf_smolyak_d6_apply(
 /// `ev` must be null or live from `smf_smolyak_d6_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_smolyak_d6_size(ev: *const SmfSmolyakD6) -> usize {
-    if ev.is_null() { return 0; }
+    if ev.is_null() {
+        return 0;
+    }
     let inner = unsafe { &*ev.cast::<InnerSmolyakD6>() };
     inner.n_per_axis.pow(D as u32)
 }
@@ -177,7 +190,9 @@ pub unsafe extern "C" fn smf_smolyak_d6_size(ev: *const SmfSmolyakD6) -> usize {
 /// `ev` must be null or live from `smf_smolyak_d6_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_smolyak_d6_n_nodes(ev: *const SmfSmolyakD6) -> usize {
-    if ev.is_null() { return 0; }
+    if ev.is_null() {
+        return 0;
+    }
     let inner = unsafe { &*ev.cast::<InnerSmolyakD6>() };
     match build_kernel(inner.domain_lo, inner.domain_hi, inner.n_per_axis) {
         Ok(k) => k.n_nodes(),
@@ -191,7 +206,9 @@ pub unsafe extern "C" fn smf_smolyak_d6_n_nodes(ev: *const SmfSmolyakD6) -> usiz
 /// `ev` must be null or live from `smf_smolyak_d6_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_smolyak_d6_free(ev: *mut SmfSmolyakD6) {
-    if ev.is_null() { return; }
+    if ev.is_null() {
+        return;
+    }
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         unsafe { drop(Box::from_raw(ev.cast::<InnerSmolyakD6>())) };
     }));
@@ -238,10 +255,14 @@ fn build_kernel(
     let grid = build_grid(lo, hi, n)?;
     SmolyakGridND::with_level(
         |_x: &[f64; D], a: &mut SquareMatrix<f64, D>| {
-            for i in 0..D { a.set(i, i, 1.0); }
+            for i in 0..D {
+                a.set(i, i, 1.0);
+            }
         },
         |_x: &[f64; D], b: &mut [f64; D]| {
-            for v in b.iter_mut() { *v = 0.0; }
+            for v in b.iter_mut() {
+                *v = 0.0;
+            }
         },
         |_x: &[f64; D]| 0.0_f64,
         grid,

@@ -29,8 +29,7 @@ use semiflow::{
     StrangSplit,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // Concrete split type alias mirrors diffusion_extra2.rs.
 type StrangConcrete = StrangSplit<DiffusionChernoff<f64>, DriftReactionChernoff<f64>>;

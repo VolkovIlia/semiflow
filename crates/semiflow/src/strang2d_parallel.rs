@@ -30,20 +30,10 @@ use alloc::{sync::Arc, vec::Vec};
 use core::cell::Cell;
 use std::sync::Mutex;
 
-use crate::{
-    chernoff::{ApplyChernoffExt, ChernoffFunction},
-    error::SemiflowError,
-    float::SemiflowFloat,
-    grid::Grid1D,
-    grid_fn::GridFn1D,
-    parallel_pool::{drain_thread_local_pools_2d_for, ParallelPool2D},
-};
-
 // ---------------------------------------------------------------------------
 // Re-export the per-precision pools for backward compatibility
 // (tests/parallel_scratch_drain.rs uses PARALLEL_2D_POOL directly)
 // ---------------------------------------------------------------------------
-
 /// Per-thread grow-only scratch pool for 2D parallel pencil buffers (f64).
 ///
 /// Replaces the per-call `vec![0.0_f64; n]` allocations in `x_pass_chunk`
@@ -53,6 +43,14 @@ use crate::{
 /// Not part of the stable public API; not frozen at v1.0.0.
 #[doc(hidden)]
 pub use crate::parallel_pool::PARALLEL_2D_POOL_F64 as PARALLEL_2D_POOL;
+use crate::{
+    chernoff::{ApplyChernoffExt, ChernoffFunction},
+    error::SemiflowError,
+    float::SemiflowFloat,
+    grid::Grid1D,
+    grid_fn::GridFn1D,
+    parallel_pool::{drain_thread_local_pools_2d_for, ParallelPool2D},
+};
 
 /// Drain the calling thread's 2D parallel scratch pool (f64 + f32).
 ///

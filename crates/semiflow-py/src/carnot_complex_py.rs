@@ -35,8 +35,10 @@ use semiflow::{
     ComplexTripleJump, Grid1D,
 };
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Constants (per-crate dup, ADR-0028 Amdt 2)

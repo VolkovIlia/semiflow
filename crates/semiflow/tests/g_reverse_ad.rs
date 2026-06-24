@@ -50,12 +50,12 @@
 #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
 #![allow(unsafe_code)]
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-use semiflow::{
-    CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, ReverseChernoff,
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    sync::atomic::{AtomicUsize, Ordering},
 };
+
+use semiflow::{CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, ReverseChernoff};
 
 // ---------------------------------------------------------------------------
 // Peak-tracking global allocator

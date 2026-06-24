@@ -275,6 +275,8 @@ impl ChernoffFunction<f32> for ShiftChernoff1D<f32> {
 
     /// Growth bound `(1, ‖c‖_∞)`.
     fn growth(&self) -> Growth<f32> {
+        // cast_possible_truncation: f32 impl; narrowing c_norm_bound to f32 is intentional.
+        #[allow(clippy::cast_possible_truncation)]
         Growth::new(1.0, self.c_norm_bound as f32)
     }
 

@@ -18,8 +18,12 @@ use semiflow::{
 
 use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
-extern "Rust" fn unit_a_bc2(_: f64) -> f64 { 1.0 }
-extern "Rust" fn zero_bc2(_: f64) -> f64 { 0.0 }
+extern "Rust" fn unit_a_bc2(_: f64) -> f64 {
+    1.0
+}
+extern "Rust" fn zero_bc2(_: f64) -> f64 {
+    0.0
+}
 
 type DiffUnit2 = DiffusionChernoff<f64>;
 type RobinKernel = RobinHeatChernoff<DiffUnit2, HalfSpaceRobin<f64, 1>, f64>;
@@ -457,7 +461,10 @@ pub unsafe extern "C" fn smf_killed_dir1d_size(ev: *const SmfKilledDir1D) -> usi
     if ev.is_null() {
         return 0;
     }
-    unsafe { &*ev.cast::<KilledDirState>() }.current.values.len()
+    unsafe { &*ev.cast::<KilledDirState>() }
+        .current
+        .values
+        .len()
 }
 
 /// Free a killed-Dirichlet handle. Null-safe.

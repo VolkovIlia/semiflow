@@ -32,9 +32,9 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // v as usize: v is always non-negative N grid count
-#![allow(clippy::cast_sign_loss)]           // v as usize: same
-#![allow(clippy::doc_markdown)]             // err_sup, SepticHermite in doc: LaTeX-like math terms
-// v7.0: QuinticHermite removed (ADR-0109 removal clock fulfilled); using SepticHermite default.
+#![allow(clippy::cast_sign_loss)] // v as usize: same
+#![allow(clippy::doc_markdown)] // err_sup, SepticHermite in doc: LaTeX-like math terms
+                                // v7.0: QuinticHermite removed (ADR-0109 removal clock fulfilled); using SepticHermite default.
 
 use semiflow::{
     ChernoffSemigroup, Diffusion6thChernoff, Grid1D, Grid2D, GridFn2D, InterpKind, Strang2D,
@@ -49,12 +49,12 @@ const A_CONST: f64 = 0.5;
 const X_MIN: f64 = -15.0;
 const X_MAX: f64 = 15.0;
 const N_CHERNOFF: usize = 1000; // temporal steps; τ = 5e-4
-// v9.1+ (ADR-0163): floor-safe asymptotic prime basket for the SepticHermite era.
-// Empirical regime map (g3_6_2d_regime_map_diagnostic): {191,251,331} sit in the clean
-// 6th-order truncation band (seg slopes -5.86/-5.98/-6.18 straddle -6.0; finest err
-// 2.25e-8 ≈ 5000× the ~5e-12 SepticHermite floor). Coarser N=127 is pre-asymptotic
-// (-5.86); finer N≥419 steepens pre-floor (-6.48,…); N≥997 floored. OLS over basket -6.07.
-// Supersedes ADR-0020 Amendment 3's {503,997,1999} (QuinticHermite-floor-era). See ADR-0163.
+                                // v9.1+ (ADR-0163): floor-safe asymptotic prime basket for the SepticHermite era.
+                                // Empirical regime map (g3_6_2d_regime_map_diagnostic): {191,251,331} sit in the clean
+                                // 6th-order truncation band (seg slopes -5.86/-5.98/-6.18 straddle -6.0; finest err
+                                // 2.25e-8 ≈ 5000× the ~5e-12 SepticHermite floor). Coarser N=127 is pre-asymptotic
+                                // (-5.86); finer N≥419 steepens pre-floor (-6.48,…); N≥997 floored. OLS over basket -6.07.
+                                // Supersedes ADR-0020 Amendment 3's {503,997,1999} (QuinticHermite-floor-era). See ADR-0163.
 const N_SWEEP: [usize; 3] = [191, 251, 331];
 const SLOPE_LO: f64 = -6.30; // upper-bound on |slope| (pre-floor super-convergence catch)
 const SLOPE_HI: f64 = -5.85; // lower-bound on |slope| (order-degradation catch)
@@ -318,8 +318,13 @@ fn run_diag_sweep() -> (Vec<f64>, Vec<f64>) {
          N_CHERNOFF={N_CHERNOFF} (τ=5e-4, IDENTICAL to FLAGSHIP gate)"
     );
     eprintln!("Domain [{X_MIN}, {X_MAX}]²; SepticHermite per axis (v6.0+, ADR-0109)");
-    eprintln!("Floor reference: G_SEPTIC_HERMITE_FLOOR φ ≤ 5e-12 (1D); expect 2D saturation near it");
-    eprintln!("{:>6}  {:>10}  {:>14}  {:>12}  {:>8}", "N", "dx", "err_sup", "seg_slope", "time(s)");
+    eprintln!(
+        "Floor reference: G_SEPTIC_HERMITE_FLOOR φ ≤ 5e-12 (1D); expect 2D saturation near it"
+    );
+    eprintln!(
+        "{:>6}  {:>10}  {:>14}  {:>12}  {:>8}",
+        "N", "dx", "err_sup", "seg_slope", "time(s)"
+    );
 
     let mut ns_f: Vec<f64> = Vec::new();
     let mut errs: Vec<f64> = Vec::new();
@@ -333,7 +338,10 @@ fn run_diag_sweep() -> (Vec<f64>, Vec<f64>) {
         let seg = prev.map_or_else(
             || "           -".into(),
             |(pn, pe): (f64, f64)| {
-                format!("{:>12.4}", (err.ln() - pe.ln()) / ((n as f64).ln() - pn.ln()))
+                format!(
+                    "{:>12.4}",
+                    (err.ln() - pe.ln()) / ((n as f64).ln() - pn.ln())
+                )
             },
         );
         eprintln!("{n:>6}  {dx:>10.4e}  {err:>14.4e}  {seg}  ({secs:>6}s)");
@@ -367,7 +375,9 @@ fn print_diag_summary(ns_f: &[f64], errs: &[f64]) {
         eprintln!(
             "FLOOR-SAFE sub-basket {ns:?} (err ≥ {FLOOR_SAFE_MIN_ERR:.0e}) OLS slope = {safe_slope:.4}"
         );
-        eprintln!("→ Predicted asymptotic order ≈ -6 (recalibrate FLAGSHIP window from this value).");
+        eprintln!(
+            "→ Predicted asymptotic order ≈ -6 (recalibrate FLAGSHIP window from this value)."
+        );
     } else {
         eprintln!("FLOOR-SAFE sub-basket too small — extend DIAG_N_SWEEP coarser (add N < 127).");
     }

@@ -1,12 +1,12 @@
 //! Scalar fallback implementations for all SIMD traits. NO `unsafe`.
 //!
 //! Always compiled — each platform needs at least one of these fallbacks:
-//! - x86_64+avx2: provides F32x4Scalar (no native AVX2 f32x4 in our trait)
-//! - aarch64+neon: provides F64x4Scalar, F32x8Scalar (no f64x4/f32x8 in NEON)
+//! - `x86_64+avx2`: provides `F32x4Scalar` (no native AVX2 f32x4 in our trait)
+//! - aarch64+neon: provides `F64x4Scalar`, `F32x8Scalar` (no f64x4/f32x8 in NEON)
 //! - other arches: provides all three scalar fallbacks
 //! - cfg(test): force-scalar hook uses these on all arches (ADR-0019 §6.5A)
 //!
-//! Items that are unused on a given arch are suppressed by #[allow(dead_code)]
+//! Items that are unused on a given arch are suppressed by #[`allow(dead_code)`]
 //! to avoid warnings without conditional compilation noise.
 
 use super::{SimdF32x4, SimdF32x8, SimdF64x4};
@@ -97,30 +97,42 @@ impl SimdF32x8 for F32x8Scalar {
     #[inline]
     fn add(self, r: Self) -> Self {
         F32x8Scalar([
-            self.0[0] + r.0[0], self.0[1] + r.0[1],
-            self.0[2] + r.0[2], self.0[3] + r.0[3],
-            self.0[4] + r.0[4], self.0[5] + r.0[5],
-            self.0[6] + r.0[6], self.0[7] + r.0[7],
+            self.0[0] + r.0[0],
+            self.0[1] + r.0[1],
+            self.0[2] + r.0[2],
+            self.0[3] + r.0[3],
+            self.0[4] + r.0[4],
+            self.0[5] + r.0[5],
+            self.0[6] + r.0[6],
+            self.0[7] + r.0[7],
         ])
     }
 
     #[inline]
     fn sub(self, r: Self) -> Self {
         F32x8Scalar([
-            self.0[0] - r.0[0], self.0[1] - r.0[1],
-            self.0[2] - r.0[2], self.0[3] - r.0[3],
-            self.0[4] - r.0[4], self.0[5] - r.0[5],
-            self.0[6] - r.0[6], self.0[7] - r.0[7],
+            self.0[0] - r.0[0],
+            self.0[1] - r.0[1],
+            self.0[2] - r.0[2],
+            self.0[3] - r.0[3],
+            self.0[4] - r.0[4],
+            self.0[5] - r.0[5],
+            self.0[6] - r.0[6],
+            self.0[7] - r.0[7],
         ])
     }
 
     #[inline]
     fn mul(self, r: Self) -> Self {
         F32x8Scalar([
-            self.0[0] * r.0[0], self.0[1] * r.0[1],
-            self.0[2] * r.0[2], self.0[3] * r.0[3],
-            self.0[4] * r.0[4], self.0[5] * r.0[5],
-            self.0[6] * r.0[6], self.0[7] * r.0[7],
+            self.0[0] * r.0[0],
+            self.0[1] * r.0[1],
+            self.0[2] * r.0[2],
+            self.0[3] * r.0[3],
+            self.0[4] * r.0[4],
+            self.0[5] * r.0[5],
+            self.0[6] * r.0[6],
+            self.0[7] * r.0[7],
         ])
     }
 
@@ -136,7 +148,7 @@ impl SimdF32x8 for F32x8Scalar {
 }
 
 /// 4-lane f32 SIMD backed by `[f32; 4]`. No unsafe. Used on non-NEON arches,
-/// including x86_64+avx2 (no native f32x4 type in our AVX2 trait surface).
+/// including `x86_64+avx2` (no native f32x4 type in our AVX2 trait surface).
 #[allow(dead_code)] // used on x86_64+avx2 and all non-neon arches
 #[derive(Clone, Copy)]
 pub(crate) struct F32x4Scalar([f32; 4]);
@@ -160,24 +172,30 @@ impl SimdF32x4 for F32x4Scalar {
     #[inline]
     fn add(self, r: Self) -> Self {
         F32x4Scalar([
-            self.0[0] + r.0[0], self.0[1] + r.0[1],
-            self.0[2] + r.0[2], self.0[3] + r.0[3],
+            self.0[0] + r.0[0],
+            self.0[1] + r.0[1],
+            self.0[2] + r.0[2],
+            self.0[3] + r.0[3],
         ])
     }
 
     #[inline]
     fn sub(self, r: Self) -> Self {
         F32x4Scalar([
-            self.0[0] - r.0[0], self.0[1] - r.0[1],
-            self.0[2] - r.0[2], self.0[3] - r.0[3],
+            self.0[0] - r.0[0],
+            self.0[1] - r.0[1],
+            self.0[2] - r.0[2],
+            self.0[3] - r.0[3],
         ])
     }
 
     #[inline]
     fn mul(self, r: Self) -> Self {
         F32x4Scalar([
-            self.0[0] * r.0[0], self.0[1] * r.0[1],
-            self.0[2] * r.0[2], self.0[3] * r.0[3],
+            self.0[0] * r.0[0],
+            self.0[1] * r.0[1],
+            self.0[2] * r.0[2],
+            self.0[3] * r.0[3],
         ])
     }
 

@@ -2,8 +2,8 @@
 //! ADR-0064). Hosts the FFI bindings for the **two new** kernels introduced
 //! in v2.4:
 //!
-//! - [`smf_ghc6_*`] — `GraphHeat6thChernoff` (order-6 spatial; ADR-0062).
-//! - [`smf_vc_mghc_*`] — `VarCoefMagnusGraphHeatChernoff` (order-4 variable-
+//! - `smf_ghc6_*` — `GraphHeat6thChernoff` (order-6 spatial; ADR-0062).
+//! - `smf_vc_mghc_*` — `VarCoefMagnusGraphHeatChernoff` (order-4 variable-
 //!   coefficient × time-dependent Magnus; ADR-0063).
 //!
 //! The pre-existing K=4 / Magnus K=4 / Magnus K=6 / VarCoef-constant FFI
@@ -17,14 +17,16 @@
 
 use std::sync::Arc;
 
-use semiflow::scratch::ScratchPool;
 use semiflow::{
+    scratch::ScratchPool,
     varcoef_magnus_graph::{VarCoefMagnusGraphHeatChernoff, WeightAtTime},
     ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian, LaplacianAtTime,
 };
 
-use crate::graph_ffi::{SmfGraph, SmfGraphSig};
-use crate::status::SemiflowStatus;
+use crate::{
+    graph_ffi::{SmfGraph, SmfGraphSig},
+    status::SemiflowStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque handles

@@ -36,7 +36,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeat6thChernoff, ScratchPool,
 };

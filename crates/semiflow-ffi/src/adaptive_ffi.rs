@@ -47,16 +47,14 @@
 #![allow(unsafe_code)]
 #![allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
 
-use std::ffi::CStr;
-use std::os::raw::c_double;
+use std::{ffi::CStr, os::raw::c_double};
 
 use semiflow::{
     AdaptivePI as CorePI, BoundaryPolicy, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Constant fn-pointers
@@ -99,16 +97,35 @@ impl AdaptiveVariant {
             Self::DriftReaction(k) => k.evolve_adaptive(t, u0)?,
             Self::Shift(k) => k.evolve_adaptive(t, u0)?,
         };
-        Ok((outcome.final_state, outcome.steps_accepted, outcome.steps_rejected))
+        Ok((
+            outcome.final_state,
+            outcome.steps_accepted,
+            outcome.steps_rejected,
+        ))
     }
 
     fn set_tolerance(&mut self, abs: f64, rel: f64) {
         match self {
-            Self::Diff2(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Diff4(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Diff6(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::DriftReaction(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Shift(k) => { k.tol_abs = abs; k.tol_rel = rel; }
+            Self::Diff2(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Diff4(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Diff6(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::DriftReaction(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Shift(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
         }
     }
 }
@@ -296,7 +313,10 @@ fn build_adaptive_inner(
     let current = GridFn1D::new(grid, u0.to_vec())?;
     let mut iv = build_variant(grid, kernel)?;
     iv.set_tolerance(tol_abs, tol_rel);
-    Ok(AdaptivePIInner { integrator: iv, current })
+    Ok(AdaptivePIInner {
+        integrator: iv,
+        current,
+    })
 }
 
 fn build_variant(

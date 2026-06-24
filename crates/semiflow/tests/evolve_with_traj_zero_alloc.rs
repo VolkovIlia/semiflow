@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
-
 use semiflow::{
     graph_traj::{GraphTraj, SegmentWeightFn},
     magnus_graph::MagnusGraphHeatChernoff,

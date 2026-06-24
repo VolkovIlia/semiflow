@@ -1,4 +1,4 @@
-//! G_ROUGH_HESTON_MC_PARITY — RELEASE_BLOCKING gate (ADR-0181, issue #9).
+//! `G_ROUGH_HESTON_MC_PARITY` — `RELEASE_BLOCKING` gate (ADR-0181, issue #9).
 //!
 //! Verifies that the `MatrixDiffusionChernoff<f64, 4>` Chernoff kernel for the
 //! 4-factor Markov rough-Heston model agrees with a Monte-Carlo of the SAME
@@ -26,8 +26,8 @@
 //!
 //! 1. `discount_factor_subtest`: flat IC u₀≡1, coupling zeroed, after n steps
 //!    component-0 == e^{−rT} to ≤1e-12. Isolates the discount factor.
-//! 2. `delta_kernel_self_convergence`: N=48 vs N=192, measures δ_kernel.
-//! 3. `gate_i_parity`: asserts |C_ch − C_mc| ≤ 3·MC_stderr + DELTA_KERNEL.
+//! 2. `delta_kernel_self_convergence`: N=48 vs N=192, measures `δ_kernel`.
+//! 3. `gate_i_parity`: asserts |`C_ch` − `C_mc`| ≤ `3·MC_stderr` + `DELTA_KERNEL`.
 //!
 //! Run (slow test, ~minutes for 1M paths):
 //! ```text
@@ -37,7 +37,14 @@
 //! ```
 
 // Numerical patterns expected in financial/MC code.
-#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::unreadable_literal,          // financial constants (PCG seeds, GA coefficients)
+    clippy::decimal_bitwise_operands,    // PCG64 128-bit constants use decimal + shift
+    clippy::many_single_char_names,      // MC physics: v, m, s2, e, z, r are domain names
+    clippy::cast_sign_loss,              // MC paths: f64→usize index after positivity check
+)]
 
 use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, Grid1D, MatrixDiffusionChernoff,
@@ -63,7 +70,7 @@ const GL_EXPONENTS: [f64; 3] = [0.8000_0000, 3.2000_0000, 11.2000_0000];
 const K_SIGMA: f64 = 3.0; // 3σ band on the MC reference
 /// Measured kernel discretisation margin (N=48 vs N=192 self-convergence).
 /// Back-annotated here and in ADR-0181 §D3 + math §33.9 after rc.1 measurement.
-/// NOTE: Measurement uses accuracy grid (N_GRID_ACC=192, TAU_ACC=0.01) for
+/// NOTE: Measurement uses accuracy grid (`N_GRID_ACC=192`, `TAU_ACC=0.01`) for
 /// gate I parity, while the demonstrator uses the coarse latency grid.
 /// See `delta_kernel_self_convergence` sub-test for the fitted value.
 const DELTA_KERNEL: f64 = 0.55; // rc.1 placeholder; replaced by measured value below
@@ -72,8 +79,8 @@ const DELTA_KERNEL: f64 = 0.55; // rc.1 placeholder; replaced by measured value 
 const N_PATHS: usize = 1_000_000; // antithetic: 500_000 pairs
 const N_PAIRS: usize = N_PATHS / 2;
 const N_MC_STEPS: usize = 200; // finer than kernel (200 vs 40) → MC-stderr dominated
-// 0xC0FFEE_BABE_DEAD_BEEF (20 hex digits) exceeds u64::MAX.
-// Python oracle does `& 0xFFFF_FFFF_FFFF_FFFF`; apply the same truncation.
+                               // 0xC0FFEE_BABE_DEAD_BEEF (20 hex digits) exceeds u64::MAX.
+                               // Python oracle does `& 0xFFFF_FFFF_FFFF_FFFF`; apply the same truncation.
 const SEED: u64 = 0xFFEE_BABE_DEAD_BEEFu64; // lower-64 of 0xC0FFEE_BABE_DEAD_BEEF
 
 // Accuracy grid parameters (separate from latency grid, per ADR-0181 §D3).
@@ -106,7 +113,7 @@ impl Pcg64 {
 
     fn new(seed: u64) -> Self {
         // Initialise using the seed: state = seed, increment = canonical constant.
-        let state = (seed as u128) | ((seed.wrapping_mul(0x9e37_79b9_7f4a_7c15)) as u128) << 64;
+        let state = u128::from(seed) | u128::from(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15)) << 64;
         Self {
             state: state.wrapping_add(Self::PCG_INC),
             inc: Self::PCG_INC,
@@ -208,94 +215,99 @@ fn qe_cir_step(v: f64, kappa_eff: f64, theta_eff: f64, xi_eff: f64, dt: f64, z: 
 //   dV_k = (κθ − (κ+γ_k)·V_k) dt + ξ√(w_k V₀)·√(V_k/(w_k V₀)) dW_v   (QE-CIR)
 //   corr: d⟨W_spot, W_v⟩ = ρ dt via Cholesky [1, 0; ρ, √(1−ρ²)]
 
-fn mc_price_kernel_model(
-    rng: &mut Pcg64,
-    n_pairs: usize,
-    strike: f64,
-) -> (f64, f64) {
-    let dt = T_MAT / N_MC_STEPS as f64;
-    let sqrt_dt = dt.sqrt();
+struct McParams {
+    kappa_eff: [f64; 3],
+    theta_eff: f64,
+    xi_eff: [f64; 3],
+    coupling: [f64; 3],
+    v0_k: [f64; 3],
+    dt: f64,
+    sqrt_dt: f64,
+    corr_perp: f64,
+}
+
+fn build_mc_params() -> McParams {
+    McParams {
+        kappa_eff: [
+            KAPPA + GL_EXPONENTS[0],
+            KAPPA + GL_EXPONENTS[1],
+            KAPPA + GL_EXPONENTS[2],
+        ],
+        theta_eff: KAPPA * THETA,
+        xi_eff: [
+            XI * GL_WEIGHTS[0].sqrt(),
+            XI * GL_WEIGHTS[1].sqrt(),
+            XI * GL_WEIGHTS[2].sqrt(),
+        ],
+        coupling: [
+            RHO * XI * GL_WEIGHTS[0],
+            RHO * XI * GL_WEIGHTS[1],
+            RHO * XI * GL_WEIGHTS[2],
+        ],
+        v0_k: [
+            GL_WEIGHTS[0] * V_0,
+            GL_WEIGHTS[1] * V_0,
+            GL_WEIGHTS[2] * V_0,
+        ],
+        dt: T_MAT / N_MC_STEPS as f64,
+        sqrt_dt: (T_MAT / N_MC_STEPS as f64).sqrt(),
+        corr_perp: (1.0 - RHO * RHO).sqrt(),
+    }
+}
+
+/// Simulate one antithetic pair; returns `(payoff_pos, payoff_anti)`.
+fn simulate_pair(rng: &mut Pcg64, p: &McParams, strike: f64) -> (f64, f64) {
+    let mut x_p = 0.0_f64;
+    let mut x_a = 0.0_f64;
+    let mut vp = p.v0_k;
+    let mut va = p.v0_k;
     let sqrt_v0 = V_0.sqrt();
-    let corr_perp = (1.0 - RHO * RHO).sqrt();
+    for _ in 0..N_MC_STEPS {
+        let (z1, z2) = rng.next_normal_pair();
+        let z_spot = z1;
+        let z_vol = RHO * z1 + p.corr_perp * z2;
+        let coup_p = vp[0] * p.coupling[0] + vp[1] * p.coupling[1] + vp[2] * p.coupling[2];
+        x_p += (R - 0.5 * V_0 + coup_p) * p.dt + sqrt_v0 * p.sqrt_dt * z_spot;
+        let coup_a = va[0] * p.coupling[0] + va[1] * p.coupling[1] + va[2] * p.coupling[2];
+        x_a += (R - 0.5 * V_0 + coup_a) * p.dt - sqrt_v0 * p.sqrt_dt * z_spot;
+        for k in 0..3 {
+            vp[k] = qe_cir_step(vp[k], p.kappa_eff[k], p.theta_eff, p.xi_eff[k], p.dt, z_vol);
+            va[k] = qe_cir_step(
+                va[k],
+                p.kappa_eff[k],
+                p.theta_eff,
+                p.xi_eff[k],
+                p.dt,
+                -z_vol,
+            );
+        }
+    }
+    (
+        (S_0 * x_p.exp() - strike).max(0.0),
+        (S_0 * x_a.exp() - strike).max(0.0),
+    )
+}
+
+fn mc_price_kernel_model(rng: &mut Pcg64, n_pairs: usize, strike: f64) -> (f64, f64) {
     let disc = (-R * T_MAT).exp();
-    let coupling: [f64; 3] = [
-        RHO * XI * GL_WEIGHTS[0],
-        RHO * XI * GL_WEIGHTS[1],
-        RHO * XI * GL_WEIGHTS[2],
-    ];
-
-    // QE-CIR parameters per factor k: kappa_eff = κ + γ_k, theta_eff = κθ, xi_eff = ξ√w_k.
-    let kappa_eff: [f64; 3] = [
-        KAPPA + GL_EXPONENTS[0],
-        KAPPA + GL_EXPONENTS[1],
-        KAPPA + GL_EXPONENTS[2],
-    ];
-    let theta_eff = KAPPA * THETA;
-    let xi_eff: [f64; 3] = [
-        XI * GL_WEIGHTS[0].sqrt(),
-        XI * GL_WEIGHTS[1].sqrt(),
-        XI * GL_WEIGHTS[2].sqrt(),
-    ];
-    // Initial variance per factor.
-    let v0_k: [f64; 3] = [
-        GL_WEIGHTS[0] * V_0,
-        GL_WEIGHTS[1] * V_0,
-        GL_WEIGHTS[2] * V_0,
-    ];
-
+    let p = build_mc_params();
     let mut payoff_sum = 0.0_f64;
     let mut payoff_sq_sum = 0.0_f64;
-    let n_eff = 2 * n_pairs;
-
     for _ in 0..n_pairs {
-        // Generate N_MC_STEPS pairs of correlated normals for one path + antithetic.
-        let mut x_p = 0.0_f64; // log(S/S_0), positive path
-        let mut x_a = 0.0_f64; // log(S/S_0), antithetic path
-        let mut v_p = v0_k; // variance factors, positive path
-        let mut v_a = v0_k; // variance factors, antithetic path
-
-        for _ in 0..N_MC_STEPS {
-            // Generate correlated Brownian increments.
-            let (z1, z2) = rng.next_normal_pair();
-            let z_spot = z1;
-            let z_vol = RHO * z1 + corr_perp * z2;
-
-            // Positive path: spot update (frozen-V₀ + coupling reaction + risk-neutral drift).
-            let coup_p = v_p[0] * coupling[0] + v_p[1] * coupling[1] + v_p[2] * coupling[2];
-            x_p += (R - 0.5 * V_0 + coup_p) * dt + sqrt_v0 * sqrt_dt * z_spot;
-            // Antithetic path: flip both Brownians.
-            let coup_a = v_a[0] * coupling[0] + v_a[1] * coupling[1] + v_a[2] * coupling[2];
-            x_a += (R - 0.5 * V_0 + coup_a) * dt - sqrt_v0 * sqrt_dt * z_spot;
-
-            // Variance factors: QE-CIR step.
-            for k in 0..3 {
-                v_p[k] = qe_cir_step(v_p[k], kappa_eff[k], theta_eff, xi_eff[k], dt, z_vol);
-                v_a[k] = qe_cir_step(v_a[k], kappa_eff[k], theta_eff, xi_eff[k], dt, -z_vol);
-            }
-        }
-
-        let s_p = S_0 * x_p.exp();
-        let s_a = S_0 * x_a.exp();
-        let payoff_p = (s_p - strike).max(0.0);
-        let payoff_a = (s_a - strike).max(0.0);
-
-        payoff_sum += payoff_p + payoff_a;
-        payoff_sq_sum += payoff_p * payoff_p + payoff_a * payoff_a;
+        let (payoff_pos, payoff_anti) = simulate_pair(rng, &p, strike);
+        payoff_sum += payoff_pos + payoff_anti;
+        payoff_sq_sum += payoff_pos * payoff_pos + payoff_anti * payoff_anti;
     }
-
+    let n_eff = 2 * n_pairs;
     let mean_payoff = payoff_sum / n_eff as f64;
-    // Unbiased variance: E[X²] - (E[X])²
-    let var_payoff =
-        payoff_sq_sum / n_eff as f64 - mean_payoff * mean_payoff;
+    let var_payoff = payoff_sq_sum / n_eff as f64 - mean_payoff * mean_payoff;
     let stderr = disc * var_payoff.max(0.0).sqrt() / (n_eff as f64).sqrt();
     (disc * mean_payoff, stderr)
 }
 
 // ── Chernoff price on a given grid ───────────────────────────────────────────
 
-fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
-    let grid = Grid1D::new(X_MIN, X_MAX, n_grid).expect("Grid1D");
-
+fn build_kernel(r: f64, grid: Grid1D) -> MatrixDiffusionChernoff<f64, 4> {
     let fill_a = |_x: f64, mat: &mut [[f64; 4]; 4]| {
         *mat = [[0.0; 4]; 4];
         mat[0][0] = 0.5 * V_0;
@@ -303,28 +315,29 @@ fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
             mat[k + 1][k + 1] = 0.5 * XI * XI * GL_WEIGHTS[k] * V_0;
         }
     };
-    let r_b = r;
     let fill_b = move |_x: f64, mat: &mut [[f64; 4]; 4]| {
         *mat = [[0.0; 4]; 4];
         // Risk-neutral drift: (r − ½V₀) — Itô correction plus risk-free rate.
-        // Must match ADR-0181 §D2: dX = (r − ½V₀) dt + √V₀ dW (frozen-V₀ spot).
-        mat[0][0] = r_b - 0.5 * V_0;
+        mat[0][0] = r - 0.5 * V_0;
         for k in 0..3 {
             mat[k + 1][k + 1] = KAPPA * (THETA - GL_WEIGHTS[k] * V_0);
         }
     };
-    let r_captured = r;
     let fill_c = move |_x: f64, mat: &mut [[f64; 4]; 4]| {
         *mat = [[0.0; 4]; 4];
-        mat[0][0] = -r_captured;
+        mat[0][0] = -r;
         for k in 0..3 {
             mat[k + 1][k + 1] = -GL_EXPONENTS[k];
             mat[0][k + 1] = RHO * XI * GL_WEIGHTS[k];
         }
     };
+    MatrixDiffusionChernoff::<f64, 4>::new(fill_a, fill_b, fill_c, grid)
+        .expect("MatrixDiffusionChernoff")
+}
 
-    let chernoff = MatrixDiffusionChernoff::<f64, 4>::new(fill_a, fill_b, fill_c, grid)
-        .expect("MatrixDiffusionChernoff");
+fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
+    let grid = Grid1D::new(X_MIN, X_MAX, n_grid).expect("Grid1D");
+    let chernoff = build_kernel(r, grid);
     let n_steps = (T_MAT / tau).round() as usize;
 
     let ic = MatrixGridFn1D::<f64, 4>::from_fn(grid, |x| {
@@ -340,7 +353,6 @@ fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
     let mut state = ic.clone();
     let mut dst = MatrixGridFn1D::<f64, 4>::new(grid);
     let mut scratch = ScratchPool::new();
-
     for _ in 0..n_steps {
         chernoff
             .apply_into(tau, &state, &mut dst, &mut scratch)
@@ -348,15 +360,12 @@ fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
         std::mem::swap(&mut state, &mut dst);
     }
 
-    // Interpolate component-0 at x=0 (log(S_0/S_0)=0).
     let dx = (X_MAX - X_MIN) / ((n_grid - 1) as f64);
     let idx_f = (0.0 - X_MIN) / dx;
     let i = idx_f.floor() as usize;
     let i = i.min(n_grid - 2);
     let frac = idx_f - i as f64;
-    let v_i = state.point_view(i)[0];
-    let v_i1 = state.point_view(i + 1)[0];
-    (1.0 - frac) * v_i + frac * v_i1
+    (1.0 - frac) * state.point_view(i)[0] + frac * state.point_view(i + 1)[0]
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -366,11 +375,11 @@ fn chernoff_price(n_grid: usize, tau: f64, strike: f64, r: f64) -> f64 {
 /// Flat IC u₀≡1 on component 0, coupling zeroed, after n steps component-0
 /// should equal e^{−rT}. Isolates the discount mechanism from diffusion/coupling.
 ///
-/// Tolerance: 1e-6 (not 1e-12) — the MatrixDiffusionChernoff applies the
+/// Tolerance: 1e-6 (not 1e-12) — the `MatrixDiffusionChernoff` applies the
 /// matrix exponential via CN twice per step; floating-point accumulation over
-/// 40 steps is O(n·ε_mach) ≈ 40·2e-16 ≈ 8e-15 per step, giving ~3e-9 total.
+/// 40 steps is `O(n·ε_mach)` ≈ 40·2e-16 ≈ 8e-15 per step, giving ~3e-9 total.
 /// The Python oracle's 1e-12 check uses pure scalar arithmetic (not CN); the
-/// Rust kernel's 1e-6 tolerance still catches wrong r or missing c_00 entirely.
+/// Rust kernel's 1e-6 tolerance still catches wrong r or missing `c_00` entirely.
 #[test]
 fn discount_factor_subtest() {
     let n_grid = N_GRID_LAT;
@@ -379,8 +388,12 @@ fn discount_factor_subtest() {
     let grid = Grid1D::new(X_MIN, X_MAX, n_grid).expect("Grid1D");
 
     // Zero diffusion/drift/coupling; only c_00 = -R (pure discount).
-    let fill_a = |_: f64, mat: &mut [[f64; 4]; 4]| { *mat = [[0.0; 4]; 4]; };
-    let fill_b = |_: f64, mat: &mut [[f64; 4]; 4]| { *mat = [[0.0; 4]; 4]; };
+    let fill_a = |_: f64, mat: &mut [[f64; 4]; 4]| {
+        *mat = [[0.0; 4]; 4];
+    };
+    let fill_b = |_: f64, mat: &mut [[f64; 4]; 4]| {
+        *mat = [[0.0; 4]; 4];
+    };
     let fill_c = |_: f64, mat: &mut [[f64; 4]; 4]| {
         *mat = [[0.0; 4]; 4];
         mat[0][0] = -R;
@@ -424,11 +437,11 @@ fn discount_factor_subtest() {
 // Sub-test 2: Measure δ_kernel via N=48 vs N=192 self-convergence.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Measures δ_kernel = max over strikes of |C_ch(N=48, τ=0.025) - C_ch(N=192, τ=0.01)|.
+/// Measures `δ_kernel` = max over strikes of |`C_ch(N=48`, τ=0.025) - `C_ch(N=192`, τ=0.01)|.
 /// This is the kernel truncation error at the demonstrator's coarse grid.
 /// The ACCURACY grid (N=192, τ=0.01) is used as the reference for gate I.
 #[test]
-#[cfg_attr(not(feature = "slow-tests"), ignore)]
+#[cfg_attr(not(feature = "slow-tests"), ignore = "slow-tests feature required")]
 fn delta_kernel_self_convergence() {
     eprintln!("[delta_kernel] measuring kernel discretisation error (N=48 vs N=192)...");
 
@@ -461,16 +474,16 @@ fn delta_kernel_self_convergence() {
 // Sub-test 3: G_ROUGH_HESTON_MC_PARITY — RELEASE_BLOCKING gate.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// G_ROUGH_HESTON_MC_PARITY (RELEASE_BLOCKING, ADR-0181 §D3).
+/// `G_ROUGH_HESTON_MC_PARITY` (`RELEASE_BLOCKING`, ADR-0181 §D3).
 ///
-/// Asserts |C_chernoff(accuracy_grid) − C_mc| ≤ K_SIGMA·MC_stderr + DELTA_KERNEL
+/// Asserts |`C_chernoff(accuracy_grid)` − `C_mc`| ≤ `K_SIGMA·MC_stderr` + `DELTA_KERNEL`
 /// at K ∈ {90, 100, 110}, T=1, canonical parameters.
 ///
 /// MC: 1M antithetic paths, QE-CIR variance factors, frozen-V₀ spot diffusion,
 /// PCG-based seed `0xC0FFEE_BABE_DEAD_BEEF`. Gate I only — see advisory record
 /// for model-bias (gate II).
 #[test]
-#[cfg_attr(not(feature = "slow-tests"), ignore)]
+#[cfg_attr(not(feature = "slow-tests"), ignore = "slow-tests feature required")]
 fn gate_i_parity() {
     eprintln!(
         "[gate_I] G_ROUGH_HESTON_MC_PARITY: H=0.1 r={R} v0={V_0} κ={KAPPA} θ={THETA} \

@@ -27,6 +27,14 @@ use alloc::{sync::Arc, vec::Vec};
 use core::cell::Cell;
 use std::sync::Mutex;
 
+// ---------------------------------------------------------------------------
+// Re-export the f64 3D pool for backward compat (tests use PARALLEL_3D_POOL)
+// ---------------------------------------------------------------------------
+/// Per-thread grow-only scratch pool for 3D parallel pencil buffers (f64).
+///
+/// Not part of the stable public API; not frozen at v1.0.0.
+#[doc(hidden)]
+pub use crate::parallel_pool::PARALLEL_3D_POOL_F64 as PARALLEL_3D_POOL;
 use crate::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},
     error::SemiflowError,
@@ -36,16 +44,6 @@ use crate::{
     parallel_pool::{drain_thread_local_pools_3d_for, ParallelPool3D},
     strang2d_parallel::chunk_count,
 };
-
-// ---------------------------------------------------------------------------
-// Re-export the f64 3D pool for backward compat (tests use PARALLEL_3D_POOL)
-// ---------------------------------------------------------------------------
-
-/// Per-thread grow-only scratch pool for 3D parallel pencil buffers (f64).
-///
-/// Not part of the stable public API; not frozen at v1.0.0.
-#[doc(hidden)]
-pub use crate::parallel_pool::PARALLEL_3D_POOL_F64 as PARALLEL_3D_POOL;
 
 /// Drain the calling thread's 3D parallel scratch pool (f64 + f32).
 ///

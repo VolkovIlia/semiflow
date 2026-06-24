@@ -26,7 +26,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     quantum_graph::{
         QuantumGraph as CoreQuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal,
@@ -34,16 +33,17 @@ use semiflow::{
     ChernoffSemigroup,
 };
 
+// Re-export sibling classes so `register()` can reference them.
+pub(crate) use crate::structured_matrix::PyMatrixDiffusion1D;
 use crate::{
     error::{from_core, new_pyerr},
     graph_py::extract_f64_vec,
     panic::catch_panic_py,
 };
-
-// Re-export sibling classes so `register()` can reference them.
-pub(crate) use crate::structured_matrix::PyMatrixDiffusion1D;
-pub(crate) use crate::structured_point::{sample_gridfn2d, PyPointEval};
-pub(crate) use crate::structured_traj::{PyGraphTraj, PyStrangGraph};
+pub(crate) use crate::{
+    structured_point::{sample_gridfn2d, PyPointEval},
+    structured_traj::{PyGraphTraj, PyStrangGraph},
+};
 
 // ===========================================================================
 // QuantumGraph — topology/metric data class (M16)

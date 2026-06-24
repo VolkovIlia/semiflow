@@ -14,10 +14,8 @@
 #![cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 
 use core::arch::aarch64::{
-    float32x4_t, float64x2_t,
-    vaddq_f32, vaddq_f64, vdupq_n_f32, vdupq_n_f64,
-    vld1q_f32, vld1q_f64, vmulq_f32, vmulq_f64,
-    vst1q_f32, vst1q_f64, vsubq_f32, vsubq_f64,
+    float32x4_t, float64x2_t, vaddq_f32, vaddq_f64, vdupq_n_f32, vdupq_n_f64, vld1q_f32, vld1q_f64,
+    vmulq_f32, vmulq_f64, vst1q_f32, vst1q_f64, vsubq_f32, vsubq_f64,
 };
 
 use super::{SimdF32x4, SimdF64x4};

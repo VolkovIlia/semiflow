@@ -73,7 +73,7 @@ pub trait PointEval<F: SemiflowFloat = f64>: ChernoffFunction<F> {
     /// Evaluate `(F(τ))^{n_steps}` applied to `src` at each query in `x_queries`.
     ///
     /// Each element of `x_queries` is a coordinate slice with the same encoding
-    /// as the `x` parameter of [`eval_at`]: 1-D backends expect slices of length
+    /// as the `x` parameter of [`Self::eval_at`]: 1-D backends expect slices of length
     /// 1, 2-D backends length 2, and so on.
     ///
     /// Returns a `Vec<F>` of length `x_queries.len()` in the same order.

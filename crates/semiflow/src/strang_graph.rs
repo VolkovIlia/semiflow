@@ -18,8 +18,7 @@
 //! `ScratchPool::take_graph_buf` / `return_graph_buf` to borrow and return
 //! pool-owned buffers wrapped in transient `GraphSignal`s.
 
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
     chernoff::{ChernoffFunction, Growth},
@@ -319,12 +318,14 @@ fn build_combinatorial_lap_from_edges<F: SemiflowFloat>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::sync::Arc;
 
-    use crate::graph::{Graph, Laplacian};
-    use crate::graph_signal::GraphSignal;
-    use crate::state::State;
+    use super::*;
+    use crate::{
+        graph::{Graph, Laplacian},
+        graph_signal::GraphSignal,
+        state::State,
+    };
 
     #[test]
     fn new_bipartite_path_rejects_small_graph() {

@@ -12,15 +12,13 @@ use std::sync::Arc;
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-
 use semiflow::{Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeatChernoff};
 
-use crate::dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype};
-use crate::graph_heat_f32::compute_magnus_graph_f32;
-
 use crate::{
+    dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype},
     error::from_core,
     graph_extra::PyLaplacian,
+    graph_heat_f32::compute_magnus_graph_f32,
     graph_py::{
         extract_f64_vec, extract_laplacian_arc, make_lap_at_t_f32, resolve_graph_from_any,
         validate_n_steps, validate_rho_bar, validate_signal_len, validate_t_final,

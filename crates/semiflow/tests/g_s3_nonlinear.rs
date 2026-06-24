@@ -110,7 +110,11 @@ fn idft_c2r(cplx: &[f64]) -> Vec<f64> {
 
 /// Wrapped DFT wavenumber: 2π·fftfreq(m,n)/dx. Matches numpy fftfreq convention.
 fn wavenumber(m: usize, n: usize, dx: f64) -> f64 {
-    let m_f = if m <= n / 2 { m as f64 } else { m as f64 - n as f64 };
+    let m_f = if m <= n / 2 {
+        m as f64
+    } else {
+        m as f64 - n as f64
+    };
     TAU * m_f / (n as f64 * dx)
 }
 
@@ -199,7 +203,16 @@ fn strang_step(u: &mut [f64], n: usize, d: usize, dx: f64, nu: f64, r: f64, tau:
 }
 
 /// Full Strang-split logistic RD evolver (local re-impl; not the production module).
-fn strang_rd_local(u0: &[f64], n: usize, d: usize, dx: f64, nu: f64, r: f64, t: f64, nsteps: usize) -> Vec<f64> {
+fn strang_rd_local(
+    u0: &[f64],
+    n: usize,
+    d: usize,
+    dx: f64,
+    nu: f64,
+    r: f64,
+    t: f64,
+    nsteps: usize,
+) -> Vec<f64> {
     let mut u = u0.to_vec();
     let tau = t / nsteps as f64;
     for _ in 0..nsteps {
@@ -227,7 +240,11 @@ fn burgers_cole_hopf_local(u0: &[f64], n: usize, dx: f64, nu: f64, t: f64) -> Ve
     phi.copy_from_slice(&phi_evolved);
     // Back Cole-Hopf: u = -2ν φ_x / φ.
     let phi_x = spectral_deriv(&phi, n, dx);
-    phi_x.iter().zip(phi.iter()).map(|(&px, &p)| -two_nu * px / p).collect()
+    phi_x
+        .iter()
+        .zip(phi.iter())
+        .map(|(&px, &p)| -two_nu * px / p)
+        .collect()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -259,23 +276,44 @@ fn lap_fd(u: &[f64], n: usize, d: usize, dx: f64) -> Vec<f64> {
 }
 
 /// Independent FD + RK4 reference for `u_t = ν·Δu + r·u(1-u)`.
-fn ref_rd_rk4(u0: &[f64], n: usize, d: usize, dx: f64, nu: f64, r: f64, t: f64, fine: usize) -> Vec<f64> {
+fn ref_rd_rk4(
+    u0: &[f64],
+    n: usize,
+    d: usize,
+    dx: f64,
+    nu: f64,
+    r: f64,
+    t: f64,
+    fine: usize,
+) -> Vec<f64> {
     let mut u = u0.to_vec();
     let dt = t / fine as f64;
     let rhs = |v: &[f64]| -> Vec<f64> {
         let lap = lap_fd(v, n, d, dx);
-        v.iter().zip(lap.iter()).map(|(&vi, &li)| nu * li + r * vi * (1.0 - vi)).collect()
+        v.iter()
+            .zip(lap.iter())
+            .map(|(&vi, &li)| nu * li + r * vi * (1.0 - vi))
+            .collect()
     };
     for _ in 0..fine {
         let k1 = rhs(&u);
-        let u2: Vec<f64> = u.iter().zip(k1.iter()).map(|(&x, &k)| x + 0.5 * dt * k).collect();
+        let u2: Vec<f64> = u
+            .iter()
+            .zip(k1.iter())
+            .map(|(&x, &k)| x + 0.5 * dt * k)
+            .collect();
         let k2 = rhs(&u2);
-        let u3: Vec<f64> = u.iter().zip(k2.iter()).map(|(&x, &k)| x + 0.5 * dt * k).collect();
+        let u3: Vec<f64> = u
+            .iter()
+            .zip(k2.iter())
+            .map(|(&x, &k)| x + 0.5 * dt * k)
+            .collect();
         let k3 = rhs(&u3);
         let u4: Vec<f64> = u.iter().zip(k3.iter()).map(|(&x, &k)| x + dt * k).collect();
         let k4 = rhs(&u4);
-        for (ui, (&k1i, (&k2i, (&k3i, &k4i)))) in
-            u.iter_mut().zip(k1.iter().zip(k2.iter().zip(k3.iter().zip(k4.iter()))))
+        for (ui, (&k1i, (&k2i, (&k3i, &k4i)))) in u
+            .iter_mut()
+            .zip(k1.iter().zip(k2.iter().zip(k3.iter().zip(k4.iter()))))
         {
             *ui += (dt / 6.0) * (k1i + 2.0 * k2i + 2.0 * k3i + k4i);
         }
@@ -305,14 +343,23 @@ fn ref_burgers_rk4(u0: &[f64], n: usize, dx: f64, nu: f64, t: f64, fine: usize) 
     let dt = t / fine as f64;
     for _ in 0..fine {
         let k1 = burgers_rhs_spectral(&u, n, dx, nu);
-        let u2: Vec<f64> = u.iter().zip(k1.iter()).map(|(&x, &k)| x + 0.5 * dt * k).collect();
+        let u2: Vec<f64> = u
+            .iter()
+            .zip(k1.iter())
+            .map(|(&x, &k)| x + 0.5 * dt * k)
+            .collect();
         let k2 = burgers_rhs_spectral(&u2, n, dx, nu);
-        let u3: Vec<f64> = u.iter().zip(k2.iter()).map(|(&x, &k)| x + 0.5 * dt * k).collect();
+        let u3: Vec<f64> = u
+            .iter()
+            .zip(k2.iter())
+            .map(|(&x, &k)| x + 0.5 * dt * k)
+            .collect();
         let k3 = burgers_rhs_spectral(&u3, n, dx, nu);
         let u4: Vec<f64> = u.iter().zip(k3.iter()).map(|(&x, &k)| x + dt * k).collect();
         let k4 = burgers_rhs_spectral(&u4, n, dx, nu);
-        for (ui, (&k1i, (&k2i, (&k3i, &k4i)))) in
-            u.iter_mut().zip(k1.iter().zip(k2.iter().zip(k3.iter().zip(k4.iter()))))
+        for (ui, (&k1i, (&k2i, (&k3i, &k4i)))) in u
+            .iter_mut()
+            .zip(k1.iter().zip(k2.iter().zip(k3.iter().zip(k4.iter()))))
         {
             *ui += (dt / 6.0) * (k1i + 2.0 * k2i + 2.0 * k3i + k4i);
         }
@@ -396,12 +443,7 @@ fn tt_ranks_all_bonds(u_flat: &[f64], n: usize, d: usize, eps: f64) -> Vec<usize
 /// Uses left power iteration: u ← Bv/‖Bv‖, v ← Bᵀu; σ = ‖Bᵀu‖.
 /// No gram matrix formed — avoids precision loss from squaring the condition number.
 /// Ported and adapted from `g_s3_dense_coupling.rs::top_k_sv_deflation`.
-fn sv_deflation_rank_and_carry(
-    a: &[f64],
-    rows: usize,
-    cols: usize,
-    eps: f64,
-) -> (usize, Vec<f64>) {
+fn sv_deflation_rank_and_carry(a: &[f64], rows: usize, cols: usize, eps: f64) -> (usize, Vec<f64>) {
     // k_max = min(rows, cols) covers all possible singular values.
     let k_max = rows.min(cols);
     let mut b = a.to_vec();
@@ -450,7 +492,7 @@ fn sv_deflation_rank_and_carry(
         }
         sigs.push(sigma);
         right_vecs.push(v.clone()); // σ·v̂ — scaled right singular vector
-        // Deflate: B -= u·vᵀ  (v has magnitude σ, so this removes σ·u·v̂ᵀ).
+                                    // Deflate: B -= u·vᵀ  (v has magnitude σ, so this removes σ·u·v̂ᵀ).
         for i in 0..rows {
             for j in 0..cols {
                 b[i * cols + j] -= u[i] * v[j];
@@ -476,7 +518,10 @@ fn sv_deflation_rank_and_carry(
 
 /// Effective TT-rank: max over all bonds.
 fn eff_rank_max(u: &[f64], n: usize, d: usize, eps: f64) -> usize {
-    tt_ranks_all_bonds(u, n, d, eps).into_iter().max().unwrap_or(1)
+    tt_ranks_all_bonds(u, n, d, eps)
+        .into_iter()
+        .max()
+        .unwrap_or(1)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -553,9 +598,15 @@ fn g_s3_nonlinear() {
             u_8step = burgers_cole_hopf_local(&u_8step, n_check, dx_check, nu, t / 8.0);
         }
         let err_semigroup = max_abs(
-            &u_1shot.iter().zip(u_8step.iter()).map(|(&a, &b)| a - b).collect::<Vec<_>>()
+            &u_1shot
+                .iter()
+                .zip(u_8step.iter())
+                .map(|(&a, &b)| a - b)
+                .collect::<Vec<_>>(),
         );
-        println!("  1-shot vs 8-step max err = {err_semigroup:.3e}  (target ≤1e-9, probe 3.16e-11)");
+        println!(
+            "  1-shot vs 8-step max err = {err_semigroup:.3e}  (target ≤1e-9, probe 3.16e-11)"
+        );
         assert!(
             err_semigroup <= 1e-9,
             "FAIL assert 1 semigroup: err={err_semigroup:.3e} > 1e-9"
@@ -602,7 +653,10 @@ fn g_s3_nonlinear() {
         let r = R_LOGISTIC;
         let t = T_ORDER;
         let xs = grid_xs(n);
-        let base: Vec<f64> = xs.iter().map(|&x| (0.3 + 0.25 * x.cos()).max(0.02).min(0.98)).collect();
+        let base: Vec<f64> = xs
+            .iter()
+            .map(|&x| (0.3 + 0.25 * x.cos()).max(0.02).min(0.98))
+            .collect();
         let u0 = build_rank1_ic(&base, n, d);
 
         let u_ref = ref_rd_rk4(&u0, n, d, dx, nu, r, t, FINE_ORDER);
@@ -615,7 +669,10 @@ fn g_s3_nonlinear() {
             let err = rel_l2(&u, &u_ref);
             errs.push(err);
             taus.push(t / ns as f64);
-            println!("    nsteps={ns:4}  tau={:.4e}  rel_err={err:.4e}", t / ns as f64);
+            println!(
+                "    nsteps={ns:4}  tau={:.4e}  rel_err={err:.4e}",
+                t / ns as f64
+            );
         }
         let n_pts = errs.len();
         let log_tau: Vec<f64> = taus[2..].iter().map(|&x| x.ln()).collect();
@@ -626,9 +683,18 @@ fn g_s3_nonlinear() {
         println!("\n  OLS slope (tail {n_pts}-2 pts) = {slope:+.4}  (target ≥1.9, probe +2.0002)");
         println!("  coarsest err={coarsest:.3e}  finest err={finest:.3e}");
         // Real error regime: coarsest in (1e-5, 1e-2), finest < 1e-5
-        assert!(coarsest > 1e-5, "FAIL assert 2 regime: coarsest {coarsest:.3e} ≤ 1e-5");
-        assert!(finest < 1e-5, "FAIL assert 2 regime: finest {finest:.3e} ≥ 1e-5");
-        assert!(finest > 1e-12, "FAIL assert 2 regime: finest {finest:.3e} < 1e-12 (floor)");
+        assert!(
+            coarsest > 1e-5,
+            "FAIL assert 2 regime: coarsest {coarsest:.3e} ≤ 1e-5"
+        );
+        assert!(
+            finest < 1e-5,
+            "FAIL assert 2 regime: finest {finest:.3e} ≥ 1e-5"
+        );
+        assert!(
+            finest > 1e-12,
+            "FAIL assert 2 regime: finest {finest:.3e} < 1e-12 (floor)"
+        );
         assert!(slope >= 1.9, "FAIL assert 2 slope: {slope:+.4} < 1.9");
         println!("  Assert 2: PASS");
 
@@ -667,7 +733,11 @@ fn g_s3_nonlinear() {
                 let rk = tt_ranks_all_bonds(&u3, n3, d3, 1e-6);
                 let rk_max = *rk.iter().max().unwrap();
                 max_rank = max_rank.max(rk_max);
-                println!("    step {:3}: eff-TT-rank(1e-6)={rk:?}  max|u|={:.3}", step + 1, max_abs(&u3));
+                println!(
+                    "    step {:3}: eff-TT-rank(1e-6)={rk:?}  max|u|={:.3}",
+                    step + 1,
+                    max_abs(&u3)
+                );
             }
         }
         max_rank_struct = max_rank;
@@ -715,7 +785,11 @@ fn g_s3_nonlinear() {
                     let rk = tt_ranks_all_bonds(&ug, n, d, 1e-6);
                     let rk_max = *rk.iter().max().unwrap();
                     max_rank_gen = max_rank_gen.max(rk_max);
-                    println!("    step {:3}: eff-TT-rank(1e-6)={rk:?}  max|u|={:.3}", step + 1, max_abs(&ug));
+                    println!(
+                        "    step {:3}: eff-TT-rank(1e-6)={rk:?}  max|u|={:.3}",
+                        step + 1,
+                        max_abs(&ug)
+                    );
                 }
             }
         }
@@ -741,8 +815,8 @@ fn g_s3_nonlinear() {
             let mut phi_gen = vec![0.0f64; n_wall * n_wall];
             for i in 0..n_wall {
                 for j in 0..n_wall {
-                    let psi = xs_wall[i].sin() + xs_wall[j].cos()
-                        + 0.5 * (xs_wall[i] + xs_wall[j]).sin(); // non-separable
+                    let psi =
+                        xs_wall[i].sin() + xs_wall[j].cos() + 0.5 * (xs_wall[i] + xs_wall[j]).sin(); // non-separable
                     phi_gen[i * n_wall + j] = (-psi / (2.0 * nu_wall)).exp();
                 }
             }
@@ -754,7 +828,10 @@ fn g_s3_nonlinear() {
                 "FAIL assert 4 SeamA wall: generic phi rank {rk_gen_max} < 8"
             );
             // Separable potential: phi_sep = exp(-ψ(x)/(2ν)) ⊗ exp(-ψ(y)/(2ν)) → rank 1
-            let phi_1d: Vec<f64> = xs_wall.iter().map(|&x| (-x.sin() / (2.0 * nu_wall)).exp()).collect();
+            let phi_1d: Vec<f64> = xs_wall
+                .iter()
+                .map(|&x| (-x.sin() / (2.0 * nu_wall)).exp())
+                .collect();
             let phi_sep: Vec<f64> = (0..n_wall * n_wall)
                 .map(|flat| phi_1d[flat / n_wall] * phi_1d[flat % n_wall])
                 .collect();
@@ -796,9 +873,15 @@ fn g_s3_nonlinear() {
 
         // Strang(r=0) should equal pure heat to 0 ULP (logistic flow with r=0 is exact identity).
         let max_diff = max_abs(
-            &u_strang_f0.iter().zip(u_heat.iter()).map(|(&a, &b)| a - b).collect::<Vec<_>>()
+            &u_strang_f0
+                .iter()
+                .zip(u_heat.iter())
+                .map(|(&a, &b)| a - b)
+                .collect::<Vec<_>>(),
         );
-        println!("  ||Strang(r=0) - pure heat||_max = {max_diff:.3e}  (target 0 ULP, probe 0.000e+00)");
+        println!(
+            "  ||Strang(r=0) - pure heat||_max = {max_diff:.3e}  (target 0 ULP, probe 0.000e+00)"
+        );
         assert!(
             max_diff == 0.0,
             "FAIL assert 5 reduction: diff={max_diff:.3e} ≠ 0 (not 0 ULP)"
@@ -834,13 +917,26 @@ fn g_s3_nonlinear() {
             let u0_clipped: Vec<f64> = u0.iter().map(|&x| x.max(0.01).min(0.99)).collect();
 
             let result = strang_rd_local(
-                &u0_clipped, n_cost, d_cost, dx_cost, nu_cost, R_LOGISTIC_RANK, tau_cost, nsteps_cost,
+                &u0_clipped,
+                n_cost,
+                d_cost,
+                dx_cost,
+                nu_cost,
+                R_LOGISTIC_RANK,
+                tau_cost,
+                nsteps_cost,
             );
             let all_finite = result.iter().all(|x| x.is_finite());
             let mx = max_abs(&result);
-            println!("  d={d_cost}: n^d={} states, max|u|={mx:.4}, finite={all_finite}", n_cost.pow(d_cost as u32));
+            println!(
+                "  d={d_cost}: n^d={} states, max|u|={mx:.4}, finite={all_finite}",
+                n_cost.pow(d_cost as u32)
+            );
             assert!(all_finite, "FAIL assert 6: d={d_cost} result not finite");
-            assert!(mx > 0.0 && mx <= 1.1, "FAIL assert 6: d={d_cost} max|u|={mx:.4} unreasonable");
+            assert!(
+                mx > 0.0 && mx <= 1.1,
+                "FAIL assert 6: d={d_cost} max|u|={mx:.4} unreasonable"
+            );
 
             // Dense state cost check (n=27, architect-pinned per reconciled contract L184).
             // n=27 is uniformly > 1 TB for all d≥8:
@@ -849,7 +945,9 @@ fn g_s3_nonlinear() {
             let n_hyp = 27usize;
             let dense_bytes = (n_hyp as f64).powi(d_cost as i32) * 8.0;
             let tb = 1e12f64;
-            println!("    dense (n=27,d={d_cost}): {dense_bytes:.2e} bytes  (need > 1 TB = {tb:.2e})");
+            println!(
+                "    dense (n=27,d={d_cost}): {dense_bytes:.2e} bytes  (need > 1 TB = {tb:.2e})"
+            );
             assert!(
                 dense_bytes > tb,
                 "FAIL assert 6: dense_bytes={dense_bytes:.2e} ≤ 1 TB for n=27,d={d_cost}"

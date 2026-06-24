@@ -51,7 +51,10 @@ fn validate_tau(tau: f64, n_steps: usize) -> Result<(), JsValue> {
 fn extract_flat_2d(u0: &Float64Array, nx: usize, ny: usize) -> Result<Vec<f64>, JsValue> {
     let expected = nx * ny;
     if u0.length() as usize != expected {
-        return Err(make_js_error("GridMismatch", "u0 length must equal nx * ny"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "u0 length must equal nx * ny",
+        ));
     }
     let mut buf = vec![0.0f64; expected];
     u0.copy_to(&mut buf);
@@ -63,15 +66,25 @@ fn extract_flat_2d(u0: &Float64Array, nx: usize, ny: usize) -> Result<Vec<f64>, 
     Ok(buf)
 }
 
-fn extract_finite_array(arr: &Float64Array, expected: usize, name: &str) -> Result<Vec<f64>, JsValue> {
+fn extract_finite_array(
+    arr: &Float64Array,
+    expected: usize,
+    name: &str,
+) -> Result<Vec<f64>, JsValue> {
     if arr.length() as usize != expected {
-        return Err(make_js_error("GridMismatch", &format!("{name} length must equal {expected}")));
+        return Err(make_js_error(
+            "GridMismatch",
+            &format!("{name} length must equal {expected}"),
+        ));
     }
     let mut buf = vec![0.0f64; expected];
     arr.copy_to(&mut buf);
     for &v in &buf {
         if !v.is_finite() {
-            return Err(make_js_error("NanInf", &format!("{name} contains NaN or Inf")));
+            return Err(make_js_error(
+                "NanInf",
+                &format!("{name} contains NaN or Inf"),
+            ));
         }
     }
     Ok(buf)
@@ -89,8 +102,12 @@ fn unit_diff(grid: Grid1D<f64>) -> DiffusionChernoff<f64> {
 }
 
 fn build_grid_2d(
-    xmin: f64, xmax: f64, nx: usize,
-    ymin: f64, ymax: f64, ny: usize,
+    xmin: f64,
+    xmax: f64,
+    nx: usize,
+    ymin: f64,
+    ymax: f64,
+    ny: usize,
 ) -> Result<(Grid1D<f64>, Grid1D<f64>, Grid2D<f64>), JsValue> {
     let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
     let gy = Grid1D::new(ymin, ymax, ny).map_err(|e| err_to_js(&e))?;
@@ -108,7 +125,9 @@ fn evolve_nsm(
     let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()]).map_err(|e| err_to_js(&e))?;
     let mut scratch = ScratchPool::<f64>::new();
     for _ in 0..n_steps {
-        kernel.apply_into(tau, &state, &mut dst, &mut scratch).map_err(|e| err_to_js(&e))?;
+        kernel
+            .apply_into(tau, &state, &mut dst, &mut scratch)
+            .map_err(|e| err_to_js(&e))?;
         core::mem::swap(&mut state, &mut dst);
     }
     Ok(state.values)
@@ -144,8 +163,12 @@ impl NonSeparable2D {
     /// Throws JS `Error` with `.kind`.
     #[wasm_bindgen(constructor)]
     pub fn new(
-        xmin: f64, xmax: f64, nx: usize,
-        ymin: f64, ymax: f64, ny: usize,
+        xmin: f64,
+        xmax: f64,
+        nx: usize,
+        ymin: f64,
+        ymax: f64,
+        ny: usize,
         c: f64,
     ) -> Result<NonSeparable2D, JsValue> {
         let (gx, gy, grid) = build_grid_2d(xmin, xmax, nx, ymin, ymax, ny)?;
@@ -154,9 +177,19 @@ impl NonSeparable2D {
         let c_arc: Arc<dyn Fn(f64, f64) -> f64 + Send + Sync + 'static> =
             Arc::new(move |_x, _y| c_val);
         let kernel = nonseparable_mixed_closure::with_closure_c(
-            unit_diff(gx), unit_diff(gy), c_arc, c_norm, grid,
-        ).map_err(|e| err_to_js(&e))?;
-        Ok(NonSeparable2D { kernel, grid, nx, ny })
+            unit_diff(gx),
+            unit_diff(gy),
+            c_arc,
+            c_norm,
+            grid,
+        )
+        .map_err(|e| err_to_js(&e))?;
+        Ok(NonSeparable2D {
+            kernel,
+            grid,
+            nx,
+            ny,
+        })
     }
 
     /// Evolve flat row-major `u0` (length `nx * ny`) by `n_steps` of size `tau`.
@@ -165,7 +198,12 @@ impl NonSeparable2D {
     ///
     /// # Errors
     /// Throws JS `Error` with `.kind`.
-    pub fn evolve(&self, u0: &Float64Array, tau: f64, n_steps: usize) -> Result<Float64Array, JsValue> {
+    pub fn evolve(
+        &self,
+        u0: &Float64Array,
+        tau: f64,
+        n_steps: usize,
+    ) -> Result<Float64Array, JsValue> {
         validate_tau(tau, n_steps)?;
         let input = extract_flat_2d(u0, self.nx, self.ny)?;
         let result = evolve_nsm(&self.kernel, self.grid, input, tau, n_steps)?;
@@ -175,17 +213,23 @@ impl NonSeparable2D {
     /// X-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nx(&self) -> usize { self.nx }
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
 
     /// Y-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn ny(&self) -> usize { self.ny }
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
 
     /// Total number of grid nodes (`nx * ny`).
     #[must_use]
     #[wasm_bindgen(js_name = "len")]
-    pub fn len_method(&self) -> usize { self.nx * self.ny }
+    pub fn len_method(&self) -> usize {
+        self.nx * self.ny
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -222,8 +266,12 @@ impl NonSeparable2DAniso {
     /// Throws JS `Error` with `.kind`.
     #[wasm_bindgen(constructor)]
     pub fn new(
-        xmin: f64, xmax: f64, nx: usize,
-        ymin: f64, ymax: f64, ny: usize,
+        xmin: f64,
+        xmax: f64,
+        nx: usize,
+        ymin: f64,
+        ymax: f64,
+        ny: usize,
         beta_values: &Float64Array,
         beta_norm_bound: f64,
     ) -> Result<NonSeparable2DAniso, JsValue> {
@@ -238,16 +286,31 @@ impl NonSeparable2DAniso {
                 beta_arc[j * ns[0] + i]
             });
         let kernel = nonseparable_mixed_closure::with_closure_beta(
-            unit_diff(gx), unit_diff(gy), beta_cls, norm_bound, grid,
-        ).map_err(|e| err_to_js(&e))?;
-        Ok(NonSeparable2DAniso { kernel, grid, nx, ny })
+            unit_diff(gx),
+            unit_diff(gy),
+            beta_cls,
+            norm_bound,
+            grid,
+        )
+        .map_err(|e| err_to_js(&e))?;
+        Ok(NonSeparable2DAniso {
+            kernel,
+            grid,
+            nx,
+            ny,
+        })
     }
 
     /// Evolve flat row-major `u0` (length `nx * ny`) by `n_steps` of size `tau`.
     ///
     /// # Errors
     /// Throws JS `Error` with `.kind`.
-    pub fn evolve(&self, u0: &Float64Array, tau: f64, n_steps: usize) -> Result<Float64Array, JsValue> {
+    pub fn evolve(
+        &self,
+        u0: &Float64Array,
+        tau: f64,
+        n_steps: usize,
+    ) -> Result<Float64Array, JsValue> {
         validate_tau(tau, n_steps)?;
         let input = extract_flat_2d(u0, self.nx, self.ny)?;
         let result = evolve_nsm(&self.kernel, self.grid, input, tau, n_steps)?;
@@ -257,17 +320,23 @@ impl NonSeparable2DAniso {
     /// X-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nx(&self) -> usize { self.nx }
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
 
     /// Y-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn ny(&self) -> usize { self.ny }
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
 
     /// Total number of grid nodes (`nx * ny`).
     #[must_use]
     #[wasm_bindgen(js_name = "len")]
-    pub fn len_method(&self) -> usize { self.nx * self.ny }
+    pub fn len_method(&self) -> usize {
+        self.nx * self.ny
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,23 +347,41 @@ fn compute_norm_bound(beta_raw: &[f64], hint: f64) -> f64 {
     if hint > 0.0 {
         return hint;
     }
-    let m = beta_raw.iter().copied().map(f64::abs).fold(0.0_f64, f64::max);
-    if m == 0.0 { 0.0 } else { m * 1.1 }
+    let m = beta_raw
+        .iter()
+        .copied()
+        .map(f64::abs)
+        .fold(0.0_f64, f64::max);
+    if m == 0.0 {
+        0.0
+    } else {
+        m * 1.1
+    }
 }
 
 type BetaClosureParts = (Arc<Vec<f64>>, [(f64, f64); 2], [usize; 2]);
 
 fn build_beta_closure_2d(
     beta: Vec<f64>,
-    xmin: f64, xmax: f64, nx: usize,
-    ymin: f64, ymax: f64, ny: usize,
+    xmin: f64,
+    xmax: f64,
+    nx: usize,
+    ymin: f64,
+    ymax: f64,
+    ny: usize,
 ) -> BetaClosureParts {
     (Arc::new(beta), [(xmin, xmax), (ymin, ymax)], [nx, ny])
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 fn clamp_idx(x: f64, lo: f64, hi: f64, n: usize) -> usize {
-    if n <= 1 { return 0; }
+    if n <= 1 {
+        return 0;
+    }
     let fi = (x - lo) / (hi - lo) * (n as f64 - 1.0);
     (fi.round() as isize).clamp(0, n as isize - 1) as usize
 }

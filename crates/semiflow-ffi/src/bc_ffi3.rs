@@ -20,12 +20,8 @@
 use std::os::raw::c_double;
 
 use semiflow::{
-    diffusion::DiffusionChernoff,
-    grid::Grid1D,
-    grid_fn::GridFn1D,
-    killing_order2::DirichletHeat2ndChernoff,
-    reflection::HalfSpaceRegion,
-    ChernoffSemigroup,
+    diffusion::DiffusionChernoff, grid::Grid1D, grid_fn::GridFn1D,
+    killing_order2::DirichletHeat2ndChernoff, reflection::HalfSpaceRegion, ChernoffSemigroup,
 };
 
 use crate::{handle::validate_u0_finite, status::SemiflowStatus};
@@ -105,7 +101,7 @@ pub unsafe extern "C" fn smf_dirichlet_heat2nd1d_new(
     })
 }
 
-/// Advance DirichletHeat2nd evolver by `t`; write values into `dst`.
+/// Advance `DirichletHeat2nd` evolver by `t`; write values into `dst`.
 ///
 /// # Safety
 /// `ev` must be a live pointer from `smf_dirichlet_heat2nd1d_new`.
@@ -170,9 +166,7 @@ pub unsafe extern "C" fn smf_dirichlet_heat2nd1d_values(
 /// # Safety
 /// `ev` must be null or a live pointer from `smf_dirichlet_heat2nd1d_new`.
 #[no_mangle]
-pub unsafe extern "C" fn smf_dirichlet_heat2nd1d_size(
-    ev: *const SmfDirichletHeat2nd1D,
-) -> usize {
+pub unsafe extern "C" fn smf_dirichlet_heat2nd1d_size(ev: *const SmfDirichletHeat2nd1D) -> usize {
     if ev.is_null() {
         return 0;
     }
@@ -180,7 +174,7 @@ pub unsafe extern "C" fn smf_dirichlet_heat2nd1d_size(
     s.current.values.len()
 }
 
-/// Free a DirichletHeat2nd1D handle. Null-safe.
+/// Free a `DirichletHeat2nd1D` handle. Null-safe.
 ///
 /// # Safety
 /// `ev` must be null or a live pointer from `smf_dirichlet_heat2nd1d_new`.

@@ -116,7 +116,7 @@ impl<F: SemiflowFloat> ScratchPool<F> {
 
     /// Take ownership of a scratch `Vec<F>` of length `len`, filled with `F::zero()`.
     ///
-    /// Unlike [`borrow_vec`], the returned `Vec` is fully owned by the caller.
+    /// Unlike [`Self::borrow_vec`], the returned `Vec` is fully owned by the caller.
     /// The caller MUST return it via [`Self::return_vec`] to reclaim capacity.
     /// Use this when multiple buffers must be live simultaneously (e.g. the
     /// K=4 g-grid chain in `TruncatedExp` `apply_into`).

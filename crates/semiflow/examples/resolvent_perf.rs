@@ -12,11 +12,13 @@
 // Integration test: allows for numerical / binding wrapper patterns.
 #![allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
 
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
-use std::time::Instant;
+use std::{
+    env,
+    fs::{create_dir_all, File},
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 use semiflow::{
     DiffusionChernoff, Grid1D, GridFn1D, HdrSnapshot, LaplaceChernoffResolvent, LaplaceQuadrature,

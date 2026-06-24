@@ -122,7 +122,11 @@ where
     /// - `DomainViolation` if `n == 0`.
     /// - `DomainViolation` if `quadrature == TrapezoidWithTail { t_max }` and
     ///   `t_max` is not finite or `≤ 0`.
-    pub fn new(inner: C, n: usize, quadrature: LaplaceQuadrature<F>) -> Result<Self, SemiflowError> {
+    pub fn new(
+        inner: C,
+        n: usize,
+        quadrature: LaplaceQuadrature<F>,
+    ) -> Result<Self, SemiflowError> {
         if n == 0 {
             return Err(SemiflowError::DomainViolation {
                 what: "LaplaceChernoffResolvent n must be >= 1",
@@ -257,7 +261,12 @@ where
     // Point-eval: Gauss-Laguerre path (scalar accumulation).
     // Uses buf_b as grid prototype for fresh_from_fn after the first node.
     #[allow(clippy::too_many_arguments)]
-    fn eval_ap_gl32(&self, lambda: F, x0: &[F], g_at: &dyn Fn(&[F]) -> F) -> Result<F, SemiflowError>
+    fn eval_ap_gl32(
+        &self,
+        lambda: F,
+        x0: &[F],
+        g_at: &dyn Fn(&[F]) -> F,
+    ) -> Result<F, SemiflowError>
     where
         C::S: Clone + Sampleable<F>,
     {

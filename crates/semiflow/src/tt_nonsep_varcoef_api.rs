@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 use crate::{
     float::{from_f64, SemiflowFloat},
-    tt_nonsep_varcoef::{CpCoef, CoefRole, nonsep_evolve},
+    tt_nonsep_varcoef::{nonsep_evolve, CoefRole, CpCoef},
 };
 
 /// Order-2 low-CP-rank non-separable variable-coefficient evolver (S³ POC).
@@ -62,7 +62,13 @@ impl<F: SemiflowFloat> S3NonSepVarCoefEvolver<F> {
         coefs: Vec<CpCoef<F>>,
     ) -> Result<Self, crate::SemiflowError> {
         validate_nonsep(n, d, dx, a0, &coefs)?;
-        Ok(Self { n, d, dx, a0, coefs })
+        Ok(Self {
+            n,
+            d,
+            dx,
+            a0,
+            coefs,
+        })
     }
 
     /// Evolve state `u0` (flat `n^d`) for `nsteps` steps of size `tau`.
@@ -83,7 +89,16 @@ impl<F: SemiflowFloat> S3NonSepVarCoefEvolver<F> {
                 detail: "u0 length must equal n^d",
             });
         }
-        Ok(nonsep_evolve(u0, self.n, self.d, self.dx, self.a0, &self.coefs, tau, nsteps))
+        Ok(nonsep_evolve(
+            u0,
+            self.n,
+            self.d,
+            self.dx,
+            self.a0,
+            &self.coefs,
+            tau,
+            nsteps,
+        ))
     }
 }
 
@@ -96,10 +111,14 @@ fn validate_nonsep<F: SemiflowFloat>(
     coefs: &[CpCoef<F>],
 ) -> Result<(), crate::SemiflowError> {
     if n < 2 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "n must be >= 2" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "n must be >= 2",
+        });
     }
     if dx <= F::zero() {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "dx must be > 0" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "dx must be > 0",
+        });
     }
     if a0 <= F::zero() {
         return Err(crate::SemiflowError::S3OutOfClass {
@@ -191,7 +210,11 @@ mod tests {
     #[test]
     fn rejects_non_parabolic_coef() {
         // c0 = 0, no terms → reconstructed c(x) = 0 ≤ 0 everywhere
-        let coef = CpCoef { c0: 0.0, terms: vec![], role: CoefRole::Diffusion };
+        let coef = CpCoef {
+            c0: 0.0,
+            terms: vec![],
+            role: CoefRole::Diffusion,
+        };
         assert!(S3NonSepVarCoefEvolver::<f64>::new(4, 2, 0.1, 1.0, vec![coef]).is_err());
     }
 
@@ -200,7 +223,11 @@ mod tests {
         // factor has length 1 (d=1), but d=2
         let factor: Vec<Vec<f64>> = vec![vec![1.0f64; 4]];
         let t = CpTerm { factor };
-        let coef = CpCoef { c0: 1.0, terms: vec![t], role: CoefRole::Diffusion };
+        let coef = CpCoef {
+            c0: 1.0,
+            terms: vec![t],
+            role: CoefRole::Diffusion,
+        };
         assert!(S3NonSepVarCoefEvolver::<f64>::new(4, 2, 0.1, 1.0, vec![coef]).is_err());
     }
 

@@ -63,7 +63,7 @@ use crate::{
 mod schrodinger_helpers;
 use schrodinger_helpers::{
     pentadiag_forward_elim, pentadiag_init_bands, strang_first_v_rotation,
-    strang_last_v_rotation_cast,
+    strang_last_v_rotation_cast, tridiag_matvec_f64,
 };
 
 // ---------------------------------------------------------------------------
@@ -244,7 +244,10 @@ impl<F: SemiflowFloat> SchrodingerChernoff<F> {
     /// # Errors
     ///
     /// Returns [`SemiflowError::DomainViolation`] if any `V(x_i)` is not finite.
-    pub fn new(kinetic: Diffusion4thChernoff<F>, v: impl Fn(F) -> F) -> Result<Self, SemiflowError> {
+    pub fn new(
+        kinetic: Diffusion4thChernoff<F>,
+        v: impl Fn(F) -> F,
+    ) -> Result<Self, SemiflowError> {
         let grid = kinetic.grid;
         let n = grid.n;
         let mut v_at_node = Vec::with_capacity(n);
@@ -439,20 +442,6 @@ fn cn_kinetic_step_f64(n: usize, a_off: f64, w: &mut [Vec<f64>; 12]) {
     }
     // m_d ← m_new: swap slots 1 and 6 to avoid allocation.
     w.swap(1, 6);
-}
-
-/// Tridiagonal matrix-vector product (f64, Dirichlet BCs).
-///
-/// A[i,i] = `diag`, A[i,i±1] = `off`; boundary off-diags are 0.
-#[inline]
-fn tridiag_matvec_f64(n: usize, diag: f64, off: f64, v: &[f64], out: &mut Vec<f64>) {
-    debug_assert_eq!(v.len(), n);
-    out.resize(n, 0.0);
-    for i in 0..n {
-        let left = if i == 0 { 0.0 } else { off * v[i - 1] };
-        let right = if i == n - 1 { 0.0 } else { off * v[i + 1] };
-        out[i] = diag * v[i] + left + right;
-    }
 }
 
 /// Solve the pentadiagonal system `(I + A²)·x = rhs` (f64, band-5 LU).

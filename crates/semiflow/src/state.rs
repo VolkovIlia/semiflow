@@ -23,11 +23,12 @@
 //!
 //! ## Macro
 //!
-//! [`impl_state_for_gridfn!`] generates identical `State<F>` + `HilbertState<F>`
+//! [`crate::impl_state_for_gridfn!`] generates identical `State<F>` + `HilbertState<F>`
 //! impls for all three tensor grid-fn types without duplicating code.
 
-use crate::float::SemiflowFloat;
 use num_traits::Float;
+
+use crate::float::SemiflowFloat;
 
 // ---------------------------------------------------------------------------
 // Layer 1 — State<F>

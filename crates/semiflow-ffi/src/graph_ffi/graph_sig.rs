@@ -6,9 +6,8 @@ use std::sync::Arc;
 
 use semiflow::{Graph, GraphSignal};
 
-use crate::status::SemiflowStatus;
-
 use super::{GraphInner, GraphSigInner, SmfGraph, SmfGraphSig};
+use crate::status::SemiflowStatus;
 
 // ---------------------------------------------------------------------------
 // Graph constructors

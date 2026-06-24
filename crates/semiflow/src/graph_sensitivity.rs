@@ -44,8 +44,13 @@ pub trait GeneratorSensitivity<F: SemiflowFloat> {
     /// # Errors
     ///
     /// `DomainViolation` if `k >= self.n_params()`.
-    fn apply_param_deriv(&self, k: usize, t: F, v: &[F], out: &mut [F])
-        -> Result<(), SemiflowError>;
+    fn apply_param_deriv(
+        &self,
+        k: usize,
+        t: F,
+        v: &[F],
+        out: &mut [F],
+    ) -> Result<(), SemiflowError>;
 }
 
 // ---------------------------------------------------------------------------

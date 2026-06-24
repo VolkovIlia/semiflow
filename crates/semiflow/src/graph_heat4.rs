@@ -1,4 +1,4 @@
-//! Order-4 graph heat Chernoff via Padé[0,4] operator Taylor truncation.
+//! Order-4 graph heat Chernoff via Padé\[0,4\] operator Taylor truncation.
 //!
 //! `S₄(τ) f = Σ_{k=0}^{4} (−τ L_G)^k / k! · f`
 //!          = `f − τ L_G f + (τ²/2) L_G² f − (τ³/6) L_G³ f + (τ⁴/24) L_G⁴ f`.
@@ -32,7 +32,7 @@ use crate::{
 // GraphHeat4thChernoff<F>
 // ---------------------------------------------------------------------------
 
-/// Order-4 Chernoff for `∂ₜu = −L_G u` via Padé[0,4] / 4-term operator
+/// Order-4 Chernoff for `∂ₜu = −L_G u` via Padé\[0,4\] / 4-term operator
 /// Taylor truncation of `exp(−τ L_G)`.
 ///
 /// `S₄(τ) f = Σ_{k=0}^{4} (−τ L_G)^k / k! · f`.
@@ -198,12 +198,14 @@ fn apply_zeta4_into<F: SemiflowFloat>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::sync::Arc;
 
-    use crate::graph::{Graph, Laplacian};
-    use crate::graph_signal::GraphSignal;
-    use crate::state::State;
+    use super::*;
+    use crate::{
+        graph::{Graph, Laplacian},
+        graph_signal::GraphSignal,
+        state::State,
+    };
 
     #[test]
     fn apply_at_zero_tau_returns_src() {

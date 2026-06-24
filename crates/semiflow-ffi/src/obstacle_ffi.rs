@@ -56,8 +56,7 @@ use semiflow::{
     ObstacleChernoff, ScratchPool, StrangSplit,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Local obstacle types (mirrors obstacle_py.rs, per ADR-0028 Amendment 2)
@@ -80,10 +79,7 @@ impl semiflow::Obstacle<f64> for FfiArrayObstacle {
         0.0
     }
 
-    fn project_in_place(
-        &self,
-        dst: &mut GridFn1D<f64>,
-    ) -> Result<(), semiflow::SemiflowError> {
+    fn project_in_place(&self, dst: &mut GridFn1D<f64>) -> Result<(), semiflow::SemiflowError> {
         if dst.values.len() != self.values.len() {
             return Err(semiflow::SemiflowError::DomainViolation {
                 what: "FfiArrayObstacle: length mismatch",
@@ -353,7 +349,11 @@ fn build_obstacle_inner(
         Some(obs) => build_array_variant(a, b, c, obs, grid, use_strang)?,
         None => build_const_variant(a, b, c, level, grid, use_strang)?,
     };
-    Ok(ObstacleInner { kernel, n_steps, current })
+    Ok(ObstacleInner {
+        kernel,
+        n_steps,
+        current,
+    })
 }
 
 fn build_const_variant(
@@ -433,10 +433,7 @@ fn validate_params(a: f64, b: f64, c: f64) -> Result<(), semiflow::SemiflowError
 // Evolve helper
 // ---------------------------------------------------------------------------
 
-fn run_obstacle_evolve(
-    inner: &mut ObstacleInner,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn run_obstacle_evolve(inner: &mut ObstacleInner, t: f64) -> Result<(), semiflow::SemiflowError> {
     #[allow(clippy::cast_precision_loss)]
     let tau = t / inner.n_steps as f64;
     let grid = inner.current.grid;

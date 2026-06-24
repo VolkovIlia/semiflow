@@ -4,10 +4,10 @@
 [![PyPI badge — pending
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](../../LICENSE-MIT)
 
-PyO3 Python bindings for [`semiflow-core`](../../crates/semiflow-core) —
+PyO3 Python bindings for [`semiflow`](../../crates/semiflow) —
 Chernoff approximations of operator semigroups (Remizov 2025, Theorem 6).
 
-**Aligned with `semiflow-core` v9.0.0** (ADR-0154, 2026-06-10). The Python
+**Built on the `semiflow` core crate** (ADR-0154, 2026-06-10). The Python
 surface has parity with all core kernel families via ADR-0111 Waves P1–P7
 plus the v9.0.0 addition of `ReverseHeat1D` (reverse-mode AD, math §51,
 ADR-0156): 26 binding classes + 1 free function. Pyright errors: 0. Complete
@@ -358,4 +358,4 @@ DOI [10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q)
 
 ## License
 
-MIT OR Apache-2.0 — same as `semiflow-core`.
+MIT OR Apache-2.0 — same as `semiflow`.

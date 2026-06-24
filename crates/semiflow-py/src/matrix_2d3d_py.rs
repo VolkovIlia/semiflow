@@ -12,7 +12,11 @@
 //! Flat `2*nx*ny*nz` buffer: `buf[(k*nx*ny+j*nx+i)*2+c]`.
 
 // Binding layer.
-#![allow(clippy::needless_pass_by_value, clippy::unused_self, clippy::too_many_arguments)]
+#![allow(
+    clippy::needless_pass_by_value,
+    clippy::unused_self,
+    clippy::too_many_arguments
+)]
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
@@ -60,9 +64,9 @@ use crate::{
 /// Raises
 /// ------
 /// `SemiflowError`
-///     kind='GridMismatch' if grid params invalid or u0 length wrong.
-///     kind='NanInf' if u0 contains NaN or Inf.
-///     kind='OutOfDomain' if nx<5 or ny<5 or a_diag<=0.
+///     kind='`GridMismatch`' if grid params invalid or u0 length wrong.
+///     kind='`NanInf`' if u0 contains NaN or Inf.
+///     kind='`OutOfDomain`' if nx<5 or ny<5 or `a_diag`<=0.
 #[pyclass(name = "MatrixDiffusion2D")]
 pub struct MatrixDiffusion2D {
     a_diag: f64,
@@ -94,11 +98,17 @@ impl MatrixDiffusion2D {
                 pyo3::exceptions::PyTypeError::new_err("u0 must be a float64 array")
             })?;
             validate_u0_2d(&vals, nx, ny)?;
-            let grid2d = build_grid2d(xmin, xmax, nx, ymin, ymax, ny)
-                .map_err(|e| from_core(&e))?;
+            let grid2d = build_grid2d(xmin, xmax, nx, ymin, ymax, ny).map_err(|e| from_core(&e))?;
             // Eagerly validate kernel construction.
             build_matrix_kernel(a_diag, c_coupling, grid2d.x).map_err(|e| from_core(&e))?;
-            Ok(MatrixDiffusion2D { a_diag, c_coupling, grid2d, current: vals, nx, ny })
+            Ok(MatrixDiffusion2D {
+                a_diag,
+                c_coupling,
+                grid2d,
+                current: vals,
+                nx,
+                ny,
+            })
         })
     }
 
@@ -204,7 +214,15 @@ impl MatrixDiffusion3D {
             let grid3d = build_grid3d(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz)
                 .map_err(|e| from_core(&e))?;
             build_matrix_kernel(a_diag, c_coupling, grid3d.x).map_err(|e| from_core(&e))?;
-            Ok(MatrixDiffusion3D { a_diag, c_coupling, grid3d, current: vals, nx, ny, nz })
+            Ok(MatrixDiffusion3D {
+                a_diag,
+                c_coupling,
+                grid3d,
+                current: vals,
+                nx,
+                ny,
+                nz,
+            })
         })
     }
 

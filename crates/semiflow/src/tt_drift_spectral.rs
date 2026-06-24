@@ -337,10 +337,7 @@ mod tests {
             );
             // im must be exactly zero in value (sym_im = 0 when bj=bk=0).
             // Accept ±0.0 (both are exact zero; only the sign bit differs).
-            assert!(
-                im == 0.0,
-                "im nonzero at idx={idx}: {im:.3e}"
-            );
+            assert!(im == 0.0, "im nonzero at idx={idx}: {im:.3e}");
         }
     }
 

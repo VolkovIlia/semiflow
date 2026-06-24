@@ -32,10 +32,10 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
 #![allow(clippy::cast_possible_truncation)] // usize→u32 for .pow(): d ≤ 4, n ≤ 13 in test
-#![allow(clippy::cast_possible_wrap)]       // u32→i32 for .powi(): scaling factor ≤ 30
-#![allow(clippy::many_single_char_names)]   // n, d, r, a, s, etc. are standard math variable names
-#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic (Kronecker)
-#![allow(clippy::unreadable_literal)]       // LCG/expm coefficients are mathematical identifiers
+#![allow(clippy::cast_possible_wrap)] // u32→i32 for .powi(): scaling factor ≤ 30
+#![allow(clippy::many_single_char_names)] // n, d, r, a, s, etc. are standard math variable names
+#![allow(clippy::needless_range_loop)] // index loops use cross-index arithmetic (Kronecker)
+#![allow(clippy::unreadable_literal)] // LCG/expm coefficients are mathematical identifiers
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -436,9 +436,7 @@ fn run_exactness(d: usize, grids: &[usize], steps: &[usize], a: &[f64], rho: f64
         let ok = if err <= EXACTNESS_GATE { "✓" } else { "FAIL" };
         let dx = (X_MAX - X_MIN) / (n as f64 - 1.0);
         let tau = T / ns as f64;
-        println!(
-            "  {n:>5} | {ns:>5} | {tau:.4e} | {hd:.4} | {pk:>6} | {err:.4e}   | {ok}"
-        );
+        println!("  {n:>5} | {ns:>5} | {tau:.4e} | {hd:.4} | {pk:>6} | {err:.4e}   | {ok}");
 
         // Anti-vacuity: h/dx non-integer (frac>0.05)
         let frac = (hd - hd.round()).abs();

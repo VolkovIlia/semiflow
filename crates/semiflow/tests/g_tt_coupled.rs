@@ -49,10 +49,10 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::too_many_lines)]
 #![allow(clippy::cast_possible_truncation)] // usize→u32 for .pow(): d ≤ 10, n ≤ 32 in test
-#![allow(clippy::cast_possible_wrap)]       // u32→i32 for .powi(): scaling factor ≤ 30
-#![allow(clippy::many_single_char_names)]   // n, d, r, a, s, etc. are standard math variable names
-#![allow(clippy::needless_range_loop)]      // index loops use cross-index arithmetic
-#![allow(clippy::unreadable_literal)]       // LCG/expm constants are mathematical identifiers
+#![allow(clippy::cast_possible_wrap)] // u32→i32 for .powi(): scaling factor ≤ 30
+#![allow(clippy::many_single_char_names)] // n, d, r, a, s, etc. are standard math variable names
+#![allow(clippy::needless_range_loop)] // index loops use cross-index arithmetic
+#![allow(clippy::unreadable_literal)] // LCG/expm constants are mathematical identifiers
 
 extern crate alloc;
 use alloc::vec::Vec;

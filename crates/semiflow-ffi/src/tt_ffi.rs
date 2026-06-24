@@ -61,7 +61,9 @@ pub unsafe extern "C" fn smf_ttstate_new_separable(
     }
     catch_panic!({
         let off = unsafe { std::slice::from_raw_parts(offsets, n_axes + 1) };
-        if let Err(s) = validate_offsets(off, n_axes) { return s; }
+        if let Err(s) = validate_offsets(off, n_axes) {
+            return s;
+        }
         let total = off[n_axes];
         let flat = unsafe { std::slice::from_raw_parts(data, total) };
         match build_slices_from_ragged(flat, off, n_axes) {
@@ -201,7 +203,9 @@ pub unsafe extern "C" fn smf_ttstate_inner_separable(
             return SemiflowStatus::GridMismatch;
         }
         let off = unsafe { std::slice::from_raw_parts(offsets, n_axes + 1) };
-        if let Err(st) = validate_offsets(off, n_axes) { return st; }
+        if let Err(st) = validate_offsets(off, n_axes) {
+            return st;
+        }
         let total = off[n_axes];
         let flat = unsafe { std::slice::from_raw_parts(data, total) };
         match build_slices_from_ragged(flat, off, n_axes) {

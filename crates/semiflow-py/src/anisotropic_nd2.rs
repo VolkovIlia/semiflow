@@ -13,7 +13,6 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     nonseparable_mixed_closure, ChernoffFunction, DiffusionChernoff, Grid2D, GridFn2D, ScratchPool,
 };
@@ -28,8 +27,7 @@ use crate::{
 };
 
 /// Concrete `NonSeparableMixed` type for the aniso variant.
-type NsmAniso =
-    semiflow::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
+type NsmAniso = semiflow::NonSeparableMixedChernoff<DiffusionChernoff<f64>, DiffusionChernoff<f64>>;
 
 // ===========================================================================
 // NonSeparable2DAniso — position-dependent beta coupling (M20)

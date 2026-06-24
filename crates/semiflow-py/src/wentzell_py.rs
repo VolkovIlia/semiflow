@@ -42,11 +42,13 @@ use semiflow::{
     GridFn1D, TimedChernoffFunction,
 };
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
-use crate::wentzell_helpers::{
-    extract_f64_vec, validate_c_reaction, validate_schedule, validate_t, validate_u0_finite,
-    ScheduledWentzellRegion,
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+    wentzell_helpers::{
+        extract_f64_vec, validate_c_reaction, validate_schedule, validate_t, validate_u0_finite,
+        ScheduledWentzellRegion,
+    },
 };
 
 // ---------------------------------------------------------------------------

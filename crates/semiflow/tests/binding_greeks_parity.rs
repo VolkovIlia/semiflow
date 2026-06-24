@@ -202,6 +202,25 @@ fn richardson_gamma() -> Vec<f64> {
 // Test: canonical golden + Richardson correctness anchor
 // ---------------------------------------------------------------------------
 
+// Emit the full 64-element golden triple for embedding in the binding parity
+// tests. Run SCALAR (so the WASM tolerance gate compares against the same
+// strict-IEEE f64 arithmetic family, ADR-0183):
+//   cargo test -p semiflow --no-default-features --features std \
+//       --test binding_greeks_parity print_golden_full -- --ignored --nocapture
+#[test]
+#[ignore = "diagnostic: prints the golden arrays; run with --ignored --nocapture"]
+fn print_golden_full() {
+    use std::fmt::Write as _;
+    let (value, delta, gamma) = canonical_greeks_core();
+    for (label, arr) in [("VALUE", &value), ("DELTA", &delta), ("GAMMA", &gamma)] {
+        let mut s = String::new();
+        for v in arr {
+            let _ = write!(s, "{v:.16e},");
+        }
+        println!("CORE_DUMP {label} [{s}]");
+    }
+}
+
 #[test]
 fn g_binding_greeks_parity_core_golden() {
     let (value, delta, gamma) = canonical_greeks_core();

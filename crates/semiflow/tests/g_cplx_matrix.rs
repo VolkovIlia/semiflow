@@ -16,7 +16,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64: intentional bit-mixing
-#![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
+#![allow(clippy::needless_range_loop)] // matrix index loops use cross-index arithmetic
 
 use num_complex::Complex;
 use semiflow::{

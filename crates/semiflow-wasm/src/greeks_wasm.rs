@@ -29,9 +29,8 @@
 )]
 
 use js_sys::{Object, Reflect};
-use wasm_bindgen::prelude::*;
-
 use semiflow::{dual::Dual, DiffusionChernoff, Grid1D, GridFn1D};
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

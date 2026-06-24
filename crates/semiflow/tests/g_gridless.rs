@@ -67,9 +67,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::needless_range_loop)]
 
-use semiflow::{
-    ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
-};
+use semiflow::{ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool};
 
 // ── Shared OLS helper ──────────────────────────────────────────────────────────
 

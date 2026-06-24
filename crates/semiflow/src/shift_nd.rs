@@ -27,8 +27,7 @@
 // D is a small const generic (PDE dimension, typically 1–5): D as u32 and D as f64 are safe.
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
 
 use crate::{

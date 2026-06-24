@@ -75,6 +75,60 @@ fn coupled_new_null_check(
 /// any `b_j ≠ 0`, non-adjacent pair, or non-SPD block → `OutOfDomain`.
 ///
 /// # Safety
+/// Inner logic for `smf_tt_coupled_new` (extracted to stay ≤50 lines).
+///
+/// # Safety
+/// All pointers must be non-null and valid for `n_axes` / `n_pairs` elements.
+#[allow(clippy::too_many_arguments)]
+unsafe fn coupled_new_inner(
+    a: *const f64,
+    b: *const f64,
+    c: f64,
+    coupling_tag: u32,
+    tridiag_rho: f64,
+    pairs_jk: *const usize,
+    pairs_rho: *const f64,
+    n_pairs: usize,
+    dom_min: *const f64,
+    dom_max: *const f64,
+    n_axes: usize,
+    eps_round: f64,
+    out_ev: *mut *mut SmfTtCoupledEvolver,
+) -> SemiflowStatus {
+    catch_panic!({
+        if n_axes == 0 {
+            return SemiflowStatus::GridMismatch;
+        }
+        let result = unsafe {
+            build_coupled_evolver_from_ptrs(
+                a,
+                b,
+                c,
+                coupling_tag,
+                tridiag_rho,
+                pairs_jk,
+                pairs_rho,
+                n_pairs,
+                dom_min,
+                dom_max,
+                eps_round,
+                n_axes,
+            )
+        };
+        match result {
+            Err(s) => s,
+            Ok(ev) => {
+                let raw = Box::into_raw(Box::new(ev)).cast::<SmfTtCoupledEvolver>();
+                unsafe { *out_ev = raw };
+                SemiflowStatus::Ok
+            }
+        }
+    })
+}
+
+/// Allocate a `TtCoupledEvolver` on the heap and write its pointer to `*out_ev`.
+///
+/// # Safety
 /// All non-null pointer arguments must be valid for the stated lengths.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
@@ -93,28 +147,36 @@ pub unsafe extern "C" fn smf_tt_coupled_new(
     eps_round: f64,
     out_ev: *mut *mut SmfTtCoupledEvolver,
 ) -> SemiflowStatus {
-    let nc = coupled_new_null_check(a, b, dom_min, dom_max, out_ev, coupling_tag, pairs_jk, pairs_rho);
+    let nc = coupled_new_null_check(
+        a,
+        b,
+        dom_min,
+        dom_max,
+        out_ev,
+        coupling_tag,
+        pairs_jk,
+        pairs_rho,
+    );
     if nc != SemiflowStatus::Ok {
         return nc;
     }
-    catch_panic!({
-        if n_axes == 0 {
-            return SemiflowStatus::GridMismatch;
-        }
-        let a_s = unsafe { std::slice::from_raw_parts(a, n_axes) };
-        let b_s = unsafe { std::slice::from_raw_parts(b, n_axes) };
-        let min_s = unsafe { std::slice::from_raw_parts(dom_min, n_axes) };
-        let max_s = unsafe { std::slice::from_raw_parts(dom_max, n_axes) };
-        match build_coupled_evolver(a_s, b_s, c, coupling_tag, tridiag_rho,
-                pairs_jk, pairs_rho, n_pairs, min_s, max_s, eps_round, n_axes) {
-            Err(s) => s,
-            Ok(ev) => {
-                let raw = Box::into_raw(Box::new(ev)).cast::<SmfTtCoupledEvolver>();
-                unsafe { *out_ev = raw };
-                SemiflowStatus::Ok
-            }
-        }
-    })
+    unsafe {
+        coupled_new_inner(
+            a,
+            b,
+            c,
+            coupling_tag,
+            tridiag_rho,
+            pairs_jk,
+            pairs_rho,
+            n_pairs,
+            dom_min,
+            dom_max,
+            n_axes,
+            eps_round,
+            out_ev,
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +345,44 @@ fn validate_coeffs_and_domain(
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Thin unsafe wrapper: materialise slices from raw ptrs and delegate.
+#[allow(clippy::too_many_arguments)]
+unsafe fn build_coupled_evolver_from_ptrs(
+    a: *const f64,
+    b: *const f64,
+    c: f64,
+    coupling_tag: u32,
+    tridiag_rho: f64,
+    pairs_jk: *const usize,
+    pairs_rho: *const f64,
+    n_pairs: usize,
+    dom_min: *const f64,
+    dom_max: *const f64,
+    eps_round: f64,
+    n_axes: usize,
+) -> Result<CoupledTtChernoff<f64>, SemiflowStatus> {
+    let a_s = unsafe { std::slice::from_raw_parts(a, n_axes) };
+    let b_s = unsafe { std::slice::from_raw_parts(b, n_axes) };
+    let min_s = unsafe { std::slice::from_raw_parts(dom_min, n_axes) };
+    let max_s = unsafe { std::slice::from_raw_parts(dom_max, n_axes) };
+    unsafe {
+        build_coupled_evolver(
+            a_s,
+            b_s,
+            c,
+            coupling_tag,
+            tridiag_rho,
+            pairs_jk,
+            pairs_rho,
+            n_pairs,
+            min_s,
+            max_s,
+            eps_round,
+            n_axes,
+        )
+    }
+}
+
 /// Build `CoupledTtChernoff<f64>` from validated inputs.
 #[allow(clippy::too_many_arguments)]
 unsafe fn build_coupled_evolver(
@@ -301,7 +401,14 @@ unsafe fn build_coupled_evolver(
 ) -> Result<CoupledTtChernoff<f64>, SemiflowStatus> {
     let domain = validate_coeffs_and_domain(a, b, c, eps_round, min_s, max_s)?;
     let topology = unsafe {
-        decode_topology(coupling_tag, tridiag_rho, pairs_jk, pairs_rho, n_pairs, n_axes)
+        decode_topology(
+            coupling_tag,
+            tridiag_rho,
+            pairs_jk,
+            pairs_rho,
+            n_pairs,
+            n_axes,
+        )
     }?;
     let wall_st = precheck_coupled_walls(b, &topology, a);
     if wall_st != SemiflowStatus::Ok {
@@ -309,5 +416,12 @@ unsafe fn build_coupled_evolver(
     }
     // CoupledTtChernoff::new panics on the same conditions pre-checked above.
     // catch_panic! at the call site handles any residual panic from other assertions.
-    Ok(CoupledTtChernoff::new(a.to_vec(), b.to_vec(), c, topology, domain, eps_round))
+    Ok(CoupledTtChernoff::new(
+        a.to_vec(),
+        b.to_vec(),
+        c,
+        topology,
+        domain,
+        eps_round,
+    ))
 }

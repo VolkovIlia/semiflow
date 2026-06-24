@@ -44,7 +44,6 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
-
 use core::f64::consts::TAU;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -52,8 +51,8 @@ use core::f64::consts::TAU;
 // ═══════════════════════════════════════════════════════════════════════════
 
 const A_DIFF: f64 = 0.7; // diffusion coefficient (asserts 1,2,3,5,6,8)
-// B_DRIFT=2.0 ensures b·τ/dx frac > 0.05 for all n∈{7..13} with τ=0.35·dx².
-// (b=1.3 gives frac≈0.041 at n=11 which violates the >0.05 guard; 2.0 gives 0.064 ✓.)
+                         // B_DRIFT=2.0 ensures b·τ/dx frac > 0.05 for all n∈{7..13} with τ=0.35·dx².
+                         // (b=1.3 gives frac≈0.041 at n=11 which violates the >0.05 guard; 2.0 gives 0.064 ✓.)
 const B_DRIFT: f64 = 2.0; // drift coefficient (non-zero, genuine sub-grid advection)
 const RHO: f64 = 0.6; // coupling strength
 const TAU_FRAC: f64 = 0.35; // τ = TAU_FRAC · dx²
@@ -74,7 +73,7 @@ const R4A: f64 = 0.15; // coupling for 4a sweep
 const TAU4A: f64 = 0.02; // fixed tau for 4a sweep
 const N4A: usize = 5; // n for 4a/4b (n^d state, small enough for d=10)
 const D4A_SWEEP: &[usize] = &[3, 4, 5, 6]; // d range for assert 4a
-// EPS sweep for Δrank: four values (knife-edge robustness check).
+                                           // EPS sweep for Δrank: four values (knife-edge robustness check).
 const EPS4A: [f64; 4] = [1e-8, 1e-10, 1e-12, 1e-14];
 // LCG seed for generic IC (deterministic, no rand dep).
 const LCG_SEED: u64 = 12345;
@@ -291,15 +290,7 @@ fn add_d1c_axis(l: &mut [f64], n: usize, d: usize, j: usize, coeff: f64, dx: f64
 /// Add `coeff · (I⊗…⊗D1c_j⊗…⊗I) · (I⊗…⊗D1c_k⊗…⊗I)` to `l` (adjacent pair, j<k).
 ///
 /// For the adjacent-pair cross term `2r·D1c_j⊗D1c_k` (both already have 1/(2dx) built in).
-fn add_d1c_pair(
-    l: &mut [f64],
-    n: usize,
-    d: usize,
-    j: usize,
-    k: usize,
-    coeff: f64,
-    dx: f64,
-) {
+fn add_d1c_pair(l: &mut [f64], n: usize, d: usize, j: usize, k: usize, coeff: f64, dx: f64) {
     let tot = n.pow(d as u32);
     let sj = n.pow((d - 1 - j) as u32);
     let sk = n.pow((d - 1 - k) as u32);
@@ -466,7 +457,12 @@ fn apply_cplx_pair(panel: &mut [f64], n_j: usize, n_k: usize, es: &[f64]) -> f64
     let mut cplx = vec![0.0f64; n_j * n_k * 2];
     for mj in 0..n_j {
         let row: Vec<f64> = (0..n_k)
-            .flat_map(|ik| [cplx_j[mj * n_k * 2 + ik * 2], cplx_j[mj * n_k * 2 + ik * 2 + 1]])
+            .flat_map(|ik| {
+                [
+                    cplx_j[mj * n_k * 2 + ik * 2],
+                    cplx_j[mj * n_k * 2 + ik * 2 + 1],
+                ]
+            })
             .collect();
         let fr = dft_c2c(&row);
         for mk in 0..n_k {
@@ -499,7 +495,12 @@ fn apply_cplx_pair(panel: &mut [f64], n_j: usize, n_k: usize, es: &[f64]) -> f64
     let mut max_imag = 0.0f64;
     for ik in 0..n_k {
         let col: Vec<f64> = (0..n_j)
-            .flat_map(|mj| [cplx2[mj * n_k * 2 + ik * 2], cplx2[mj * n_k * 2 + ik * 2 + 1]])
+            .flat_map(|mj| {
+                [
+                    cplx2[mj * n_k * 2 + ik * 2],
+                    cplx2[mj * n_k * 2 + ik * 2 + 1],
+                ]
+            })
             .collect();
         let inv = idft(&col);
         for ij in 0..n_j {
@@ -545,10 +546,7 @@ fn gaussian_ic(n: usize, d: usize) -> Vec<f64> {
 /// `m0 * n^{d-1} + m1 * n^{d-2} + ... + m_{d-1}`.
 fn fft_nd_real(u: &[f64], n: usize, d: usize) -> Vec<f64> {
     // Start with the real input converted to complex interleaved.
-    let mut cplx: Vec<f64> = u
-        .iter()
-        .flat_map(|&v| [v, 0.0])
-        .collect();
+    let mut cplx: Vec<f64> = u.iter().flat_map(|&v| [v, 0.0]).collect();
 
     // Apply 1-D DFT along each axis j (axis j has stride s = n^{d-1-j}).
     for j in 0..d {
@@ -629,7 +627,10 @@ fn ifft_nd(cplx: &[f64], n: usize, d: usize) -> (Vec<f64>, f64) {
 fn build_expsym_nd(n: usize, d: usize, a: f64, b: f64, rho: f64, tau: f64) -> Vec<f64> {
     let dx = 1.0 / n as f64;
     let omega: Vec<f64> = (0..n).map(|m| TAU * m as f64 / n as f64).collect();
-    let sd2: Vec<f64> = omega.iter().map(|&w| (2.0 * w.cos() - 2.0) / (dx * dx)).collect();
+    let sd2: Vec<f64> = omega
+        .iter()
+        .map(|&w| (2.0 * w.cos() - 2.0) / (dx * dx))
+        .collect();
     let sd1r: Vec<f64> = omega.iter().map(|&w| w.sin() / dx).collect();
 
     let nd = n.pow(d as u32);
@@ -666,7 +667,15 @@ fn build_expsym_nd(n: usize, d: usize, a: f64, b: f64, rho: f64, tau: f64) -> Ve
 /// Algorithm: fft_d → elementwise COMPLEX multiply by expsym_nd → ifft_d → take real.
 /// This is the d-D analogue of the pair-factor apply, using the complete symbol.
 /// Returns (evolved state, max |imag residue|).
-fn spectral_evolve(u0: &[f64], n: usize, d: usize, a: f64, b: f64, rho: f64, tau: f64) -> (Vec<f64>, f64) {
+fn spectral_evolve(
+    u0: &[f64],
+    n: usize,
+    d: usize,
+    a: f64,
+    b: f64,
+    rho: f64,
+    tau: f64,
+) -> (Vec<f64>, f64) {
     // Step 1: forward d-D DFT.
     let mut cplx = fft_nd_real(u0, n, d);
     // Step 2: build full d-D complex expsym.
@@ -718,7 +727,12 @@ fn rank_by_qr(a: &[f64], m: usize, eps: f64) -> usize {
     let mut r = a.to_vec();
     let mut rank = 0usize;
     let mut col_norms: Vec<f64> = (0..m)
-        .map(|j| (0..m).map(|i| r[i * m + j] * r[i * m + j]).sum::<f64>().sqrt())
+        .map(|j| {
+            (0..m)
+                .map(|i| r[i * m + j] * r[i * m + j])
+                .sum::<f64>()
+                .sqrt()
+        })
         .collect();
     let max_norm = col_norms.iter().cloned().fold(0.0f64, f64::max);
     let tol = eps * max_norm;
@@ -743,13 +757,20 @@ fn rank_by_qr(a: &[f64], m: usize, eps: f64) -> usize {
             col_norms.swap(col, pivot);
         }
         // Householder reflector on column `col` from row `col` downward.
-        let norm = (col..m).map(|i| r[i * m + col] * r[i * m + col]).sum::<f64>().sqrt();
+        let norm = (col..m)
+            .map(|i| r[i * m + col] * r[i * m + col])
+            .sum::<f64>()
+            .sqrt();
         if norm < 1e-300 {
             break;
         }
         let sign = if r[col * m + col] >= 0.0 { 1.0 } else { -1.0 };
         r[col * m + col] += sign * norm;
-        let inv_norm = 1.0 / ((col..m).map(|i| r[i * m + col] * r[i * m + col]).sum::<f64>().sqrt());
+        let inv_norm = 1.0
+            / ((col..m)
+                .map(|i| r[i * m + col] * r[i * m + col])
+                .sum::<f64>()
+                .sqrt());
         for i in col..m {
             r[i * m + col] *= inv_norm;
         }
@@ -762,7 +783,10 @@ fn rank_by_qr(a: &[f64], m: usize, eps: f64) -> usize {
         }
         // Update norms.
         for j in (col + 1)..m {
-            col_norms[j] = (col..m).map(|i| r[i * m + j] * r[i * m + j]).sum::<f64>().sqrt();
+            col_norms[j] = (col..m)
+                .map(|i| r[i * m + j] * r[i * m + j])
+                .sum::<f64>()
+                .sqrt();
         }
     }
     rank
@@ -790,7 +814,8 @@ fn lcg_ic(count: usize, seed: u64) -> Vec<f64> {
     let mut state = seed;
     (0..count)
         .map(|_| {
-            state = state.wrapping_mul(6_364_136_223_846_793_005)
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
                 .wrapping_add(1_442_695_040_888_963_407);
             // Map top 53 bits to [0, 1) then shift to [-1, 1).
             let bits = (state >> 11) as f64;
@@ -805,7 +830,12 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
     let mut r = a.to_vec();
     let k = rows.min(cols);
     let mut col_norms: Vec<f64> = (0..cols)
-        .map(|j| (0..rows).map(|i| r[i * cols + j] * r[i * cols + j]).sum::<f64>().sqrt())
+        .map(|j| {
+            (0..rows)
+                .map(|i| r[i * cols + j] * r[i * cols + j])
+                .sum::<f64>()
+                .sqrt()
+        })
         .collect();
     let max_norm = col_norms.iter().cloned().fold(0.0f64, f64::max);
     let tol = eps * max_norm;
@@ -817,24 +847,50 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
             .map(|(i, &v)| (i + col, v))
             .unwrap_or((col, 0.0));
-        if pnorm < tol { break; }
+        if pnorm < tol {
+            break;
+        }
         rank += 1;
         if pivot != col {
-            for row in 0..rows { r.swap(row * cols + col, row * cols + pivot); }
+            for row in 0..rows {
+                r.swap(row * cols + col, row * cols + pivot);
+            }
             col_norms.swap(col, pivot);
         }
-        let norm = (col..rows).map(|i| r[i * cols + col] * r[i * cols + col]).sum::<f64>().sqrt();
-        if norm < 1e-300 { break; }
-        let sign = if r[col * cols + col] >= 0.0 { 1.0 } else { -1.0 };
+        let norm = (col..rows)
+            .map(|i| r[i * cols + col] * r[i * cols + col])
+            .sum::<f64>()
+            .sqrt();
+        if norm < 1e-300 {
+            break;
+        }
+        let sign = if r[col * cols + col] >= 0.0 {
+            1.0
+        } else {
+            -1.0
+        };
         r[col * cols + col] += sign * norm;
-        let inv = 1.0 / (col..rows).map(|i| r[i*cols+col]*r[i*cols+col]).sum::<f64>().sqrt();
-        for i in col..rows { r[i * cols + col] *= inv; }
-        for j in (col + 1)..cols {
-            let dot: f64 = (col..rows).map(|i| r[i * cols + col] * r[i * cols + j]).sum();
-            for i in col..rows { r[i * cols + j] -= 2.0 * dot * r[i * cols + col]; }
+        let inv = 1.0
+            / (col..rows)
+                .map(|i| r[i * cols + col] * r[i * cols + col])
+                .sum::<f64>()
+                .sqrt();
+        for i in col..rows {
+            r[i * cols + col] *= inv;
         }
         for j in (col + 1)..cols {
-            col_norms[j] = (col..rows).map(|i| r[i*cols+j]*r[i*cols+j]).sum::<f64>().sqrt();
+            let dot: f64 = (col..rows)
+                .map(|i| r[i * cols + col] * r[i * cols + j])
+                .sum();
+            for i in col..rows {
+                r[i * cols + j] -= 2.0 * dot * r[i * cols + col];
+            }
+        }
+        for j in (col + 1)..cols {
+            col_norms[j] = (col..rows)
+                .map(|i| r[i * cols + j] * r[i * cols + j])
+                .sum::<f64>()
+                .sqrt();
         }
     }
     rank
@@ -854,7 +910,9 @@ fn first_cut_rank(u: &[f64], n: usize, d: usize, eps: f64) -> usize {
         // Transpose: right_n rows × left_n cols.
         let mut at = vec![0.0f64; right_n * left_n];
         for i in 0..left_n {
-            for j in 0..right_n { at[j * left_n + i] = u[i * right_n + j]; }
+            for j in 0..right_n {
+                at[j * left_n + i] = u[i * right_n + j];
+            }
         }
         rank_rect_qr(&at, right_n, left_n, eps)
     }
@@ -888,17 +946,18 @@ fn g_s3_drift_spectral() {
     // Check for call patterns (with opening paren) after stripping line comments.
     // Doc-comment mentions like "// NO lu_solve_inplace" are intentional and benign.
     {
-        let src_path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tt_drift_spectral.rs"
-        );
+        let src_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tt_drift_spectral.rs");
         let src = std::fs::read_to_string(src_path)
             .expect("cannot read tt_drift_spectral.rs for source audit");
         // Strip line comments to avoid false positives from doc strings.
         let no_comments: String = src
             .lines()
             .map(|line| {
-                if let Some(pos) = line.find("//") { &line[..pos] } else { line }
+                if let Some(pos) = line.find("//") {
+                    &line[..pos]
+                } else {
+                    line
+                }
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -950,7 +1009,11 @@ fn g_s3_drift_spectral() {
         let mut p_real = u0.clone();
         apply_cplx_pair(&mut p_real, n, n, &es_re);
 
-        let max_diff = p_cplx.iter().zip(p_real.iter()).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+        let max_diff = p_cplx
+            .iter()
+            .zip(p_real.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f64::max);
         assert!(
             max_diff == 0.0,
             "assert 6 FAIL: b=0 complex path differs from real-sym path by {max_diff:.3e}"
@@ -981,8 +1044,12 @@ fn g_s3_drift_spectral() {
             "  n={n:2}: rel_l2={rel_err:.3e}, max_imag={max_imag:.3e}, b·τ/dx={:.4}",
             B_DRIFT * tau / dx
         );
-        if rel_err > max_rel_err_d3 { max_rel_err_d3 = rel_err; }
-        if max_imag > max_imag_d3 { max_imag_d3 = max_imag; }
+        if rel_err > max_rel_err_d3 {
+            max_rel_err_d3 = rel_err;
+        }
+        if max_imag > max_imag_d3 {
+            max_imag_d3 = max_imag;
+        }
 
         // Assert 5 (once, at smallest n).
         if n == N_VALS_D3[0] {
@@ -993,7 +1060,10 @@ fn g_s3_drift_spectral() {
                 .map(|flat| {
                     let mut f = flat;
                     let mut val = 1.0f64;
-                    for _ in 0..d3 { val *= v1d[f % n]; f /= n; }
+                    for _ in 0..d3 {
+                        val *= v1d[f % n];
+                        f /= n;
+                    }
                     val
                 })
                 .collect();
@@ -1042,8 +1112,12 @@ fn g_s3_drift_spectral() {
             "  n={n:2}: rel_l2={rel_err:.3e}, max_imag={max_imag:.3e}, b·τ/dx={:.4}",
             B_DRIFT * tau / dx
         );
-        if rel_err > max_rel_err_d4 { max_rel_err_d4 = rel_err; }
-        if max_imag > max_imag_d4 { max_imag_d4 = max_imag; }
+        if rel_err > max_rel_err_d4 {
+            max_rel_err_d4 = rel_err;
+        }
+        if max_imag > max_imag_d4 {
+            max_imag_d4 = max_imag;
+        }
     }
 
     assert!(
@@ -1113,7 +1187,10 @@ fn g_s3_drift_spectral() {
                 dense gen bytes = {bytes_d8:.3e} (threshold >1 TB = {CURSE_TB_THRESHOLD:.0e})",
         N4A.pow(8)
     );
-    assert!(finite_d8, "assert 4b FAIL d=8: evolver produced non-finite values");
+    assert!(
+        finite_d8,
+        "assert 4b FAIL d=8: evolver produced non-finite values"
+    );
     assert!(
         imag4b_d8 < 1e-10,
         "assert 4b FAIL d=8: max|imag|={imag4b_d8:.2e} ≥ 1e-10"
@@ -1131,7 +1208,10 @@ fn g_s3_drift_spectral() {
                  dense gen bytes = {bytes_d10:.3e} (>1 TB confirmed)",
         N4A.pow(10)
     );
-    assert!(finite_d10, "assert 4b FAIL d=10: evolver produced non-finite values");
+    assert!(
+        finite_d10,
+        "assert 4b FAIL d=10: evolver produced non-finite values"
+    );
     assert!(
         imag4b_d10 < 1e-10,
         "assert 4b FAIL d=10: max|imag|={imag4b_d10:.2e} ≥ 1e-10"
@@ -1194,18 +1274,29 @@ fn fft_nd_round_trip() {
     let u0: Vec<f64> = (0..nd).map(|i| ((i as f64) * 0.37 + 0.1).sin()).collect();
     let cplx = fft_nd_real(&u0, n, d);
     let (recovered, max_imag) = ifft_nd(&cplx, n, d);
-    let max_err = u0.iter().zip(recovered.iter()).map(|(a,b)| (a-b).abs()).fold(0.0f64, f64::max);
+    let max_err = u0
+        .iter()
+        .zip(recovered.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f64, f64::max);
     assert!(max_err < 1e-12, "fft_nd round-trip err={max_err:.3e}");
-    assert!(max_imag < 1e-12, "fft_nd round-trip max_imag={max_imag:.3e}");
+    assert!(
+        max_imag < 1e-12,
+        "fft_nd round-trip max_imag={max_imag:.3e}"
+    );
 }
 
 // ── spectral_evolve debug: accuracy vs dense expm (d=2, small) ───────────
 #[test]
 fn spectral_evolve_vs_dense_small() {
-    let n = 5usize; let d = 2usize;
-    let dx = 1.0 / n as f64; let tau = 0.35 * dx * dx;
+    let n = 5usize;
+    let d = 2usize;
+    let dx = 1.0 / n as f64;
+    let tau = 0.35 * dx * dx;
     let nd = n.pow(d as u32);
-    let a = 0.7f64; let b = 2.0f64; let rho = 0.6f64;
+    let a = 0.7f64;
+    let b = 2.0f64;
+    let rho = 0.6f64;
     let u0 = gaussian_ic(n, d);
     // Build dense generator and scale by tau: expm(tau * L) · u0.
     let gen = build_gen(n, d, a, b, rho, dx);
@@ -1225,46 +1316,63 @@ fn spectral_evolve_vs_dense_small() {
 // ── build_gen sanity: check diagonal of the d=2 n=5 generator ────────────
 #[test]
 fn build_gen_sanity() {
-    let n=5usize; let d=2usize; let dx=1.0/n as f64; let a=0.7f64; let b=2.0f64; let rho=0.6f64;
+    let n = 5usize;
+    let d = 2usize;
+    let dx = 1.0 / n as f64;
+    let a = 0.7f64;
+    let b = 2.0f64;
+    let rho = 0.6f64;
     let nd = n.pow(d as u32);
     let gen = build_gen(n, d, a, b, rho, dx);
     println!("gen.len={}, nd={nd}", gen.len());
     // Diagonal: each element = 2*a*(-2/dx^2) = -2*0.7*50 = -70
-    let expected_diag = 2.0 * a * (-2.0) / (dx*dx);
-    println!("gen[0,0]={}, expected={expected_diag:.2}", gen[0*nd+0]);
-    assert!((gen[0*nd+0] - expected_diag).abs() < 1e-10, "gen[0,0]={}", gen[0*nd+0]);
+    let expected_diag = 2.0 * a * (-2.0) / (dx * dx);
+    println!("gen[0,0]={}, expected={expected_diag:.2}", gen[0 * nd + 0]);
+    assert!(
+        (gen[0 * nd + 0] - expected_diag).abs() < 1e-10,
+        "gen[0,0]={}",
+        gen[0 * nd + 0]
+    );
 }
 
 // ── expm_l on 3x3 diagonal matrix ────────────────────────────────────────
 #[test]
 fn expm_l_diagonal_3x3() {
     // exp(diag(a,b,c)) = diag(exp(a), exp(b), exp(c))
-    let a = vec![
-        -1.0, 0.0, 0.0,
-        0.0, -2.0, 0.0,
-        0.0, 0.0, -3.0,
-    ];
+    let a = vec![-1.0, 0.0, 0.0, 0.0, -2.0, 0.0, 0.0, 0.0, -3.0];
     let result = expm_l(&a, 3);
     println!("diag expm: result={:?}", &result);
-    assert!((result[0] - (-1.0f64).exp()).abs() < 1e-12, "r[0,0]={}", result[0]);
-    assert!((result[4] - (-2.0f64).exp()).abs() < 1e-12, "r[1,1]={}", result[4]);
-    assert!((result[8] - (-3.0f64).exp()).abs() < 1e-12, "r[2,2]={}", result[8]);
+    assert!(
+        (result[0] - (-1.0f64).exp()).abs() < 1e-12,
+        "r[0,0]={}",
+        result[0]
+    );
+    assert!(
+        (result[4] - (-2.0f64).exp()).abs() < 1e-12,
+        "r[1,1]={}",
+        result[4]
+    );
+    assert!(
+        (result[8] - (-3.0f64).exp()).abs() < 1e-12,
+        "r[2,2]={}",
+        result[8]
+    );
 }
 
 // ── expm_l sanity test on 2x2 matrix ─────────────────────────────────────
 #[test]
 fn expm_l_sanity_2x2() {
     // exp([0,-1;1,0]) = [cos1, -sin1; sin1, cos1]
-    let a = vec![0.0f64, -1.0, 1.0, 0.0];  // 2x2
+    let a = vec![0.0f64, -1.0, 1.0, 0.0]; // 2x2
     let result = expm_l(&a, 2);
     let cos1 = 1.0f64.cos();
     let sin1 = 1.0f64.sin();
     println!("expm_l 2x2 rotation: result={:?}", &result);
     println!("expected: [{cos1:.6}, {:.6}, {sin1:.6}, {cos1:.6}]", -sin1);
-    assert!((result[0]-cos1).abs() < 1e-12, "r[0,0]");
-    assert!((result[1]-(-sin1)).abs() < 1e-12, "r[0,1]");
-    assert!((result[2]-sin1).abs() < 1e-12, "r[1,0]");
-    assert!((result[3]-cos1).abs() < 1e-12, "r[1,1]");
+    assert!((result[0] - cos1).abs() < 1e-12, "r[0,0]");
+    assert!((result[1] - (-sin1)).abs() < 1e-12, "r[0,1]");
+    assert!((result[2] - sin1).abs() < 1e-12, "r[1,0]");
+    assert!((result[3] - cos1).abs() < 1e-12, "r[1,1]");
 }
 
 // ── Direct test of expsym_nd vs known Python result ───────────────────────
@@ -1273,25 +1381,36 @@ fn expsym_nd_sanity() {
     // n=5, d=2, mode (0,0): symbol = 2*a*sd2[0] + 2*i*b*sd1r[0] - 2*rho*sd1r[0]^2
     // sd2[0] = (2*1-2)/dx^2 = 0; sd1r[0] = sin(0)/dx = 0
     // symbol(0,0) = 0 + 0 - 0 = 0 → expsym = 1+0i ✓
-    let n = 5usize; let d = 2usize; let dx = 1.0/n as f64; let tau = 0.35*dx*dx;
+    let n = 5usize;
+    let d = 2usize;
+    let dx = 1.0 / n as f64;
+    let tau = 0.35 * dx * dx;
     let expsym = build_expsym_nd(n, d, 0.7, 2.0, 0.6, tau);
     println!("expsym[0,0]=(re={}, im={})", expsym[0], expsym[1]);
     // mode (0,0): flat=0, both modes=0 → sd2[0]=0, sd1r[0]=0 → symbol=0 → exp=1
-    assert!((expsym[0]-1.0).abs() < 1e-14, "expsym(0,0) re={}", expsym[0]);
+    assert!(
+        (expsym[0] - 1.0).abs() < 1e-14,
+        "expsym(0,0) re={}",
+        expsym[0]
+    );
     assert!(expsym[1].abs() < 1e-14, "expsym(0,0) im={}", expsym[1]);
     // mode (1,0): flat=5 (i0=1, i1=0): sym_re=a*sd2[1]+a*sd2[0]-2r*sd1r[1]*sd1r[0]
     //   = a*sd2[1] (sd2[0]=0, sd1r[0]=0)
     let omega1 = TAU * 1.0 / n as f64;
-    let sd2_1 = (2.0*omega1.cos()-2.0)/(dx*dx);
-    let sd1r_1 = omega1.sin()/dx;
-    let sym_re = 0.7*sd2_1 + 0.7*0.0 - 2.0*0.6*sd1r_1*0.0;  // mode (1,0)
-    let sym_im = 2.0*sd1r_1 + 2.0*0.0;
-    let ev_re = (tau*sym_re).exp() * (tau*sym_im).cos();
-    let ev_im = (tau*sym_re).exp() * (tau*sym_im).sin();
-    let flat10 = 1*n + 0;  // i0=1, i1=0 → flat=5
-    println!("expsym(1,0)=(re={:.6}, im={:.6}), expected=(re={ev_re:.6}, im={ev_im:.6})", expsym[2*flat10], expsym[2*flat10+1]);
-    assert!((expsym[2*flat10]-ev_re).abs() < 1e-12);
-    assert!((expsym[2*flat10+1]-ev_im).abs() < 1e-12);
+    let sd2_1 = (2.0 * omega1.cos() - 2.0) / (dx * dx);
+    let sd1r_1 = omega1.sin() / dx;
+    let sym_re = 0.7 * sd2_1 + 0.7 * 0.0 - 2.0 * 0.6 * sd1r_1 * 0.0; // mode (1,0)
+    let sym_im = 2.0 * sd1r_1 + 2.0 * 0.0;
+    let ev_re = (tau * sym_re).exp() * (tau * sym_im).cos();
+    let ev_im = (tau * sym_re).exp() * (tau * sym_im).sin();
+    let flat10 = 1 * n + 0; // i0=1, i1=0 → flat=5
+    println!(
+        "expsym(1,0)=(re={:.6}, im={:.6}), expected=(re={ev_re:.6}, im={ev_im:.6})",
+        expsym[2 * flat10],
+        expsym[2 * flat10 + 1]
+    );
+    assert!((expsym[2 * flat10] - ev_re).abs() < 1e-12);
+    assert!((expsym[2 * flat10 + 1] - ev_im).abs() < 1e-12);
 }
 
 // ── Assert 7 duplicate (fast, non-ignored) ──────────────────────────────
@@ -1306,7 +1425,13 @@ fn no_solver_in_drift_evolver() {
     // Strip line comments before checking.
     let no_comments: String = src
         .lines()
-        .map(|l| if let Some(p) = l.find("//") { &l[..p] } else { l })
+        .map(|l| {
+            if let Some(p) = l.find("//") {
+                &l[..p]
+            } else {
+                l
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
     for kw in ["lu_solve_inplace(", "dense_expm("] {

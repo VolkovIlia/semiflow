@@ -117,7 +117,11 @@ fn assemble_dist(dist: &Path, pkg_web: &Path, pkg_node: &Path, _root: &Path) -> 
     copy_dir_matching(
         pkg_web,
         &web_dir,
-        &["semiflow_wasm.js", "semiflow_wasm.wasm", "semiflow_wasm.d.ts"],
+        &[
+            "semiflow_wasm.js",
+            "semiflow_wasm.wasm",
+            "semiflow_wasm.d.ts",
+        ],
     )?;
 
     // Node build: rename .js → .cjs (CommonJS convention)

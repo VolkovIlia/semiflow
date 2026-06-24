@@ -11,8 +11,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc};
 
 use crate::{
     chernoff::ChernoffFunction,

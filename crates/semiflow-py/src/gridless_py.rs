@@ -29,11 +29,11 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow::{chernoff::ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction,
-                    ScratchPool};
+use semiflow::{
+    chernoff::ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
+};
 
-use crate::error::new_pyerr;
-use crate::panic::catch_panic_py;
+use crate::{error::new_pyerr, panic::catch_panic_py};
 
 /// Compiled dimension (mirrors `COMPILED_D` in `gridless_ffi.rs`).
 const COMPILED_D: usize = 1;
@@ -79,20 +79,25 @@ impl PyMeasureState {
     /// Construct a `MeasureState` from parallel position/weight numpy arrays.
     #[new]
     #[allow(clippy::needless_pass_by_value)] // PyO3 FromPyObject requires owned Vec
-    fn new(
-        positions: Vec<f64>,
-        weights: Vec<f64>,
-        dim: usize,
-    ) -> PyResult<Self> {
+    fn new(positions: Vec<f64>, weights: Vec<f64>, dim: usize) -> PyResult<Self> {
         catch_panic_py!({
             if dim != COMPILED_D {
-                return Err(new_pyerr("Unsupported", "MeasureState: dim must be 1 (compiled D)"));
+                return Err(new_pyerr(
+                    "Unsupported",
+                    "MeasureState: dim must be 1 (compiled D)",
+                ));
             }
             if positions.is_empty() || weights.is_empty() {
-                return Err(new_pyerr("GridMismatch", "MeasureState: positions/weights must be non-empty"));
+                return Err(new_pyerr(
+                    "GridMismatch",
+                    "MeasureState: positions/weights must be non-empty",
+                ));
             }
             if positions.len() != weights.len() {
-                return Err(new_pyerr("GridMismatch", "MeasureState: positions and weights lengths differ"));
+                return Err(new_pyerr(
+                    "GridMismatch",
+                    "MeasureState: positions and weights lengths differ",
+                ));
             }
             let ms = build_measure_state(&positions, &weights)?;
             Ok(Self { inner: ms })
@@ -130,14 +135,13 @@ impl PyMeasureState {
     /// ------
     /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — axis >= `COMPILED_D`.
-    fn marginal<'py>(
-        &self,
-        py: Python<'py>,
-        axis: usize,
-    ) -> PyResult<MarginalPair<'py>> {
+    fn marginal<'py>(&self, py: Python<'py>, axis: usize) -> PyResult<MarginalPair<'py>> {
         catch_panic_py!({
             if axis >= COMPILED_D {
-                return Err(new_pyerr("OutOfDomain", "MeasureState.marginal: axis >= 1 (COMPILED_D)"));
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "MeasureState.marginal: axis >= 1 (COMPILED_D)",
+                ));
             }
             // D=1: axis==0 always; use the public flat-buffer extractor.
             let (pos_out, wt_out) = self.inner.to_flat_buffers_d1();
@@ -202,7 +206,10 @@ impl PyGridlessEvolver {
                 ParticleReduction::GaussianBackground
             } else {
                 if voronoi_cap == 0 {
-                    return Err(new_pyerr("OutOfDomain", "GridlessEvolver: voronoi_cap must be >= 1"));
+                    return Err(new_pyerr(
+                        "OutOfDomain",
+                        "GridlessEvolver: voronoi_cap must be >= 1",
+                    ));
                 }
                 ParticleReduction::WeightedVoronoi { cap: voronoi_cap }
             };
@@ -223,15 +230,13 @@ impl PyGridlessEvolver {
     /// ------
     /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — `tau` < 0 or non-finite.
-    fn apply(
-        &self,
-        tau: f64,
-        src: &PyMeasureState,
-        dst: &mut PyMeasureState,
-    ) -> PyResult<()> {
+    fn apply(&self, tau: f64, src: &PyMeasureState, dst: &mut PyMeasureState) -> PyResult<()> {
         catch_panic_py!({
             if !tau.is_finite() || tau < 0.0 {
-                return Err(new_pyerr("OutOfDomain", "GridlessEvolver.apply: tau must be finite >= 0"));
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "GridlessEvolver.apply: tau must be finite >= 0",
+                ));
             }
             let mut pool = ScratchPool::<f64>::new();
             self.inner
@@ -255,12 +260,7 @@ impl PyGridlessEvolver {
     /// ------
     /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — `n_steps` == 0 or `t_final` non-finite/negative.
-    fn evolve(
-        &self,
-        state: &mut PyMeasureState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> PyResult<()> {
+    fn evolve(&self, state: &mut PyMeasureState, t_final: f64, n_steps: usize) -> PyResult<()> {
         catch_panic_py!({
             validate_evolve_args(t_final, n_steps, "GridlessEvolver.evolve")?;
             #[allow(clippy::cast_precision_loss)] // n_steps <= u32::MAX in practice
@@ -289,17 +289,17 @@ impl PyGridlessEvolver {
 // ---------------------------------------------------------------------------
 
 /// Build a `MeasureState<f64, 1>` from flat position/weight vecs.
-fn build_measure_state(
-    pos: &[f64],
-    wts: &[f64],
-) -> PyResult<MeasureState<f64, 1>> {
+fn build_measure_state(pos: &[f64], wts: &[f64]) -> PyResult<MeasureState<f64, 1>> {
     let n = pos.len();
     let mut particles: Vec<([f64; 1], f64)> = Vec::with_capacity(n);
     for i in 0..n {
         let p = pos[i];
         let w = wts[i];
         if !p.is_finite() || !w.is_finite() {
-            return Err(new_pyerr("NanInf", "MeasureState: NaN/Inf in positions or weights"));
+            return Err(new_pyerr(
+                "NanInf",
+                "MeasureState: NaN/Inf in positions or weights",
+            ));
         }
         particles.push(([p], w));
     }
@@ -309,7 +309,10 @@ fn build_measure_state(
 /// Validate scalar D=1 coefficients.
 fn validate_gridless_coeffs(a: f64, b: f64, c: f64, ctx: &str) -> PyResult<()> {
     if !a.is_finite() || a < 0.0 {
-        return Err(new_pyerr("NanInf", &format!("{ctx}: a must be finite >= 0")));
+        return Err(new_pyerr(
+            "NanInf",
+            &format!("{ctx}: a must be finite >= 0"),
+        ));
     }
     if !b.is_finite() {
         return Err(new_pyerr("NanInf", &format!("{ctx}: b is non-finite")));
@@ -323,10 +326,16 @@ fn validate_gridless_coeffs(a: f64, b: f64, c: f64, ctx: &str) -> PyResult<()> {
 /// Validate evolve arguments.
 fn validate_evolve_args(t_final: f64, n_steps: usize, ctx: &str) -> PyResult<()> {
     if n_steps == 0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: n_steps must be >= 1")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: n_steps must be >= 1"),
+        ));
     }
     if !t_final.is_finite() || t_final < 0.0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: t_final must be finite >= 0")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: t_final must be finite >= 0"),
+        ));
     }
     Ok(())
 }

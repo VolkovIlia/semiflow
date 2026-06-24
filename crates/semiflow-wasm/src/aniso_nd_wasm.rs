@@ -23,7 +23,11 @@
 
 #![allow(unsafe_code)]
 #![allow(clippy::too_many_arguments)]
-#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::needless_pass_by_value)]
 
@@ -66,7 +70,10 @@ fn extract_finite(arr: &Float64Array, expected: usize, name: &str) -> Result<Vec
     arr.copy_to(&mut buf);
     for &v in &buf {
         if !v.is_finite() {
-            return Err(make_js_error("NanInf", &format!("{name} contains NaN or Inf")));
+            return Err(make_js_error(
+                "NanInf",
+                &format!("{name} contains NaN or Inf"),
+            ));
         }
     }
     Ok(buf)
@@ -80,7 +87,9 @@ fn vec_to_js(values: &[f64]) -> Float64Array {
 
 /// Nearest grid index for physical coordinate `x` in axis `[lo, hi]` of size `n`.
 fn phys_to_idx(x: f64, lo: f64, hi: f64, n: usize) -> usize {
-    if n <= 1 { return 0; }
+    if n <= 1 {
+        return 0;
+    }
     let fi = (x - lo) / (hi - lo) * (n as f64 - 1.0);
     (fi.round() as isize).clamp(0, n as isize - 1) as usize
 }
@@ -118,9 +127,12 @@ impl AnisotropicShiftND2 {
     /// Throws JS `Error` with `.kind`.
     #[wasm_bindgen(constructor)]
     pub fn new(
-        nx: usize, ny: usize,
-        xmin: f64, xmax: f64,
-        ymin: f64, ymax: f64,
+        nx: usize,
+        ny: usize,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
         a_values: &Float64Array,
         b_values: Option<Float64Array>,
         c_values: Option<Float64Array>,
@@ -177,22 +189,30 @@ impl AnisotropicShiftND2 {
 
     /// Approximation order (always 1, ADR-0112).
     #[must_use]
-    pub fn order(&self) -> u32 { 1 }
+    pub fn order(&self) -> u32 {
+        1
+    }
 
     /// X-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nx(&self) -> usize { self.nx }
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
 
     /// Y-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn ny(&self) -> usize { self.ny }
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
 
     /// Total number of grid nodes (`nx * ny`).
     #[must_use]
     #[wasm_bindgen(js_name = "len")]
-    pub fn len_method(&self) -> usize { self.nx * self.ny }
+    pub fn len_method(&self) -> usize {
+        self.nx * self.ny
+    }
 }
 
 fn evolve_nd2(
@@ -203,20 +223,28 @@ fn evolve_nd2(
     n_steps: usize,
 ) -> Result<Vec<f64>, JsValue> {
     let mut src = GridFnND::<f64, 2>::new(grid.clone(), input).map_err(|e| err_to_js(&e))?;
-    let mut dst = GridFnND::<f64, 2>::new(grid, vec![0.0; src.values.len()]).map_err(|e| err_to_js(&e))?;
+    let mut dst =
+        GridFnND::<f64, 2>::new(grid, vec![0.0; src.values.len()]).map_err(|e| err_to_js(&e))?;
     let mut scratch = ScratchPool::<f64>::new();
     for _ in 0..n_steps {
-        kernel.apply_into(tau, &src, &mut dst, &mut scratch).map_err(|e| err_to_js(&e))?;
+        kernel
+            .apply_into(tau, &src, &mut dst, &mut scratch)
+            .map_err(|e| err_to_js(&e))?;
         core::mem::swap(&mut src, &mut dst);
     }
     Ok(src.values)
 }
 
 fn build_nd2_kernel(
-    nx: usize, ny: usize,
-    xmin: f64, xmax: f64,
-    ymin: f64, ymax: f64,
-    a: Vec<f64>, b: Vec<f64>, c: Vec<f64>,
+    nx: usize,
+    ny: usize,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+    a: Vec<f64>,
+    b: Vec<f64>,
+    c: Vec<f64>,
 ) -> Result<(AnisotropicShiftChernoffND<f64, 2>, GridND<f64, 2>), JsValue> {
     let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
     let gy = Grid1D::new(ymin, ymax, ny).map_err(|e| err_to_js(&e))?;
@@ -247,7 +275,8 @@ fn build_nd2_kernel(
         },
         move |x| c_c[nd_idx_2(x, &ns, &axes)],
         grid.clone(),
-    ).map_err(|e| err_to_js(&e))?;
+    )
+    .map_err(|e| err_to_js(&e))?;
     Ok((kernel, grid))
 }
 
@@ -287,10 +316,15 @@ impl AnisotropicShiftND3 {
     /// Throws JS `Error` with `.kind`.
     #[wasm_bindgen(constructor)]
     pub fn new(
-        nx: usize, ny: usize, nz: usize,
-        xmin: f64, xmax: f64,
-        ymin: f64, ymax: f64,
-        zmin: f64, zmax: f64,
+        nx: usize,
+        ny: usize,
+        nz: usize,
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        zmin: f64,
+        zmax: f64,
         a_values: &Float64Array,
         b_values: Option<Float64Array>,
         c_values: Option<Float64Array>,
@@ -305,7 +339,9 @@ impl AnisotropicShiftND3 {
             Some(ref c) => extract_finite(c, n_pts, "c_values")?,
             None => vec![0.0f64; n_pts],
         };
-        let (kernel, grid) = build_nd3_kernel(nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw)?;
+        let (kernel, grid) = build_nd3_kernel(
+            nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw,
+        )?;
         Ok(AnisotropicShiftND3 {
             kernel: Arc::new(kernel),
             grid,
@@ -348,27 +384,37 @@ impl AnisotropicShiftND3 {
 
     /// Approximation order (always 1, ADR-0112).
     #[must_use]
-    pub fn order(&self) -> u32 { 1 }
+    pub fn order(&self) -> u32 {
+        1
+    }
 
     /// X-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nx(&self) -> usize { self.nx }
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
 
     /// Y-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn ny(&self) -> usize { self.ny }
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
 
     /// Z-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nz(&self) -> usize { self.nz }
+    pub fn nz(&self) -> usize {
+        self.nz
+    }
 
     /// Total number of grid nodes (`nx * ny * nz`).
     #[must_use]
     #[wasm_bindgen(js_name = "len")]
-    pub fn len_method(&self) -> usize { self.nx * self.ny * self.nz }
+    pub fn len_method(&self) -> usize {
+        self.nx * self.ny * self.nz
+    }
 }
 
 fn evolve_nd3(
@@ -379,21 +425,31 @@ fn evolve_nd3(
     n_steps: usize,
 ) -> Result<Vec<f64>, JsValue> {
     let mut src = GridFnND::<f64, 3>::new(grid.clone(), input).map_err(|e| err_to_js(&e))?;
-    let mut dst = GridFnND::<f64, 3>::new(grid, vec![0.0; src.values.len()]).map_err(|e| err_to_js(&e))?;
+    let mut dst =
+        GridFnND::<f64, 3>::new(grid, vec![0.0; src.values.len()]).map_err(|e| err_to_js(&e))?;
     let mut scratch = ScratchPool::<f64>::new();
     for _ in 0..n_steps {
-        kernel.apply_into(tau, &src, &mut dst, &mut scratch).map_err(|e| err_to_js(&e))?;
+        kernel
+            .apply_into(tau, &src, &mut dst, &mut scratch)
+            .map_err(|e| err_to_js(&e))?;
         core::mem::swap(&mut src, &mut dst);
     }
     Ok(src.values)
 }
 
 fn build_nd3_kernel(
-    nx: usize, ny: usize, nz: usize,
-    xmin: f64, xmax: f64,
-    ymin: f64, ymax: f64,
-    zmin: f64, zmax: f64,
-    a: Vec<f64>, b: Vec<f64>, c: Vec<f64>,
+    nx: usize,
+    ny: usize,
+    nz: usize,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+    zmin: f64,
+    zmax: f64,
+    a: Vec<f64>,
+    b: Vec<f64>,
+    c: Vec<f64>,
 ) -> Result<(AnisotropicShiftChernoffND<f64, 3>, GridND<f64, 3>), JsValue> {
     let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
     let gy = Grid1D::new(ymin, ymax, ny).map_err(|e| err_to_js(&e))?;
@@ -427,7 +483,8 @@ fn build_nd3_kernel(
         },
         move |x| c_c[nd_idx_3(x, &ns, &axes)],
         grid.clone(),
-    ).map_err(|e| err_to_js(&e))?;
+    )
+    .map_err(|e| err_to_js(&e))?;
     Ok((kernel, grid))
 }
 

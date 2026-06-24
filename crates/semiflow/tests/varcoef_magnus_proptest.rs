@@ -11,7 +11,6 @@
 use std::sync::Arc;
 
 use proptest::prelude::*;
-
 use semiflow::{
     error::SemiflowError,
     graph::{Graph, Laplacian},

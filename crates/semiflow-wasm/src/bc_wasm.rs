@@ -123,8 +123,16 @@ impl Killing1D {
     ) -> Result<Killing1D, JsValue> {
         let buf = extract_u0(u0, n)?;
         let range = xmax - xmin;
-        let lo_eff = if lo.is_finite() { lo } else { xmin + range * 0.25 };
-        let hi_eff = if hi.is_finite() { hi } else { xmax - range * 0.25 };
+        let lo_eff = if lo.is_finite() {
+            lo
+        } else {
+            xmin + range * 0.25
+        };
+        let hi_eff = if hi.is_finite() {
+            hi
+        } else {
+            xmax - range * 0.25
+        };
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
         let region = BoxRegion::<f64, 1>::new([lo_eff], [hi_eff]).map_err(|e| err_to_js(&e))?;
@@ -281,9 +289,8 @@ impl Robin1D {
             .map_err(|e| err_to_js(&e))?
             .with_interp(InterpKind::CubicHermite);
         let diff = DiffusionChernoff::new(unit_a_bc, zero_bc, zero_bc, 1.0, grid);
-        let region =
-            HalfSpaceRobin::<f64, 1>::new([origin_eff], [1.0], alpha, beta)
-                .map_err(|e| err_to_js(&e))?;
+        let region = HalfSpaceRobin::<f64, 1>::new([origin_eff], [1.0], alpha, beta)
+            .map_err(|e| err_to_js(&e))?;
         let kernel = RobinHeatChernoff::new(diff, region).map_err(|e| err_to_js(&e))?;
         let sg = ChernoffSemigroup::new(kernel, 100).map_err(|e| err_to_js(&e))?;
         let current = GridFn1D::new(grid, buf).map_err(|e| err_to_js(&e))?;
@@ -365,7 +372,10 @@ impl Resolvent1D {
     /// Throws JS `Error` with `.kind` — see crate-level error table.
     pub fn eval(&self, lambda: f64, g: &Float64Array) -> Result<Float64Array, JsValue> {
         if !lambda.is_finite() || lambda <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "lambda must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "lambda must be finite and > 0",
+            ));
         }
         let n = self.grid.n;
         if g.length() as usize != n {
@@ -379,7 +389,10 @@ impl Resolvent1D {
             }
         }
         let gfn = GridFn1D::new(self.grid, g_buf).map_err(|e| err_to_js(&e))?;
-        let result = self.resolvent.eval(lambda, &gfn).map_err(|e| err_to_js(&e))?;
+        let result = self
+            .resolvent
+            .eval(lambda, &gfn)
+            .map_err(|e| err_to_js(&e))?;
         Ok(fn_to_js(&result.values))
     }
 

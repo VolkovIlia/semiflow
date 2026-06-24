@@ -25,10 +25,10 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
-#![allow(clippy::cast_precision_loss)]   // usize→f64 in tau/OLS; n_steps ≤ 512 ≤ 2^52
+#![allow(clippy::cast_precision_loss)] // usize→f64 in tau/OLS; n_steps ≤ 512 ≤ 2^52
 #![allow(clippy::cast_possible_truncation)] // f64→usize probe index: .round() positive
-#![allow(clippy::cast_sign_loss)]        // f64→usize probe index: .round() result ≥ 0
-#![allow(clippy::too_many_lines)]        // g_wentzell_order is a single cohesive gate (51 lines)
+#![allow(clippy::cast_sign_loss)] // f64→usize probe index: .round() result ≥ 0
+#![allow(clippy::too_many_lines)] // g_wentzell_order is a single cohesive gate (51 lines)
 
 use semiflow::{
     diffusion::DiffusionChernoff,

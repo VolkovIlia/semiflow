@@ -3,14 +3,13 @@
 //! Declared as `#[path = "truncated_exp4_compute.rs"] mod compute;` inside
 //! `truncated_exp4.rs` — this file is a child of that module, so `super::` works.
 
+use super::{TruncatedExp4thDiffusionChernoff, FACTORIAL_INVERSE, TRUNC_ORDER_USIZE};
 use crate::{
     error::SemiflowError,
     float::{from_f64, half, SemiflowFloat},
     grid::Grid1D,
     grid_fn::GridFn1D,
 };
-
-use super::{TruncatedExp4thDiffusionChernoff, FACTORIAL_INVERSE, TRUNC_ORDER_USIZE};
 
 // Private computation helpers — generic
 

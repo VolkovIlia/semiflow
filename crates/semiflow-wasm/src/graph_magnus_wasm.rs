@@ -29,143 +29,21 @@
 use std::sync::Arc;
 
 use js_sys::Float64Array;
+use semiflow::{
+    magnus_graph::LaplacianAtTime,
+    varcoef_magnus_graph::{VarCoefMagnusGraphHeatChernoff as CoreVarCoefMagnus, WeightAtTime},
+    Graph, GraphSignal, Laplacian, MagnusGraphHeat6thChernoff as CoreMagnusK6,
+    MagnusGraphHeatChernoff as CoreMagnusK4, ScratchPool,
+};
 use wasm_bindgen::prelude::*;
 
-use crate::error::{err_to_js, make_js_error};
-use crate::graph_wasm::GraphPath;
-
-use semiflow::{
-    Graph, GraphSignal, Laplacian, ScratchPool,
-    MagnusGraphHeatChernoff as CoreMagnusK4,
-    MagnusGraphHeat6thChernoff as CoreMagnusK6,
-};
-use semiflow::magnus_graph::LaplacianAtTime;
-use semiflow::varcoef_magnus_graph::{
-    VarCoefMagnusGraphHeatChernoff as CoreVarCoefMagnus, WeightAtTime,
+use crate::{
+    error::{err_to_js, make_js_error},
+    graph_wasm::GraphPath,
 };
 
-// ---------------------------------------------------------------------------
-// JsLapCb — unsafe Send+Sync wrapper for JS callbacks (ADR-0034 pattern)
-// ---------------------------------------------------------------------------
-
-/// Newtype for `js_sys::Function` with unsafe `Send + Sync`.
-///
-/// # Safety
-///
-/// `wasm32-unknown-unknown` is single-threaded by spec — no OS threads share
-/// WASM linear memory.  `Send` and `Sync` are vacuously safe (ADR-0034).
-struct JsLapCb(js_sys::Function);
-
-// Safety: wasm32-unknown-unknown is single-threaded (ADR-0034).
-unsafe impl Send for JsLapCb {}
-unsafe impl Sync for JsLapCb {}
-
-impl JsLapCb {
-    /// Call JS callback with one `f64` argument → `Float64Array` or `None`.
-    fn call_arr(&self, t: f64) -> Option<Vec<f64>> {
-        let arg = JsValue::from_f64(t);
-        let ret = self.0.call1(&JsValue::NULL, &arg).ok()?;
-        if !ret.is_instance_of::<Float64Array>() {
-            return None;
-        }
-        let arr = Float64Array::from(ret);
-        let mut buf = vec![0.0_f64; arr.length() as usize];
-        arr.copy_to(&mut buf);
-        Some(buf)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-/// Unit-weight fallback Laplacian for a path graph with `n_nodes` nodes.
-fn unit_lap(n_nodes: usize) -> Arc<Laplacian<f64>> {
-    let g = Graph::<f64>::path(n_nodes);
-    Arc::new(Laplacian::assemble_combinatorial(&g))
-}
-
-/// Build `LaplacianAtTime<f64>` from a JS callback + stored graph topology.
-///
-/// The closure reconstructs a `Graph` from undirected edge weights returned
-/// by the JS callback, then assembles its combinatorial Laplacian.  Falls
-/// back to unit-weight path topology on JS exceptions or invalid weights.
-fn make_lap_at_t(cb: JsLapCb, base_graph: &Graph<f64>) -> LaplacianAtTime<f64> {
-    let n_nodes = base_graph.n_nodes();
-    let row_ptr = base_graph.row_ptr().to_vec();
-    let col_idx = base_graph.col_idx().to_vec();
-
-    Box::new(move |t: f64| -> Arc<Laplacian<f64>> {
-        let Some(weights) = cb.call_arr(t) else {
-            return unit_lap(n_nodes);
-        };
-        // Collect forward edges (u < v) in CSR row order.
-        let mut edges: Vec<(u32, u32, f64)> = Vec::new();
-        let mut w_idx = 0usize;
-        for u in 0..n_nodes {
-            for &nb in &col_idx[row_ptr[u]..row_ptr[u + 1]] {
-                let v = nb as usize;
-                if u < v {
-                    if w_idx >= weights.len() {
-                        return unit_lap(n_nodes);
-                    }
-                    let w = weights[w_idx];
-                    if !w.is_finite() || w <= 0.0 {
-                        return unit_lap(n_nodes);
-                    }
-                    #[allow(clippy::cast_possible_truncation)]
-                    edges.push((u as u32, v as u32, w));
-                    w_idx += 1;
-                }
-            }
-        }
-        if w_idx != weights.len() {
-            return unit_lap(n_nodes);
-        }
-        match Graph::<f64>::from_edges(n_nodes, edges) {
-            Ok(g) => Arc::new(Laplacian::assemble_combinatorial(&g)),
-            Err(_) => unit_lap(n_nodes),
-        }
-    })
-}
-
-/// Build `WeightAtTime<f64>` from a JS callback returning a `Float64Array`.
-fn make_a_at_t(cb: JsLapCb, n_nodes: usize) -> WeightAtTime<f64> {
-    Box::new(move |t: f64| -> Vec<f64> {
-        let fallback = vec![1.0_f64; n_nodes];
-        let Some(weights) = cb.call_arr(t) else {
-            return fallback;
-        };
-        if weights.len() != n_nodes {
-            return fallback;
-        }
-        for &v in &weights {
-            if !v.is_finite() || v <= 0.0 {
-                return fallback;
-            }
-        }
-        weights
-    })
-}
-
-/// Validate common evolve parameters.
-fn validate_evolve(f0: &[f64], n_nodes: usize, t_final: f64, n_steps: u32) -> Result<(), JsValue> {
-    if f0.len() != n_nodes {
-        return Err(make_js_error("GridMismatch", "f0.length must equal n_nodes"));
-    }
-    for &v in f0 {
-        if !v.is_finite() {
-            return Err(make_js_error("NanInf", "f0 contains NaN or Inf"));
-        }
-    }
-    if n_steps == 0 {
-        return Err(make_js_error("OutOfDomain", "n_steps must be >= 1"));
-    }
-    if !t_final.is_finite() || t_final < 0.0 {
-        return Err(make_js_error("OutOfDomain", "t_final must be finite and >= 0"));
-    }
-    Ok(())
-}
+mod graph_magnus_wasm_helpers;
+use graph_magnus_wasm_helpers::{make_a_at_t, make_lap_at_t, validate_evolve, JsLapCb};
 
 // ---------------------------------------------------------------------------
 // MagnusGraphHeat — Magnus K=4 time-varying graph heat
@@ -213,7 +91,10 @@ impl MagnusGraphHeatWasm {
         convergence_check: bool,
     ) -> Result<MagnusGraphHeatWasm, JsValue> {
         if !rho_bar_max.is_finite() || rho_bar_max <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "rho_bar_max must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "rho_bar_max must be finite and > 0",
+            ));
         }
         let n_nodes = graph.n_nodes() as usize;
         let g = Arc::new(Graph::<f64>::path(n_nodes));
@@ -240,9 +121,8 @@ impl MagnusGraphHeatWasm {
         let convergence_check = self.convergence_check;
         let n_st = n_steps as usize;
         let lap_at_t: LaplacianAtTime<f64> = Box::new(move |t| lap_cb(t));
-        let mghc = CoreMagnusK4::new(
-            Arc::clone(&graph), lap_at_t, rho_bar_max, convergence_check,
-        ).map_err(|e| err_to_js(&e))?;
+        let mghc = CoreMagnusK4::new(Arc::clone(&graph), lap_at_t, rho_bar_max, convergence_check)
+            .map_err(|e| err_to_js(&e))?;
         #[allow(clippy::cast_precision_loss)]
         let tau = t_final / n_st as f64;
         let mut state = GraphSignal::from_fn(graph, |i| f0[i as usize]);
@@ -308,7 +188,10 @@ impl MagnusGraphHeat6Wasm {
         convergence_check: bool,
     ) -> Result<MagnusGraphHeat6Wasm, JsValue> {
         if !rho_bar_max.is_finite() || rho_bar_max <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "rho_bar_max must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "rho_bar_max must be finite and > 0",
+            ));
         }
         let n_nodes = graph.n_nodes() as usize;
         let g = Arc::new(Graph::<f64>::path(n_nodes));
@@ -335,9 +218,8 @@ impl MagnusGraphHeat6Wasm {
         let convergence_check = self.convergence_check;
         let n_st = n_steps as usize;
         let lap_at_t: LaplacianAtTime<f64> = Box::new(move |t| lap_cb(t));
-        let mgh6 = CoreMagnusK6::new(
-            Arc::clone(&graph), lap_at_t, rho_bar_max, convergence_check,
-        ).map_err(|e| err_to_js(&e))?;
+        let mgh6 = CoreMagnusK6::new(Arc::clone(&graph), lap_at_t, rho_bar_max, convergence_check)
+            .map_err(|e| err_to_js(&e))?;
         #[allow(clippy::cast_precision_loss)]
         let tau = t_final / n_st as f64;
         let mut state = GraphSignal::from_fn(graph, |i| f0[i as usize]);
@@ -419,10 +301,16 @@ impl VarCoefMagnusGraphWasm {
             return Err(make_js_error("OutOfDomain", "n_nodes must be >= 1"));
         }
         if !rho_bar_max.is_finite() || rho_bar_max <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "rho_bar_max must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "rho_bar_max must be finite and > 0",
+            ));
         }
         if !a_sup_max.is_finite() || a_sup_max <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "a_sup_max must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "a_sup_max must be finite and > 0",
+            ));
         }
         let n = n_nodes as usize;
         let g = Arc::new(Graph::<f64>::path(n));

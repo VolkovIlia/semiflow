@@ -30,10 +30,11 @@ use semiflow::{
 
 // Re-export from diffusion_extra2 for registration.
 pub(crate) use crate::diffusion_extra2::{PyStrang1D, PyTruncatedExp4th1D};
-
-use crate::boundary::parse_boundary;
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    boundary::parse_boundary,
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Shared fn-pointer constants (unit coefficients)

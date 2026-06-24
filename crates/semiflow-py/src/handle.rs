@@ -13,8 +13,8 @@
 
 use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, ChernoffFunction, ChernoffSemigroup,
-    DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn1D, GridFn2D, GridFn3D, SemiflowError,
-    ScratchPool, Strang2D, Strang3D,
+    DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn1D, GridFn2D, GridFn3D, ScratchPool,
+    SemiflowError, Strang2D, Strang3D,
 };
 
 // ---------------------------------------------------------------------------

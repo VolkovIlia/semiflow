@@ -291,6 +291,9 @@ impl ChernoffFunction<f32> for DriftReactionChernoff<f32> {
 
     /// Growth bound `(M, ω) = (1.0, c_norm_bound)`.
     fn growth(&self) -> Growth<f32> {
+        // cast_possible_truncation: f32 growth bound is intentional (f32 impl); c_norm_bound
+        // is a user-supplied f64 reaction coefficient narrowed to f32 precision here.
+        #[allow(clippy::cast_possible_truncation)]
         Growth::new(1.0, self.c_norm_bound as f32)
     }
 

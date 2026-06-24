@@ -6,9 +6,9 @@
 //! 2. Constructor / free lifecycle (no leak / double-free).
 //! 3. Scalar introspection: `n_nodes`, `is_combinatorial`, `is_normalized`,
 //!    `spectral_bound`.
-//! 4. CSR read-back consistency (row_ptr / col_idx / vals lengths vs a known
-//!    P_3 graph; values cross-checked against hand-computed Laplacian).
-//! 5. `to_dense` diagonal for P_4 combinatorial Laplacian.
+//! 4. CSR read-back consistency (`row_ptr` / `col_idx` / vals lengths vs a known
+//!    `P_3` graph; values cross-checked against hand-computed Laplacian).
+//! 5. `to_dense` diagonal for `P_4` combinatorial Laplacian.
 //! 6. `GraphTraj` degenerate constructor + getters.
 //! 7. All returned buffers are freed with the matching free functions
 //!    (`smf_free_buf_usize`, `smf_free_buf_f64`).
@@ -16,15 +16,13 @@
 #![allow(unsafe_code)]
 
 use semiflow_ffi::{
-    smf_free_buf_f64, smf_free_buf_usize,
-    smf_graph_laplacian_combinatorial, smf_graph_laplacian_normalized,
-    smf_graph_path, smf_graph_drop,
-    smf_graph_traj_free, smf_graph_traj_n_nodes, smf_graph_traj_n_segments,
-    smf_graph_traj_new, smf_graph_traj_t_horizon,
-    smf_laplacian_col_idx, smf_laplacian_free, smf_laplacian_is_combinatorial,
-    smf_laplacian_is_normalized, smf_laplacian_n_nodes, smf_laplacian_row_ptr,
-    smf_laplacian_spectral_bound, smf_laplacian_to_dense, smf_laplacian_vals,
-    SemiflowStatus, SmfGraph, SmfGraphTraj, SmfLaplacian,
+    smf_free_buf_f64, smf_free_buf_usize, smf_graph_drop, smf_graph_laplacian_combinatorial,
+    smf_graph_laplacian_normalized, smf_graph_path, smf_graph_traj_free, smf_graph_traj_n_nodes,
+    smf_graph_traj_n_segments, smf_graph_traj_new, smf_graph_traj_t_horizon, smf_laplacian_col_idx,
+    smf_laplacian_free, smf_laplacian_is_combinatorial, smf_laplacian_is_normalized,
+    smf_laplacian_n_nodes, smf_laplacian_row_ptr, smf_laplacian_spectral_bound,
+    smf_laplacian_to_dense, smf_laplacian_vals, SemiflowStatus, SmfGraph, SmfGraphTraj,
+    SmfLaplacian,
 };
 
 // ---------------------------------------------------------------------------
@@ -119,9 +117,14 @@ fn laplacian_n_nodes_null_returns_zero() {
     assert_eq!(unsafe { smf_laplacian_n_nodes(std::ptr::null()) }, 0);
 }
 
+// float_cmp: null-ptr convention returns exact 0.0 by construction.
+#[allow(clippy::float_cmp)]
 #[test]
 fn laplacian_spectral_bound_null_returns_zero() {
-    assert_eq!(unsafe { smf_laplacian_spectral_bound(std::ptr::null()) }, 0.0);
+    assert_eq!(
+        unsafe { smf_laplacian_spectral_bound(std::ptr::null()) },
+        0.0
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -202,10 +205,22 @@ fn laplacian_p4_to_dense_diagonal() {
     let dense = unsafe { std::slice::from_raw_parts(d_ptr, n * n) };
 
     // Diagonal values (degree of each node).
-    assert!((dense[0] - 1.0).abs() < 1e-12, "L[0,0] should be 1.0 (degree of node 0)");
-    assert!((dense[5] - 2.0).abs() < 1e-12, "L[1,1] should be 2.0 (degree of node 1)");
-    assert!((dense[10] - 2.0).abs() < 1e-12, "L[2,2] should be 2.0 (degree of node 2)");
-    assert!((dense[15] - 1.0).abs() < 1e-12, "L[3,3] should be 1.0 (degree of node 3)");
+    assert!(
+        (dense[0] - 1.0).abs() < 1e-12,
+        "L[0,0] should be 1.0 (degree of node 0)"
+    );
+    assert!(
+        (dense[5] - 2.0).abs() < 1e-12,
+        "L[1,1] should be 2.0 (degree of node 1)"
+    );
+    assert!(
+        (dense[10] - 2.0).abs() < 1e-12,
+        "L[2,2] should be 2.0 (degree of node 2)"
+    );
+    assert!(
+        (dense[15] - 1.0).abs() < 1e-12,
+        "L[3,3] should be 1.0 (degree of node 3)"
+    );
 
     // Off-diagonal adjacent entries must be -1.0.
     assert!((dense[1] + 1.0).abs() < 1e-12, "L[0,1] should be -1.0");
@@ -298,6 +313,8 @@ fn graph_traj_n_segments_null_returns_zero() {
     assert_eq!(unsafe { smf_graph_traj_n_segments(std::ptr::null()) }, 0);
 }
 
+// float_cmp: null-ptr convention returns exact 0.0 by construction.
+#[allow(clippy::float_cmp)]
 #[test]
 fn graph_traj_t_horizon_null_returns_zero() {
     assert_eq!(unsafe { smf_graph_traj_t_horizon(std::ptr::null()) }, 0.0);

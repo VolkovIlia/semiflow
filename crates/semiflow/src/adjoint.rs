@@ -274,9 +274,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::sync::Arc;
 
+    use super::*;
     use crate::{
         drift_reaction::DriftReactionChernoff,
         graph::{Graph, Laplacian},

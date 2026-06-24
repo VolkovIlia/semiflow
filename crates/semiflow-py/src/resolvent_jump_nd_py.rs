@@ -38,8 +38,10 @@ use semiflow::{
     Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ResolventJumpChernoff2D, ResolventJumpChernoff3D,
 };
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers shared within this file (per-crate dup, ADR-0028 Amdt 2)

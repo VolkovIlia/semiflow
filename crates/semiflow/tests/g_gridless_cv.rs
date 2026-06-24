@@ -34,9 +34,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow::{
-    ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool,
-};
+use semiflow::{ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool};
 
 extern crate alloc;
 

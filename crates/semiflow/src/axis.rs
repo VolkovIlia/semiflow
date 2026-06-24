@@ -143,7 +143,7 @@ where
     /// - Y-pass: strided gather/scatter per column; `core::mem::take` reclaim.
     ///
     /// # Errors
-    /// Same conditions as [`AxisLift::apply`].
+    /// Same conditions as [`AxisLift`] `apply_into`.
     fn apply_into(
         &self,
         tau: F,

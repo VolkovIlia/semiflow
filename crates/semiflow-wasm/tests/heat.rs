@@ -106,8 +106,9 @@ fn len_matches_n() {
 fn version_is_semver() {
     let v = version();
     assert!(!v.is_empty(), "version string is empty");
-    let parts: Vec<&str> = v.split('.').collect();
-    assert_eq!(parts.len(), 3, "unexpected version format: {v}");
+    let core = v.split(['-', '+']).next().unwrap_or(&v);
+    let parts: Vec<&str> = core.split('.').collect();
+    assert_eq!(parts.len(), 3, "unexpected version core format: {v}");
 }
 
 // ---------------------------------------------------------------------------

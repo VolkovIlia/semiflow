@@ -172,7 +172,11 @@ fn fd_triple_g<F: SemiflowFloat>(
 // ---------------------------------------------------------------------------
 
 /// Generic septic-Hermite sampler for `F: SemiflowFloat` (incl. `Dual<f64>`).
-pub(crate) fn sample_septic_1d_generic<F: SemiflowFloat>(values: &[F], grid: &Grid1D<F>, x: F) -> F {
+pub(crate) fn sample_septic_1d_generic<F: SemiflowFloat>(
+    values: &[F],
+    grid: &Grid1D<F>,
+    x: F,
+) -> F {
     let dx = grid.dx();
     let t_frac = (x - grid.xmin) / dx;
     let t_floor = Float::floor(t_frac);

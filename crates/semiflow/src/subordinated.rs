@@ -54,7 +54,10 @@ pub trait LevySubordinator<F: SemiflowFloat = f64>: Send + Sync + 'static {
 
 /// Return `DomainViolation` for a positive parameter that fails `> 0 ∧ finite`.
 #[inline]
-fn check_positive_finite<F: SemiflowFloat>(val: F, what: &'static str) -> Result<(), SemiflowError> {
+fn check_positive_finite<F: SemiflowFloat>(
+    val: F,
+    what: &'static str,
+) -> Result<(), SemiflowError> {
     if !val.is_finite() || val <= F::zero() {
         return Err(SemiflowError::DomainViolation {
             what,
@@ -181,11 +184,11 @@ impl<F: SemiflowFloat> LevySubordinator<F> for GammaSubordinator<F> {
 // ─── Backend 3: InverseGaussianSubordinator<F> ────────────────────────────────
 
 /// Inverse-Gaussian subordinator: `φ_c(λ) = √(c²+2λ)−c`, `c>0` (CBF, SSV §13 Ex 14.5).
-/// Bochner-Phillips: Gauss-Legendre on [`v_lo`, `v_hi`] with standardized IG density.
+/// Bochner-Phillips: Gauss-Legendre on \[`v_lo`, `v_hi`\] with standardized IG density.
 ///
 /// # Known limitation (v6.2.4)
 ///
-/// The GL-on-[`v_lo,v_hi`] quadrature over-decays for small per-step τ (Pinsky 1986
+/// The GL-on-\[`v_lo`,`v_hi`\] quadrature over-decays for small per-step τ (Pinsky 1986
 /// `s^{-3/2}` singularity): `f_128` → ~0 at all λ, converging to the WRONG limit, NOT
 /// `exp(−τ φ_IG(λ))`. The gate passes via ≥2/3 (Stable+Gamma). Tracked for future fix.
 #[derive(Debug, Clone, Copy, PartialEq)]

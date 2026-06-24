@@ -47,6 +47,13 @@
 
 use alloc::sync::Arc;
 
+// Free-function helpers (validation, trajectory, kernels) — re-exported so
+// that external callers (magnus_graph_adjoint, tests) keep the canonical
+// `crate::magnus_graph::*` paths unchanged.
+pub(crate) use crate::magnus_graph_helpers::{
+    apply_magnus_k4_into_at, apply_omega4, run_all_segments, validate_magnus_radius, validate_rho,
+    validate_tau, validate_traj_inputs,
+};
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
@@ -56,14 +63,6 @@ use crate::{
     graph_traj::GraphTraj,
     scratch::ScratchPool,
     state::State,
-};
-
-// Free-function helpers (validation, trajectory, kernels) — re-exported so
-// that external callers (magnus_graph_adjoint, tests) keep the canonical
-// `crate::magnus_graph::*` paths unchanged.
-pub(crate) use crate::magnus_graph_helpers::{
-    apply_magnus_k4_into_at, apply_omega4, run_all_segments, validate_magnus_radius, validate_rho,
-    validate_tau, validate_traj_inputs,
 };
 
 // ---------------------------------------------------------------------------
@@ -124,7 +123,7 @@ pub(crate) const SQRT3_OVER_12_F64: f64 = 0.144_337_567_297_406_433;
 ///     })
 /// };
 /// ```
-/// Type alias for [`graph_traj::SegmentWeightFn`] — identical closure type,
+/// Type alias for [`crate::graph_traj::SegmentWeightFn`] — identical closure type,
 /// unified to remove duplication (ADR Wave 2.2A §8).
 pub type LaplacianAtTime<F> = crate::graph_traj::SegmentWeightFn<F>;
 

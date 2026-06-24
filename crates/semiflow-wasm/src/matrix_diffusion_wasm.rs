@@ -168,13 +168,22 @@ impl MatrixDiffusion1D {
             ));
         }
         if !a_diag.is_finite() || a_diag <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "a_diag must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "a_diag must be finite and > 0",
+            ));
         }
         let vals = extract_u0(u0, n)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         // Validate kernel construction eagerly.
         build_kernel(a_diag, c_coupling, grid).map_err(|e| err_to_js(&e))?;
-        Ok(MatrixDiffusion1D { grid, a_diag, c_coupling, vals, n })
+        Ok(MatrixDiffusion1D {
+            grid,
+            a_diag,
+            c_coupling,
+            vals,
+            n,
+        })
     }
 
     /// Advance state by time `t` using `n_steps` Chernoff iterations.
@@ -183,8 +192,15 @@ impl MatrixDiffusion1D {
     /// Throws JS `Error` with `.kind` — see crate-level error table.
     pub fn evolve(&mut self, t: f64, n_steps: usize) -> Result<(), JsValue> {
         validate_evolve_mat(t, n_steps)?;
-        let out = evolve_matrix(self.a_diag, self.c_coupling, self.grid, &self.vals, t, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let out = evolve_matrix(
+            self.a_diag,
+            self.c_coupling,
+            self.grid,
+            &self.vals,
+            t,
+            n_steps,
+        )
+        .map_err(|e| err_to_js(&e))?;
         self.vals = out;
         Ok(())
     }

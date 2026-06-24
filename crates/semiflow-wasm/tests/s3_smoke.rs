@@ -54,8 +54,7 @@ fn tt_evolver_evolve() {
     let b = mk_f64(&[0.0, 0.0]);
     let dom_min = mk_f64(&[-1.0, -1.0]);
     let dom_max = mk_f64(&[1.0, 1.0]);
-    let evolver = TtEvolver::new(&a, &b, 0.0, &dom_min, &dom_max, 1e-8)
-        .expect("TtEvolver::new");
+    let evolver = TtEvolver::new(&a, &b, 0.0, &dom_min, &dom_max, 1e-8).expect("TtEvolver::new");
     assert_eq!(evolver.ndim(), 2);
 
     evolver.evolve(&mut state, 0.0, 1).expect("evolve");

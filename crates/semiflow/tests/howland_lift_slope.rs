@@ -23,8 +23,8 @@
 use semiflow::{
     chernoff::Growth,
     howland::{HowlandLift, HowlandState, TimedChernoffFunction},
-    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, SemiflowError,
-    ScratchPool,
+    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, ScratchPool,
+    SemiflowError,
 };
 
 // ---------------------------------------------------------------------------

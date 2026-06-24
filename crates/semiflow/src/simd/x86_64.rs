@@ -15,11 +15,9 @@
 #![cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 
 use core::arch::x86_64::{
-    __m256, __m256d,
-    _mm256_add_pd, _mm256_loadu_pd, _mm256_mul_pd, _mm256_set1_pd, _mm256_storeu_pd,
-    _mm256_sub_pd,
-    _mm256_add_ps, _mm256_loadu_ps, _mm256_mul_ps, _mm256_set1_ps, _mm256_storeu_ps,
-    _mm256_sub_ps,
+    __m256, __m256d, _mm256_add_pd, _mm256_add_ps, _mm256_loadu_pd, _mm256_loadu_ps, _mm256_mul_pd,
+    _mm256_mul_ps, _mm256_set1_pd, _mm256_set1_ps, _mm256_storeu_pd, _mm256_storeu_ps,
+    _mm256_sub_pd, _mm256_sub_ps,
 };
 
 use super::{SimdF32x8, SimdF64x4};

@@ -17,8 +17,7 @@
 //! machine-epsilon. With tol≈1e-16 the estimator over-refines transcendental
 //! integrands to q=9 and the node-count saving evaporates (PRE-FLIGHT-confirmed).
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
 
 use crate::{

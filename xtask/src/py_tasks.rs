@@ -193,8 +193,8 @@ pub fn py_bench() -> Result<()> {
 /// Graph PDE Python smoke gate (ADR-0059).
 ///
 /// Builds the wheel in dev mode, then runs `pytest smoke_graph.py -v`.
-/// The test file exercises [`GraphPath`], [`GraphHeat`], [`MagnusGraphHeat`]
-/// and asserts cross-binding identity against [`Heat1D`] (≤3 ULP).
+/// The test file exercises `GraphPath`, `GraphHeat`, `MagnusGraphHeat`
+/// and asserts cross-binding identity against `Heat1D` (≤3 ULP).
 pub fn py_graph_smoke() -> Result<()> {
     let root = crate::workspace_root()?;
     let venv = root.join("target").join("py-graph-smoke-venv");

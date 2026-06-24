@@ -46,10 +46,10 @@
 
 use std::sync::Arc;
 
+use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
-use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 
 // ---------------------------------------------------------------------------
 // GraphPath

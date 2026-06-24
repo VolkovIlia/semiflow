@@ -11,8 +11,8 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // n_steps ≤ 128, well within 2^52
-#![allow(clippy::similar_names)]       // sb/sa, sb_dst/sa_dst are intentionally parallel Option B/A names
-#![allow(clippy::doc_markdown)]        // `n_steps=128` and similar notation in doc comment
+#![allow(clippy::similar_names)] // sb/sa, sb_dst/sa_dst are intentionally parallel Option B/A names
+#![allow(clippy::doc_markdown)] // `n_steps=128` and similar notation in doc comment
 
 use std::f64::consts::PI;
 
@@ -100,8 +100,10 @@ fn g_schrod_b_unitarity_harmonic_oscillator_gaussian() {
 #[ignore = "advisory: cross-representation Option A vs B; investigate on failure but does not block"]
 fn schrodinger_option_a_vs_b_sup_norm() {
     use semiflow::{
-        diffusion4::Diffusion4thChernoff, grid_fn::GridFn1D, schrodinger::SchrodingerChernoff,
-        schrodinger::SchrodingerState, ChernoffFunction,
+        diffusion4::Diffusion4thChernoff,
+        grid_fn::GridFn1D,
+        schrodinger::{SchrodingerChernoff, SchrodingerState},
+        ChernoffFunction,
     };
 
     let n = 128_usize;
@@ -142,9 +144,7 @@ fn schrodinger_option_a_vs_b_sup_norm() {
     }
 
     let four_ulp = 4.0 * f64::EPSILON;
-    println!(
-        "Option A vs B sup-norm diff = {sup_diff:.4e}  (4 ULP = {four_ulp:.4e})"
-    );
+    println!("Option A vs B sup-norm diff = {sup_diff:.4e}  (4 ULP = {four_ulp:.4e})");
 
     // ADVISORY: warn but do not panic (cross-check may differ slightly due to
     // algorithm ordering; hard-fail only if difference is catastrophically large)

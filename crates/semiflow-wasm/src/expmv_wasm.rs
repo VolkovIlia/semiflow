@@ -6,9 +6,7 @@
 //! adaptively each step by Al-Mohy & Higham (2011) Algorithm 3.2 (ADR-0121).
 
 use js_sys::Float64Array;
-use semiflow::{
-    ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D,
-};
+use semiflow::{ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D};
 use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};

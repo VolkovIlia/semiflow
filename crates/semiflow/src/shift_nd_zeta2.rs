@@ -27,8 +27,7 @@
 //!
 //! CITATION: ADR-0112 AMENDMENT 2; math.md §32.8; §9.2.3.B (1-D analogue).
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
 
 use crate::{

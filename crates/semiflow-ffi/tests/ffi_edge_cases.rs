@@ -16,8 +16,8 @@
 use std::ffi::CStr;
 
 use semiflow_ffi::{
-    smf_evolve, smf_state_free, smf_state_new_heat_1d_unit, smf_state_values,
-    smf_status_str, smf_version, SemiflowState, SemiflowStatus,
+    smf_evolve, smf_state_free, smf_state_new_heat_1d_unit, smf_state_values, smf_status_str,
+    smf_version, SemiflowState, SemiflowStatus,
 };
 
 // ---------------------------------------------------------------------------
@@ -39,8 +39,7 @@ fn make_state() -> *mut SemiflowState {
         })
         .collect();
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_eq!(s, SemiflowStatus::Ok, "make_state: construction failed");
     assert!(!ptr.is_null());
     ptr
@@ -55,8 +54,7 @@ fn make_state() -> *mut SemiflowState {
 fn test_u0_len_shorter_than_n() {
     let u0 = vec![1.0f64; N - 1];
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_ne!(s, SemiflowStatus::Ok, "expected error for u0_len < n");
     assert!(ptr.is_null(), "ptr must remain null on error");
 }
@@ -66,8 +64,7 @@ fn test_u0_len_shorter_than_n() {
 fn test_u0_len_longer_than_n() {
     let u0 = vec![1.0f64; N + 1];
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_ne!(s, SemiflowStatus::Ok, "expected error for u0_len > n");
     assert!(ptr.is_null());
 }
@@ -88,8 +85,7 @@ fn test_inf_in_u0() {
     let mut u0 = vec![1.0f64; N];
     u0[0] = f64::INFINITY;
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_eq!(s, SemiflowStatus::NanInf, "Inf in u0 must return NanInf");
     assert!(ptr.is_null());
 }
@@ -100,8 +96,7 @@ fn test_neg_inf_in_u0() {
     let mut u0 = vec![1.0f64; N];
     u0[0] = f64::NEG_INFINITY;
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_eq!(s, SemiflowStatus::NanInf);
     assert!(ptr.is_null());
 }
@@ -111,8 +106,7 @@ fn test_neg_inf_in_u0() {
 fn test_reversed_bounds() {
     let u0 = vec![1.0f64; N];
     let mut ptr: *mut SemiflowState = std::ptr::null_mut();
-    let s =
-        unsafe { smf_state_new_heat_1d_unit(10.0, -10.0, N, u0.as_ptr(), u0.len(), &mut ptr) };
+    let s = unsafe { smf_state_new_heat_1d_unit(10.0, -10.0, N, u0.as_ptr(), u0.len(), &mut ptr) };
     assert_ne!(s, SemiflowStatus::Ok, "reversed bounds must be rejected");
     assert!(ptr.is_null());
 }
@@ -275,9 +269,8 @@ fn test_evolve_multiple_calls_compose() {
 
     // Reference: single shot t=1.0.
     let mut ref_state: *mut SemiflowState = std::ptr::null_mut();
-    let s_ref = unsafe {
-        smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ref_state)
-    };
+    let s_ref =
+        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), u0.len(), &mut ref_state) };
     assert_eq!(s_ref, SemiflowStatus::Ok);
     assert_eq!(
         unsafe { smf_evolve(ref_state, 1.0, N_STEPS) },

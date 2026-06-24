@@ -16,8 +16,7 @@
     clippy::cast_possible_truncation
 )]
 
-use crate::grid::Grid1D;
-use crate::grid_nd::GridFnND;
+use crate::{grid::Grid1D, grid_nd::GridFnND};
 
 /// Clamped linear interpolation index on a uniform 1D f64 grid.
 ///

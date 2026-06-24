@@ -22,8 +22,7 @@ use crate::{
     dtype_dispatch::Dtype,
     error::from_core,
     handle::{build_heat_closure, CoeffClosure},
-    state::extract_f64_slice,
-    state::Heat1D,
+    state::{extract_f64_slice, Heat1D},
 };
 
 // ---------------------------------------------------------------------------

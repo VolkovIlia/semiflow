@@ -19,10 +19,10 @@
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::cast_possible_wrap, clippy::unnecessary_wraps)]
 
-use numpy::{IntoPyArray, PyArray1, PyArray2, ToPyArray};
-use pyo3::prelude::*;
 use std::sync::Arc;
 
+use numpy::{IntoPyArray, PyArray1, PyArray2, ToPyArray};
+use pyo3::prelude::*;
 use semiflow::Laplacian;
 
 use crate::error::new_pyerr;

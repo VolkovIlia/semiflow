@@ -30,9 +30,7 @@
 //! If any pair of bits diverges, the panic prints: index, hex bits of both
 //! values, and ULP distance — to enable root-cause analysis.
 
-use semiflow::{
-    chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff,
-};
+use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4thDiffusionChernoff};
 
 // ---------------------------------------------------------------------------
 // Diagnostic reporter — byte-level diff on divergence.

@@ -50,7 +50,7 @@ use crate::{error::SemiflowError, float::SemiflowFloat, scratch::ScratchPool, st
 ///
 /// ## Migration from v2.x
 ///
-/// ```rust,no_run
+/// ```text
 /// // v2.x (tuple return — hard-removed at v4.0, ADR-0084):
 /// // let (m, om) = func.growth();
 ///
@@ -177,7 +177,7 @@ pub trait ChernoffFunction<F: SemiflowFloat = f64> {
     /// (supertrait with no default) AND override this method. The supertrait
     /// provides compile-time guarantees that the implementation is genuine.
     ///
-    /// This default exists to satisfy [`AdjointChernoff::apply_into`]'s
+    /// This default exists to satisfy [`crate::adjoint::AdjointChernoff`]'s
     /// dispatch without requiring specialization. See ADR-0114.
     ///
     /// # Errors

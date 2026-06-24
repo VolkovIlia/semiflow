@@ -73,11 +73,7 @@ impl<F: SemiflowFloat> S3DenseCouplingEvolver<F> {
     ///
     /// # Errors
     /// Returns [`crate::SemiflowError::S3OutOfClass`] if `u0.len() != n^d`.
-    pub fn evolve(
-        &self,
-        u0: &[F],
-        tau: F,
-    ) -> Result<(Vec<F>, F), crate::SemiflowError> {
+    pub fn evolve(&self, u0: &[F], tau: F) -> Result<(Vec<F>, F), crate::SemiflowError> {
         let nd = self.n.pow(self.d as u32);
         if u0.len() != nd {
             return Err(crate::SemiflowError::S3OutOfClass {
@@ -105,10 +101,14 @@ fn validate_dense_coupling<F: SemiflowFloat>(
         });
     }
     if n < 2 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "n must be >= 2" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "n must be >= 2",
+        });
     }
     if dx <= F::zero() {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "dx must be > 0" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "dx must be > 0",
+        });
     }
     for &aj in a {
         if aj <= F::zero() {
@@ -127,7 +127,13 @@ mod tests {
     #[test]
     fn rejects_n_less_than_2() {
         let r = S3DenseCouplingEvolver::<f64>::rank1_dense(
-            1, 2, 0.1, &[1.0; 2], &[1.0; 2], 0.1, vec![0.0; 2],
+            1,
+            2,
+            0.1,
+            &[1.0; 2],
+            &[1.0; 2],
+            0.1,
+            vec![0.0; 2],
         );
         assert!(r.is_err());
     }
@@ -135,7 +141,13 @@ mod tests {
     #[test]
     fn rejects_dx_zero() {
         let r = S3DenseCouplingEvolver::<f64>::rank1_dense(
-            4, 2, 0.0, &[1.0; 2], &[1.0; 2], 0.1, vec![0.0; 2],
+            4,
+            2,
+            0.0,
+            &[1.0; 2],
+            &[1.0; 2],
+            0.1,
+            vec![0.0; 2],
         );
         assert!(r.is_err());
     }
@@ -143,7 +155,13 @@ mod tests {
     #[test]
     fn rejects_nonpositive_a() {
         let r = S3DenseCouplingEvolver::<f64>::rank1_dense(
-            4, 2, 0.1, &[0.0, 1.0], &[1.0; 2], 0.1, vec![0.0; 2],
+            4,
+            2,
+            0.1,
+            &[0.0, 1.0],
+            &[1.0; 2],
+            0.1,
+            vec![0.0; 2],
         );
         assert!(r.is_err());
     }
@@ -151,7 +169,13 @@ mod tests {
     #[test]
     fn rejects_length_mismatch() {
         let r = S3DenseCouplingEvolver::<f64>::rank1_dense(
-            4, 3, 0.1, &[1.0; 2], &[1.0; 2], 0.1, vec![0.0; 2],
+            4,
+            3,
+            0.1,
+            &[1.0; 2],
+            &[1.0; 2],
+            0.1,
+            vec![0.0; 2],
         );
         assert!(r.is_err());
     }
@@ -159,7 +183,13 @@ mod tests {
     #[test]
     fn accepts_valid_inputs() {
         let r = S3DenseCouplingEvolver::<f64>::rank1_dense(
-            4, 2, 0.1, &[1.0; 2], &[1.0; 2], 0.1, vec![0.0; 2],
+            4,
+            2,
+            0.1,
+            &[1.0; 2],
+            &[1.0; 2],
+            0.1,
+            vec![0.0; 2],
         );
         assert!(r.is_ok());
     }

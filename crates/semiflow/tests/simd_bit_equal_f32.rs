@@ -21,9 +21,7 @@
 #![cfg(feature = "simd")]
 
 use semiflow::{
-    chernoff::ApplyChernoffExt,
-    diffusion6::Diffusion6thChernoff,
-    simd::with_force_scalar,
+    chernoff::ApplyChernoffExt, diffusion6::Diffusion6thChernoff, simd::with_force_scalar,
     BoundaryPolicy, Grid1D, GridFn1D, InterpKind,
 };
 
@@ -68,8 +66,10 @@ fn lcg_values_f32(n: usize, seed: u64) -> Vec<f32> {
                 .wrapping_add(1_442_695_040_888_963_407);
             let hi32 = (state >> 32) as u32;
             // u32 → f64 (lossless), scale to [0,1), cast to f32.
-            let mantissa = (hi32 as f64) / (u32::MAX as f64);
-            (0.1 + mantissa) as f32
+            // cast_possible_truncation: intentional f64 → f32 for test data generation.
+            #[allow(clippy::cast_possible_truncation)]
+            let v = (0.1 + f64::from(hi32) / f64::from(u32::MAX)) as f32;
+            v
         })
         .collect()
 }
@@ -98,8 +98,7 @@ fn check_diffusion6_f32_bit_equal(n: usize, bnd: BoundaryPolicy<f32>) {
     let f0 = GridFn1D::<f32>::new_generic(grid, values).expect("f0 f32");
     let tau = 0.01_f32;
 
-    let scalar_out =
-        with_force_scalar(|| dc.apply_chernoff(tau, &f0).expect("apply scalar f32"));
+    let scalar_out = with_force_scalar(|| dc.apply_chernoff(tau, &f0).expect("apply scalar f32"));
     let simd_out = dc.apply_chernoff(tau, &f0).expect("apply simd f32");
 
     assert_bit_equal_f32(&scalar_out.values, &simd_out.values, &label);

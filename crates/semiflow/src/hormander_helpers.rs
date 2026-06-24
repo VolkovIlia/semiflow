@@ -5,8 +5,7 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use crate::error::SemiflowError;
-use crate::float::SemiflowFloat;
+use crate::{error::SemiflowError, float::SemiflowFloat};
 
 // ─── Heisenberg group d=3 (math.md §28.4.B) ──────────────────────────────────
 

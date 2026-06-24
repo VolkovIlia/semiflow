@@ -18,7 +18,7 @@
 //! Richardson gives order 4 iff the base S has only **odd** local errors.
 //! This requires `S(τ)·S(−τ) = I + O(τ⁵)` (palindromic to order 4).
 //!
-//! The existing [`DriftReactionChernoff`] uses an asymmetric RK2 foot with
+//! The existing [`crate::drift_reaction::DriftReactionChernoff`] uses an asymmetric RK2 foot with
 //! round-trip error O(τ⁴), which limits Richardson to global order 3.
 //! `DriftReactionZeta4Chernoff` instead uses a one-step Newton iteration
 //! of the implicit midpoint (palindromic to O(τ⁵)):

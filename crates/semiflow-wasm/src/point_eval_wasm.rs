@@ -19,11 +19,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_possible_truncation)]
 
-use semiflow::{
-    diffusion::DiffusionChernoff,
-    point_eval::PointEval as _,
-    Grid1D, GridFn1D,
-};
+use semiflow::{diffusion::DiffusionChernoff, point_eval::PointEval as _, Grid1D, GridFn1D};
 use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
@@ -82,13 +78,7 @@ impl PointEvalWasm {
     /// # Errors
     /// See struct-level error table.
     #[wasm_bindgen(js_name = "evalAt")]
-    pub fn eval_at(
-        &self,
-        tau: f64,
-        u0: &[f64],
-        x: f64,
-        n_steps: u32,
-    ) -> Result<f64, JsValue> {
+    pub fn eval_at(&self, tau: f64, u0: &[f64], x: f64, n_steps: u32) -> Result<f64, JsValue> {
         if n_steps == 0 {
             return Err(make_js_error("OutOfDomain", "n_steps must be >= 1"));
         }
@@ -96,18 +86,14 @@ impl PointEvalWasm {
             return Err(make_js_error("OutOfDomain", "tau must be finite and >= 0"));
         }
         if u0.len() != self.n {
-            return Err(make_js_error(
-                "GridMismatch",
-                "u0.length must equal n",
-            ));
+            return Err(make_js_error("GridMismatch", "u0.length must equal n"));
         }
         for &v in u0 {
             if !v.is_finite() {
                 return Err(make_js_error("NanInf", "u0 contains NaN or Inf"));
             }
         }
-        let grid = Grid1D::new(self.xmin, self.xmax, self.n)
-            .map_err(|e| err_to_js(&e))?;
+        let grid = Grid1D::new(self.xmin, self.xmax, self.n).map_err(|e| err_to_js(&e))?;
         let kernel = DiffusionChernoff::new(
             |_: f64| 1.0_f64,
             |_: f64| 0.0_f64,
@@ -115,8 +101,13 @@ impl PointEvalWasm {
             1.0_f64,
             grid,
         );
-        let src = GridFn1D { values: u0.to_vec(), grid };
-        kernel.eval_at(tau, &src, &[x], n_steps).map_err(|e| err_to_js(&e))
+        let src = GridFn1D {
+            values: u0.to_vec(),
+            grid,
+        };
+        kernel
+            .eval_at(tau, &src, &[x], n_steps)
+            .map_err(|e| err_to_js(&e))
     }
 
     /// Grid node count `n`.

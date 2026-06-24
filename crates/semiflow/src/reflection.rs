@@ -167,7 +167,7 @@ impl<F: SemiflowFloat, const D: usize> ReflectingRegion<F> for HalfSpaceRegion<F
         dot > F::zero()
     }
 
-    /// Build ghost state: for each outside node i, dst[i] = src sampled at `σ_R(x_i)`.
+    /// Build ghost state: for each outside node i, `dst[i]` = src sampled at `σ_R(x_i)`.
     fn reflect_in_place(
         &self,
         dst: &mut GridFn1D<F>,

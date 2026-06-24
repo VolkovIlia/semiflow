@@ -3,12 +3,15 @@
 
 use alloc::sync::Arc;
 
-use crate::graph::{Graph, Laplacian};
-use crate::graph_signal::GraphSignal;
-use crate::magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff};
-use crate::scratch::ScratchPool;
-use crate::state::State;
-use crate::{chernoff::ChernoffFunction, error::SemiflowError};
+use crate::{
+    chernoff::ChernoffFunction,
+    error::SemiflowError,
+    graph::{Graph, Laplacian},
+    graph_signal::GraphSignal,
+    magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
+    scratch::ScratchPool,
+    state::State,
+};
 
 fn make_path_mc(n: usize) -> MagnusGraphHeatChernoff<f64> {
     let g = Arc::new(Graph::<f64>::path(n));

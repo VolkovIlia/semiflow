@@ -4,7 +4,7 @@
 //! Provides `catmull_rom_dispatch` used by `Grid1D::interp` (`CubicHermite` arm).
 //!
 //! f64 SIMD path reformulates as `0.5 * dot(coeffs(s), [pm1, p0, p1, p2])`.
-//! f32 SIMD path uses `F32x4` (NEON) / scalar fallback (x86_64 without SSE f32x4 trait).
+//! f32 SIMD path uses `F32x4` (NEON) / scalar fallback (`x86_64` without SSE f32x4 trait).
 //! Bit-equality verified by `SIMD_BIT_EQUAL` and `SIMD_F32_BIT_EQUAL` gates.
 
 #[cfg(feature = "simd")]
@@ -83,7 +83,8 @@ pub(crate) fn catmull_rom_scalar_f32(pm1: f32, p0: f32, p1: f32, p2: f32, s: f32
         -s2 + s3,
     ];
     // Scalar reference: same left-to-right order as F32x4Scalar::horizontal_sum.
-    0.5_f32 * (((pts[0] * coeffs[0] + pts[1] * coeffs[1]) + pts[2] * coeffs[2]) + pts[3] * coeffs[3])
+    0.5_f32
+        * (((pts[0] * coeffs[0] + pts[1] * coeffs[1]) + pts[2] * coeffs[2]) + pts[3] * coeffs[3])
 }
 
 /// Catmull-Rom kernel — f32 SIMD path using `F32x4` (NEON on aarch64, scalar elsewhere).
@@ -99,9 +100,10 @@ fn catmull_rom_simd_f32(pm1: f32, p0: f32, p1: f32, p2: f32, s: f32) -> f32 {
         s + 4.0_f32 * s2 - 3.0_f32 * s3,
         -s2 + s3,
     ];
-    0.5_f32 * F32x4::load_unaligned(&pts)
-        .mul(F32x4::load_unaligned(&coeffs))
-        .horizontal_sum()
+    0.5_f32
+        * F32x4::load_unaligned(&pts)
+            .mul(F32x4::load_unaligned(&coeffs))
+            .horizontal_sum()
 }
 
 /// Catmull-Rom f32 dispatcher — SIMD when `simd` feature active, scalar otherwise.

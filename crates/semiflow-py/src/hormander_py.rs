@@ -14,8 +14,7 @@
 use pyo3::prelude::*;
 use semiflow::{heisenberg_heat_kernel, HypoellipticChernoff};
 
-use crate::error::from_core;
-use crate::panic::catch_panic_py;
+use crate::{error::from_core, panic::catch_panic_py};
 
 // ---------------------------------------------------------------------------
 // HypoellipticChernoffHeisenberg pyclass

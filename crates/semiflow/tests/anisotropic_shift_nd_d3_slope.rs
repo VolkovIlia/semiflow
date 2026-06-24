@@ -29,7 +29,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; len ≤ 4 ≤ 2^52
-#![allow(clippy::cast_lossless)]       // u32→f64 widening: always exact for u32
+#![allow(clippy::cast_lossless)] // u32→f64 widening: always exact for u32
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},

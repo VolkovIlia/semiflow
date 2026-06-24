@@ -36,6 +36,8 @@
 //! (ADR-0018).  The serial and parallel paths return **bit-identical** results
 //! (see `tests/strang3d_parallel_bit_equal.rs`).
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "parallel")]
 use crate::parallel_pool::ParallelPool3D;
 #[cfg(feature = "parallel")]
@@ -43,8 +45,6 @@ use crate::strang3d_parallel::{
     parallel_x_pass_3d, parallel_y_pass_3d, parallel_z_pass_3d, resolve_threads_3d,
     MIN_PENCILS_PER_THREAD,
 };
-use alloc::vec::Vec;
-
 use crate::{
     axis::Axis,
     chernoff::{ChernoffFunction, Growth},

@@ -11,6 +11,12 @@
 
 use alloc::vec::Vec;
 
+// Wave B3: SIMD dispatch imports (ADR-0019 Amendment 2).
+// Re-exported from simd/mod.rs; arch-specific impls in simd/x86_64.rs / aarch64.rs.
+#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
+use crate::simd::apply_g4_stencil_avx2_4nodes;
+#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
+use crate::simd::apply_g4_stencil_neon_4nodes;
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
@@ -22,13 +28,6 @@ use crate::{
         validate_tau_f64, TruncatedExp4thDiffusionChernoff, TRUNC_ORDER_USIZE,
     },
 };
-
-// Wave B3: SIMD dispatch imports (ADR-0019 Amendment 2).
-// Re-exported from simd/mod.rs; arch-specific impls in simd/x86_64.rs / aarch64.rs.
-#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
-use crate::simd::apply_g4_stencil_avx2_4nodes;
-#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
-use crate::simd::apply_g4_stencil_neon_4nodes;
 
 // ---------------------------------------------------------------------------
 // HalfNodeCoeffCache
