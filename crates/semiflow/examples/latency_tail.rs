@@ -211,7 +211,12 @@ fn c_fn(_: f64) -> f64 {
     -R
 }
 
-// ── CLOCK_MONOTONIC_RAW via inline extern C (no libc dep) ────────────────────
+// ── Monotonic nanosecond clock ────────────────────────────────────────────────
+// On Linux: CLOCK_MONOTONIC_RAW via inline extern "C" (no libc dep) for
+// maximum precision (unaffected by NTP slew, lowest overhead).
+// On all other platforms (Windows, macOS, …): std::time::Instant anchored to
+// a per-process start instant — monotonic, cross-platform, slightly coarser.
+#[cfg(target_os = "linux")]
 #[allow(unsafe_code)]
 fn clock_ns_raw() -> i64 {
     #[repr(C)]
@@ -222,7 +227,7 @@ fn clock_ns_raw() -> i64 {
     extern "C" {
         fn clock_gettime(clk_id: i32, tp: *mut Timespec) -> i32;
     }
-    const CLOCK_MONOTONIC_RAW: i32 = 4; // Linux
+    const CLOCK_MONOTONIC_RAW: i32 = 4; // Linux-specific clock ID
     let mut ts = Timespec {
         tv_sec: 0,
         tv_nsec: 0,
@@ -231,6 +236,17 @@ fn clock_ns_raw() -> i64 {
         clock_gettime(CLOCK_MONOTONIC_RAW, &mut ts);
     }
     ts.tv_sec * 1_000_000_000 + ts.tv_nsec
+}
+
+#[cfg(not(target_os = "linux"))]
+fn clock_ns_raw() -> i64 {
+    use std::time::Instant;
+    // Anchor to a process-start instant so the returned value is a relative
+    // nanosecond count (same semantic as the Linux path for interval arithmetic).
+    std::thread_local! {
+        static START: Instant = Instant::now();
+    }
+    START.with(|s| s.elapsed().as_nanos() as i64)
 }
 
 // ── xoshiro256** (hand-rolled, contract §6.5 + §2.3) ─────────────────────────
