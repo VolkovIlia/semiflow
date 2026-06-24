@@ -32,21 +32,22 @@ wasm-bindgen-test = "0.3"
 [lints]
 workspace = true
 
-# wasm-pack 0.15.0 bundles wasm-opt 117 (supports bulk-memory ops).  The
-# default release path enables wasm-opt with --enable-bulk-memory so that the
-# bulk-memory opcodes emitted by the Rust toolchain (memcpy/memset intrinsics)
-# pass wasm-validator; without this flag wasm-opt 117 rejects the binary.
+# wasm-opt is disabled for both profiles.  The wasm32 target emits bulk-memory
+# opcodes (memcpy/memset intrinsics) and different OS runners bundle different
+# wasm-opt versions: Ubuntu's wasm-opt accepts --enable-bulk-memory, macOS's
+# rejects it with "error in parsing input".  Enabling wasm-opt would therefore
+# be non-portable across the CI matrix.  Size optimisation comes entirely from
+# the [profile.release-wasm] cargo flags (opt-level=z, lto=fat, codegen-units=1,
+# strip=true) — see D2 (v0.13.0) and ADR-0028.
 #
-# The `--size` path (xtask wasm-build --size) uses `--no-opt` to skip wasm-pack's
-# bundled wasm-opt entirely: wasm-pack 0.15.0 does not recognise the custom
-# "release-wasm" profile key (it warns "unknown key and will be ignored") and
-# falls back to running wasm-opt with `-O` only, which also rejects bulk-memory.
-# Size is optimised by the `[profile.release-wasm]` rustc flags (opt-level=z,
-# lto=fat, codegen-units=1, strip=true) — see D2 (v0.13.0) and ADR-0028.
+# The xtask wasm-build --size path additionally passes --no-opt to wasm-pack
+# because wasm-pack 0.15.0 does not recognise the custom "release-wasm" profile
+# key (warns "unknown key and will be ignored") and would otherwise run its
+# default wasm-opt pass.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O", "--enable-bulk-memory"]
+wasm-opt = false
 
-# Kept for documentation; wasm-pack 0.15.0 ignores this key with a warning.
-# The --size xtask path passes --no-opt to avoid the bulk-memory validator error.
+# wasm-pack 0.15.0 ignores this key (warns "unknown key and will be ignored");
+# the --size xtask path passes --no-opt explicitly.
 [package.metadata.wasm-pack.profile.release-wasm]
-wasm-opt = ["-O", "--enable-bulk-memory"]
+wasm-opt = false
