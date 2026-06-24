@@ -289,3 +289,11 @@ impl fmt::Display for SemiflowError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for SemiflowError {}
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+    include!("error_tests_mod.rs");
+}

@@ -322,3 +322,10 @@ impl ApproximationSubspace<8, f64> for Diffusion8thZeta8Chernoff<f64> {
         apply_jet_iter_6th(&self.inner.inner.inner, f, out, 8)
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("diffusion8_zeta8_tests_mod.rs");
+}

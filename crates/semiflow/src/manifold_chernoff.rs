@@ -387,3 +387,10 @@ impl ChernoffFunction<f64> for ManifoldChernoff<FubiniStudyCp1<f64>, f64> {
         Growth::contraction()
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("manifold_chernoff_tests_mod.rs");
+}

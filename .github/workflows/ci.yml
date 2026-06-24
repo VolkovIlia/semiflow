@@ -99,9 +99,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: |
-          # 80% floor: simd/scalar.rs (40%), strang.rs (63%), nonseparable2d*.rs (71-78%)
-          # need dedicated tests; raise back to 85 once those files are covered (separate PR).
+          # 80% floor. Excluded crates have dedicated integration jobs:
+          #   semiflow-ffi  → ffi-smoke/ffi-build (C driver exercises extern "C" surface)
+          #   semiflow-py   → py-smoke (Python driver)
+          #   semiflow-wasm → wasm-test (Node/browser driver)
+          #   xtask         → build-only tooling
           cargo llvm-cov --workspace --fail-under-lines 80 \
+            --exclude semiflow-ffi \
             --exclude semiflow-py \
             --exclude semiflow-wasm \
             --exclude xtask

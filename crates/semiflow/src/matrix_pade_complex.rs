@@ -422,6 +422,8 @@ fn cmat_inv_2<C: SemiflowComplex, const M: usize>(
 }
 
 /// M×M complex matrix-vector multiply: `out = A·v`.
+///
+/// (test hook exposed as `pub(crate)` — used by `matrix_pade_complex_tests_mod.rs`)
 #[inline]
 pub(crate) fn cmat_vec_mul<C: SemiflowComplex, const M: usize>(
     a: &[[C; M]; M],
@@ -434,4 +436,11 @@ pub(crate) fn cmat_vec_mul<C: SemiflowComplex, const M: usize>(
         }
     }
     out
+}
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("matrix_pade_complex_tests_mod.rs");
 }

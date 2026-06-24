@@ -235,3 +235,10 @@ fn mat_scale_entries<F: SemiflowFloat, const M: usize>(
     }
     out
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("matrix_pade_tests_mod.rs");
+}

@@ -104,3 +104,10 @@ impl<F: SemiflowFloat> Sampleable<F> for GridFn1D<F> {
         Ok(Self { values, grid })
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("resolvent_residual_tests_mod.rs");
+}

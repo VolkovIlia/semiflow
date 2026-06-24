@@ -304,3 +304,10 @@ fn accumulate_zeta2_correction<F: SemiflowFloat, const D: usize>(
     }
     corr
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    include!("shift_nd_zeta2_tests_mod.rs");
+}
