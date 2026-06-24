@@ -14,11 +14,13 @@
 //!   LICENSE-APACHE
 //!   web/
 //!     semiflow_wasm.js
-//!     semiflow_wasm.wasm
+//!     semiflow_wasm_bg.wasm      (wasm-bindgen emits _bg suffix; JS glue references this name)
+//!     semiflow_wasm_bg.wasm.d.ts (TS declarations for the bg wasm exports)
 //!     semiflow_wasm.d.ts
 //!   node/
-//!     semiflow_wasm.cjs   (renamed from semiflow_wasm.js produced by --target nodejs)
-//!     semiflow_wasm.wasm
+//!     semiflow_wasm.cjs          (renamed from semiflow_wasm.js produced by --target nodejs)
+//!     semiflow_wasm_bg.wasm      (nodejs glue loads via __dirname/semiflow_wasm_bg.wasm)
+//!     semiflow_wasm_bg.wasm.d.ts
 //! ```
 //!
 //! The caller (CI workflow) runs `npm pack` and `npm publish` afterwards.
@@ -106,35 +108,45 @@ fn run_wasm_pack_release(target: &str, out_dir: &str, root: &Path) -> Result<()>
 /// Copy build artifacts from `pkg-web/` and `pkg-node/` into `dist/npm/`.
 ///
 /// Layout:
-/// - `dist/npm/web/` ← `pkg-web/{js,wasm,d.ts}` files
-/// - `dist/npm/node/` ← `pkg-node/{js,wasm}` files; `.js` renamed to `.cjs`
+/// - `dist/npm/web/` ← `pkg-web/{js,_bg.wasm,_bg.wasm.d.ts,d.ts}` files
+/// - `dist/npm/node/` ← `pkg-node/{.js→.cjs,_bg.wasm,_bg.wasm.d.ts}` files
+///
+/// wasm-bindgen emits `semiflow_wasm_bg.wasm` (not `semiflow_wasm.wasm`).
+/// The JS glue hard-codes this `_bg` name in both targets, so we must
+/// preserve it exactly — renaming would break the JS→wasm link at runtime.
 fn assemble_dist(dist: &Path, pkg_web: &Path, pkg_node: &Path, _root: &Path) -> Result<()> {
     let web_dir = dist.join("web");
     let node_dir = dist.join("node");
     fs::create_dir_all(&web_dir).context("create dist/npm/web/")?;
     fs::create_dir_all(&node_dir).context("create dist/npm/node/")?;
 
+    // Web: copy JS glue, the _bg wasm (referenced by URL in the glue), and TS types.
     copy_dir_matching(
         pkg_web,
         &web_dir,
         &[
             "semiflow_wasm.js",
-            "semiflow_wasm.wasm",
+            "semiflow_wasm_bg.wasm",
+            "semiflow_wasm_bg.wasm.d.ts",
             "semiflow_wasm.d.ts",
         ],
     )?;
 
-    // Node build: rename .js → .cjs (CommonJS convention)
+    // Node build: rename .js → .cjs (CommonJS convention).
+    // The .cjs still loads `${__dirname}/semiflow_wasm_bg.wasm`, so keep that name.
     let node_js = pkg_node.join("semiflow_wasm.js");
-    let node_wasm = pkg_node.join("semiflow_wasm.wasm");
     if !node_js.exists() {
         bail!("expected pkg-node/semiflow_wasm.js — was --target nodejs build successful?");
     }
     fs::copy(&node_js, node_dir.join("semiflow_wasm.cjs"))
         .context("copy semiflow_wasm.js → node/semiflow_wasm.cjs")?;
-    if node_wasm.exists() {
-        fs::copy(&node_wasm, node_dir.join("semiflow_wasm.wasm")).context("copy node wasm")?;
-    }
+
+    // Copy the _bg wasm and its TS declarations for the node target.
+    copy_dir_matching(
+        pkg_node,
+        &node_dir,
+        &["semiflow_wasm_bg.wasm", "semiflow_wasm_bg.wasm.d.ts"],
+    )?;
     Ok(())
 }
 
@@ -207,10 +219,10 @@ fn verify_layout(dist: &Path) -> Result<()> {
     let required: &[&str] = &[
         "package.json",
         "web/semiflow_wasm.js",
-        "web/semiflow_wasm.wasm",
+        "web/semiflow_wasm_bg.wasm",
         "web/semiflow_wasm.d.ts",
         "node/semiflow_wasm.cjs",
-        "node/semiflow_wasm.wasm",
+        "node/semiflow_wasm_bg.wasm",
     ];
     let mut missing: Vec<&str> = Vec::new();
     for rel in required {
