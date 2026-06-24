@@ -47,9 +47,12 @@ lto = "thin"
 # Inherits release but overrides panic = "unwind" so that
 # catch_unwind() is NOT a no-op (panic = "abort" in [profile.release] would
 # turn catch_unwind into a no-op, breaking the panic boundary across FFI/PyO3).
+# strip=true removes DWARF symbols (unstripped ~1.42 MB → stripped ~1.24 MB);
+# does not affect runtime performance (symbols are not used at call time).
 [profile.release-ffi]
 inherits = "release"
 panic = "unwind"
+strip = true
 
 # WASM binary-size profile (D2, v0.13.0).
 # Targets <500 KB stripped WASM bundle per ADR-0028 Amendment 1 (panic=abort correct

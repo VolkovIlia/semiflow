@@ -9,7 +9,7 @@
 //! |----------|--------|
 //! | `semiflow-wasm/pkg-web/*.wasm`  | 500 KB |
 //! | `semiflow-wasm/pkg-node/*.wasm` | 500 KB |
-//! | `semiflow-ffi` cdylib (Linux)   |   1 MB |
+//! | `semiflow-ffi` cdylib (Linux)   | 1.5 MB |
 //! | `semiflow-py` cdylib            |   5 MB |
 //!
 //! ## CI integration
@@ -54,12 +54,15 @@ const BUDGETS: &[Budget] = &[
     Budget {
         label: "FFI cdylib (release-ffi, Linux)",
         pattern: "target/release-ffi/libsemiflow_ffi.so",
-        limit_bytes: 1024 * 1024,
+        // Operator-zoo bindings grew the stripped cdylib to ~1.24 MB; 1.5 MB keeps
+        // a meaningful ceiling to catch future bloat while reflecting actual size.
+        limit_bytes: 1536 * 1024,
     },
     Budget {
         label: "FFI cdylib (release-ffi, macOS)",
         pattern: "target/release-ffi/libsemiflow_ffi.dylib",
-        limit_bytes: 1024 * 1024,
+        // Same rationale as Linux entry above.
+        limit_bytes: 1536 * 1024,
     },
     Budget {
         label: "PyO3 cdylib (release-ffi, Linux)",
