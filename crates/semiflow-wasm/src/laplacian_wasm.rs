@@ -42,11 +42,10 @@
 
 use std::sync::Arc;
 
+use semiflow::{Graph, Laplacian, LaplacianKind};
 use wasm_bindgen::prelude::*;
 
-use crate::error::make_js_error;
-use crate::graph_wasm::GraphPath;
-use semiflow::{Graph, Laplacian, LaplacianKind};
+use crate::{error::make_js_error, graph_wasm::GraphPath};
 
 // ---------------------------------------------------------------------------
 // Laplacian JS class
@@ -83,7 +82,10 @@ impl LaplacianWasm {
         }
         let g = Arc::new(Graph::<f64>::path(n));
         let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
-        Ok(LaplacianWasm { inner: lap, graph: g })
+        Ok(LaplacianWasm {
+            inner: lap,
+            graph: g,
+        })
     }
 
     /// Assemble the symmetric normalized Laplacian
@@ -102,7 +104,10 @@ impl LaplacianWasm {
         }
         let g = Arc::new(Graph::<f64>::path(n));
         let lap = Arc::new(Laplacian::assemble_normalized(&g));
-        Ok(LaplacianWasm { inner: lap, graph: g })
+        Ok(LaplacianWasm {
+            inner: lap,
+            graph: g,
+        })
     }
 
     /// Number of nodes in the Laplacian.
@@ -173,9 +178,9 @@ impl LaplacianWasm {
     #[wasm_bindgen(js_name = "toDense")]
     pub fn to_dense(&self) -> Result<Vec<f64>, JsValue> {
         let n = self.inner.n_nodes();
-        let size = n.checked_mul(n).ok_or_else(|| {
-            make_js_error("OutOfDomain", "n * n overflows usize")
-        })?;
+        let size = n
+            .checked_mul(n)
+            .ok_or_else(|| make_js_error("OutOfDomain", "n * n overflows usize"))?;
         let mut buf = vec![0.0_f64; size];
         let row_ptr = self.inner.row_ptr();
         let col_idx = self.inner.col_idx();
@@ -232,7 +237,11 @@ impl GraphTrajWasm {
             return Err(make_js_error("OutOfDomain", "t_horizon must be > 0"));
         }
         let n = graph.n_nodes() as usize;
-        Ok(GraphTrajWasm { n_nodes: n, t_horizon, n_segments: 1 })
+        Ok(GraphTrajWasm {
+            n_nodes: n,
+            t_horizon,
+            n_segments: 1,
+        })
     }
 
     /// Number of nodes in the trajectory's graph.

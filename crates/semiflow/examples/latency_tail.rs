@@ -31,8 +31,13 @@
 #[cfg(feature = "tracking-alloc")]
 #[allow(unsafe_code)]
 mod tracking {
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering::{Relaxed, Acquire}};
+    use std::{
+        alloc::{GlobalAlloc, Layout, System},
+        sync::atomic::{
+            AtomicI64, AtomicUsize,
+            Ordering::{Acquire, Relaxed},
+        },
+    };
     pub struct Alloc;
     static CUR: AtomicUsize = AtomicUsize::new(0);
     static PEAK: AtomicUsize = AtomicUsize::new(0);

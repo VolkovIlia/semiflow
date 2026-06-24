@@ -59,16 +59,15 @@
 // all values are grid sizes or step counts ≪ 2^52, so precision loss is impossible in practice.
 #![allow(clippy::cast_precision_loss)]
 
+// Virtual-node sampler: SepticHermite O(dx⁸), floor ≈ 1.49e-12 (ADR-0109 v6.0+).
+// QuinticHermite removed at v7.0 (ADR-0109 12-month removal clock fulfilled).
 use crate::{
     boundary::BoundaryPolicy,
     error::SemiflowError,
     grid::Grid1D,
     grid_chebyshev_nodes::{chebyshev_nodes, chebyshev_weights, is_supported_m},
+    grid_chebyshev_septic::sample_septic_1d as sample_virtual_node,
 };
-
-// Virtual-node sampler: SepticHermite O(dx⁸), floor ≈ 1.49e-12 (ADR-0109 v6.0+).
-// QuinticHermite removed at v7.0 (ADR-0109 12-month removal clock fulfilled).
-use crate::grid_chebyshev_septic::sample_septic_1d as sample_virtual_node;
 
 /// Guard width for removable-singularity: when |x - `x_k`| < `EPSILON_GUARD`, return `f_k` directly.
 /// Uses a generous multiple of machine epsilon scaled by dx.

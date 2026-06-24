@@ -17,8 +17,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
 
-use std::f64::consts::TAU as TWO_PI;
-use std::sync::Arc;
+use std::{f64::consts::TAU as TWO_PI, sync::Arc};
 
 use semiflow::{
     chernoff::{ApplyChernoffExt, ChernoffFunction},

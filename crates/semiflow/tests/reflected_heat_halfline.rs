@@ -26,7 +26,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // n, n_steps ≤ 1024, well within 2^52
-#![allow(clippy::doc_markdown)]        // math notation in doc comments (K_N, n_Chernoff, etc.)
+#![allow(clippy::doc_markdown)] // math notation in doc comments (K_N, n_Chernoff, etc.)
 
 use semiflow::{
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff},

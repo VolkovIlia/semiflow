@@ -37,13 +37,9 @@ use crate::{
 
 /// Build a `Grid1D<Dual<F>>` matching the geometry of a `Grid1D<F>`.
 fn dual_grid<F: SemiflowFloat>(g: &Grid1D<F>) -> Grid1D<Dual<F>> {
-    Grid1D::<Dual<F>>::new_generic(
-        Dual::constant(g.xmin),
-        Dual::constant(g.xmax),
-        g.n,
-    )
-    .expect("dual grid from valid primal grid")
-    .with_interp(g.interp)
+    Grid1D::<Dual<F>>::new_generic(Dual::constant(g.xmin), Dual::constant(g.xmax), g.n)
+        .expect("dual grid from valid primal grid")
+        .with_interp(g.interp)
 }
 
 // ---------------------------------------------------------------------------
@@ -95,15 +91,30 @@ fn step_jacobian_col_region<F: SemiflowFloat>(
     let xmin_f64 = grid.xmin.to_f64().unwrap_or(f64::NEG_INFINITY);
     let xmax_f64 = grid.xmax.to_f64().unwrap_or(f64::INFINITY);
     let n_minus1 = (n_nodes - 1).max(1);
+    // cast_precision_loss: n_minus1 < 2^52 in practice (grid size ≤ billions).
+    #[allow(clippy::cast_precision_loss)]
     let dx_f64 = (xmax_f64 - xmin_f64) / n_minus1 as f64;
 
     // Build per-region dual kernel. a'=a''=0 for const-per-region (§51.10 scope).
     let kernel_dual = DiffusionChernoff::<Dual<F>>::with_closure(
         move |x: Dual<F>| {
             let xv = x.value.to_f64().unwrap_or(xmin_f64);
+            // cast_possible_truncation: `.round()` bounds the f64; clamp below guards sign.
+            // cast_sign_loss: clamp(0, …) ensures non-negative before usize cast.
+            // cast_possible_wrap: n_minus1 < isize::MAX (grid size limited in practice).
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_possible_wrap
+            )]
             let raw = ((xv - xmin_f64) / dx_f64).round() as isize;
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
             let idx = raw.clamp(0, n_minus1 as isize) as usize;
-            if is_in_r_a[idx] { Dual::variable(theta_r) } else { Dual::constant(tbr_a[idx]) }
+            if is_in_r_a[idx] {
+                Dual::variable(theta_r)
+            } else {
+                Dual::constant(tbr_a[idx])
+            }
         },
         |_: Dual<F>| Dual::constant(F::zero()),
         |_: Dual<F>| Dual::constant(F::zero()),
@@ -228,6 +239,8 @@ fn backward_step_kvec<F: SemiflowFloat>(
     let k = rmap.region_count();
     let n = kernel.grid.n;
     // (b) Per-region gradient accumulation.
+    // `r` is passed as region index to step_jacobian_col_region, so iter() is not applicable.
+    #[allow(clippy::needless_range_loop)]
     for r in 0..k {
         let b_kr = step_jacobian_col_region(kernel, tau, u_prev, theta, rmap, r)?;
         let dot: F = lambda
@@ -264,32 +277,15 @@ pub(crate) fn backward_sweep<F: SemiflowFloat>(
     theta: &[F],
     rmap: &RegionMap,
 ) -> Result<Vec<F>, SemiflowError> {
-    let n = schedule.n_steps;
-    let stride = schedule.stride;
-    let n_vals = u_n.values.len();
-    let k = rmap.region_count();
-
-    // ── 1. Seed cotangent λ_n = 2(u_n − target) ───────────────────────────
-    let two = from_f64::<F>(2.0);
-    let mut lambda: Vec<F> = (0..n_vals)
-        .map(|i| two * (u_n.values[i] - target.values[i]))
-        .collect();
-    let mut grad = vec![F::zero(); k];
-
+    let (mut lambda, mut grad, ft_kvec) = init_sweep_state(kernel, tau, u_n, target, rmap)?;
     let fwd = |s: F, u: &GridFn1D<F>| kernel.apply_f(s, u);
     let tau_dual = Dual::constant(tau);
-
-    // ── 1b. For K>1: build exact F^⊤ via unit-vector probing (once per sweep).
-    //        F is time-homogeneous so we build it ONCE and reuse for all n steps.
-    let ft_kvec: Option<Vec<F>> = if k > 1 {
-        Some(build_f_transpose(kernel, tau)?)
-    } else {
-        None
-    };
+    let n = schedule.n_steps;
+    let stride = schedule.stride;
+    let k = rmap.region_count();
 
     // ── 2. Backward loop k = n … 1 (STRICTLY DECREASING) ─────────────────
     for step in (1..=n).rev() {
-        // (a) Replay u_{step-1} from nearest checkpoint.
         let base = ((step - 1) / stride) * stride;
         let ck_idx = base / stride;
         let seg = recompute_segment(&fwd, tau, &checkpoints[ck_idx], base, step - 1)?;
@@ -314,4 +310,37 @@ pub(crate) fn backward_sweep<F: SemiflowFloat>(
     }
 
     Ok(grad)
+}
+
+/// Initialise cotangent vector, gradient accumulator, and optional F^⊤ matrix.
+///
+/// Returns `(lambda, grad, ft_kvec)`. `ft_kvec` is `Some` only when K>1.
+///
+/// # Errors
+/// Returns `SemiflowError` if F^⊤ construction fails.
+// (Vec<F>, Vec<F>, Option<Vec<F>>) = (lambda, grad, ft_kvec) — 3-tuple is simpler than a struct.
+#[allow(clippy::type_complexity)]
+fn init_sweep_state<F: SemiflowFloat>(
+    kernel: &DiffusionChernoff<F>,
+    tau: F,
+    u_n: &GridFn1D<F>,
+    target: &GridFn1D<F>,
+    rmap: &RegionMap,
+) -> Result<(Vec<F>, Vec<F>, Option<Vec<F>>), SemiflowError> {
+    let two = from_f64::<F>(2.0);
+    let n_vals = u_n.values.len();
+    let k = rmap.region_count();
+    // Seed cotangent λ_n = 2(u_n − target).
+    let lambda: Vec<F> = (0..n_vals)
+        .map(|i| two * (u_n.values[i] - target.values[i]))
+        .collect();
+    let grad = vec![F::zero(); k];
+    // For K>1: build exact F^⊤ via unit-vector probing (once per sweep).
+    // F is time-homogeneous so it is reused across all n steps.
+    let ft_kvec = if k > 1 {
+        Some(build_f_transpose(kernel, tau)?)
+    } else {
+        None
+    };
+    Ok((lambda, grad, ft_kvec))
 }

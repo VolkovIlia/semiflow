@@ -34,10 +34,9 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
 
-use semiflow::chernoff::ApplyChernoffExt;
 use semiflow::{
-    Diffusion4thChernoff, DiffusionChernoff, DriftReactionChernoff, Dual, Grid1D, GridFn1D,
-    InterpKind,
+    chernoff::ApplyChernoffExt, Diffusion4thChernoff, DiffusionChernoff, DriftReactionChernoff,
+    Dual, Grid1D, GridFn1D, InterpKind,
 };
 
 // ---------------------------------------------------------------------------

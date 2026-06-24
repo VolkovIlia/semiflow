@@ -28,10 +28,7 @@
 //! Build with `--profile release-ffi` (`panic = "unwind"`).
 
 #![allow(unsafe_code)]
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::too_many_arguments,
-)]
+#![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
 use std::os::raw::c_double;
 
@@ -40,8 +37,7 @@ use semiflow::{
     ChernoffSemigroup, Grid1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Opaque handle
@@ -260,7 +256,13 @@ fn build_matrix(
     build_matrix_kernel(a_diag, c_coupling, grid)?;
     let mut current = MatrixGridFn1D::<f64, 2>::new(grid);
     current.values.copy_from_slice(u0);
-    Ok(InnerMatrix { a_diag, c_coupling, n_steps, grid, current })
+    Ok(InnerMatrix {
+        a_diag,
+        c_coupling,
+        n_steps,
+        grid,
+        current,
+    })
 }
 
 /// Build `MatrixDiffusionChernoff<f64, 2>` with diagonal-a and symmetric coupling.
@@ -294,10 +296,7 @@ fn build_matrix_kernel(
     )
 }
 
-fn evolve_matrix(
-    inner: &mut InnerMatrix,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_matrix(inner: &mut InnerMatrix, t: f64) -> Result<(), semiflow::SemiflowError> {
     let kernel = build_matrix_kernel(inner.a_diag, inner.c_coupling, inner.grid)?;
     let sg = ChernoffSemigroup::new(kernel, inner.n_steps)?;
     let mut src = MatrixGridFn1D::<f64, 2>::new(inner.grid);

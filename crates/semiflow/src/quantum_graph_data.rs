@@ -7,17 +7,15 @@
 #![allow(clippy::cast_precision_loss)]
 
 extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 
+use super::quantum_graph::QuantumGraph;
 use crate::{
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     grid::Grid1D,
 };
-
-use super::quantum_graph::QuantumGraph;
 
 // ── Kirchhoff vertex ─────────────────────────────────────────────────────────
 
@@ -174,12 +172,15 @@ pub(crate) fn kirchhoff_gemv_inplace<F: SemiflowFloat>(mat: &[F], y: &mut [F], d
 // Exact float comparisons in tests verify norm_sup == 0 after exact cancellation.
 #[allow(clippy::float_cmp)]
 mod tests {
-    use super::*;
-    use crate::chernoff::ChernoffFunction;
-    use crate::quantum_graph::{QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal};
-    use crate::scratch::ScratchPool;
-    use crate::state::State;
     use core::f64::consts::PI;
+
+    use super::*;
+    use crate::{
+        chernoff::ChernoffFunction,
+        quantum_graph::{QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
+        scratch::ScratchPool,
+        state::State,
+    };
 
     #[test]
     fn path_graph_topology() {

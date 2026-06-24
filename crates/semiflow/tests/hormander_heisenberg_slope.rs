@@ -170,9 +170,7 @@ fn g_horm_heisenberg_slope() {
             .map(|(a, b)| (a - b).abs())
             .fold(0.0_f64, f64::max);
         self_errs.push(self_err);
-        println!(
-            "G_HORM_HEISENBERG n={n:3}: ‖u_n−u_{{2n}}‖={self_err:.4e}  tau={tau:.4e}"
-        );
+        println!("G_HORM_HEISENBERG n={n:3}: ‖u_n−u_{{2n}}‖={self_err:.4e}  tau={tau:.4e}");
     }
 
     // OLS slope of log(‖u_n - u_{2n}‖) vs log(n).
@@ -181,9 +179,7 @@ fn g_horm_heisenberg_slope() {
     let ys: Vec<f64> = self_errs.iter().map(|&e| e.ln()).collect();
     let slope = ols_slope(&xs, &ys);
 
-    println!(
-        "\nG_HORM_HEISENBERG OLS slope: {slope:.4}  (gate ≤ {SLOPE_GATE:.2})"
-    );
+    println!("\nG_HORM_HEISENBERG OLS slope: {slope:.4}  (gate ≤ {SLOPE_GATE:.2})");
 
     assert!(
         slope <= SLOPE_GATE,

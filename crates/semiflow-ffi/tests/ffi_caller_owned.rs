@@ -7,8 +7,8 @@
 #![allow(unsafe_code)]
 
 use semiflow_ffi::{
-    smf_evolve, smf_evolve_inplace, smf_state_free, smf_state_new_heat_1d_unit,
-    smf_state_values, SemiflowStatus,
+    smf_evolve, smf_evolve_inplace, smf_state_free, smf_state_new_heat_1d_unit, smf_state_values,
+    SemiflowStatus,
 };
 
 // ---------------------------------------------------------------------------
@@ -47,14 +47,8 @@ fn caller_owned_matches_v1_evolve() {
     // Path A: v1.0.0 smf_evolve + smf_state_values
     unsafe {
         let mut state_a = std::ptr::null_mut();
-        let rc = smf_state_new_heat_1d_unit(
-            XMIN,
-            XMAX,
-            N,
-            buf_a.as_ptr(),
-            buf_a.len(),
-            &mut state_a,
-        );
+        let rc =
+            smf_state_new_heat_1d_unit(XMIN, XMAX, N, buf_a.as_ptr(), buf_a.len(), &mut state_a);
         assert_eq!(rc, SemiflowStatus::Ok, "state_new Path A");
         let rc = smf_evolve(state_a, TAU, N_STEPS);
         assert_eq!(rc, SemiflowStatus::Ok, "evolve Path A");
@@ -66,14 +60,8 @@ fn caller_owned_matches_v1_evolve() {
     // Path B: Wave 5 smf_evolve_inplace
     unsafe {
         let mut state_b = std::ptr::null_mut();
-        let rc = smf_state_new_heat_1d_unit(
-            XMIN,
-            XMAX,
-            N,
-            buf_b.as_ptr(),
-            buf_b.len(),
-            &mut state_b,
-        );
+        let rc =
+            smf_state_new_heat_1d_unit(XMIN, XMAX, N, buf_b.as_ptr(), buf_b.len(), &mut state_b);
         assert_eq!(rc, SemiflowStatus::Ok, "state_new Path B");
         let rc = smf_evolve_inplace(state_b, buf_b.as_mut_ptr(), N, TAU, N_STEPS);
         assert_eq!(rc, SemiflowStatus::Ok, "evolve_inplace Path B");
@@ -94,8 +82,7 @@ fn caller_owned_matches_v1_evolve() {
 #[test]
 fn null_state_returns_null_ptr() {
     let mut buf = gaussian_init();
-    let rc =
-        unsafe { smf_evolve_inplace(std::ptr::null_mut(), buf.as_mut_ptr(), N, TAU, N_STEPS) };
+    let rc = unsafe { smf_evolve_inplace(std::ptr::null_mut(), buf.as_mut_ptr(), N, TAU, N_STEPS) };
     assert_eq!(rc, SemiflowStatus::NullPtr);
 }
 

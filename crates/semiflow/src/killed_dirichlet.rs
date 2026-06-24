@@ -36,9 +36,7 @@
 // all values are grid sizes or step counts ≪ 2^52, so precision loss is impossible in practice.
 #![allow(clippy::cast_precision_loss)]
 
-use alloc::boxed::Box;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec, vec::Vec};
 
 use crate::{
     chernoff::{ChernoffFunction, Growth},

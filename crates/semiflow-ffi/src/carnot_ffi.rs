@@ -24,10 +24,7 @@
 //! Build with `--profile release-ffi` (`panic = "unwind"`).
 
 #![allow(unsafe_code)]
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-)]
+#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
 use std::os::raw::c_double;
 
@@ -215,11 +212,7 @@ fn run_apply_real(
     Ok(out.values)
 }
 
-fn build_grid(
-    lo: f64,
-    hi: f64,
-    n: usize,
-) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
+fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }

@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     graph::Graph, graph_heat::GraphHeatChernoff, graph_signal::GraphSignal, graph_traj::GraphTraj,
     strang_graph::StrangSplitGraph, ChernoffFunction, ChernoffSemigroup,

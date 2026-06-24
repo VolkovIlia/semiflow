@@ -27,7 +27,7 @@ use crate::error::SemiflowError;
 /// `k` equal-size (± 1) regions. Each node belongs to exactly one region.
 #[derive(Clone, Debug)]
 pub struct RegionMap {
-    /// `region_of[i]` = region id r of node i.  len == n_grid.
+    /// `region_of[i]` = region id r of node i.  len == `n_grid`.
     region_of: Vec<usize>,
     region_count: usize,
 }
@@ -47,10 +47,11 @@ impl RegionMap {
             });
         }
         let per = n_grid / k;
-        let region_of: Vec<usize> = (0..n_grid)
-            .map(|i| (i / per).min(k - 1))
-            .collect();
-        Ok(Self { region_of, region_count: k })
+        let region_of: Vec<usize> = (0..n_grid).map(|i| (i / per).min(k - 1)).collect();
+        Ok(Self {
+            region_of,
+            region_count: k,
+        })
     }
 
     /// Build from an explicit node-to-region assignment vector.
@@ -70,23 +71,29 @@ impl RegionMap {
                 what: "RegionMap::from_vec: region id out of range",
             });
         }
-        Ok(Self { region_of, region_count: k })
+        Ok(Self {
+            region_of,
+            region_count: k,
+        })
     }
 
     /// Region id of node `i` (unchecked — caller must ensure `i < n_grid`).
     #[inline]
+    #[must_use]
     pub fn region_of(&self, i: usize) -> usize {
         self.region_of[i]
     }
 
     /// Number of regions K.
     #[inline]
+    #[must_use]
     pub fn region_count(&self) -> usize {
         self.region_count
     }
 
     /// Number of grid nodes.
     #[inline]
+    #[must_use]
     pub fn n_grid(&self) -> usize {
         self.region_of.len()
     }

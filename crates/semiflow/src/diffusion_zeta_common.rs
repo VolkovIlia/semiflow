@@ -7,10 +7,7 @@
 //! in the per-order modules — they differ in width (7-pt vs 9-pt), SIMD layout,
 //! and stencil-step formula.
 
-use crate::{
-    error::SemiflowError,
-    float::SemiflowFloat,
-};
+use crate::{error::SemiflowError, float::SemiflowFloat};
 
 /// Validate `tau`: must be finite and non-negative (f64).
 #[inline]

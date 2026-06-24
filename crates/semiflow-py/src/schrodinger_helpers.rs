@@ -182,10 +182,7 @@ pub(crate) fn extract_f64_vec(obj: &Bound<'_, PyAny>, name: &str) -> PyResult<Ve
 // ---------------------------------------------------------------------------
 
 /// Validate that both `re` and `im` slices contain only finite values.
-pub(crate) fn validate_psi_finite(
-    re: &[f64],
-    im: &[f64],
-) -> Result<(), semiflow::SemiflowError> {
+pub(crate) fn validate_psi_finite(re: &[f64], im: &[f64]) -> Result<(), semiflow::SemiflowError> {
     for &v in re.iter().chain(im.iter()) {
         if !v.is_finite() {
             return Err(semiflow::SemiflowError::DomainViolation {

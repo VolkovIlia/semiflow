@@ -12,11 +12,13 @@ extern crate alloc;
 
 use num_complex::Complex;
 
-use crate::carnot_complex::CplxGridFn5;
-use crate::carnot_stepk_helpers::lerp_idx_1d_f64;
-use crate::error::SemiflowError;
-use crate::grid_nd::GridND;
-use crate::hormander_engel_helpers::{GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL};
+use crate::{
+    carnot_complex::CplxGridFn5,
+    carnot_stepk_helpers::lerp_idx_1d_f64,
+    error::SemiflowError,
+    grid_nd::GridND,
+    hormander_engel_helpers::{GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL},
+};
 
 /// Apply `exp(sigma·X₁²)` with complex sigma to a complex grid function.
 ///

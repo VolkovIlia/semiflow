@@ -61,7 +61,7 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::needless_pass_by_value)] // Diffusion4thChernoff passed by value for Clone inside thread closure
-#![allow(clippy::too_many_lines)]         // parallel_y_pass is 51 lines due to detailed column-gather comments
+#![allow(clippy::too_many_lines)] // parallel_y_pass is 51 lines due to detailed column-gather comments
 
 use semiflow::{
     chernoff::ApplyChernoffExt, ChernoffFunction, ChernoffSemigroup, Diffusion4thChernoff, Grid1D,

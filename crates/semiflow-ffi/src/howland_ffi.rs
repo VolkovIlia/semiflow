@@ -29,7 +29,11 @@
 //! Build with `--profile release-ffi` (`panic = "unwind"`).
 
 #![allow(unsafe_code)]
-#![allow(clippy::cast_precision_loss, clippy::needless_pass_by_value, clippy::too_many_arguments)]
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments
+)]
 
 use std::os::raw::c_double;
 
@@ -235,7 +239,12 @@ fn build_howland(
     let slice = GridFn1D::new(grid, u0.to_vec())?;
     let samples: Vec<GridFn1D<f64>> = (0..n_t).map(|_| slice.clone()).collect();
     let state = HowlandState::new(samples)?;
-    Ok(HowlandState1D { lift, state, n, n_t })
+    Ok(HowlandState1D {
+        lift,
+        state,
+        n,
+        n_t,
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -115,7 +115,7 @@ pub enum SemiflowError {
 
     /// Operation requires a primitive not yet available for this inner type.
     ///
-    /// Returned by [`crate::AdjointChernoff::apply_into`] when called via
+    /// Returned by [`crate::adjoint::AdjointChernoff`] `apply_into` when called via
     /// `new_general` on an inner that does not implement
     /// [`crate::adjoint::AdjointApply`] (no transpose-apply primitive).
     ///
@@ -129,7 +129,7 @@ pub enum SemiflowError {
 
     /// Magnus convergence radius violated: `ρ̄_max · τ ≥ π/2`.
     ///
-    /// Returned by [`crate::MagnusGraphHeatChernoff::apply_into`] when
+    /// Returned by [`crate::magnus_graph::MagnusGraphHeatChernoff`] `apply_into` when
     /// `rho_bar_max * tau >= π/2` (50% safety margin vs. theoretical `< π`).
     ///
     /// Caller MUST reduce `τ` or supply a tighter `rho_bar_max` bound.

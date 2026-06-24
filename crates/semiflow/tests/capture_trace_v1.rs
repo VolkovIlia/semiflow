@@ -14,9 +14,7 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines)]
 
-use semiflow::{
-    boundary::InterpKind, grid::BoundaryPolicy, DiffusionChernoff, Grid1D, GridFn1D,
-};
+use semiflow::{boundary::InterpKind, grid::BoundaryPolicy, DiffusionChernoff, Grid1D, GridFn1D};
 
 /// Capture the v1.0.0 accepted-τ trajectory by re-implementing the substep loop.
 /// Since the current code cannot be instrumented directly we replay the formulas.

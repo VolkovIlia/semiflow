@@ -31,8 +31,12 @@ use crate::error::{err_to_js, make_js_error};
 // Coefficient stubs (unit diffusion, no drift/reaction)
 // ---------------------------------------------------------------------------
 
-extern "Rust" fn unit_a_hw(_: f64) -> f64 { 1.0 }
-extern "Rust" fn zero_hw(_: f64) -> f64 { 0.0 }
+extern "Rust" fn unit_a_hw(_: f64) -> f64 {
+    1.0
+}
+extern "Rust" fn zero_hw(_: f64) -> f64 {
+    0.0
+}
 
 // ---------------------------------------------------------------------------
 // Type aliases
@@ -149,12 +153,21 @@ impl Howland1D {
             return Err(make_js_error("OutOfDomain", "n_t must be >= 2"));
         }
         if !t_horizon.is_finite() || t_horizon <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "t_horizon must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "t_horizon must be finite and > 0",
+            ));
         }
         let buf = extract_u0_hw(u0, n)?;
         let (lift, state, grid) =
             build_howland_wasm(xmin, xmax, n, &buf, n_t, t_horizon).map_err(|e| err_to_js(&e))?;
-        Ok(Howland1D { lift, state, grid, n_t, t_horizon })
+        Ok(Howland1D {
+            lift,
+            state,
+            grid,
+            n_t,
+            t_horizon,
+        })
     }
 
     /// Advance by one full `t_horizon` sweep.

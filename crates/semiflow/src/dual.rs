@@ -18,8 +18,7 @@
 
 use core::{
     fmt,
-    ops::{Add, Div, Mul, Neg, Rem, Sub},
-    ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
 use num_traits::{Float, Num, NumCast, One, ToPrimitive, Zero};

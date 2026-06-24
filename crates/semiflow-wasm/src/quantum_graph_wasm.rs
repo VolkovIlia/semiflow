@@ -19,8 +19,8 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use semiflow::{
-    ChernoffSemigroup, GridFn1D, QuantumGraph as CoreQuantumGraph,
-    QuantumGraphHeatChernoff, QuantumGraphSignal,
+    ChernoffSemigroup, GridFn1D, QuantumGraph as CoreQuantumGraph, QuantumGraphHeatChernoff,
+    QuantumGraphSignal,
 };
 use wasm_bindgen::prelude::*;
 
@@ -60,12 +60,8 @@ impl QuantumGraphWasm {
         edge_length: f64,
         n_grid: u32,
     ) -> Result<QuantumGraphWasm, JsValue> {
-        let g = CoreQuantumGraph::<f64>::path(
-            n_edges as usize,
-            edge_length,
-            n_grid as usize,
-        )
-        .map_err(|e| err_to_js(&e))?;
+        let g = CoreQuantumGraph::<f64>::path(n_edges as usize, edge_length, n_grid as usize)
+            .map_err(|e| err_to_js(&e))?;
         Ok(Self { inner: g })
     }
 
@@ -84,12 +80,8 @@ impl QuantumGraphWasm {
         edge_length: f64,
         n_grid: u32,
     ) -> Result<QuantumGraphWasm, JsValue> {
-        let g = CoreQuantumGraph::<f64>::star(
-            n_arms as usize,
-            edge_length,
-            n_grid as usize,
-        )
-        .map_err(|e| err_to_js(&e))?;
+        let g = CoreQuantumGraph::<f64>::star(n_arms as usize, edge_length, n_grid as usize)
+            .map_err(|e| err_to_js(&e))?;
         Ok(Self { inner: g })
     }
 
@@ -150,9 +142,13 @@ impl QuantumGraphHeatWasm {
         let graph = qg.inner.clone();
         let n_edges = graph.n_edges;
         let n_per_edge = graph.edge_grids[0].n;
-        let kernel = QuantumGraphHeatChernoff::new(graph.clone())
-            .map_err(|e| err_to_js(&e))?;
-        Ok(Self { kernel, graph, n_edges, n_per_edge })
+        let kernel = QuantumGraphHeatChernoff::new(graph.clone()).map_err(|e| err_to_js(&e))?;
+        Ok(Self {
+            kernel,
+            graph,
+            n_edges,
+            n_per_edge,
+        })
     }
 
     /// Evolve `f0` by time `t` using `n_steps` Chernoff steps.
@@ -162,12 +158,7 @@ impl QuantumGraphHeatWasm {
     ///
     /// # Errors
     /// See struct-level error table.
-    pub fn evolve(
-        &self,
-        t: f64,
-        n_steps: u32,
-        f0: &[f64],
-    ) -> Result<Vec<f64>, JsValue> {
+    pub fn evolve(&self, t: f64, n_steps: u32, f0: &[f64]) -> Result<Vec<f64>, JsValue> {
         let total = self.n_edges * self.n_per_edge;
         validate_qg_inputs(f0, total, t, n_steps)?;
         let sg = ChernoffSemigroup::new(self.kernel.clone(), n_steps as usize)
@@ -212,7 +203,10 @@ fn signal_from_flat(
         .enumerate()
         .map(|(e, &g)| {
             let base = e * n_per_edge;
-            GridFn1D { values: flat[base..base + n_per_edge].to_vec(), grid: g }
+            GridFn1D {
+                values: flat[base..base + n_per_edge].to_vec(),
+                grid: g,
+            }
         })
         .collect();
     QuantumGraphSignal { per_edge }
@@ -226,12 +220,7 @@ fn gather_flat(sig: &QuantumGraphSignal<f64>, n_per_edge: usize) -> Vec<f64> {
     out
 }
 
-fn validate_qg_inputs(
-    f0: &[f64],
-    total: usize,
-    t: f64,
-    n_steps: u32,
-) -> Result<(), JsValue> {
+fn validate_qg_inputs(f0: &[f64], total: usize, t: f64, n_steps: u32) -> Result<(), JsValue> {
     if f0.len() != total {
         return Err(make_js_error(
             "GridMismatch",

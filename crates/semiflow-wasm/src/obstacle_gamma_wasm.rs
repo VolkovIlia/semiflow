@@ -42,14 +42,13 @@
 #![allow(unsafe_code)]
 
 use js_sys::{Float64Array, Object, Reflect, Uint8Array};
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
-    ChernoffFunction, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D,
-    Obstacle, ObstacleChernoff, ObstacleChernoffND, ScratchPool, SemiflowError, SquareMatrix,
+    ChernoffFunction, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, Obstacle,
+    ObstacleChernoff, ObstacleChernoffND, ScratchPool, SemiflowError, SquareMatrix,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 
@@ -104,7 +103,10 @@ impl Obstacle<f64> for WasmGammaArrayObstacle {
                 value: active.len() as f64,
             });
         }
-        for (flag, (wv, gv)) in active.iter_mut().zip(w.values.iter().zip(self.values.iter())) {
+        for (flag, (wv, gv)) in active
+            .iter_mut()
+            .zip(w.values.iter().zip(self.values.iter()))
+        {
             *flag = *wv > *gv;
         }
         Ok(())
@@ -179,11 +181,13 @@ impl ObstacleGammaV8Wasm {
             return Err(make_js_error("NanInf", "level must be finite"));
         }
         let grid = Grid1D::new(domain_lo, domain_hi, n_grid).map_err(|e| err_to_js(&e))?;
-        let diff =
-            DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
+        let diff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
         let obs = ConstantObstacle::new(level).map_err(|e| err_to_js(&e))?;
         let kernel: GammaConst = ObstacleChernoff::new(diff, obs).map_err(|e| err_to_js(&e))?;
-        Ok(ObstacleGammaV8Wasm { kernel: GammaVariant::Const(kernel), grid })
+        Ok(ObstacleGammaV8Wasm {
+            kernel: GammaVariant::Const(kernel),
+            grid,
+        })
     }
 
     /// Construct with a per-node array obstacle floor.
@@ -210,11 +214,13 @@ impl ObstacleGammaV8Wasm {
         let mut obs_buf = vec![0.0f64; n_grid];
         obstacle_array.copy_to(&mut obs_buf);
         let grid = Grid1D::new(domain_lo, domain_hi, n_grid).map_err(|e| err_to_js(&e))?;
-        let diff =
-            DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
+        let diff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
         let obs = WasmGammaArrayObstacle::new(obs_buf).map_err(|e| err_to_js(&e))?;
         let kernel: GammaArray = ObstacleChernoff::new(diff, obs).map_err(|e| err_to_js(&e))?;
-        Ok(ObstacleGammaV8Wasm { kernel: GammaVariant::Array(kernel), grid })
+        Ok(ObstacleGammaV8Wasm {
+            kernel: GammaVariant::Array(kernel),
+            grid,
+        })
     }
 
     /// Number of grid nodes.
@@ -236,7 +242,10 @@ impl ObstacleGammaV8Wasm {
     pub fn inactive_gamma(&self, v: &Float64Array) -> Result<JsValue, JsValue> {
         let n = self.grid.n;
         if v.length() as usize != n {
-            return Err(make_js_error("GridMismatch", "v length does not match nGrid"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "v length does not match nGrid",
+            ));
         }
         let mut v_buf = vec![0.0f64; n];
         v.copy_to(&mut v_buf);
@@ -313,7 +322,12 @@ impl ObstacleND2Wasm {
         let gx = Grid1D::new(xmin, xmax, nx).map_err(|e| err_to_js(&e))?;
         let gy = Grid1D::new(ymin, ymax, ny).map_err(|e| err_to_js(&e))?;
         let grid_nd = GridND::<f64, 2>::new([gx, gy]).map_err(|e| err_to_js(&e))?;
-        Ok(ObstacleND2Wasm { level, grid_nd, nx, ny })
+        Ok(ObstacleND2Wasm {
+            level,
+            grid_nd,
+            nx,
+            ny,
+        })
     }
 
     /// Return `[nx, ny]` as a two-element array.
@@ -398,7 +412,13 @@ fn validate_gamma_domain(lo: f64, hi: f64, n: usize) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn validate_nd2_domain(xmin: f64, xmax: f64, ymin: f64, ymax: f64, level: f64) -> Result<(), JsValue> {
+fn validate_nd2_domain(
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+    level: f64,
+) -> Result<(), JsValue> {
     if !xmin.is_finite() || !xmax.is_finite() || !ymin.is_finite() || !ymax.is_finite() {
         return Err(make_js_error("NanInf", "domain bounds must be finite"));
     }

@@ -45,7 +45,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     varcoef_magnus_graph::{
         compute_rho_bar as core_compute_rho_bar, VarCoefMagnusGraphHeatChernoff, WeightAtTime,

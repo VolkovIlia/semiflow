@@ -43,9 +43,8 @@ impl From<&SemiflowError> for SemiflowStatus {
             SemiflowError::DomainViolation { what, value } => map_domain_violation(what, *value),
             SemiflowError::GridUnderresolved { .. } => SemiflowStatus::BoundaryFailure,
             // Both convergence-related variants map to the same status code.
-            SemiflowError::ConvergenceFailed { .. } | SemiflowError::AdaptiveStepRejected { .. } => {
-                SemiflowStatus::ConvergenceFailed
-            }
+            SemiflowError::ConvergenceFailed { .. }
+            | SemiflowError::AdaptiveStepRejected { .. } => SemiflowStatus::ConvergenceFailed,
             SemiflowError::Unsupported { .. } => SemiflowStatus::Unsupported,
             SemiflowError::CflViolated { .. } => SemiflowStatus::CflViolated,
             // Non-exhaustive guard: future variants map to OutOfDomain.

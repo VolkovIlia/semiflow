@@ -4,8 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use alloc::sync::Arc;
-    use alloc::vec;
+    use alloc::{sync::Arc, vec};
 
     use crate::{
         graph::{Graph, Laplacian},

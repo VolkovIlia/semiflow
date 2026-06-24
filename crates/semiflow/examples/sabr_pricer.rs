@@ -75,11 +75,13 @@
 // Integration test: allows for numerical / binding wrapper patterns.
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
-use std::time::Instant;
+use std::{
+    env,
+    fs::{create_dir_all, File},
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 use semiflow::{
     chernoff::ApplyChernoffExt, BoundaryPolicy, Grid1D, Grid2D, GridFn2D, HdrSnapshot, Hyperbolic2,

@@ -27,13 +27,10 @@
 //! ev.evolve(state, t_final=0.1, n_steps=4)
 //! ```
 
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::{prelude::*, types::PyTuple};
 use semiflow::{CoupledTtChernoff, CouplingTopology};
 
-use crate::error::new_pyerr;
-use crate::panic::catch_panic_py;
-use crate::tt_py::PyTtState;
+use crate::{error::new_pyerr, panic::catch_panic_py, tt_py::PyTtState};
 
 // ---------------------------------------------------------------------------
 // TtCoupledEvolver pyclass
@@ -109,12 +106,7 @@ impl PyTtCoupledEvolver {
     /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — `n_steps` == 0, `t_final` non-finite/negative,
     ///     or `ev.ndim() != state.ndim()`.
-    fn evolve(
-        &self,
-        state: &mut PyTtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> PyResult<()> {
+    fn evolve(&self, state: &mut PyTtState, t_final: f64, n_steps: usize) -> PyResult<()> {
         catch_panic_py!({
             validate_evolve_args(t_final, n_steps, "TtCoupledEvolver.evolve")?;
             if self.inner.ndim() != state.inner.ndim() {
@@ -136,14 +128,23 @@ impl PyTtCoupledEvolver {
 /// Validate scalar coefficients for finiteness and non-negativity of a.
 fn validate_coeffs(a: &[f64], b: &[f64], c: f64, eps: f64, ctx: &str) -> PyResult<()> {
     if a.is_empty() {
-        return Err(new_pyerr("GridMismatch", &format!("{ctx}: axis list is empty")));
+        return Err(new_pyerr(
+            "GridMismatch",
+            &format!("{ctx}: axis list is empty"),
+        ));
     }
     if !c.is_finite() || !eps.is_finite() {
-        return Err(new_pyerr("NanInf", &format!("{ctx}: c or eps_round is non-finite")));
+        return Err(new_pyerr(
+            "NanInf",
+            &format!("{ctx}: c or eps_round is non-finite"),
+        ));
     }
     for (j, &v) in a.iter().enumerate() {
         if !v.is_finite() || v < 0.0 {
-            return Err(new_pyerr("NanInf", &format!("{ctx}: a[{j}] must be finite >= 0")));
+            return Err(new_pyerr(
+                "NanInf",
+                &format!("{ctx}: a[{j}] must be finite >= 0"),
+            ));
         }
     }
     for (j, &v) in b.iter().enumerate() {
@@ -184,35 +185,51 @@ fn decode_topology(
                 new_pyerr("NanInf", &format!("{ctx}: Tridiagonal rho must be float"))
             })?;
             if !rho.is_finite() {
-                return Err(new_pyerr("NanInf", &format!("{ctx}: Tridiagonal rho is non-finite")));
+                return Err(new_pyerr(
+                    "NanInf",
+                    &format!("{ctx}: Tridiagonal rho is non-finite"),
+                ));
             }
             Ok(CouplingTopology::Tridiagonal(rho))
         }
-        "Pairs" => {
-            let raw: Vec<(usize, usize, f64)> = tup
-                .get_item(1)?
-                .extract::<Vec<(usize, usize, f64)>>()
-                .map_err(|_| {
-                    new_pyerr(
-                        "GridMismatch",
-                        &format!("{ctx}: Pairs expects list of (j, k, rho) tuples"),
-                    )
-                })?;
-            for &(j, k, rho) in &raw {
-                if j >= n_axes || k >= n_axes {
-                    return Err(new_pyerr("GridMismatch", &format!("{ctx}: pair axis index out of range")));
-                }
-                if !rho.is_finite() {
-                    return Err(new_pyerr("NanInf", &format!("{ctx}: pair rho is non-finite")));
-                }
-            }
-            Ok(CouplingTopology::Pairs(raw))
-        }
+        "Pairs" => decode_topology_pairs(tup, n_axes, ctx),
         other => Err(new_pyerr(
             "OutOfDomain",
             &format!("{ctx}: unknown coupling tag '{other}'; expected None/Tridiagonal/Pairs"),
         )),
     }
+}
+
+/// Decode the `"Pairs"` coupling variant from its tuple representation.
+fn decode_topology_pairs(
+    tup: &Bound<'_, PyTuple>,
+    n_axes: usize,
+    ctx: &str,
+) -> PyResult<CouplingTopology<f64>> {
+    let raw: Vec<(usize, usize, f64)> = tup
+        .get_item(1)?
+        .extract::<Vec<(usize, usize, f64)>>()
+        .map_err(|_| {
+            new_pyerr(
+                "GridMismatch",
+                &format!("{ctx}: Pairs expects list of (j, k, rho) tuples"),
+            )
+        })?;
+    for &(j, k, rho) in &raw {
+        if j >= n_axes || k >= n_axes {
+            return Err(new_pyerr(
+                "GridMismatch",
+                &format!("{ctx}: pair axis index out of range"),
+            ));
+        }
+        if !rho.is_finite() {
+            return Err(new_pyerr(
+                "NanInf",
+                &format!("{ctx}: pair rho is non-finite"),
+            ));
+        }
+    }
+    Ok(CouplingTopology::Pairs(raw))
 }
 
 /// Precheck fail-loud walls (mirrors `tt_coupled_ffi.rs::precheck_coupled_walls`).
@@ -256,10 +273,16 @@ fn precheck_walls(
 /// Validate evolve arguments.
 fn validate_evolve_args(t_final: f64, n_steps: usize, ctx: &str) -> PyResult<()> {
     if n_steps == 0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: n_steps must be >= 1")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: n_steps must be >= 1"),
+        ));
     }
     if !t_final.is_finite() || t_final < 0.0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: t_final must be finite >= 0")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: t_final must be finite >= 0"),
+        ));
     }
     Ok(())
 }

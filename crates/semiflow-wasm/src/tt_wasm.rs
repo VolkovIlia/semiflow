@@ -38,9 +38,8 @@
     clippy::too_many_arguments
 )]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{TtChernoff, TtState as CoreTtState};
+use wasm_bindgen::prelude::*;
 
 use crate::error::make_js_error;
 
@@ -52,15 +51,23 @@ use crate::error::make_js_error;
 fn decode_offsets(offsets: &js_sys::Uint32Array) -> Result<Vec<usize>, JsValue> {
     let len = offsets.length() as usize;
     if len < 2 {
-        return Err(make_js_error("GridMismatch", "TT: offsets must have length >= 2"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "TT: offsets must have length >= 2",
+        ));
     }
-    let v: Vec<usize> = (0..len).map(|i| offsets.get_index(i as u32) as usize).collect();
+    let v: Vec<usize> = (0..len)
+        .map(|i| offsets.get_index(i as u32) as usize)
+        .collect();
     if v[0] != 0 {
         return Err(make_js_error("GridMismatch", "TT: offsets[0] must be 0"));
     }
     for win in v.windows(2) {
         if win[1] <= win[0] {
-            return Err(make_js_error("GridMismatch", "TT: offsets must be strictly increasing"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "TT: offsets must be strictly increasing",
+            ));
         }
     }
     Ok(v)
@@ -74,7 +81,10 @@ fn extract_slices(
 ) -> Result<Vec<Vec<f64>>, JsValue> {
     let total = offsets[n_axes];
     if data.length() as usize != total {
-        return Err(make_js_error("GridMismatch", "TT: data.length must equal offsets[n_axes]"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "TT: data.length must equal offsets[n_axes]",
+        ));
     }
     let mut raw = vec![0.0f64; total];
     data.copy_to(&mut raw);
@@ -126,10 +136,15 @@ impl TtState {
         let off = decode_offsets(offsets)?;
         let n_axes = off.len() - 1;
         if n_axes == 0 {
-            return Err(make_js_error("GridMismatch", "TtState: n_axes must be >= 1"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "TtState: n_axes must be >= 1",
+            ));
         }
         let slices = extract_slices(data, &off, n_axes)?;
-        Ok(TtState { inner: CoreTtState::<f64>::rank1_separable(slices) })
+        Ok(TtState {
+            inner: CoreTtState::<f64>::rank1_separable(slices),
+        })
     }
 
     /// Number of tensor modes (d).
@@ -142,7 +157,10 @@ impl TtState {
     #[wasm_bindgen(js_name = "nJ")]
     pub fn n_j(&self, axis: usize) -> Result<usize, JsValue> {
         if axis >= self.inner.ndim() {
-            return Err(make_js_error("OutOfDomain", "TtState.nJ: axis out of range"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "TtState.nJ: axis out of range",
+            ));
         }
         Ok(self.inner.n_j(axis))
     }
@@ -232,7 +250,10 @@ impl TtEvolver {
     ) -> Result<TtEvolver, JsValue> {
         let n = a.length() as usize;
         if n == 0 {
-            return Err(make_js_error("GridMismatch", "TtEvolver: n_axes must be >= 1"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "TtEvolver: n_axes must be >= 1",
+            ));
         }
         if b.length() as usize != n
             || dom_min.length() as usize != n
@@ -244,7 +265,10 @@ impl TtEvolver {
             ));
         }
         if !c.is_finite() || !eps_round.is_finite() {
-            return Err(make_js_error("NanInf", "TtEvolver: c and epsRound must be finite"));
+            return Err(make_js_error(
+                "NanInf",
+                "TtEvolver: c and epsRound must be finite",
+            ));
         }
         let ev = build_tt_evolver_wasm(a, b, c, dom_min, dom_max, n, eps_round)?;
         Ok(TtEvolver { inner: ev })
@@ -253,14 +277,12 @@ impl TtEvolver {
     /// Evolve `state` in-place for time `t_final` with `n_steps` Chernoff steps.
     ///
     /// `state` is mutated behind its JS handle; chain calls to continue.
-    pub fn evolve(
-        &self,
-        state: &mut TtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> Result<(), JsValue> {
+    pub fn evolve(&self, state: &mut TtState, t_final: f64, n_steps: usize) -> Result<(), JsValue> {
         if n_steps == 0 {
-            return Err(make_js_error("OutOfDomain", "TtEvolver.evolve: n_steps must be >= 1"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "TtEvolver.evolve: n_steps must be >= 1",
+            ));
         }
         if !t_final.is_finite() || t_final < 0.0 {
             return Err(make_js_error(
@@ -300,6 +322,54 @@ impl TtState {
 // Private build helper
 // ---------------------------------------------------------------------------
 
+/// Validate coefficient and domain vectors for `TtEvolver` (all finite, `a_j >= 0`).
+fn validate_tt_coefficients(
+    a_v: &[f64],
+    b_v: &[f64],
+    lo_v: &[f64],
+    hi_v: &[f64],
+) -> Result<(), JsValue> {
+    for &v in a_v
+        .iter()
+        .chain(b_v.iter())
+        .chain(lo_v.iter())
+        .chain(hi_v.iter())
+    {
+        if !v.is_finite() {
+            return Err(make_js_error(
+                "NanInf",
+                "TtEvolver: coefficient or domain is NaN/Inf",
+            ));
+        }
+    }
+    for &ai in a_v {
+        if ai < 0.0 {
+            return Err(make_js_error(
+                "NanInf",
+                "TtEvolver: diffusion a_j must be >= 0",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Build domain pairs from lo/hi vectors; returns error if any `lo >= hi`.
+fn build_tt_domain(lo_v: &[f64], hi_v: &[f64], label: &str) -> Result<Vec<(f64, f64)>, JsValue> {
+    lo_v.iter()
+        .zip(hi_v.iter())
+        .map(|(&lo, &hi)| {
+            if lo >= hi {
+                Err(make_js_error(
+                    "NanInf",
+                    &format!("{label}: dom_min must be < dom_max"),
+                ))
+            } else {
+                Ok((lo, hi))
+            }
+        })
+        .collect()
+}
+
 fn build_tt_evolver_wasm(
     a: &js_sys::Float64Array,
     b: &js_sys::Float64Array,
@@ -317,26 +387,7 @@ fn build_tt_evolver_wasm(
     b.copy_to(&mut b_v);
     dom_min.copy_to(&mut lo_v);
     dom_max.copy_to(&mut hi_v);
-    for &v in a_v.iter().chain(b_v.iter()).chain(lo_v.iter()).chain(hi_v.iter()) {
-        if !v.is_finite() {
-            return Err(make_js_error("NanInf", "TtEvolver: coefficient or domain is NaN/Inf"));
-        }
-    }
-    for &ai in &a_v {
-        if ai < 0.0 {
-            return Err(make_js_error("NanInf", "TtEvolver: diffusion a_j must be >= 0"));
-        }
-    }
-    let domain: Vec<(f64, f64)> = lo_v
-        .iter()
-        .zip(hi_v.iter())
-        .map(|(&lo, &hi)| {
-            if lo >= hi {
-                Err(make_js_error("NanInf", "TtEvolver: dom_min must be < dom_max"))
-            } else {
-                Ok((lo, hi))
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    validate_tt_coefficients(&a_v, &b_v, &lo_v, &hi_v)?;
+    let domain = build_tt_domain(&lo_v, &hi_v, "TtEvolver")?;
     Ok(TtChernoff::new(a_v, b_v, c, domain, eps_round))
 }

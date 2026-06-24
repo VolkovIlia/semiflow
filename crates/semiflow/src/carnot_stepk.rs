@@ -48,15 +48,16 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use crate::chernoff::{ChernoffFunction, Growth};
-use crate::error::SemiflowError;
-use crate::float::{from_f64, SemiflowFloat};
-use crate::grid_nd::GridFnND;
-use crate::hormander::{bracket_central_diff, HypoellipticChernoff, VectorField};
-use crate::scratch::ScratchPool;
-
-use crate::carnot_stepk_helpers::{lerp_idx_1d_f64, sample_5d};
-use crate::hormander_engel_helpers::{GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL};
+use crate::{
+    carnot_stepk_helpers::{lerp_idx_1d_f64, sample_5d},
+    chernoff::{ChernoffFunction, Growth},
+    error::SemiflowError,
+    float::{from_f64, SemiflowFloat},
+    grid_nd::GridFnND,
+    hormander::{bracket_central_diff, HypoellipticChernoff, VectorField},
+    hormander_engel_helpers::{GH32_NODES_ENGEL, GH32_WEIGHTS_ENGEL},
+    scratch::ScratchPool,
+};
 
 // ─── Filiform N=5 left-invariant vector fields ───────────────────────────────
 
@@ -154,13 +155,13 @@ impl HypoellipticChernoff<f64, 5, 2> {
     /// Construct the filiform N=5 step-4 Carnot group Chernoff approximation.
     ///
     /// Sets X₁ = `Filiform5X1`, X₂ = `Filiform5X2` and verifies the step-2
-    /// bracket structure at the origin: [X₁,X₂] ≈ (0,0,1,0,0) = X₃.
+    /// bracket structure at the origin: `[X₁,X₂]` ≈ (0,0,1,0,0) = X₃.
     ///
-    /// Full step-4 verification (X₅=[X₁,X₄]) is covered by `T_CARNOT_STEP4`
+    /// Full step-4 verification (X₅=`[X₁,X₄]`) is covered by `T_CARNOT_STEP4`
     /// sympy oracle (`scripts/carnot_step4_kit.py`, PASS at architect time).
     ///
     /// # Errors
-    /// - `DomainViolation` if [X₁,X₂] bracket check fails.
+    /// - `DomainViolation` if `[X₁,X₂]` bracket check fails.
     pub fn new_filiform5() -> Result<Self, SemiflowError> {
         let x1 = Filiform5X1::<f64>::new();
         let x2 = Filiform5X2::<f64>::new();
@@ -397,8 +398,7 @@ fn sample_axis0_5d(
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
-    use crate::grid::Grid1D;
-    use crate::grid_nd::GridND;
+    use crate::{grid::Grid1D, grid_nd::GridND};
 
     #[test]
     fn filiform5_x1_is_constant_unit() {

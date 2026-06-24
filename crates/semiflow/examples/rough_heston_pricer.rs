@@ -58,13 +58,19 @@
 //! ```
 
 // Integration test/bench/example: allows for numerical patterns.
-#![allow(clippy::cast_possible_truncation)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,  // usize→f64 grid index; values < 2^52 for any feasible grid
+    clippy::cast_sign_loss,       // idx_f.floor() as usize: idx_f is positive by construction
+)]
 
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
-use std::time::Instant;
+use std::{
+    env,
+    fs::{create_dir_all, File},
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 use semiflow::{
     chernoff::ChernoffFunction, scratch::ScratchPool, Grid1D, HdrSnapshot, MatrixDiffusionChernoff,
@@ -116,10 +122,10 @@ const GL_EXPONENTS: [f64; 3] = [0.8000_0000, 3.2000_0000, 11.2000_0000];
 ///
 /// Default matches the pre-#9 canonical constants; `r = 0.05` is the documented
 /// risk-free rate. `--rate 0.0` via CLI recovers the pre-#9 forward-ish behaviour
-/// identically (c_00 = 0 ⟹ no discount).
+/// identically (`c_00` = 0 ⟹ no discount).
 #[derive(Debug, Clone, Copy)]
 pub struct RoughHestonParams {
-    /// Risk-free rate. c_00 = −r enters the reaction matrix (ADR-0181 §D1).
+    /// Risk-free rate. `c_00` = −r enters the reaction matrix (ADR-0181 §D1).
     pub r: f64,
 }
 
@@ -160,6 +166,16 @@ fn parse_f64(raw: &str, flag: &str) -> f64 {
         .unwrap_or_else(|_| die(&format!("{flag} needs a float, got '{raw}'")))
 }
 
+fn print_usage() -> ! {
+    println!(
+        "Usage: rough_heston_pricer \
+         [--price] [--rate <f64>] \
+         [--n-ticks N] [--warmup-ticks N] \
+         [--out-json PATH] [--rep N] [--gate-id ID]"
+    );
+    std::process::exit(0);
+}
+
 fn parse_args(argv: Vec<String>) -> Args {
     let mut a = Args {
         n_ticks: 1_000,
@@ -177,15 +193,13 @@ fn parse_args(argv: Vec<String>) -> Args {
                 a.n_ticks = parse_usize(&it.next().unwrap_or_default(), "--n-ticks", 1);
             }
             "--warmup-ticks" => {
-                a.warmup_ticks =
-                    parse_usize(&it.next().unwrap_or_default(), "--warmup-ticks", 0);
+                a.warmup_ticks = parse_usize(&it.next().unwrap_or_default(), "--warmup-ticks", 0);
             }
             "--out-json" => {
                 a.out_json = PathBuf::from(it.next().unwrap_or_default());
             }
             "--rep" => {
-                a.rep =
-                    parse_usize(&it.next().unwrap_or_default(), "--rep", 0) as u32;
+                a.rep = parse_usize(&it.next().unwrap_or_default(), "--rep", 0) as u32;
             }
             "--hardware-profile" | "--gate-id" => {
                 let v = it.next().unwrap_or_default();
@@ -199,15 +213,7 @@ fn parse_args(argv: Vec<String>) -> Args {
             "--rate" | "-r" => {
                 a.params.r = parse_f64(&it.next().unwrap_or_default(), "--rate");
             }
-            "--help" | "-h" => {
-                println!(
-                    "Usage: rough_heston_pricer \
-                     [--price] [--rate <f64>] \
-                     [--n-ticks N] [--warmup-ticks N] \
-                     [--out-json PATH] [--rep N] [--gate-id ID]"
-                );
-                std::process::exit(0);
-            }
+            "--help" | "-h" => print_usage(),
             f => die(&format!("unknown flag '{f}'")),
         }
     }
@@ -317,8 +323,8 @@ fn build_initial_strike(grid: Grid1D, strike: f64) -> MatrixGridFn1D<f64, 4> {
 
 // ── Price read-out ─────────────────────────────────────────────────────────────
 
-/// Interpolate component-0 of `state` at log-spot x = log(S_0/S_0) = 0.
-/// Returns the discounted call price (component 0, spot = S_0).
+/// Interpolate component-0 of `state` at log-spot x = `log(S_0/S_0)` = 0.
+/// Returns the discounted call price (component 0, spot = `S_0`).
 fn read_price_at_spot(grid: Grid1D, state: &MatrixGridFn1D<f64, 4>) -> f64 {
     // Find the grid node nearest to x = 0 (log(S_0/S_0) = 0).
     let n = grid.n;
@@ -343,7 +349,7 @@ fn read_price_at_spot(grid: Grid1D, state: &MatrixGridFn1D<f64, 4>) -> f64 {
 fn run_price_mode(
     chernoff: &MatrixDiffusionChernoff<f64, 4>,
     grid: Grid1D,
-    params: &RoughHestonParams,
+    params: RoughHestonParams,
 ) {
     let n_steps = (T_MAT / TAU).round() as usize;
     let strikes = [90.0_f64, 100.0, 110.0];
@@ -449,9 +455,7 @@ fn measure(
 fn main() {
     let args = parse_args(env::args().collect());
 
-    eprintln!(
-        "Rough Heston pricer: H={HURST}  S_0={S_0}  V_0={V_0}  κ={KAPPA}  θ={THETA}"
-    );
+    eprintln!("Rough Heston pricer: H={HURST}  S_0={S_0}  V_0={V_0}  κ={KAPPA}  θ={THETA}");
     eprintln!(
         "  ξ={XI}  ρ={RHO}  r={r}  N_factors=3  M=4  grid={N_GRID}  τ={TAU}",
         r = args.params.r
@@ -461,12 +465,11 @@ fn main() {
     let fill_b = make_fill_b_ij(args.params.r);
     let fill_c = make_fill_c_ij(args.params.r);
     let grid = Grid1D::new(X_MIN, X_MAX, N_GRID).expect("Grid1D construction");
-    let chernoff =
-        MatrixDiffusionChernoff::<f64, 4>::new(fill_a_ij, fill_b, fill_c, grid)
-            .expect("MatrixDiffusionChernoff construction");
+    let chernoff = MatrixDiffusionChernoff::<f64, 4>::new(fill_a_ij, fill_b, fill_c, grid)
+        .expect("MatrixDiffusionChernoff construction");
 
     if args.price_mode {
-        run_price_mode(&chernoff, grid, &args.params);
+        run_price_mode(&chernoff, grid, args.params);
         return;
     }
 

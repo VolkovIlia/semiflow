@@ -30,13 +30,15 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,
     ChernoffFunction, Grid1D, ScratchPool,
 };
 
+// Re-export sibling pyclasses for registration.
+pub(crate) use crate::anisotropic_nd2::PyNonSeparable2DAniso;
+pub(crate) use crate::anisotropic_nd3::{PyHeat2DVarA, PyHeat3DVarA};
 use crate::{
     anisotropic_nd_helpers::{
         build_aniso_nd3_kernel, extract_finite_f64_vec, nd_flat_idx_2, validate_t_nsteps,
@@ -44,10 +46,6 @@ use crate::{
     error::from_core,
     panic::catch_panic_py,
 };
-
-// Re-export sibling pyclasses for registration.
-pub(crate) use crate::anisotropic_nd2::PyNonSeparable2DAniso;
-pub(crate) use crate::anisotropic_nd3::{PyHeat2DVarA, PyHeat3DVarA};
 
 // ===========================================================================
 // AnisotropicShiftND2 — D=2 specialisation (M19)

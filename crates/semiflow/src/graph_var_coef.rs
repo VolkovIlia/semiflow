@@ -309,9 +309,7 @@ fn check_cfl<F: SemiflowFloat>(tau: F, rho_bar: F, a: &[F]) -> Result<(), Semifl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::Graph;
-    use crate::graph_signal::GraphSignal;
-    use crate::state::State;
+    use crate::{graph::Graph, graph_signal::GraphSignal, state::State};
 
     fn make_path_vc(n: usize, a_fn: impl Fn(usize) -> f64) -> VarCoefGraphHeatChernoff<f64> {
         let g = Arc::new(Graph::<f64>::path(n));

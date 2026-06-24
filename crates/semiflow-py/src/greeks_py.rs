@@ -26,12 +26,12 @@
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-use semiflow::{
-    dual::Dual, DiffusionChernoff, Evolver, Grid1D, GridFn1D, KilledDirichletChernoff,
-};
+use semiflow::{dual::Dual, DiffusionChernoff, Evolver, Grid1D, GridFn1D, KilledDirichletChernoff};
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Type alias for readability

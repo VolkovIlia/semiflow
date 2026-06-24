@@ -38,10 +38,10 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::cast_possible_truncation)] // f64→usize floor: .round() ≥ 0 guaranteed
-#![allow(clippy::cast_sign_loss)]           // f64→usize floor: result ≥ 0 guaranteed
-#![allow(clippy::similar_names)]            // mode_fwd/mode_bwd are paired math vars
-#![allow(clippy::needless_range_loop)]      // index arithmetic uses cross-index Kronecker
-#![allow(clippy::items_after_statements)]   // use TtCore inside fn after let statements
+#![allow(clippy::cast_sign_loss)] // f64→usize floor: result ≥ 0 guaranteed
+#![allow(clippy::similar_names)] // mode_fwd/mode_bwd are paired math vars
+#![allow(clippy::needless_range_loop)] // index arithmetic uses cross-index Kronecker
+#![allow(clippy::items_after_statements)] // use TtCore inside fn after let statements
 
 extern crate alloc;
 use alloc::vec::Vec;

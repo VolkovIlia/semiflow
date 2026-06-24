@@ -81,9 +81,8 @@ fn texp4_simd_bit_equal_variable_a_n64() {
     let out_simd = me4c.apply_chernoff(tau, &u0).expect("simd apply");
 
     // Scalar fallback path (forced via FORCE_SCALAR hook).
-    let out_scalar = semiflow::simd::with_force_scalar(|| {
-        me4c.apply_chernoff(tau, &u0).expect("scalar apply")
-    });
+    let out_scalar =
+        semiflow::simd::with_force_scalar(|| me4c.apply_chernoff(tau, &u0).expect("scalar apply"));
 
     assert_bit_equal(
         &out_simd.values,

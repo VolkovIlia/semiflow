@@ -27,7 +27,7 @@
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 use std::os::raw::c_double;
@@ -209,7 +209,11 @@ fn build_engel(
     check_len("u0 length must equal n**4", u0.len(), size)?;
     // Verify Engel bracket condition at construction.
     let _ = HypoellipticChernoff::<f64, 4, 2>::new_engel()?;
-    Ok(EngelState { grid, current: u0.to_vec(), size })
+    Ok(EngelState {
+        grid,
+        current: u0.to_vec(),
+        size,
+    })
 }
 
 // ─── Compute helper (kernel reconstructed each call — kernel is !Clone) ───────

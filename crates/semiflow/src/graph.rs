@@ -1,50 +1,21 @@
 //! Frozen sparse weighted graph (`Graph<F>`) and graph Laplacian (`Laplacian<F>`)
-//! in hand-rolled CSR layout.
+//! in hand-rolled CSR layout (ADR-0048, §1/§3).
 //!
-//! See `contracts/v2.1/wave-a-graph-foundations.md` §1 / §3 and ADR-0048 for
-//! the full invariant set (I1–I7, L1–L4).
-//!
-//! ## Invariants (enforced at build time, preserved post-assembly)
-//!
-//! **Graph<F>:**
-//! - I1: `row_ptr.len() == n_nodes + 1`; `row_ptr[0] == 0`; `row_ptr[n_nodes] == col_idx.len() == vals.len()`.
-//! - I2: `row_ptr` is non-strictly monotonic.
-//! - I3: Within each row, `col_idx` is strictly sorted ascending (no duplicates).
-//! - I4: No self-loops.
-//! - I5: All `vals` are finite and positive.
-//! - I6: All `col_idx[k] < n_nodes`.
-//! - I7: Symmetric: edge `(u,v)` appears in both row `u` and row `v`.
-//!
-//! **Laplacian<F>** (extends I1–I7):
-//! - L1: Diagonal entry is the LAST in each row's CSR slice.
-//! - L2: Off-diagonal `vals < 0`; diagonal `vals > 0`.
-//! - L3: All `vals` are finite.
-//! - L4: `spectral_radius_bound` is cached at assembly.
+//! Invariants I1–I7 (Graph) and L1–L4 (Laplacian) are enforced at construction.
+//! See `contracts/v2.1/wave-a-graph-foundations.md` for the full invariant set.
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{error::SemiflowError, float::SemiflowFloat};
 
-// ---------------------------------------------------------------------------
-// LaplacianKind
-// ---------------------------------------------------------------------------
-
-/// Normalization convention for the assembled [`Laplacian`].
-///
-/// Stored for documentation only — `apply_into_slice` is identical for both
-/// (the CSR carries the computed values). See ADR-0048, Chung 1997 §1.2.
+/// Normalization convention for the assembled [`Laplacian`] (ADR-0048, Chung 1997 §1.2).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LaplacianKind {
-    /// Combinatorial Laplacian `L = D − W`. Default.
+    /// Combinatorial: `L = D − W`.
     Combinatorial,
-    /// Symmetric normalized Laplacian `L_sym = I − D^{−½} W D^{−½}` (Chung 1997 §1.2).
+    /// Symmetric normalized: `L_sym = I − D^{−½} W D^{−½}`.
     SymNormalized,
 }
-
-// ---------------------------------------------------------------------------
-// Graph<F>
-// ---------------------------------------------------------------------------
 
 /// Frozen sparse weighted graph in symmetric CSR layout. See ADR-0048.
 ///
@@ -87,12 +58,7 @@ impl<F: SemiflowFloat> Graph<F> {
         &self.vals
     }
 
-    // -----------------------------------------------------------------------
-    // Internal builder helper
-    // -----------------------------------------------------------------------
-
-    /// Assemble a CSR graph from an adjacency list (one `Vec<(u32, F)>` per row).
-    /// Rows are sorted by `col_idx` ascending (invariant I3).
+    /// Assemble a CSR graph from an adjacency list; rows sorted ascending (I3).
     fn from_rows(n_nodes: usize, mut rows: Vec<Vec<(u32, F)>>) -> Self {
         for row in &mut rows {
             row.sort_unstable_by_key(|(c, _)| *c);
@@ -118,10 +84,6 @@ impl<F: SemiflowFloat> Graph<F> {
             vals,
         }
     }
-
-    // -----------------------------------------------------------------------
-    // Builders
-    // -----------------------------------------------------------------------
 
     /// Path graph `0 — 1 — 2 — … — (n − 1)` with unit edge weights.
     ///
@@ -154,8 +116,7 @@ impl<F: SemiflowFloat> Graph<F> {
             rows[i].push((iu32 + 1, F::one()));
             rows[i + 1].push((iu32, F::one()));
         }
-        // wrap-around edge
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // wrap-around edge
         let n_minus_1 = (n - 1) as u32;
         rows[n - 1].push((0_u32, F::one()));
         rows[0].push((n_minus_1, F::one()));
@@ -165,11 +126,8 @@ impl<F: SemiflowFloat> Graph<F> {
     /// Build from an iterator of undirected edges `(u, v, w)`.
     ///
     /// # Errors
-    /// Returns [`SemiflowError::DomainViolation`] on:
-    /// - Self-loop (`u == v`).
-    /// - Node index out of range.
-    /// - Non-positive or non-finite edge weight.
-    /// - Duplicate edge.
+    /// [`SemiflowError::DomainViolation`]: self-loop, node out of range, bad weight,
+    /// or duplicate edge.
     pub fn from_edges(
         n_nodes: usize,
         edges: impl IntoIterator<Item = (u32, u32, F)>,
@@ -194,7 +152,6 @@ impl<F: SemiflowFloat> Graph<F> {
                     value: w.to_f64().unwrap_or(f64::NAN),
                 });
             }
-            // Check duplicate
             if rows[u as usize].iter().any(|(c, _)| *c == v) {
                 return Err(SemiflowError::DomainViolation {
                     what: "Graph::from_edges: duplicate edge",
@@ -207,9 +164,7 @@ impl<F: SemiflowFloat> Graph<F> {
         Ok(Self::from_rows(n_nodes, rows))
     }
 
-    /// Erdős–Rényi `G(n_nodes, p)` with seeded splitmix64 RNG.
-    ///
-    /// All edge weights = `F::one()`. Deterministic for a given `seed`.
+    /// Erdős–Rényi `G(n_nodes, p)` with seeded splitmix64 RNG. All weights = 1.
     #[must_use]
     pub fn erdos_renyi(n_nodes: usize, p: f64, seed: u64) -> Self {
         let mut rng = SplitMix64::new(seed);
@@ -228,10 +183,6 @@ impl<F: SemiflowFloat> Graph<F> {
         Self::from_rows(n_nodes, rows)
     }
 }
-
-// ---------------------------------------------------------------------------
-// SplitMix64 — deterministic seeded RNG (≤ 20 LoC, no new dep)
-// ---------------------------------------------------------------------------
 
 /// Minimal splitmix64 RNG for deterministic Erdős–Rényi graphs.
 struct SplitMix64 {
@@ -252,20 +203,13 @@ impl SplitMix64 {
     }
 
     fn next_f64(&mut self) -> f64 {
-        // Map to [0, 1) using upper 53 bits.
-        // The right-shifted value and divisor (2^53) are both exact in f64.
         #[allow(clippy::cast_precision_loss)]
-        let hi53 = (self.next_u64() >> 11) as f64;
-        // 2^53 is representable exactly in f64 (53-bit mantissa).
+        let hi53 = (self.next_u64() >> 11) as f64; // upper 53 bits → [0,1)
         #[allow(clippy::cast_precision_loss)]
-        let scale = 1.0_f64 / (1u64 << 53) as f64;
+        let scale = 1.0_f64 / (1u64 << 53) as f64; // 2^53 exact in f64
         hi53 * scale
     }
 }
-
-// ---------------------------------------------------------------------------
-// Laplacian<F>
-// ---------------------------------------------------------------------------
 
 /// Frozen sparse Laplacian in CSR layout. See ADR-0048 invariants L1–L4.
 ///
@@ -310,7 +254,7 @@ impl<F: SemiflowFloat> Laplacian<F> {
         &self.col_idx
     }
 
-    /// Value slice (L[i,j] for each CSR entry).
+    /// Value slice (`L[i,j]` for each CSR entry).
     #[must_use]
     pub fn vals(&self) -> &[F] {
         &self.vals
@@ -322,9 +266,7 @@ impl<F: SemiflowFloat> Laplacian<F> {
         assemble_laplacian(g, LaplacianKind::Combinatorial)
     }
 
-    /// Symmetric normalized Laplacian `L_sym = I − D^{−½} W D^{−½}` (Chung 1997 §1.2).
-    ///
-    /// Isolated nodes (`deg = 0`) get `L_sym[i, i] = 0` per Chung 1997 §1.2 convention.
+    /// Symmetric normalized `L_sym = I − D^{−½} W D^{−½}` (Chung §1.2; isolated nodes → 0).
     #[must_use]
     pub fn assemble_normalized(g: &Graph<F>) -> Self {
         assemble_laplacian(g, LaplacianKind::SymNormalized)
@@ -332,18 +274,8 @@ impl<F: SemiflowFloat> Laplacian<F> {
 
     /// Construct a [`Laplacian`] from pre-computed CSR parts (ADR-0180).
     ///
-    /// Recomputes `spectral_radius_bound` via the Gershgorin row-sum formula
-    /// so the cached-bound invariant (L4) is preserved. The caller supplies
-    /// an already-computed Laplacian's `row_ptr`, `col_idx`, and a **fresh**
-    /// `vals` slice (time-varying weights); the shared pattern is reused.
-    ///
     /// # Errors
-    ///
-    /// Returns [`SemiflowError::DomainViolation`] if:
-    /// - `row_ptr.len() != n_nodes + 1`.
-    /// - `row_ptr` is not monotone non-decreasing.
-    /// - `col_idx.len() != vals.len() != row_ptr[n_nodes]`.
-    /// - Any `col_idx[k] >= n_nodes`.
+    /// [`SemiflowError::DomainViolation`] on dimension mismatch or `col_idx[k] >= n_nodes`.
     pub fn from_csr_parts(
         n_nodes: usize,
         row_ptr: Vec<usize>,
@@ -385,16 +317,9 @@ impl<F: SemiflowFloat> Laplacian<F> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Laplacian assembly (shared logic)
-// ---------------------------------------------------------------------------
-
-/// Build rows for the Laplacian: off-diagonal entries first (sorted ascending),
-/// then the diagonal as the last entry (invariant L1).
+/// Build Laplacian CSR rows: off-diagonals first (sorted asc), diagonal last (L1).
 fn assemble_laplacian<F: SemiflowFloat>(g: &Graph<F>, kind: LaplacianKind) -> Laplacian<F> {
     let n = g.n_nodes();
-
-    // Compute weighted degrees.
     let mut deg: Vec<F> = vec![F::zero(); n];
     for (i, d) in deg.iter_mut().enumerate() {
         for k in g.row_ptr()[i]..g.row_ptr()[i + 1] {
@@ -416,10 +341,7 @@ fn assemble_laplacian<F: SemiflowFloat>(g: &Graph<F>, kind: LaplacianKind) -> La
     }
 }
 
-/// Fill per-row (off-diagonal + diagonal) entries for the Laplacian.
-///
-/// Off-diagonal entries are sorted ascending (invariant I3/L1); diagonal
-/// is appended last (invariant L1).
+/// Fill per-row entries: off-diagonals sorted ascending (I3/L1), diagonal appended last.
 fn fill_laplacian_rows<F: SemiflowFloat>(
     g: &Graph<F>,
     kind: LaplacianKind,
@@ -453,18 +375,14 @@ fn fill_laplacian_rows<F: SemiflowFloat>(
             }
         }
     }
-    // Sort off-diagonal ascending (invariant I3/L1).
     for row in &mut rows {
         row.sort_unstable_by_key(|(c, _)| *c);
     }
-    // Append diagonal LAST (invariant L1).
     append_diagonal_entries(&mut rows, kind, deg);
     rows
 }
 
 /// Append the diagonal entry `(i, diag_i)` to each row (invariant L1).
-///
-/// Extracted from `fill_laplacian_rows` — batch H9b.
 fn append_diagonal_entries<F: SemiflowFloat>(
     rows: &mut [Vec<(u32, F)>],
     kind: LaplacianKind,
@@ -505,7 +423,7 @@ fn flatten_to_csr<F: Copy>(rows: &[Vec<(u32, F)>]) -> (Vec<usize>, Vec<u32>, Vec
     (row_ptr, col_idx, vals)
 }
 
-/// Validate CSR parts for `Laplacian::from_csr_parts` (ADR-0180).
+/// Validate CSR parts (dimensions + `col_idx` range) for `Laplacian::from_csr_parts`.
 fn validate_csr_parts<F: SemiflowFloat>(
     n_nodes: usize,
     row_ptr: &[usize],
@@ -515,6 +433,7 @@ fn validate_csr_parts<F: SemiflowFloat>(
     if row_ptr.len() != n_nodes + 1 {
         return Err(SemiflowError::DomainViolation {
             what: "from_csr_parts: row_ptr.len() must equal n_nodes+1",
+            #[allow(clippy::cast_precision_loss)]
             value: row_ptr.len() as f64,
         });
     }
@@ -522,6 +441,7 @@ fn validate_csr_parts<F: SemiflowFloat>(
         if row_ptr[i] > row_ptr[i + 1] {
             return Err(SemiflowError::DomainViolation {
                 what: "from_csr_parts: row_ptr not monotone non-decreasing",
+                #[allow(clippy::cast_precision_loss)]
                 value: i as f64,
             });
         }
@@ -530,6 +450,7 @@ fn validate_csr_parts<F: SemiflowFloat>(
     if col_idx.len() != nnz || vals.len() != nnz {
         return Err(SemiflowError::DomainViolation {
             what: "from_csr_parts: col_idx.len()/vals.len() must equal row_ptr[n_nodes]",
+            #[allow(clippy::cast_precision_loss)]
             value: nnz as f64,
         });
     }
@@ -544,16 +465,15 @@ fn validate_csr_parts<F: SemiflowFloat>(
     Ok(())
 }
 
-/// Gershgorin row-sum bound from flat CSR arrays: `ρ̄ = max_i Σ_j |L[i, j]|`.
+/// Gershgorin row-sum bound from flat CSR: `ρ̄ = max_i Σ_j |L[i,j]|`.
 fn gershgorin_bound_csr<F: SemiflowFloat>(row_ptr: &[usize], vals: &[F]) -> F {
     let n = row_ptr.len().saturating_sub(1);
     let mut max_sum = F::zero();
     for i in 0..n {
         let mut row_sum = F::zero();
-        for k in row_ptr[i]..row_ptr[i + 1] {
-            let v = vals[k];
-            let av = if v < F::zero() { F::zero() - v } else { v };
-            row_sum = row_sum + av;
+        for v in &vals[row_ptr[i]..row_ptr[i + 1]] {
+            let av = if *v < F::zero() { F::zero() - *v } else { *v };
+            row_sum += av;
         }
         if row_sum > max_sum {
             max_sum = row_sum;
@@ -562,7 +482,7 @@ fn gershgorin_bound_csr<F: SemiflowFloat>(row_ptr: &[usize], vals: &[F]) -> F {
     max_sum
 }
 
-/// Gershgorin row-sum bound: `ρ̄ = max_i Σ_j |L[i, j]|`.
+// Same as `gershgorin_bound_csr` but from rows vec (pre-assembly).
 fn compute_gershgorin_bound<F: SemiflowFloat>(rows: &[Vec<(u32, F)>]) -> F {
     let mut max_sum = F::zero();
     for row in rows {

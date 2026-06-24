@@ -46,15 +46,13 @@ use std::sync::Arc;
 
 use numpy::ToPyArray;
 use pyo3::prelude::*;
-
 use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 
-use crate::dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype};
-use crate::graph_heat_f32::compute_graph_heat_f32;
-
 use crate::{
+    dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype},
     error::{from_core, new_pyerr},
     graph_extra::{PyGraph, PyLaplacian},
+    graph_heat_f32::compute_graph_heat_f32,
     panic::catch_panic_py,
 };
 

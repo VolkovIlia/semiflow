@@ -17,9 +17,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::{prelude::*, types::PyAnyMethods};
-use semiflow::{
-    ChernoffFunction, ChernoffSemigroup, DriftReactionChernoff, GridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, ChernoffSemigroup, DriftReactionChernoff, GridFn1D, ScratchPool};
 
 use crate::{
     boundary::parse_boundary,

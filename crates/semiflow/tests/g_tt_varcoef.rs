@@ -12,7 +12,7 @@
 //! ## TWO load-bearing assertions (PASS iff BOTH)
 //!
 //! 1. **CONVERGENCE O(τ²)** — log-log slope of `rel_err` vs τ ≤ −1.95 vs the
-//!    closed-form linear-`a` oracle (or self-convergence vs 2·n_steps). Paired with
+//!    closed-form linear-`a` oracle (or self-convergence vs `2·n_steps`). Paired with
 //!    a load-bearing variation assert (coefficient genuinely varies; anti-degenerate).
 //! 2. **SUB-EXPONENTIAL RANK** — measured `peak_rank()` polynomial in d:
 //!    log-rank-vs-d slope < 0.70 (the §52.5 exponential threshold). Rank-1 IC ⇒
@@ -128,7 +128,7 @@ fn build_fd_matrix(j: usize, n: usize) -> Vec<f64> {
         let ahp = (a[i] + a[ip]) * half;
         let ahm = (a[i] + a[im]) * half;
         mat[i * n + ip] += ahp / dx2;
-        mat[i * n + i]  -= (ahp + ahm) / dx2;
+        mat[i * n + i] -= (ahp + ahm) / dx2;
         mat[i * n + im] += ahm / dx2;
     }
     mat
@@ -152,7 +152,12 @@ fn oracle_axis_inner(j: usize) -> f64 {
     let dx = (X_MAX - X_MIN) / (n as f64 - 1.0);
     let mat = build_fd_matrix(j, n);
     // IC: Gaussian slice
-    let f: Vec<f64> = (0..n).map(|i| { let x = X_MIN + i as f64 * dx; (-x*x/2.0).exp() }).collect();
+    let f: Vec<f64> = (0..n)
+        .map(|i| {
+            let x = X_MIN + i as f64 * dx;
+            (-x * x / 2.0).exp()
+        })
+        .collect();
     // exp(T·L_j)·f via Taylor: sum_{k=0}^{K} (T·L_j)^k / k! · f
     let t = T_FINAL;
     let k_max = 60usize;
@@ -166,7 +171,9 @@ fn oracle_axis_inner(j: usize) -> f64 {
             // multiply by t each step: term now = (T·L)^k · f / ... need rescaling
         }
         let coeff = t.powi(k as i32) / factorial;
-        for i in 0..n { result[i] += coeff * term[i]; }
+        for i in 0..n {
+            result[i] += coeff * term[i];
+        }
     }
     result.iter().sum::<f64>()
 }
@@ -215,13 +222,16 @@ fn run_varcoef_tt(d: usize, n_steps: usize, state: &mut TtState<f64>) {
 /// Evolve with CONST-mean coefficients (flat a_j = mean(a_j)) for variation check.
 fn run_const_mean_tt(d: usize, n_steps: usize, state: &mut TtState<f64>) {
     let a_axis: Vec<Vec<f64>> = (0..d)
-        .map(|j| { let m = mean(&a_axis_profile(j, N_GRID)); vec![m; N_GRID] })
+        .map(|j| {
+            let m = mean(&a_axis_profile(j, N_GRID));
+            vec![m; N_GRID]
+        })
         .collect();
     let b_axis: Vec<Vec<f64>> = (0..d).map(|_| vec![0.0; N_GRID]).collect();
     let v_axis: Vec<Vec<f64>> = (0..d).map(|_| vec![0.0; N_GRID]).collect();
     let domain: Vec<(f64, f64)> = vec![(X_MIN, X_MAX); d];
-    let ev = VarCoefTt::new(a_axis, b_axis, v_axis, domain, EPS_ROUND)
-        .expect("const-mean is valid");
+    let ev =
+        VarCoefTt::new(a_axis, b_axis, v_axis, domain, EPS_ROUND).expect("const-mean is valid");
     ev.evolve(T_FINAL, n_steps, state);
 }
 
@@ -259,10 +269,17 @@ fn g_tt_varcoef() {
         run_varcoef_tt(d_conv, ns, &mut st_coarse);
         run_varcoef_tt(d_conv, ns * 2, &mut st_fine);
         // L2 norm of per-entry difference, normalised by norm of fine solution.
-        let diff_sq: f64 = st_coarse.cores.iter().zip(&st_fine.cores)
+        let diff_sq: f64 = st_coarse
+            .cores
+            .iter()
+            .zip(&st_fine.cores)
             .flat_map(|(ca, cb)| ca.data.iter().zip(&cb.data).map(|(a, b)| (a - b) * (a - b)))
             .sum();
-        let norm_sq: f64 = st_fine.cores.iter().flat_map(|c| c.data.iter().map(|x| x * x)).sum();
+        let norm_sq: f64 = st_fine
+            .cores
+            .iter()
+            .flat_map(|c| c.data.iter().map(|x| x * x))
+            .sum();
         let rel = (diff_sq / norm_sq.max(1e-300)).sqrt();
         taus.push((ns as f64).ln()); // ln(n_steps) = ln(1/τ)+const; slope ≤ −1.95 for O(τ²)
         errs.push(rel.max(1e-300).ln());
@@ -289,7 +306,12 @@ fn g_tt_varcoef() {
     run_const_mean_tt(d_conv, NSTEPS_SWEEP[NSTEPS_SWEEP.len() - 1], &mut st_const);
     // x²-functional: f_j[i] = x_i² — measures second spatial moment.
     let dx_fn = (X_MAX - X_MIN) / (N_GRID as f64 - 1.0);
-    let x2_fn: Vec<f64> = (0..N_GRID).map(|i| { let x = X_MIN + i as f64 * dx_fn; x * x }).collect();
+    let x2_fn: Vec<f64> = (0..N_GRID)
+        .map(|i| {
+            let x = X_MIN + i as f64 * dx_fn;
+            x * x
+        })
+        .collect();
     let fns: Vec<Vec<f64>> = (0..d_conv).map(|_| x2_fn.clone()).collect();
     let v_var = st_var.inner_separable(&fns);
     let v_const = st_const.inner_separable(&fns);
@@ -307,18 +329,31 @@ fn g_tt_varcoef() {
         let r = st.peak_rank();
         let storage = st.storage_size();
         let naive: u64 = (N_GRID as u64).saturating_pow(d as u32);
-        println!("  {d:>2} | {r:>6} | {storage:>8} | {naive:>12} | {}", r == 1);
+        println!(
+            "  {d:>2} | {r:>6} | {storage:>8} | {naive:>12} | {}",
+            r == 1
+        );
         ranks.push(r);
         // HARD per-d: rank-1 IC under bond-preserving step ⇒ exactly rank-1 (52.10d).
-        assert_eq!(r, 1, "rank-1 IC grew to r={r} at d={d} — bond-preservation 52.10d violated");
+        assert_eq!(
+            r, 1,
+            "rank-1 IC grew to r={r} at d={d} — bond-preservation 52.10d violated"
+        );
         if d <= 6 {
-            assert!((storage as u64) < naive, "storage {storage} not < naive n^d {naive} at d={d}");
+            assert!(
+                (storage as u64) < naive,
+                "storage {storage} not < naive n^d {naive} at d={d}"
+            );
         }
         // Byte-reproducibility (smallest d).
         if d == D_LIST[0] {
             let mut s2 = build_state_rank1(d);
             run_varcoef_tt(d, NSTEPS_SWEEP[0], &mut s2);
-            bit_equal = st.cores.iter().zip(&s2.cores).all(|(a, b)| a.data == b.data);
+            bit_equal = st
+                .cores
+                .iter()
+                .zip(&s2.cores)
+                .all(|(a, b)| a.data == b.data);
         }
     }
     let rank_xs: Vec<f64> = D_LIST.iter().map(|&d| d as f64).collect();

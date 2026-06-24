@@ -32,11 +32,10 @@
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::needless_pass_by_value,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
-use std::os::raw::c_double;
-use std::sync::Arc;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},
@@ -117,14 +116,13 @@ pub unsafe extern "C" fn smf_aniso_nd3_new(
         }
         let a_sl = unsafe { std::slice::from_raw_parts(a_values, a_len) };
         let u0_sl = unsafe { std::slice::from_raw_parts(u0, u0_len) };
-        let b_vec = match parse_opt_slice(b_values, b_len, 3 * n_pts) {
-            Err(st) => return st, Ok(v) => v,
+        let (b_vec, c_vec) = match parse_bc_slices_nd3(b_values, b_len, c_values, c_len, n_pts) {
+            Err(st) => return st,
+            Ok(pair) => pair,
         };
-        let c_vec = match parse_opt_slice(c_values, c_len, n_pts) {
-            Err(st) => return st, Ok(v) => v,
-        };
-        if let Err(st) = check_finite(a_sl) { return st; }
-        if let Err(st) = check_finite(u0_sl) { return st; }
+        if let Err(st) = check_finite(a_sl).or_else(|_| check_finite(u0_sl)) {
+            return st;
+        }
         match build_nd3(
             nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_sl, b_vec, c_vec, u0_sl,
         ) {
@@ -157,9 +155,19 @@ pub unsafe extern "C" fn smf_aniso_nd3_evolve(
     }
     catch_panic!({
         let inner = unsafe { &mut *ev.cast::<InnerND3>() };
-        if out_len != inner.size { return SemiflowStatus::GridMismatch; }
-        if let Err(st) = check_tau_steps(tau, n_steps) { return st; }
-        match run_nd3(&inner.kernel, inner.grid.clone(), inner.current.clone(), tau, n_steps) {
+        if out_len != inner.size {
+            return SemiflowStatus::GridMismatch;
+        }
+        if let Err(st) = check_tau_steps(tau, n_steps) {
+            return st;
+        }
+        match run_nd3(
+            &inner.kernel,
+            inner.grid.clone(),
+            inner.current.clone(),
+            tau,
+            n_steps,
+        ) {
             Err(e) => SemiflowStatus::from(&e),
             Ok(result) => {
                 inner.current = result.clone();
@@ -177,7 +185,9 @@ pub unsafe extern "C" fn smf_aniso_nd3_evolve(
 /// `ev` must be null or live from `smf_aniso_nd3_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_aniso_nd3_size(ev: *const SmfAnisoND3) -> usize {
-    if ev.is_null() { return 0; }
+    if ev.is_null() {
+        return 0;
+    }
     unsafe { &*ev.cast::<InnerND3>() }.size
 }
 
@@ -196,7 +206,9 @@ pub unsafe extern "C" fn smf_aniso_nd3_values(
     }
     catch_panic!({
         let inner = unsafe { &*ev.cast::<InnerND3>() };
-        if out_len != inner.size { return SemiflowStatus::GridMismatch; }
+        if out_len != inner.size {
+            return SemiflowStatus::GridMismatch;
+        }
         let sl = unsafe { std::slice::from_raw_parts_mut(out, out_len) };
         sl.copy_from_slice(&inner.current);
         SemiflowStatus::Ok
@@ -209,7 +221,9 @@ pub unsafe extern "C" fn smf_aniso_nd3_values(
 /// `ev` must be null or live from `smf_aniso_nd3_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_aniso_nd3_free(ev: *mut SmfAnisoND3) {
-    if ev.is_null() { return; }
+    if ev.is_null() {
+        return;
+    }
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         unsafe { drop(Box::from_raw(ev.cast::<InnerND3>())) };
     }));
@@ -237,11 +251,17 @@ fn make_kernel_nd3(
     AnisotropicShiftChernoffND::<f64, 3>::new(
         move |x, mat| {
             let base = flat3(x, &ns, &axes) * 9;
-            for r in 0..3 { for ci in 0..3 { mat.set(r, ci, a2[base + r * 3 + ci]); } }
+            for r in 0..3 {
+                for ci in 0..3 {
+                    mat.set(r, ci, a2[base + r * 3 + ci]);
+                }
+            }
         },
         move |x, bv| {
             let base = flat3(x, &ns, &ax2) * 3;
-            bv[0] = b2[base]; bv[1] = b2[base + 1]; bv[2] = b2[base + 2];
+            bv[0] = b2[base];
+            bv[1] = b2[base + 1];
+            bv[2] = b2[base + 2];
         },
         move |x| c2[flat3(x, &ns, &ax3)],
         grid_nd,
@@ -271,10 +291,19 @@ fn build_nd3(
     ])?;
     let axes = [(xmin, xmax, nx), (ymin, ymax, ny), (zmin, zmax, nz)];
     let kernel = make_kernel_nd3(
-        Arc::new(a_raw.to_vec()), Arc::new(b_raw), Arc::new(c_raw),
-        [nx, ny, nz], axes, grid_nd.clone(),
+        Arc::new(a_raw.to_vec()),
+        Arc::new(b_raw),
+        Arc::new(c_raw),
+        [nx, ny, nz],
+        axes,
+        grid_nd.clone(),
     )?;
-    Ok(InnerND3 { kernel: Arc::new(kernel), grid: grid_nd, current: u0.to_vec(), size: nx * ny * nz })
+    Ok(InnerND3 {
+        kernel: Arc::new(kernel),
+        grid: grid_nd,
+        current: u0.to_vec(),
+        size: nx * ny * nz,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +333,9 @@ fn run_nd3(
 
 #[inline]
 fn phys_idx(x: f64, xmin: f64, xmax: f64, n: usize) -> usize {
-    if n == 1 { return 0; }
+    if n == 1 {
+        return 0;
+    }
     let fi = (x - xmin) / (xmax - xmin) * (n as f64 - 1.0);
     (fi.round() as isize).clamp(0, n as isize - 1) as usize
 }
@@ -326,7 +357,9 @@ fn check_tau_steps(tau: f64, n_steps: usize) -> Result<(), SemiflowStatus> {
 
 fn check_finite(vals: &[f64]) -> Result<(), SemiflowStatus> {
     for &v in vals {
-        if !v.is_finite() { return Err(SemiflowStatus::NanInf); }
+        if !v.is_finite() {
+            return Err(SemiflowStatus::NanInf);
+        }
     }
     Ok(())
 }
@@ -349,4 +382,20 @@ unsafe fn parse_opt_slice(
         return Err(SemiflowStatus::GridMismatch);
     }
     Ok(unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec())
+}
+
+/// Parse ND3 b and c optional slices, returning `(b_vec, c_vec)` or error.
+///
+/// # Safety
+/// Non-null pointers must be readable for their stated lengths.
+unsafe fn parse_bc_slices_nd3(
+    b_ptr: *const f64,
+    b_len: usize,
+    c_ptr: *const f64,
+    c_len: usize,
+    n_pts: usize,
+) -> Result<(Vec<f64>, Vec<f64>), SemiflowStatus> {
+    let b = unsafe { parse_opt_slice(b_ptr, b_len, 3 * n_pts) }?;
+    let c = unsafe { parse_opt_slice(c_ptr, c_len, n_pts) }?;
+    Ok((b, c))
 }

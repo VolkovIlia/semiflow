@@ -353,19 +353,24 @@ fn split_slab_into_cores<F: SemiflowFloat>(
 // §E — Strang-composed pair sweep
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Precompute one expsym per pair for the full list of coupled pairs at the given τ.
-///
-/// Call ONCE per `evolve` before the step loop.  The returned `Vec<Vec<F>>` has
-/// one entry per pair in `pairs` order:
-/// - `expsym_fwd[p]` — for the forward half-step (τ/2 for Strang multi-pair; τ for single pair).
-/// - `expsym_rev[p]` — for the reverse half-step (τ/2, same as fwd for Strang; None if single).
-///
-/// Returns `(expsym_fwd, expsym_rev)` where `expsym_rev` is empty if `pairs.len() == 1`.
-/// Type alias for the pair of spectral symbol tables returned by `precompute_pair_expsyms`.
+/// Pair of spectral symbol tables: `(fwd[p], rev[p])` per paired axis.
+/// `fwd[p]` = forward half-step (τ/2 for Strang multi-pair, τ for single pair).
+/// `rev[p]` = reverse half-step (empty if single pair).
+/// Built once per `evolve` by `precompute_pair_expsyms`.
 pub(crate) type PairExpsyms<F> = (
     alloc::vec::Vec<alloc::vec::Vec<F>>,
     alloc::vec::Vec<alloc::vec::Vec<F>>,
 );
+
+/// Count how many pairs share each axis (for shared-diffusion accounting).
+fn count_pairs_per_axis<F>(d: usize, pairs: &[(usize, usize, F)]) -> alloc::vec::Vec<usize> {
+    let mut n_pairs_per_axis = vec![0usize; d];
+    for &(j, k, _) in pairs {
+        n_pairs_per_axis[j] += 1;
+        n_pairs_per_axis[k] += 1;
+    }
+    n_pairs_per_axis
+}
 
 pub(crate) fn precompute_pair_expsyms<F: SemiflowFloat>(
     tau: F,
@@ -381,13 +386,7 @@ pub(crate) fn precompute_pair_expsyms<F: SemiflowFloat>(
     let use_strang = pairs.len() > 1;
     let tau_fwd = if use_strang { tau * half } else { tau };
     let tau_half = tau * half;
-    // Per-axis pair count for shared-diffusion accounting.
-    let d = a.len();
-    let mut n_pairs_per_axis = vec![0usize; d];
-    for &(j, k, _) in pairs {
-        n_pairs_per_axis[j] += 1;
-        n_pairs_per_axis[k] += 1;
-    }
+    let n_pairs_per_axis = count_pairs_per_axis(a.len(), pairs);
     let mut fwd = alloc::vec::Vec::with_capacity(pairs.len());
     let mut rev = alloc::vec::Vec::new();
     for &(j, k, rho) in pairs {
@@ -456,7 +455,7 @@ pub(crate) fn pair_sweep_strang<F: SemiflowFloat>(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// §F — Helpers
+// §F — Helpers + test-visible re-exports
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn axis_dx<F: SemiflowFloat>(domain: &[(F, F)], j: usize, n: usize) -> F {
@@ -468,10 +467,6 @@ fn axis_dx<F: SemiflowFloat>(domain: &[(F, F)], j: usize, n: usize) -> F {
 }
 
 // §E.2: one_sided_jacobi_svd → see tt_dense_expm.rs (imported above).
-
-// ═══════════════════════════════════════════════════════════════════════════
-// §F — Test-visible re-exports (for d=2 exactness self-check in tt_coupled.rs)
-// ═══════════════════════════════════════════════════════════════════════════
 
 /// Public (crate-level) alias for `build_l_pair` — used by the d=2 exactness test
 /// as the INDEPENDENT dense reference.  NOT used on the production path.

@@ -22,10 +22,9 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 
-use semiflow::{VarCoefTt, TtState};
+use semiflow::{TtState, VarCoefTt};
 
-use crate::status::SemiflowStatus;
-use crate::tt_ffi::SmfTtState;
+use crate::{status::SemiflowStatus, tt_ffi::SmfTtState};
 
 // ---------------------------------------------------------------------------
 // Opaque handle
@@ -69,65 +68,137 @@ pub unsafe extern "C" fn smf_varcoef_tt_evolver_new(
     eps_round: f64,
     out_ev: *mut *mut SmfVarCoefTtEvolver,
 ) -> SemiflowStatus {
-    if a_data.is_null() || a_off.is_null()
-        || b_data.is_null() || b_off.is_null()
-        || v_data.is_null() || v_off.is_null()
-        || dom_lo.is_null() || dom_hi.is_null()
+    if a_data.is_null()
+        || a_off.is_null()
+        || b_data.is_null()
+        || b_off.is_null()
+        || v_data.is_null()
+        || v_off.is_null()
+        || dom_lo.is_null()
+        || dom_hi.is_null()
         || out_ev.is_null()
     {
         return SemiflowStatus::NullPtr;
     }
     catch_panic!({
-        if n_axes == 0 { return SemiflowStatus::OutOfDomain; }
-        if !eps_round.is_finite() { return SemiflowStatus::NanInf; }
-        let a_offs = unsafe { std::slice::from_raw_parts(a_off, n_axes + 1) };
-        let b_offs = unsafe { std::slice::from_raw_parts(b_off, n_axes + 1) };
-        let v_offs = unsafe { std::slice::from_raw_parts(v_off, n_axes + 1) };
-        if validate_offsets(a_offs, n_axes).is_err()
-            || validate_offsets(b_offs, n_axes).is_err()
-            || validate_offsets(v_offs, n_axes).is_err()
-        {
-            return SemiflowStatus::GridMismatch;
-        }
-        let a_flat = unsafe { std::slice::from_raw_parts(a_data, a_offs[n_axes]) };
-        let b_flat = unsafe { std::slice::from_raw_parts(b_data, b_offs[n_axes]) };
-        let v_flat = unsafe { std::slice::from_raw_parts(v_data, v_offs[n_axes]) };
-        let lo_s = unsafe { std::slice::from_raw_parts(dom_lo, n_axes) };
-        let hi_s = unsafe { std::slice::from_raw_parts(dom_hi, n_axes) };
-        let a = match decode_ragged(a_flat, a_offs, n_axes) {
-            Ok(v) => v,
-            Err(s) => return s,
-        };
-        let b = match decode_ragged(b_flat, b_offs, n_axes) {
-            Ok(v) => v,
-            Err(s) => return s,
-        };
-        let v = match decode_ragged(v_flat, v_offs, n_axes) {
-            Ok(v) => v,
-            Err(s) => return s,
-        };
-        let domain_result: Result<Vec<(f64, f64)>, SemiflowStatus> = lo_s.iter().zip(hi_s.iter())
-            .map(|(&lo, &hi)| {
-                if !lo.is_finite() || !hi.is_finite() || lo >= hi {
-                    Err(SemiflowStatus::NanInf)
-                } else {
-                    Ok((lo, hi))
-                }
-            })
-            .collect();
-        let domain = match domain_result {
-            Err(s) => return s,
-            Ok(d) => d,
-        };
-        match VarCoefTt::<f64>::new(a, b, v, domain, eps_round) {
-            Err(_) => SemiflowStatus::OutOfDomain,
-            Ok(ev) => {
-                let raw = Box::into_raw(Box::new(ev)).cast::<SmfVarCoefTtEvolver>();
-                unsafe { *out_ev = raw };
-                SemiflowStatus::Ok
-            }
+        // SAFETY: null-check above; caller guarantees lengths match n_axes.
+        unsafe {
+            build_varcoef_evolver(
+                a_data, a_off, b_data, b_off, v_data, v_off, dom_lo, dom_hi, n_axes, eps_round,
+                out_ev,
+            )
         }
     })
+}
+
+/// Load offset+data slices and validate offsets.
+///
+/// # Safety
+/// All pointers must be non-null and valid for `n_axes` / the lengths implied by offset arrays.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+unsafe fn load_varcoef_slices<'a>(
+    a_data: *const f64,
+    a_off: *const usize,
+    b_data: *const f64,
+    b_off: *const usize,
+    v_data: *const f64,
+    v_off: *const usize,
+    dom_lo: *const f64,
+    dom_hi: *const f64,
+    n_axes: usize,
+) -> Result<
+    (
+        &'a [f64],
+        &'a [usize],
+        &'a [f64],
+        &'a [usize],
+        &'a [f64],
+        &'a [usize],
+        &'a [f64],
+        &'a [f64],
+    ),
+    SemiflowStatus,
+> {
+    let a_offs = unsafe { std::slice::from_raw_parts(a_off, n_axes + 1) };
+    let b_offs = unsafe { std::slice::from_raw_parts(b_off, n_axes + 1) };
+    let v_offs = unsafe { std::slice::from_raw_parts(v_off, n_axes + 1) };
+    if validate_offsets(a_offs, n_axes).is_err()
+        || validate_offsets(b_offs, n_axes).is_err()
+        || validate_offsets(v_offs, n_axes).is_err()
+    {
+        return Err(SemiflowStatus::GridMismatch);
+    }
+    let a_flat = unsafe { std::slice::from_raw_parts(a_data, a_offs[n_axes]) };
+    let b_flat = unsafe { std::slice::from_raw_parts(b_data, b_offs[n_axes]) };
+    let v_flat = unsafe { std::slice::from_raw_parts(v_data, v_offs[n_axes]) };
+    let lo_s = unsafe { std::slice::from_raw_parts(dom_lo, n_axes) };
+    let hi_s = unsafe { std::slice::from_raw_parts(dom_hi, n_axes) };
+    Ok((a_flat, a_offs, b_flat, b_offs, v_flat, v_offs, lo_s, hi_s))
+}
+
+/// Inner safe-ish helper called from `smf_varcoef_tt_evolver_new`.
+///
+/// # Safety
+/// All pointer preconditions inherited from the outer `unsafe extern "C"` fn.
+unsafe fn build_varcoef_evolver(
+    a_data: *const f64,
+    a_off: *const usize,
+    b_data: *const f64,
+    b_off: *const usize,
+    v_data: *const f64,
+    v_off: *const usize,
+    dom_lo: *const f64,
+    dom_hi: *const f64,
+    n_axes: usize,
+    eps_round: f64,
+    out_ev: *mut *mut SmfVarCoefTtEvolver,
+) -> SemiflowStatus {
+    if n_axes == 0 {
+        return SemiflowStatus::OutOfDomain;
+    }
+    if !eps_round.is_finite() {
+        return SemiflowStatus::NanInf;
+    }
+    let slices = unsafe {
+        load_varcoef_slices(
+            a_data, a_off, b_data, b_off, v_data, v_off, dom_lo, dom_hi, n_axes,
+        )
+    };
+    let (a_flat, a_offs, b_flat, b_offs, v_flat, v_offs, lo_s, hi_s) = match slices {
+        Ok(s) => s,
+        Err(s) => return s,
+    };
+    let (a, b, v) = match decode_ragged_abv(a_flat, a_offs, b_flat, b_offs, v_flat, v_offs, n_axes)
+    {
+        Ok(t) => t,
+        Err(s) => return s,
+    };
+    let domain = match build_domain(lo_s, hi_s) {
+        Ok(d) => d,
+        Err(s) => return s,
+    };
+    match VarCoefTt::<f64>::new(a, b, v, domain, eps_round) {
+        Err(_) => SemiflowStatus::OutOfDomain,
+        Ok(ev) => {
+            let raw = Box::into_raw(Box::new(ev)).cast::<SmfVarCoefTtEvolver>();
+            unsafe { *out_ev = raw };
+            SemiflowStatus::Ok
+        }
+    }
+}
+
+/// Build domain pairs with validation.
+fn build_domain(lo_s: &[f64], hi_s: &[f64]) -> Result<Vec<(f64, f64)>, SemiflowStatus> {
+    lo_s.iter()
+        .zip(hi_s.iter())
+        .map(|(&lo, &hi)| {
+            if !lo.is_finite() || !hi.is_finite() || lo >= hi {
+                Err(SemiflowStatus::NanInf)
+            } else {
+                Ok((lo, hi))
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -174,10 +245,10 @@ pub unsafe extern "C" fn smf_varcoef_tt_evolver_evolve(
 /// # Safety
 /// `ev` must be null or a live `SmfVarCoefTtEvolver` pointer.
 #[no_mangle]
-pub unsafe extern "C" fn smf_varcoef_tt_evolver_ndim(
-    ev: *const SmfVarCoefTtEvolver,
-) -> usize {
-    if ev.is_null() { return 0; }
+pub unsafe extern "C" fn smf_varcoef_tt_evolver_ndim(ev: *const SmfVarCoefTtEvolver) -> usize {
+    if ev.is_null() {
+        return 0;
+    }
     let evolver = unsafe { &*ev.cast::<VarCoefTt<f64>>() };
     evolver.ndim()
 }
@@ -192,7 +263,9 @@ pub unsafe extern "C" fn smf_varcoef_tt_evolver_ndim(
 /// `ev` must be null or a live pointer from `smf_varcoef_tt_evolver_new`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_varcoef_tt_evolver_free(ev: *mut SmfVarCoefTtEvolver) {
-    if ev.is_null() { return; }
+    if ev.is_null() {
+        return;
+    }
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         unsafe { drop(Box::from_raw(ev.cast::<VarCoefTt<f64>>())) };
     }));
@@ -235,4 +308,20 @@ fn decode_ragged(
         out.push(sl);
     }
     Ok(out)
+}
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn decode_ragged_abv(
+    a_flat: &[f64],
+    a_offs: &[usize],
+    b_flat: &[f64],
+    b_offs: &[usize],
+    v_flat: &[f64],
+    v_offs: &[usize],
+    n_axes: usize,
+) -> Result<(Vec<Vec<f64>>, Vec<Vec<f64>>, Vec<Vec<f64>>), SemiflowStatus> {
+    let a = decode_ragged(a_flat, a_offs, n_axes)?;
+    let b = decode_ragged(b_flat, b_offs, n_axes)?;
+    let v = decode_ragged(v_flat, v_offs, n_axes)?;
+    Ok((a, b, v))
 }

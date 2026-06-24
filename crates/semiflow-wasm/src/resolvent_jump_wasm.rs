@@ -26,9 +26,8 @@
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::cast_possible_truncation, clippy::missing_errors_doc)]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{DiffusionChernoff, Grid1D, GridFn1D, ResolventJumpChernoff};
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

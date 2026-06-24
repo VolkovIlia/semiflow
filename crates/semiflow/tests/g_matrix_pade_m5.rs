@@ -14,13 +14,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // u128→u64 in PCG64: intentional bit-mixing
-#![allow(clippy::cast_precision_loss)]      // usize→f64 in small index arithmetic; values ≤ M ≤ 8
-#![allow(clippy::needless_range_loop)]      // matrix index loops use cross-index arithmetic
-#![allow(clippy::float_cmp)]               // byte-identity assertion requires exact f64 equality
+#![allow(clippy::cast_precision_loss)] // usize→f64 in small index arithmetic; values ≤ M ≤ 8
+#![allow(clippy::needless_range_loop)] // matrix index loops use cross-index arithmetic
+#![allow(clippy::float_cmp)] // byte-identity assertion requires exact f64 equality
 
-use semiflow::{
-    ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
 // ---------------------------------------------------------------------------
 // Minimal PCG-64 for deterministic test matrices (no external deps).

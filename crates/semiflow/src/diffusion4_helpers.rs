@@ -3,11 +3,10 @@
 //! Declared as `#[path = "diffusion4_helpers.rs"] mod helpers_f64;` inside
 //! `diffusion4.rs` — this file is a child of that module, so `super::` works.
 
-use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
+pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
 
 use super::{Diffusion4thChernoff, C1, C2, C3, W0, W1, W2};
-
-pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
+use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
 /// γ-A inner-Strang baseline: `D_γ(τ) = S(τ/2) ∘ K(τ;a) ∘ S(τ/2)`.
 ///

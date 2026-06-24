@@ -67,7 +67,7 @@ use crate::{
 /// `KillingChernoff` (§21.3) is order-1: the discontinuous indicator `𝟙_R` has
 /// an irreducible O(τ) boundary commutator. This wrapper escapes the cap by
 /// replacing the indicator with an odd ghost — the commutator vanishes by
-/// self-adjointness of L and isometry of σ_R.
+/// self-adjointness of L and isometry of `σ_R`.
 ///
 /// ## Non-negativity note
 ///
@@ -182,11 +182,11 @@ impl ChernoffFunction<f64>
 mod tests {
     use super::{DirichletHeat2ndChernoff, HalfSpaceRegion};
     use crate::{
-        chernoff::ChernoffFunction, diffusion::DiffusionChernoff, grid::Grid1D,
-        grid_fn::GridFn1D, scratch::ScratchPool,
+        chernoff::ChernoffFunction, diffusion::DiffusionChernoff, grid::Grid1D, grid_fn::GridFn1D,
+        scratch::ScratchPool,
     };
 
-    /// `order()` must match inner DiffusionChernoff (which returns 2).
+    /// `order()` must match inner `DiffusionChernoff` (which returns 2).
     /// Mirrors `reflected_heat_chernoff_order_matches_inner` in reflection.rs.
     #[test]
     fn dirichlet_heat2nd_order_matches_inner() {
@@ -194,7 +194,11 @@ mod tests {
         let inner = DiffusionChernoff::new(|_| 1.0, |_| 0.0, |_| 0.0, 1.0, grid);
         let region = HalfSpaceRegion::<f64, 1>::new([0.0], [1.0]).unwrap();
         let wrapper = DirichletHeat2ndChernoff::new(inner, region).unwrap();
-        assert_eq!(wrapper.order(), 2, "odd-image must preserve inner order (Prop 21.9.1)");
+        assert_eq!(
+            wrapper.order(),
+            2,
+            "odd-image must preserve inner order (Prop 21.9.1)"
+        );
     }
 
     /// Smoke: `apply_into` runs without panic and produces finite values.
@@ -207,8 +211,13 @@ mod tests {
         let u0 = GridFn1D::from_fn(grid, |x| (-(x - 2.0).powi(2)).exp());
         let mut u1 = GridFn1D::from_fn(grid, |_| 0.0_f64);
         let mut scratch = ScratchPool::new();
-        wrapper.apply_into(0.001, &u0, &mut u1, &mut scratch).unwrap();
-        assert!(u1.values.iter().all(|v| v.is_finite()), "all values must be finite");
+        wrapper
+            .apply_into(0.001, &u0, &mut u1, &mut scratch)
+            .unwrap();
+        assert!(
+            u1.values.iter().all(|v| v.is_finite()),
+            "all values must be finite"
+        );
     }
     // NOTE: no non-negativity test — the odd ghost subtracts mass, so u can go
     // negative near the absorbing wall. This is CORRECT (ADR-0176 §Consequences).

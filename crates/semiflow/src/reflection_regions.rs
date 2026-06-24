@@ -4,7 +4,7 @@
 //! The structs themselves live in `killing.rs` (v2.6); only the trait impls are here.
 //!
 //! ## `BoxRegion`
-//! Per-axis flip: for p[k] outside [lo[k], hi[k]], reflect across the nearest edge.
+//! Per-axis flip: for `p[k]` outside `[lo[k], hi[k]]`, reflect across the nearest edge.
 //! Implements both `KillingRegion<F>` (v2.6) and `ReflectingRegion<F>` (v2.8).
 //!
 //! ## `BallRegion`
@@ -23,7 +23,7 @@ use crate::{
 // Additive impl ReflectingRegion<F> for BoxRegion<F, D>
 // ---------------------------------------------------------------------------
 
-/// Per-axis flip: for p[k] outside [lo[k], hi[k]], reflect across nearest edge.
+/// Per-axis flip: for `p[k]` outside `[lo[k], hi[k]]`, reflect across nearest edge.
 ///
 /// Reuses v2.6 `BoxRegion<F, D>` struct unchanged. The same struct now
 /// implements both `KillingRegion<F>` (v2.6) and `ReflectingRegion<F>` (v2.8).

@@ -28,8 +28,7 @@
 //! - Hochbruck-Lubich 2010 Acta Numerica §3.4 (A-stability of Cayley map)
 //! - `matrix_inv.rs` (Cramer's-rule M×M inverse for M ∈ {1,2,3,4})
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{error::SemiflowError, float::SemiflowFloat, matrix_inv::mat_inv_dispatch};
 

@@ -4,16 +4,15 @@
 
 use std::sync::Arc;
 
-use semiflow::scratch::ScratchPool;
-use semiflow::{ChernoffSemigroup, GraphHeatChernoff, Laplacian, MagnusGraphHeatChernoff};
-
-use crate::status::SemiflowStatus;
-
-use super::make_lap_at_t;
-use super::{
-    GhcInner, GraphInner, GraphSigInner, MghcInner, SmfGhc, SmfGraph, SmfGraphSig, SmfLapAtTFn,
-    SmfMghc,
+use semiflow::{
+    scratch::ScratchPool, ChernoffSemigroup, GraphHeatChernoff, Laplacian, MagnusGraphHeatChernoff,
 };
+
+use super::{
+    make_lap_at_t, GhcInner, GraphInner, GraphSigInner, MghcInner, SmfGhc, SmfGraph, SmfGraphSig,
+    SmfLapAtTFn, SmfMghc,
+};
+use crate::status::SemiflowStatus;
 
 // ---------------------------------------------------------------------------
 // GraphHeatChernoff

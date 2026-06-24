@@ -31,12 +31,10 @@
 use std::os::raw::c_double;
 
 use semiflow::{
-    BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff, Grid1D,
-    GridFn1D,
+    BoundaryPolicy, ChernoffSemigroup, Diffusion4thChernoff, Diffusion6thChernoff, Grid1D, GridFn1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Unit-coefficient fn-pointers
@@ -357,19 +355,13 @@ fn build_inner6(
     Ok(Inner6th { semigroup, current })
 }
 
-fn evolve_4th(
-    inner: &mut Inner4th,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_4th(inner: &mut Inner4th, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())
 }
 
-fn evolve_6th(
-    inner: &mut Inner6th,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_6th(inner: &mut Inner6th, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

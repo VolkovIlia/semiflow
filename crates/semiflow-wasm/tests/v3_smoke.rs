@@ -36,6 +36,13 @@ const T: f64 = 1.0;
 const N_CHERNOFF: usize = 100;
 const TOL: f64 = 5e-4;
 
+/// Per-array sup relative-error gate for the WASM Greeks parity sub-test 4
+/// (ADR-0183). Native↔wasm32 libm `exp()` differs in the last ULP; over 32
+/// Chernoff steps + the hyper-dual chain rule the measured divergence is
+/// ≤ 6.1e-11 relative. The 1e-9 gate gives ≈150× headroom while staying tight
+/// enough that any marshalling bug (order-1 relative) is caught.
+const TOL_REL: f64 = 1e-9;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -461,20 +468,30 @@ fn evolve_at_theta(
 }
 
 // ---------------------------------------------------------------------------
-// G_BINDING_GREEKS_PARITY sub-test 4 (WASM v3, 0-ULP against core golden)
+// G_BINDING_GREEKS_PARITY sub-test 4 (WASM v3, tolerance-bounded vs core golden)
 // ---------------------------------------------------------------------------
 //
 // Canonical params (contracts/semiflow-core.properties.yaml §G_BINDING_GREEKS_PARITY):
 //   domain [-10, 10], N=64, n_chernoff=32, t=0.05, theta=0.5, u0=exp(-x²).
 //
-// GOLDEN arrays produced by:
-//   cargo test --package semiflow-core --test binding_greeks_parity \
-//              print_golden -- --nocapture
-// (crates/semiflow-core/tests/binding_greeks_parity.rs, verified vs Richardson FD)
+// GOLDEN arrays are the CORE library's hyper-dual sweep — an oracle independent
+// of this WASM SUT. They are produced by `print_golden_full` in
+//   crates/semiflow/tests/binding_greeks_parity.rs
+// built SCALAR (no SIMD) so the golden uses the same strict scalar IEEE-754 f64
+// arithmetic family as wasm32:
+//   cargo test -p semiflow --no-default-features --features std \
+//              --test binding_greeks_parity print_golden_full -- --nocapture
+// The core test verifies this golden against a Richardson 4-/6-point FD oracle
+// (sub-test 1, g_binding_greeks_parity_core_golden).
 //
-// Object.is() comparison is bit-exact IEEE-754 (same-bits, handles ±0 and NaN).
+// WASM parity is TOLERANCE-BOUNDED, not byte-identical (ADR-0183): native↔wasm32
+// libm exp() differs in the last ULP; over 32 Chernoff steps + the hyper-dual
+// chain rule the measured divergence is ≤ 6.1e-11 relative (but ~285k ULP on the
+// ~1e-23 Gaussian tail, where ULP is a misleading scale). The 1e-9 relative gate
+// still catches any marshalling bug (order-1 relative), which is the gate's job.
+// FFI and PyO3 sub-tests stay 0-ULP (native, same libm as core).
 
-/// Core golden — value array.
+/// Scalar core golden — value array (semiflow hyper-dual sweep, no-SIMD build).
 const GOLDEN_VALUE: [f64; 64] = [
     1.2273665126349644e-23,
     1.5634124948354552e-22,
@@ -541,7 +558,7 @@ const GOLDEN_VALUE: [f64; 64] = [
     1.5634124948587485e-22,
     1.2273665127349842e-23,
 ];
-/// Core golden — delta array.
+/// Scalar core golden — delta array (∂/∂θ, no-SIMD build).
 const GOLDEN_DELTA: [f64; 64] = [
     1.5116386225478912e-22,
     1.9747025981399162e-21,
@@ -608,7 +625,7 @@ const GOLDEN_DELTA: [f64; 64] = [
     1.9747025981419001e-21,
     1.5116386228096023e-22,
 ];
-/// Core golden — gamma array.
+/// Scalar core golden — gamma array (∂²/∂θ², no-SIMD build).
 const GOLDEN_GAMMA: [f64; 64] = [
     1.7668632693894237e-21,
     2.1532879021608059e-20,
@@ -680,14 +697,20 @@ const GOLDEN_GAMMA: [f64; 64] = [
 ///
 /// Calls `EvolverHeat1DGreeksV3::new` + `.greeks(0.05)` via wasm_bindgen with
 /// the canonical params (domain [-10, 10], N=64, n_chernoff=32, theta=0.5,
-/// u0=exp(-x²)).  Asserts that value, delta, and gamma Float64Arrays are
-/// bit-identical (0 ULP) to the core golden.
+/// u0=exp(-x²)).  Asserts that value, delta, and gamma Float64Arrays match the
+/// SCALAR CORE GOLDEN (an oracle independent of this WASM SUT) to ≤ 1e-9 per-
+/// array sup relative error.
+///
+/// Why tolerance, not 0-ULP (ADR-0183): native↔wasm32 libm `exp()` differs in
+/// the last ULP; over 32 Chernoff steps + the hyper-dual chain rule this is
+/// ≤ 6.1e-11 relative — physically irreducible. The 1e-9 gate still catches any
+/// marshalling bug (wrong index / transposed array / sign flip → order-1
+/// relative). FFI/PyO3 sub-tests remain 0-ULP (native, same libm as core).
 ///
 /// How called: `EvolverHeat1DGreeksV3` (wasm_bindgen `#[wasm_bindgen]` class,
 /// WASM module compiled with panic=abort per ADR-0028 Amendment 1).
-/// Comparison uses `Object.is()` semantics via Rust `f64::to_bits()` — exact.
 #[wasm_bindgen_test]
-fn g_binding_greeks_parity_sub4_wasm_0ulp() {
+fn g_binding_greeks_parity_sub4_wasm_tol() {
     // Canonical params: domain [-10, 10], N=64, n_chernoff=32, theta=0.5.
     const NG: usize = 64;
     const NC: usize = 32;
@@ -728,44 +751,49 @@ fn g_binding_greeks_parity_sub4_wasm_0ulp() {
     delta_arr.copy_to(&mut delta);
     gamma_arr.copy_to(&mut gamma);
 
-    // Compute max ULP diff for diagnostic reporting.
-    let max_ulp = |got: &[f64], want: &[f64]| -> u64 {
+    // Per-array sup RELATIVE error vs the scalar core golden (ADR-0183).
+    // ULP comparison is unusable across native↔wasm32: the irreducible libm
+    // exp() gap is ~6e-11 relative but amplifies to ~285k ULP on the ~1e-23
+    // Gaussian tail, where one mantissa bit is many ULP yet negligible.
+    let max_rel = |got: &[f64], want: &[f64]| -> f64 {
         got.iter()
             .zip(want.iter())
             .map(|(&g, &w)| {
-                let gi = g.to_bits() as i64;
-                let wi = w.to_bits() as i64;
-                gi.wrapping_sub(wi).unsigned_abs()
+                let denom = if w == 0.0 { 1.0 } else { w.abs() };
+                (g - w).abs() / denom
             })
-            .max()
-            .unwrap_or(0)
+            .fold(0.0f64, f64::max)
     };
 
-    let ulp_v = max_ulp(&value, &GOLDEN_VALUE);
-    let ulp_d = max_ulp(&delta, &GOLDEN_DELTA);
-    let ulp_g = max_ulp(&gamma, &GOLDEN_GAMMA);
+    let rel_v = max_rel(&value, &GOLDEN_VALUE);
+    let rel_d = max_rel(&delta, &GOLDEN_DELTA);
+    let rel_g = max_rel(&gamma, &GOLDEN_GAMMA);
 
     wasm_bindgen_test::console_log!(
         "G_BINDING_GREEKS_PARITY sub-test 4 (WASM v3):\n\
          How called: EvolverHeat1DGreeksV3 (wasm_bindgen, Node)\n\
-         value: max ULP diff = {}  (expected 0)\n\
-         delta: max ULP diff = {}  (expected 0)\n\
-         gamma: max ULP diff = {}  (expected 0)",
-        ulp_v,
-        ulp_d,
-        ulp_g,
+         oracle: scalar core golden (semiflow, --no-default-features --features std)\n\
+         value: max rel err = {:.3e}  (gate <= {:.0e})\n\
+         delta: max rel err = {:.3e}  (gate <= {:.0e})\n\
+         gamma: max rel err = {:.3e}  (gate <= {:.0e})",
+        rel_v,
+        TOL_REL,
+        rel_d,
+        TOL_REL,
+        rel_g,
+        TOL_REL,
     );
 
-    assert_eq!(
-        ulp_v, 0,
-        "WASM value not byte-identical to core golden (max ULP diff = {ulp_v})"
+    assert!(
+        rel_v <= TOL_REL,
+        "WASM value diverges from scalar core golden by rel err {rel_v:.3e} > {TOL_REL:.0e}"
     );
-    assert_eq!(
-        ulp_d, 0,
-        "WASM delta not byte-identical to core golden (max ULP diff = {ulp_d})"
+    assert!(
+        rel_d <= TOL_REL,
+        "WASM delta diverges from scalar core golden by rel err {rel_d:.3e} > {TOL_REL:.0e}"
     );
-    assert_eq!(
-        ulp_g, 0,
-        "WASM gamma not byte-identical to core golden (max ULP diff = {ulp_g})"
+    assert!(
+        rel_g <= TOL_REL,
+        "WASM gamma diverges from scalar core golden by rel err {rel_g:.3e} > {TOL_REL:.0e}"
     );
 }

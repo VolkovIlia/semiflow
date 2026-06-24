@@ -2,7 +2,5 @@ edition = "2021"
 max_width = 100
 hard_tabs = false
 tab_spaces = 4
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
 reorder_imports = true
 newline_style = "Unix"

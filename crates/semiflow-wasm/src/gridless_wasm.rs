@@ -31,12 +31,11 @@
     clippy::too_many_arguments
 )]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     chernoff::ChernoffFunction, GridlessChernoff, MeasureState as CoreMeasureState,
     ParticleReduction, ScratchPool,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::make_js_error;
 
@@ -84,7 +83,10 @@ impl MeasureState {
         }
         let n = positions.length() as usize;
         if n == 0 {
-            return Err(make_js_error("GridMismatch", "MeasureState: n_part must be >= 1"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "MeasureState: n_part must be >= 1",
+            ));
         }
         if weights.length() as usize != n {
             return Err(make_js_error(
@@ -223,11 +225,17 @@ impl GridlessEvolver {
         b.copy_to(&mut b_v);
         for &v in a_v.iter().chain(b_v.iter()) {
             if !v.is_finite() {
-                return Err(make_js_error("NanInf", "GridlessEvolver: a or b is NaN/Inf"));
+                return Err(make_js_error(
+                    "NanInf",
+                    "GridlessEvolver: a or b is NaN/Inf",
+                ));
             }
         }
         if a_v[0] < 0.0 {
-            return Err(make_js_error("NanInf", "GridlessEvolver: diffusion a[0] must be >= 0"));
+            return Err(make_js_error(
+                "NanInf",
+                "GridlessEvolver: diffusion a[0] must be >= 0",
+            ));
         }
         let reduction = decode_reduction_wasm(reduction_tag, voronoi_cap)?;
         Ok(GridlessEvolver {
@@ -314,7 +322,10 @@ fn decode_reduction_wasm(tag: u32, voronoi_cap: usize) -> Result<ParticleReducti
             Ok(ParticleReduction::WeightedVoronoi { cap: voronoi_cap })
         }
         1 => Ok(ParticleReduction::GaussianBackground),
-        _ => Err(make_js_error("OutOfDomain", "GridlessEvolver: unknown reductionTag")),
+        _ => Err(make_js_error(
+            "OutOfDomain",
+            "GridlessEvolver: unknown reductionTag",
+        )),
     }
 }
 
@@ -328,9 +339,14 @@ fn build_measure_state_wasm(
         let p = pos[i];
         let w = wts[i];
         if !p.is_finite() || !w.is_finite() {
-            return Err(make_js_error("NanInf", "MeasureState: position or weight is NaN/Inf"));
+            return Err(make_js_error(
+                "NanInf",
+                "MeasureState: position or weight is NaN/Inf",
+            ));
         }
         particles.push(([p], w));
     }
-    Ok(CoreMeasureState::<f64, COMPILED_D>::from_particles(&particles))
+    Ok(CoreMeasureState::<f64, COMPILED_D>::from_particles(
+        &particles,
+    ))
 }

@@ -22,8 +22,7 @@ use semiflow::{
     BoundaryPolicy, ChernoffSemigroup,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Constant killing rate
@@ -220,7 +219,13 @@ fn build_killing2nd(
 ) -> Result<InnerKilling2nd, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
-    let diff = DiffusionChernoff::new(unit_a_killing2nd, zero_killing2nd, zero_killing2nd, 1.0, grid);
+    let diff = DiffusionChernoff::new(
+        unit_a_killing2nd,
+        zero_killing2nd,
+        zero_killing2nd,
+        1.0,
+        grid,
+    );
     let rate = ConstKappa(kappa);
     let kernel = Killing2ndUnit::new(diff, rate, grid)?;
     let semigroup = ChernoffSemigroup::new(kernel, n_steps)?;
@@ -228,10 +233,7 @@ fn build_killing2nd(
     Ok(InnerKilling2nd { semigroup, current })
 }
 
-fn evolve_killing2nd(
-    inner: &mut InnerKilling2nd,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_killing2nd(inner: &mut InnerKilling2nd, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

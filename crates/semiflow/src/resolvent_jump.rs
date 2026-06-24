@@ -28,8 +28,7 @@
 #![allow(clippy::cast_precision_loss)]
 
 extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use num_complex::Complex;
 
@@ -114,7 +113,7 @@ where
     /// Approximate `e^{tA}g` via the TWS parabolic-contour inverse Laplace sum.
     ///
     /// Implements math.md §47.3 (NORMATIVE).  Each contour node is solved by
-    /// [`resolve_lhp`](Self::resolve_lhp) — a complex Thomas O(N) solve that is
+    /// `resolve_lhp` — a complex Thomas O(N) solve that is
     /// valid for any `λ ∉ σ(A)`, including `Re λ < 0`.
     ///
     /// # Errors

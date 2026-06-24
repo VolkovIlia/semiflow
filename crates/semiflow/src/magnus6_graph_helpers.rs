@@ -4,6 +4,7 @@
 //! All items are `pub(super)` — NOT part of the public API.
 //! Buffer-operation order is NORMATIVE (bit-identity gates); do not reorder.
 
+use super::{ONE_OVER_12, ONE_OVER_240, ONE_OVER_60, SQRT15_OVER_3, TEN_OVER_3};
 use crate::{
     float::{from_f64, SemiflowFloat},
     graph::Laplacian,
@@ -11,8 +12,6 @@ use crate::{
     scratch::ScratchPool,
     state::State,
 };
-
-use super::{ONE_OVER_12, ONE_OVER_240, ONE_OVER_60, SQRT15_OVER_3, TEN_OVER_3};
 
 // ---------------------------------------------------------------------------
 // Taylor-truncation kernel: exp(Ω₆)·src via degree-6 expansion

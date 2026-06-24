@@ -10,6 +10,7 @@
 
 use core::marker::PhantomData;
 
+pub use crate::gridless_reduce::ParticleReduction;
 use crate::{
     adjoint_fp::MeasureState,
     chernoff::{ChernoffFunction, Growth},
@@ -17,8 +18,6 @@ use crate::{
     float::SemiflowFloat,
     scratch::ScratchPool,
 };
-
-pub use crate::gridless_reduce::ParticleReduction;
 
 // ---------------------------------------------------------------------------
 // GridlessChernoff<F, D>

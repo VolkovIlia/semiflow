@@ -1,7 +1,7 @@
-//! `G_GRAPH_ADJOINT_SAMPLED_PARITY` — RELEASE_BLOCKING gate (ADR-0180).
+//! `G_GRAPH_ADJOINT_SAMPLED_PARITY` — `RELEASE_BLOCKING` gate (ADR-0180).
 //!
 //! Pre-sampled GL₄-aware path == closure path to 0 ULP (bit-exact), for both
-//! Magnus K=4 and VarCoef kernels. Run:
+//! Magnus K=4 and `VarCoef` kernels. Run:
 //!
 //! ```text
 //! cargo test -p semiflow-core --features slow-tests graph_adjoint_sampled_parity
@@ -16,22 +16,22 @@ use std::sync::Arc;
 
 use semiflow::{
     graph_adjoint_presampled::{fill_abscissa_times, PreSampledLaplacianSeq},
-    Graph, GraphSignal, LaplacianAtTime, LaplacianKind, MagnusGraphHeatChernoff, ScratchPool,
-    VarCoefMagnusGraphHeatChernoff, WeightAtTime, Laplacian,
+    Graph, GraphSignal, Laplacian, LaplacianAtTime, LaplacianKind, MagnusGraphHeatChernoff,
+    ScratchPool, VarCoefMagnusGraphHeatChernoff, WeightAtTime,
 };
 
 // GL4 abscissae (normative values from magnus_graph.rs; pub(crate) so inlined here)
 // Used only in the unused-variable check annotation for build_vals_seq.
 #[allow(dead_code)]
-const _GL4_C1: f64 = 0.211_324_865_405_187_134;
+const _GL4_C1: f64 = 0.211_324_865_405_187_13;
 #[allow(dead_code)]
-const _GL4_C2: f64 = 0.788_675_134_594_812_866;
+const _GL4_C2: f64 = 0.788_675_134_594_812_9;
 
 // ---------------------------------------------------------------------------
 // Test parameters (mirrors oracle in scripts/verify_graphadjoint_sampled.py)
 // ---------------------------------------------------------------------------
 
-const N: usize = 8;          // path graph nodes
+const N: usize = 8; // path graph nodes
 const N_EDGES: usize = N - 1;
 const N_STEPS: usize = 64;
 const T_HORIZON: f64 = 0.5;
@@ -49,6 +49,8 @@ fn edge_weights_at(t: f64, n_edges: usize) -> Vec<f64> {
 
 /// Assemble a combinatorial Laplacian for `path-N` with weights `w`.
 fn path_lap_from_weights(n: usize, w: &[f64]) -> Arc<Laplacian<f64>> {
+    // cast_possible_truncation: edge indices always < graph node count (small test graphs).
+    #[allow(clippy::cast_possible_truncation)]
     let edges: Vec<(u32, u32, f64)> = (0..w.len())
         .map(|e| (e as u32, (e + 1) as u32, w[e]))
         .collect();
@@ -58,7 +60,7 @@ fn path_lap_from_weights(n: usize, w: &[f64]) -> Arc<Laplacian<f64>> {
 
 /// Build the `vals_seq` for `n_steps` steps by sampling the same closure
 /// on the GL₄ grid in adjoint-schedule order.
-#[allow(unused_variables)]
+#[allow(unused_variables, clippy::too_many_arguments)]
 fn build_vals_seq(
     n: usize,
     n_edges: usize,
@@ -93,9 +95,9 @@ fn build_vals_seq(
 // Gate: Magnus K=4 variant
 // ---------------------------------------------------------------------------
 
-/// RELEASE_BLOCKING: pre-sampled and closure paths produce bit-exact results.
+/// `RELEASE_BLOCKING`: pre-sampled and closure paths produce bit-exact results.
 #[test]
-#[cfg_attr(not(feature = "slow-tests"), ignore)]
+#[cfg_attr(not(feature = "slow-tests"), ignore = "slow-tests feature required")]
 fn g_graph_adjoint_sampled_parity_magnus() {
     let tau = T_HORIZON / N_STEPS as f64;
 
@@ -116,8 +118,8 @@ fn g_graph_adjoint_sampled_parity_magnus() {
             path_lap_from_weights(N, &w)
         })
     };
-    let mc_closure = MagnusGraphHeatChernoff::new(Arc::clone(&g_arc), lap_cb, 4.0, true)
-        .expect("closure ctor");
+    let mc_closure =
+        MagnusGraphHeatChernoff::new(Arc::clone(&g_arc), lap_cb, 4.0, true).expect("closure ctor");
 
     let lam_n: Vec<f64> = (0..N).map(|i| (i as f64 + 1.0) * 0.1).collect();
     let src = GraphSignal::from_fn(Arc::clone(&g_arc), |i| lam_n[i as usize]);
@@ -130,11 +132,15 @@ fn g_graph_adjoint_sampled_parity_magnus() {
     // --- presampled path ---
     let vals_seq = build_vals_seq(N, N_EDGES, N_STEPS, tau, base_nnz, &base_rp, &base_ci);
     let seq = PreSampledLaplacianSeq::new(
-        base_rp, base_ci, vals_seq, N_STEPS, LaplacianKind::Combinatorial,
+        base_rp,
+        base_ci,
+        vals_seq,
+        N_STEPS,
+        LaplacianKind::Combinatorial,
     )
     .expect("seq ctor");
-    let ps_adj = MagnusGraphHeatChernoff::<f64>::from_presampled(seq, 4.0, true)
-        .expect("presampled ctor");
+    let ps_adj =
+        MagnusGraphHeatChernoff::<f64>::from_presampled(seq, 4.0, true).expect("presampled ctor");
 
     let mut dst_sampled = GraphSignal::zeros(Arc::clone(&g_arc));
     let mut scratch2 = ScratchPool::new();
@@ -155,9 +161,9 @@ fn g_graph_adjoint_sampled_parity_magnus() {
 // Gate: VarCoef variant
 // ---------------------------------------------------------------------------
 
-/// RELEASE_BLOCKING: VarCoef presampled path is bit-exact vs closure.
+/// `RELEASE_BLOCKING`: `VarCoef` presampled path is bit-exact vs closure.
 #[test]
-#[cfg_attr(not(feature = "slow-tests"), ignore)]
+#[cfg_attr(not(feature = "slow-tests"), ignore = "slow-tests feature required")]
 fn g_graph_adjoint_sampled_parity_varcoef() {
     let tau = T_HORIZON / N_STEPS as f64;
 
@@ -193,7 +199,11 @@ fn g_graph_adjoint_sampled_parity_varcoef() {
     let a_seq = vec![1.0_f64; 2 * N_STEPS * N];
 
     let seq = PreSampledLaplacianSeq::new(
-        base_rp, base_ci, vals_seq, N_STEPS, LaplacianKind::Combinatorial,
+        base_rp,
+        base_ci,
+        vals_seq,
+        N_STEPS,
+        LaplacianKind::Combinatorial,
     )
     .expect("seq ctor");
     let ps_adj = VarCoefMagnusGraphHeatChernoff::<f64>::from_presampled(seq, a_seq, 4.0, 4.0)

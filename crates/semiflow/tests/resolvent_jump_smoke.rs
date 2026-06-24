@@ -109,8 +109,7 @@ fn resolvent_jump_rejects_non_positive_t() {
 
 /// Evolve `g` via `n_steps` small Chernoff steps at τ = t / `n_steps`.
 fn reference_evolve(grid: Grid1D<f64>, t: f64, g: &GridFn1D<f64>, n_steps: usize) -> GridFn1D<f64> {
-    use semiflow::chernoff::ChernoffFunction;
-    use semiflow::scratch::ScratchPool;
+    use semiflow::{chernoff::ChernoffFunction, scratch::ScratchPool};
 
     let chernoff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid);
     let tau = t / n_steps as f64;

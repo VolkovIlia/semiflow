@@ -35,14 +35,15 @@
 
 use std::sync::Arc;
 
+use semiflow::{
+    ChernoffSemigroup, Graph, GraphHeat4thChernoff as CoreGraphHeat4th, GraphSignal, Laplacian,
+    VarCoefGraphHeatChernoff as CoreVarCoefGraphHeat,
+};
 use wasm_bindgen::prelude::*;
 
-use crate::error::{err_to_js, make_js_error};
-use crate::graph_wasm::GraphPath;
-use semiflow::{
-    ChernoffSemigroup, Graph, GraphSignal, Laplacian,
-    GraphHeat4thChernoff as CoreGraphHeat4th,
-    VarCoefGraphHeatChernoff as CoreVarCoefGraphHeat,
+use crate::{
+    error::{err_to_js, make_js_error},
+    graph_wasm::GraphPath,
 };
 
 // ---------------------------------------------------------------------------
@@ -92,7 +93,11 @@ impl GraphHeat4thWasm {
         let n_nodes = graph.n_nodes() as usize;
         let g = Arc::new(Graph::<f64>::path(n_nodes));
         let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
-        Ok(Self { lap, graph: g, n_nodes })
+        Ok(Self {
+            lap,
+            graph: g,
+            n_nodes,
+        })
     }
 
     /// Evolve `f0` by `t_final` seconds with `n_steps` order-4 Chernoff steps.
@@ -107,8 +112,7 @@ impl GraphHeat4thWasm {
         // Rebuild Chernoff from stored Arc<Laplacian> (cheap — Arc::clone only).
         let chernoff = CoreGraphHeat4th::new(Arc::clone(&self.lap));
         let signal = GraphSignal::from_fn(Arc::clone(&self.graph), |i| f0[i as usize]);
-        let sg = ChernoffSemigroup::new(chernoff, n_steps as usize)
-            .map_err(|e| err_to_js(&e))?;
+        let sg = ChernoffSemigroup::new(chernoff, n_steps as usize).map_err(|e| err_to_js(&e))?;
         let result = sg.evolve(t_final, &signal).map_err(|e| err_to_js(&e))?;
         Ok(result.values().to_vec())
     }
@@ -161,9 +165,16 @@ impl VarCoefGraphHeatWasm {
     /// - `.kind = "OutOfDomain"` — `rho_bar <= 0`, any `a[i] <= 0`, non-finite.
     /// - `.kind = "GridMismatch"` — `a.length != n_nodes`.
     #[wasm_bindgen(constructor)]
-    pub fn new(graph: &GraphPath, a: &[f64], rho_bar: f64) -> Result<VarCoefGraphHeatWasm, JsValue> {
+    pub fn new(
+        graph: &GraphPath,
+        a: &[f64],
+        rho_bar: f64,
+    ) -> Result<VarCoefGraphHeatWasm, JsValue> {
         if !rho_bar.is_finite() || rho_bar <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "rho_bar must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "rho_bar must be finite and > 0",
+            ));
         }
         let n_nodes = graph.n_nodes() as usize;
         if a.len() != n_nodes {
@@ -171,7 +182,10 @@ impl VarCoefGraphHeatWasm {
         }
         for &v in a {
             if !v.is_finite() || v <= 0.0 {
-                return Err(make_js_error("OutOfDomain", "a must contain finite positive values"));
+                return Err(make_js_error(
+                    "OutOfDomain",
+                    "a must contain finite positive values",
+                ));
             }
         }
         let g = Arc::new(Graph::<f64>::path(n_nodes));
@@ -198,8 +212,7 @@ impl VarCoefGraphHeatWasm {
         let g2 = Arc::clone(&self.graph);
         let chernoff = CoreVarCoefGraphHeat::new(graph, self.a.clone(), self.rho_bar)
             .map_err(|e| err_to_js(&e))?;
-        let sg = ChernoffSemigroup::new(chernoff, n_steps as usize)
-            .map_err(|e| err_to_js(&e))?;
+        let sg = ChernoffSemigroup::new(chernoff, n_steps as usize).map_err(|e| err_to_js(&e))?;
         #[allow(clippy::cast_possible_truncation)]
         let signal = GraphSignal::from_fn(g2, |i| f0[i as usize]);
         let result = sg.evolve(t_final, &signal).map_err(|e| err_to_js(&e))?;
@@ -228,7 +241,10 @@ fn validate_evolve_inputs(
     n_steps: u32,
 ) -> Result<(), JsValue> {
     if f0.len() != n_nodes {
-        return Err(make_js_error("GridMismatch", "f0.length must equal n_nodes"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "f0.length must equal n_nodes",
+        ));
     }
     for &v in f0 {
         if !v.is_finite() {
@@ -239,7 +255,10 @@ fn validate_evolve_inputs(
         return Err(make_js_error("OutOfDomain", "n_steps must be >= 1"));
     }
     if !t_final.is_finite() || t_final < 0.0 {
-        return Err(make_js_error("OutOfDomain", "t_final must be finite and >= 0"));
+        return Err(make_js_error(
+            "OutOfDomain",
+            "t_final must be finite and >= 0",
+        ));
     }
     Ok(())
 }

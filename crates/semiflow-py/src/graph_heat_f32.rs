@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use semiflow::{
     DiffusionChernoff, Evolver, Graph, GraphHeatChernoff, GraphSignal, Grid1D, GridFn1D, Laplacian,
-    LaplacianAtTime, MagnusGraphHeatChernoff, SemiflowError, ScratchPool, VarCoefGraphHeatChernoff,
+    LaplacianAtTime, MagnusGraphHeatChernoff, ScratchPool, SemiflowError, VarCoefGraphHeatChernoff,
 };
 
 use crate::dtype_dispatch::{cast_f32_to_f64, cast_f64_to_f32};
@@ -39,9 +39,7 @@ use crate::dtype_dispatch::{cast_f32_to_f64, cast_f64_to_f32};
 ///
 /// In a combinatorial Laplacian `L = D − W`, off-diagonal entries are `−w_{ij}`
 /// (negative for edges).  We extract upper-triangle edges as `(u, v, -val)`.
-pub(crate) fn build_lap_f32_from_lap_f64(
-    lap64: &Laplacian<f64>,
-) -> Arc<semiflow::Laplacian<f32>> {
+pub(crate) fn build_lap_f32_from_lap_f64(lap64: &Laplacian<f64>) -> Arc<semiflow::Laplacian<f32>> {
     let n = lap64.n_nodes();
     let row_ptr = lap64.row_ptr();
     let ci = lap64.col_idx();

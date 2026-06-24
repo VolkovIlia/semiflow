@@ -32,12 +32,11 @@
 )]
 
 use js_sys::{Object, Reflect};
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     AdjointFokkerPlanckChernoff, ChernoffFunction, DiffusionChernoff, Grid1D, MeasureState,
     ScratchPool, State,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

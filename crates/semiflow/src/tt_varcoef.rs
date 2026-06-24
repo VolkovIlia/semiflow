@@ -1,6 +1,6 @@
-//! `VarCoefTt` — additive-separable variable-coefficient evolver on [`TtState`].
+//! `VarCoefTt` — additive-separable variable-coefficient evolver on [`crate::tt_chernoff::TtState`].
 //!
-//! Applies `P₂(τ/2)·k(τ)·P₂(τ/2)` per axis via [`varcoef_axis_step`] on the
+//! Applies `P₂(τ/2)·k(τ)·P₂(τ/2)` per axis via `varcoef_axis_step` on the
 //! **mode axis** of each TT core (middle index), leaving bond indices as spectators.
 //! This is the carrier-level curse-escape: rank-1 IC stays rank-1 (§52.10d).
 //!
@@ -19,7 +19,7 @@
 #![allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 extern crate alloc;
@@ -28,8 +28,8 @@ use alloc::{vec, vec::Vec};
 use crate::{
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
-    tt_core::{tt_round, TtCore},
     tt_chernoff::TtState,
+    tt_core::{tt_round, TtCore},
     tt_varcoef_spectral::varcoef_axis_step,
 };
 
@@ -77,13 +77,21 @@ impl<F: SemiflowFloat> VarCoefTt<F> {
         eps_round: F,
     ) -> Result<Self, SemiflowError> {
         validate(&a_axis, &b_axis, &v_axis, &domain)?;
-        Ok(Self { a_axis, b_axis, v_axis, domain, eps_round })
+        Ok(Self {
+            a_axis,
+            b_axis,
+            v_axis,
+            domain,
+            eps_round,
+        })
     }
 
     /// Number of axes (spatial dimensions).
-    pub fn ndim(&self) -> usize { self.a_axis.len() }
+    pub fn ndim(&self) -> usize {
+        self.a_axis.len()
+    }
 
-    /// Grid spacing for axis `j` (derived from domain and n_j).
+    /// Grid spacing for axis `j` (derived from domain and `n_j`).
     fn axis_dx(&self, j: usize) -> F {
         let n = self.a_axis[j].len();
         axis_dx_from(self.domain[j], n)
@@ -106,7 +114,8 @@ impl<F: SemiflowFloat> VarCoefTt<F> {
                 &self.a_axis[j],
                 &self.b_axis[j],
                 &self.v_axis[j],
-                dx, t,
+                dx,
+                t,
             );
         }
         // Backward half-sweep: j = d-2 .. 0 at τ/2 (j=d-1 already done)
@@ -117,7 +126,8 @@ impl<F: SemiflowFloat> VarCoefTt<F> {
                 &self.a_axis[j],
                 &self.b_axis[j],
                 &self.v_axis[j],
-                dx, half_tau,
+                dx,
+                half_tau,
             );
         }
         tt_round(&mut state.cores, self.eps_round);
@@ -160,13 +170,13 @@ fn apply_varcoef_core<F: SemiflowFloat>(
     for il in 0..rl {
         for ir in 0..rr {
             // Extract mode line: core[il, :, ir]
-            for im in 0..n {
-                line[im] = core.get(il, im, ir);
+            for (im, slot) in line.iter_mut().enumerate() {
+                *slot = core.get(il, im, ir);
             }
             varcoef_axis_step(&mut line, n, dx, a, b, v, tau);
             // Write back
-            for im in 0..n {
-                core.set(il, im, ir, line[im]);
+            for (im, val) in line.iter().enumerate() {
+                core.set(il, im, ir, *val);
             }
         }
     }
@@ -179,7 +189,9 @@ fn apply_varcoef_core<F: SemiflowFloat>(
 /// Grid spacing from domain and n.
 fn axis_dx_from<F: SemiflowFloat>(domain: (F, F), n: usize) -> F {
     let (lo, hi) = domain;
-    if n <= 1 { return F::one(); }
+    if n <= 1 {
+        return F::one();
+    }
     (hi - lo) / from_f64(n as f64 - 1.0)
 }
 
@@ -192,7 +204,9 @@ fn validate<F: SemiflowFloat>(
 ) -> Result<(), SemiflowError> {
     let d = a.len();
     if d == 0 {
-        return Err(SemiflowError::VarCoefOutOfClass { detail: "d must be >= 1" });
+        return Err(SemiflowError::VarCoefOutOfClass {
+            detail: "d must be >= 1",
+        });
     }
     if b.len() != d || v.len() != d || domain.len() != d {
         return Err(SemiflowError::VarCoefOutOfClass {
@@ -202,7 +216,9 @@ fn validate<F: SemiflowFloat>(
     for j in 0..d {
         let nj = a[j].len();
         if nj < 2 {
-            return Err(SemiflowError::VarCoefOutOfClass { detail: "n_j must be >= 2" });
+            return Err(SemiflowError::VarCoefOutOfClass {
+                detail: "n_j must be >= 2",
+            });
         }
         if b[j].len() != nj {
             return Err(SemiflowError::VarCoefOutOfClass {
@@ -234,9 +250,15 @@ mod boundary_tests {
     use super::*;
     use crate::tt_varcoef_spectral::varcoef_axis_step;
 
-    fn flat_a(n: usize, val: f64) -> Vec<Vec<f64>> { vec![vec![val; n]; 2] }
-    fn zero_bv(n: usize) -> Vec<Vec<f64>> { vec![vec![0.0; n]; 2] }
-    fn domain2() -> Vec<(f64, f64)> { vec![(-5.0, 5.0); 2] }
+    fn flat_a(n: usize, val: f64) -> Vec<Vec<f64>> {
+        vec![vec![val; n]; 2]
+    }
+    fn zero_bv(n: usize) -> Vec<Vec<f64>> {
+        vec![vec![0.0; n]; 2]
+    }
+    fn domain2() -> Vec<(f64, f64)> {
+        vec![(-5.0, 5.0); 2]
+    }
 
     #[test]
     fn rejects_d_zero() {
@@ -298,8 +320,11 @@ mod boundary_tests {
         let mut varcoef_line = init.clone();
         varcoef_axis_step(&mut varcoef_line, n, dx, &a_flat, &b_zero, &v_zero, tau);
 
-        let max_err = varcoef_line.iter().zip(&spectral_line)
-            .map(|(p, q)| (p - q).abs()).fold(0.0_f64, f64::max);
+        let max_err = varcoef_line
+            .iter()
+            .zip(&spectral_line)
+            .map(|(p, q)| (p - q).abs())
+            .fold(0.0_f64, f64::max);
         assert!(
             max_err < 1e-12,
             "reduction invariant violated: max_err={max_err:.3e} (expected < 1e-12)"
@@ -314,21 +339,34 @@ mod boundary_tests {
         let d = 3usize;
         let dx = 10.0_f64 / (n as f64 - 1.0);
         let a_axis: Vec<Vec<f64>> = (0..d)
-            .map(|j| (0..n).map(|i| 0.5 + 0.2 * ((i as f64) * dx - 5.0 + j as f64).sin().powi(2))
-                .collect())
+            .map(|j| {
+                (0..n)
+                    .map(|i| 0.5 + 0.2 * ((i as f64) * dx - 5.0 + j as f64).sin().powi(2))
+                    .collect()
+            })
             .collect();
         let b_axis: Vec<Vec<f64>> = (0..d).map(|_| vec![0.0; n]).collect();
         let v_axis: Vec<Vec<f64>> = (0..d).map(|_| vec![0.0; n]).collect();
         let domain: Vec<(f64, f64)> = vec![(-5.0, 5.0); d];
         let ev = VarCoefTt::new(a_axis, b_axis, v_axis, domain, 1e-8).unwrap();
 
-        let slice: Vec<f64> = (0..n).map(|i| (-(((i as f64) * dx - 5.0).powi(2)) / 2.0).exp()).collect();
+        let slice: Vec<f64> = (0..n)
+            .map(|i| (-(((i as f64) * dx - 5.0).powi(2)) / 2.0).exp())
+            .collect();
         let mut state = TtState::rank1_separable((0..d).map(|_| slice.clone()).collect());
 
         ev.evolve(0.1, 3, &mut state);
-        assert_eq!(state.peak_rank(), 1, "rank-1 IC grew to r={}", state.peak_rank());
+        assert_eq!(
+            state.peak_rank(),
+            1,
+            "rank-1 IC grew to r={}",
+            state.peak_rank()
+        );
         for core in &state.cores {
-            assert!(core.data.iter().all(|x| x.is_finite()), "non-finite after evolve");
+            assert!(
+                core.data.iter().all(|x| x.is_finite()),
+                "non-finite after evolve"
+            );
         }
     }
 }

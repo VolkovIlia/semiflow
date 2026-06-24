@@ -8,13 +8,13 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow::{
-    ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D,
-};
+use semiflow::{ChernoffSemigroup, Diffusion4thChernoff, DiffusionExpmvChernoff, Grid1D, GridFn1D};
 
-use crate::boundary::parse_boundary;
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    boundary::parse_boundary,
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Inner state
@@ -75,8 +75,7 @@ impl DiffusionExpmv1D {
         catch_panic_py!({
             let policy = parse_boundary(boundary)?;
             let u0_vec = extract_f64_vec(u0)?;
-            let inner =
-                build_expmv(xmin, xmax, n, &u0_vec, policy).map_err(|e| from_core(&e))?;
+            let inner = build_expmv(xmin, xmax, n, &u0_vec, policy).map_err(|e| from_core(&e))?;
             Ok(Self { inner })
         })
     }

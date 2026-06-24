@@ -27,12 +27,10 @@
 //! GIL is held throughout (TT-Chernoff evolve is already fast per-step; the
 //! correctness-first approach mirrors `ReverseHeat1D`).
 
-use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::{prelude::*, types::PyList};
 use semiflow::{TtChernoff, TtState};
 
-use crate::error::new_pyerr;
-use crate::panic::catch_panic_py;
+use crate::{error::new_pyerr, panic::catch_panic_py};
 
 // ---------------------------------------------------------------------------
 // TtState pyclass
@@ -64,7 +62,9 @@ impl PyTtState {
     fn new(slices: &Bound<'_, PyList>) -> PyResult<Self> {
         catch_panic_py!({
             let vecs = extract_slices(slices, "TtState")?;
-            Ok(Self { inner: TtState::<f64>::rank1_separable(vecs) })
+            Ok(Self {
+                inner: TtState::<f64>::rank1_separable(vecs),
+            })
         })
     }
 
@@ -112,10 +112,7 @@ impl PyTtState {
     /// `SemiflowError`
     ///     ``kind='GridMismatch'`` — list length != ndim or slice lengths mismatch.
     ///     ``kind='NanInf'`` — NaN/Inf in any functional.
-    fn inner_separable(
-        &self,
-        functionals: &Bound<'_, PyList>,
-    ) -> PyResult<f64> {
+    fn inner_separable(&self, functionals: &Bound<'_, PyList>) -> PyResult<f64> {
         catch_panic_py!({
             let vecs = extract_slices(functionals, "TtState.inner_separable")?;
             if vecs.len() != self.inner.ndim() {
@@ -208,12 +205,7 @@ impl PyTtEvolver {
     /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — `n_steps` == 0, `t_final` non-finite/negative,
     ///     or `ev.ndim() != state.ndim()`.
-    fn evolve(
-        &self,
-        state: &mut PyTtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> PyResult<()> {
+    fn evolve(&self, state: &mut PyTtState, t_final: f64, n_steps: usize) -> PyResult<()> {
         catch_panic_py!({
             validate_evolve_args(t_final, n_steps, "TtEvolver.evolve")?;
             if self.inner.ndim() != state.inner.ndim() {
@@ -236,15 +228,24 @@ impl PyTtEvolver {
 fn extract_slices(list: &Bound<'_, PyList>, ctx: &str) -> PyResult<Vec<Vec<f64>>> {
     let n = list.len();
     if n == 0 {
-        return Err(new_pyerr("GridMismatch", &format!("{ctx}: slices list is empty")));
+        return Err(new_pyerr(
+            "GridMismatch",
+            &format!("{ctx}: slices list is empty"),
+        ));
     }
     let mut out = Vec::with_capacity(n);
     for (j, item) in list.iter().enumerate() {
         let v: Vec<f64> = item.extract::<Vec<f64>>().map_err(|_| {
-            new_pyerr("GridMismatch", &format!("{ctx}: axis {j} is not a float64 array"))
+            new_pyerr(
+                "GridMismatch",
+                &format!("{ctx}: axis {j} is not a float64 array"),
+            )
         })?;
         if v.is_empty() {
-            return Err(new_pyerr("GridMismatch", &format!("{ctx}: axis {j} is empty")));
+            return Err(new_pyerr(
+                "GridMismatch",
+                &format!("{ctx}: axis {j} is empty"),
+            ));
         }
         for &x in &v {
             if !x.is_finite() {
@@ -269,40 +270,70 @@ fn build_tt_evolver(
         return Err(new_pyerr("GridMismatch", "TtEvolver: axis list is empty"));
     }
     if !c.is_finite() || !eps_round.is_finite() {
-        return Err(new_pyerr("NanInf", "TtEvolver: c or eps_round is non-finite"));
+        return Err(new_pyerr(
+            "NanInf",
+            "TtEvolver: c or eps_round is non-finite",
+        ));
     }
-    for (j, &v) in a.iter().enumerate() {
-        if !v.is_finite() || v < 0.0 {
-            return Err(new_pyerr("NanInf", &format!("TtEvolver: a[{j}] must be finite >= 0")));
-        }
-    }
-    for (j, &v) in b.iter().enumerate() {
-        if !v.is_finite() {
-            return Err(new_pyerr("NanInf", &format!("TtEvolver: b[{j}] is non-finite")));
-        }
-    }
+    validate_tt_coeffs(a, b)?;
     let domain: Vec<(f64, f64)> = dom_min
         .iter()
         .zip(dom_max.iter())
         .enumerate()
         .map(|(j, (&lo, &hi))| {
             if !lo.is_finite() || !hi.is_finite() || lo >= hi {
-                Err(new_pyerr("NanInf", &format!("TtEvolver: domain[{j}] invalid")))
+                Err(new_pyerr(
+                    "NanInf",
+                    &format!("TtEvolver: domain[{j}] invalid"),
+                ))
             } else {
                 Ok((lo, hi))
             }
         })
         .collect::<PyResult<_>>()?;
-    Ok(TtChernoff::new(a.to_vec(), b.to_vec(), c, domain, eps_round))
+    Ok(TtChernoff::new(
+        a.to_vec(),
+        b.to_vec(),
+        c,
+        domain,
+        eps_round,
+    ))
+}
+
+/// Validate per-axis a (≥0) and b (finite) coefficient slices.
+fn validate_tt_coeffs(a: &[f64], b: &[f64]) -> PyResult<()> {
+    for (j, &v) in a.iter().enumerate() {
+        if !v.is_finite() || v < 0.0 {
+            return Err(new_pyerr(
+                "NanInf",
+                &format!("TtEvolver: a[{j}] must be finite >= 0"),
+            ));
+        }
+    }
+    for (j, &v) in b.iter().enumerate() {
+        if !v.is_finite() {
+            return Err(new_pyerr(
+                "NanInf",
+                &format!("TtEvolver: b[{j}] is non-finite"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Validate `t_final` and `n_steps` for evolve methods.
 fn validate_evolve_args(t_final: f64, n_steps: usize, ctx: &str) -> PyResult<()> {
     if n_steps == 0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: n_steps must be >= 1")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: n_steps must be >= 1"),
+        ));
     }
     if !t_final.is_finite() || t_final < 0.0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: t_final must be finite >= 0")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: t_final must be finite >= 0"),
+        ));
     }
     Ok(())
 }

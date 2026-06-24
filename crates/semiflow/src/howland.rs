@@ -1,10 +1,10 @@
 //! B2 — Howland Nonautonomous Lift (math.md §23, ADR-0070).
 //!
-//! Converts time-dependent L(s) to autonomous L̂ := -∂_s + L(s) on L²([0,T], X).
+//! Converts time-dependent L(s) to autonomous L̂ := -∂_s + L(s) on L²(\[0,T\], X).
 //! Chernoff approximation (left-endpoint shift): `F̂(τ) f̂(s) := F(τ, s−τ) f̂(s−τ)`.
 //! Order = `min(C::order(), 1)`. Cite: Howland 1974 *Trans. AMS* **207** Theorem 1.
 //!
-//! L²([0,T], X) is discretized as `Vec<C::S>` of `n_t` uniform samples (`Δs = T/(n_t−1)`).
+//! L²(\[0,T\], X) is discretized as `Vec<C::S>` of `n_t` uniform samples (`Δs = T/(n_t−1)`).
 //! `apply_into` enforces `τ = Δs` (§23.4); mismatches return `Err(DomainViolation)`.
 //! Wrapper-type blanket impls deferred to v3.x.
 
@@ -58,7 +58,7 @@ pub trait TimedChernoffFunction<F: SemiflowFloat = f64>: ChernoffFunction<F> {
 // HowlandState<S, F> — discretized L²([0,T], X)
 // ---------------------------------------------------------------------------
 
-/// Discretized L²([0,T], X): `n_t` uniform time samples (math §23.3).
+/// Discretized L²(\[0,T\], X): `n_t` uniform time samples (math §23.3).
 ///
 /// `samples[i]` ≈ `f̂(s_i)` where `s_i` = i · Δs, Δs = T / (`n_t` − 1).
 ///
@@ -107,7 +107,7 @@ where
     S: State<F>,
     F: SemiflowFloat,
 {
-    /// Total degrees of freedom = `n_t` × samples[0].`len()`.
+    /// Total degrees of freedom = `n_t` × `samples[0].len()`.
     fn len(&self) -> usize {
         self.samples.iter().map(super::state::State::len).sum()
     }
@@ -141,7 +141,7 @@ where
         }
     }
 
-    /// Sup-norm over all time slices: `max_i` ‖samples[i]‖_∞.
+    /// Sup-norm over all time slices: `max_i ‖samples[i]‖_∞`.
     fn norm_sup(&self) -> F {
         self.samples.iter().fold(F::zero(), |acc, s| {
             let n = s.norm_sup();
@@ -266,8 +266,8 @@ where
     /// Single Howland-Chernoff step with τ = Δs (matched-step, §23.4).
     ///
     /// Implements the discretized shift formula (23.4):
-    ///   dst[0] := 0       (boundary convention: f̂(s<0) ≡ 0)
-    ///   dst[i] := `C.apply_at(t`_{i-1}, Δs, src[i-1])   for i ≥ 1
+    ///   `dst[0]` := 0       (boundary convention: f̂(s&lt;0) ≡ 0)
+    ///   `dst[i]` := `C.apply_at(t_{i-1}, Δs, src[i-1])`   for i ≥ 1
     ///
     /// where t_{i-1} = (i-1) · Δs is the left endpoint of step i.
     fn apply_into(
@@ -302,9 +302,9 @@ where
         core::cmp::min(self.inner.order(), 1)
     }
 
-    /// Growth bound on Ŷ = L²([0,T], X): `M_c` · exp(T · |`ω_c`|) (math §23.5).
+    /// Growth bound on Ŷ = L²(\[0,T\], X): `M_c` · exp(T · |`ω_c`|) (math §23.5).
     ///
-    /// The time-shift is unitary on L²([0,T]); inner growth integrates over T.
+    /// The time-shift is unitary on L²(\[0,T\]); inner growth integrates over T.
     fn growth(&self) -> Growth<F> {
         let gc = self.inner.growth();
         let t_h = self.t_horizon;

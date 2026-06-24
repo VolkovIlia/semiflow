@@ -35,8 +35,12 @@ use crate::error::{err_to_js, make_js_error};
 // Coefficient fn-pointers (unit / zero)
 // ---------------------------------------------------------------------------
 
-extern "Rust" fn unit_a_adpi(_: f64) -> f64 { 1.0 }
-extern "Rust" fn zero_adpi(_: f64) -> f64 { 0.0 }
+extern "Rust" fn unit_a_adpi(_: f64) -> f64 {
+    1.0
+}
+extern "Rust" fn zero_adpi(_: f64) -> f64 {
+    0.0
+}
 
 // ---------------------------------------------------------------------------
 // 5-kernel enum (avoids Box<dyn ChernoffFunction>)
@@ -54,11 +58,26 @@ enum AdpiKernel {
 impl AdpiKernel {
     fn set_tolerance(&mut self, abs: f64, rel: f64) {
         match self {
-            Self::Diff2(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Diff4(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Diff6(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::DriftReaction(k) => { k.tol_abs = abs; k.tol_rel = rel; }
-            Self::Shift(k) => { k.tol_abs = abs; k.tol_rel = rel; }
+            Self::Diff2(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Diff4(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Diff6(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::DriftReaction(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
+            Self::Shift(k) => {
+                k.tol_abs = abs;
+                k.tol_rel = rel;
+            }
         }
     }
 
@@ -74,7 +93,11 @@ impl AdpiKernel {
             Self::DriftReaction(k) => k.evolve_adaptive(t, u0)?,
             Self::Shift(k) => k.evolve_adaptive(t, u0)?,
         };
-        Ok((outcome.final_state.values, outcome.steps_accepted, outcome.steps_rejected))
+        Ok((
+            outcome.final_state.values,
+            outcome.steps_accepted,
+            outcome.steps_rejected,
+        ))
     }
 }
 
@@ -107,12 +130,7 @@ fn fn_to_js_adpi(values: &[f64]) -> Float64Array {
 // Kernel builders (each ≤50 lines)
 // ---------------------------------------------------------------------------
 
-fn build_adpi_kernel(
-    xmin: f64,
-    xmax: f64,
-    n: usize,
-    kernel: &str,
-) -> Result<AdpiKernel, JsValue> {
+fn build_adpi_kernel(xmin: f64, xmax: f64, n: usize, kernel: &str) -> Result<AdpiKernel, JsValue> {
     let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
     match kernel {
         "heat2" => {
@@ -190,17 +208,28 @@ impl AdaptivePI1D {
         tol_rel: f64,
     ) -> Result<AdaptivePI1D, JsValue> {
         if !tol_abs.is_finite() || tol_abs <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "tol_abs must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "tol_abs must be finite and > 0",
+            ));
         }
         if !tol_rel.is_finite() || tol_rel <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "tol_rel must be finite and > 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "tol_rel must be finite and > 0",
+            ));
         }
         let buf = extract_u0_adpi(u0, n)?;
         let mut iv = build_adpi_kernel(xmin, xmax, n, kernel)?;
         iv.set_tolerance(tol_abs, tol_rel);
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let current = GridFn1D::new(grid, buf).map_err(|e| err_to_js(&e))?;
-        Ok(AdaptivePI1D { integrator: iv, current, last_accepted: 0, last_rejected: 0 })
+        Ok(AdaptivePI1D {
+            integrator: iv,
+            current,
+            last_accepted: 0,
+            last_rejected: 0,
+        })
     }
 
     /// Evolve by time `t` using adaptive PI substeps.
@@ -215,7 +244,8 @@ impl AdaptivePI1D {
             return Err(make_js_error("OutOfDomain", "t must be finite and > 0"));
         }
         let input = self.current.clone();
-        let (vals, accepted, rejected) = self.integrator
+        let (vals, accepted, rejected) = self
+            .integrator
             .evolve_adaptive(t, &input)
             .map_err(|e| err_to_js(&e))?;
         let grid = self.current.grid;

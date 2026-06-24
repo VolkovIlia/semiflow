@@ -3,14 +3,12 @@
 //! Declared as `#[path = "diffusion6_helpers.rs"] mod helpers_f64;` inside
 //! `diffusion6.rs` — this file is a child of that module, so `super::` works.
 
-use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
-
-#[cfg(feature = "simd")]
-use crate::simd::{F64x4, SimdF64x4};
+pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
 
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
-
-pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
+#[cfg(feature = "simd")]
+use crate::simd::{F64x4, SimdF64x4};
+use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
 /// γ⁶-A baseline: `D_γ⁶(τ) = S(τ/2) ∘ K7(τ;a) ∘ S(τ/2)` (f64, SIMD path).
 #[inline]

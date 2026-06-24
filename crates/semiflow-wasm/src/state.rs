@@ -108,8 +108,7 @@ impl Heat1D {
             return Err(make_js_error("OutOfDomain", "t must be finite and >= 0"));
         }
         let chernoff = self.inner.semigroup.func.clone();
-        let sg =
-            semiflow::ChernoffSemigroup::new(chernoff, n_steps).map_err(|e| err_to_js(&e))?;
+        let sg = semiflow::ChernoffSemigroup::new(chernoff, n_steps).map_err(|e| err_to_js(&e))?;
         let next = sg
             .evolve(t, &self.inner.current)
             .map_err(|e| err_to_js(&e))?;

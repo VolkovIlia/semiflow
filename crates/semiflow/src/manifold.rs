@@ -9,10 +9,9 @@
 
 use num_traits::Float;
 
-use crate::{error::SemiflowError, float::SemiflowFloat};
-
 // Re-export Hyperbolic2 from sibling module (extracted for file-size compliance).
 pub use crate::manifold_hyperbolic::Hyperbolic2;
+use crate::{error::SemiflowError, float::SemiflowFloat};
 
 // ─── BoundedGeometryManifold<F> trait ────────────────────────────────────────
 

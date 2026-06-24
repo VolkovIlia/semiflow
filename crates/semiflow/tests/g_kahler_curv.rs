@@ -36,8 +36,8 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
-#![allow(clippy::cast_precision_loss)]  // usize→f64 in OLS; n ≤ 256 ≤ 2^52
-#![allow(clippy::similar_names)]        // nx_c/nx_f/ny_c are math index names
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; n ≤ 256 ≤ 2^52
+#![allow(clippy::similar_names)] // nx_c/nx_f/ny_c are math index names
 #![allow(clippy::manual_range_contains)] // `r2 < MIN || r2 > MAX` exclusion is clearer
 
 use semiflow::{

@@ -50,8 +50,8 @@
 
 use core::f64::consts::PI;
 
-use semiflow::killing::{BoxRegion, KillingChernoff};
 use semiflow::{
+    killing::{BoxRegion, KillingChernoff},
     BoundaryPolicy, ChernoffFunction, ClosureObstacle, ConstantObstacle, DiffusionChernoff,
     DriftReactionChernoff, Grid1D, GridFn1D, ObstacleChernoff, ScratchPool,
 };

@@ -27,8 +27,7 @@ use semiflow::{
     BoundaryPolicy, ChernoffSemigroup, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Constant fn-pointers
@@ -361,10 +360,7 @@ fn evolve_drift_reaction(
     Ok(())
 }
 
-fn evolve_shift1d(
-    inner: &mut InnerShift1D,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_shift1d(inner: &mut InnerShift1D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

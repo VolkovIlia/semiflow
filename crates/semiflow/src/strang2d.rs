@@ -27,14 +27,14 @@
 //! `docs/adr/0012-tensor-product-2d.md`,
 //! and `docs/adr/0018-parallel-strang2d.md`.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "parallel")]
 use crate::parallel_pool::ParallelPool2D;
 #[cfg(feature = "parallel")]
 use crate::strang2d_parallel::{
     parallel_x_pass, parallel_y_pass, resolve_threads, MIN_ROWS_PER_THREAD,
 };
-use alloc::vec::Vec;
-
 use crate::{
     axis::{Axis, AxisLift},
     chernoff::{ChernoffFunction, Growth},

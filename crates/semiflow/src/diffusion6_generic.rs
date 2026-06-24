@@ -3,18 +3,16 @@
 //! Declared as `#[path = "diffusion6_generic.rs"] mod helpers_generic;` inside
 //! `diffusion6.rs` — this file is a child of that module, so `super::` works.
 
+pub(super) use diffusion_zeta_common::{validate_a_x_generic, validate_tau_generic};
 use num_traits::Float;
 
+use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
 use crate::{
     diffusion_zeta_common,
     error::SemiflowError,
     float::{from_f64, half, SemiflowFloat},
     grid_fn::GridFn1D,
 };
-
-use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
-
-pub(super) use diffusion_zeta_common::{validate_a_x_generic, validate_tau_generic};
 
 /// γ⁶-A baseline (generic, scalar path).
 #[inline]

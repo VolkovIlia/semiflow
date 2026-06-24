@@ -22,11 +22,13 @@
     clippy::too_many_lines
 )]
 
-use std::env;
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
-use std::time::Instant;
+use std::{
+    env,
+    fs::{create_dir_all, File},
+    io::{BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 use semiflow::{
     chernoff::ApplyChernoffExt, DiffusionChernoff, DriftReactionChernoff, Grid1D, Grid2D, GridFn2D,

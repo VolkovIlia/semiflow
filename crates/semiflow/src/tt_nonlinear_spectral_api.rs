@@ -77,7 +77,9 @@ impl<F: SemiflowFloat> S3BurgersColeHopf<F> {
                 detail: "u0 length must equal n",
             });
         }
-        Ok(burgers_cole_hopf_evolve(u0, self.n, self.dx, self.nu, t_final))
+        Ok(burgers_cole_hopf_evolve(
+            u0, self.n, self.dx, self.nu, t_final,
+        ))
     }
 }
 
@@ -125,7 +127,13 @@ impl<F: SemiflowFloat> S3ReactionDiffusion<F> {
         reaction: Reaction<F>,
     ) -> Result<Self, crate::SemiflowError> {
         validate_rd(n, d, dx, nu)?;
-        Ok(Self { n, d, dx, nu, reaction })
+        Ok(Self {
+            n,
+            d,
+            dx,
+            nu,
+            reaction,
+        })
     }
 
     /// Evolve `u0` (flat `n^d`) for `nsteps` steps of size `tau`.
@@ -136,12 +144,7 @@ impl<F: SemiflowFloat> S3ReactionDiffusion<F> {
     /// # Errors
     /// Returns [`crate::SemiflowError::S3OutOfClass`] if `u0.len() != n^d` or
     /// a Logistic IC is out of `(0,1)`.
-    pub fn evolve(
-        &self,
-        u0: &[F],
-        tau: F,
-        nsteps: usize,
-    ) -> Result<Vec<F>, crate::SemiflowError> {
+    pub fn evolve(&self, u0: &[F], tau: F, nsteps: usize) -> Result<Vec<F>, crate::SemiflowError> {
         let nd = self.n.pow(self.d as u32);
         if u0.len() != nd {
             return Err(crate::SemiflowError::S3OutOfClass {
@@ -168,13 +171,19 @@ fn validate_rd<F: SemiflowFloat>(
     nu: F,
 ) -> Result<(), crate::SemiflowError> {
     if n < 2 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "n must be >= 2" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "n must be >= 2",
+        });
     }
     if d == 0 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "d must be >= 1" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "d must be >= 1",
+        });
     }
     if dx <= F::zero() {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "dx must be > 0" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "dx must be > 0",
+        });
     }
     if nu <= F::zero() {
         return Err(crate::SemiflowError::S3OutOfClass {
@@ -242,23 +251,23 @@ mod tests {
 
     #[test]
     fn rd_rejects_logistic_ic_out_of_domain() {
-        let evolver = S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0,
-            Reaction::Logistic { r: 1.0 }).unwrap();
+        let evolver =
+            S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0, Reaction::Logistic { r: 1.0 }).unwrap();
         let bad_u0 = vec![1.5f64, 0.3, 0.4, 0.2]; // 1.5 ∉ (0,1)
         assert!(evolver.evolve(&bad_u0, 0.01, 1).is_err());
     }
 
     #[test]
     fn rd_rejects_u0_length_mismatch() {
-        let evolver = S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0,
-            Reaction::Linear { c: 0.1 }).unwrap();
+        let evolver =
+            S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0, Reaction::Linear { c: 0.1 }).unwrap();
         assert!(evolver.evolve(&[0.1f64; 3], 0.01, 1).is_err()); // 3 ≠ 4^1
     }
 
     #[test]
     fn rd_accepts_valid() {
-        let evolver = S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0,
-            Reaction::Linear { c: 0.1 }).unwrap();
+        let evolver =
+            S3ReactionDiffusion::<f64>::new(4, 1, 0.1, 1.0, Reaction::Linear { c: 0.1 }).unwrap();
         let u0 = vec![0.1f64; 4];
         assert!(evolver.evolve(&u0, 0.01, 1).is_ok());
     }

@@ -14,9 +14,9 @@
 //! PRE-FLIGHT (`scripts/verify_matrix_2d3d_preflight.py`).
 
 #![cfg(feature = "slow-tests")]
-#![allow(clippy::cast_lossless)]       // u32→f64 widening: always exact for u32
+#![allow(clippy::cast_lossless)] // u32→f64 widening: always exact for u32
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; len ≤ 4 ≤ 2^52
-#![allow(clippy::similar_names)]       // u_n/u_2n are standard PDE convergence names
+#![allow(clippy::similar_names)] // u_n/u_2n are standard PDE convergence names
 
 use semiflow::{
     ChernoffFunction, Grid1D, Grid2D, Grid3D, MatrixDiffusionChernoff, MatrixDiffusionChernoff2D,

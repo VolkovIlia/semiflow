@@ -20,8 +20,7 @@ use semiflow::{
     GridFn1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Static coefficient fn-pointers
@@ -58,7 +57,7 @@ struct InnerDrZeta4 {
 
 /// Allocate a `DriftReactionZeta4Chernoff` 1-D evolver.
 ///
-/// Solves `∂_t u = b(x)∂_x u + c(x)u` (order 4; palindromic R_sym ∘ K5 ∘ R_sym,
+/// Solves `∂_t u = b(x)∂_x u + c(x)u` (order 4; palindromic `R_sym` ∘ K5 ∘ `R_sym`,
 /// ADR-0127). Default: `b = 0.5`, `b' = 0.0`, `c = 0.0`.
 ///
 /// # Safety
@@ -166,9 +165,7 @@ pub unsafe extern "C" fn smf_drift_reaction_zeta4_values(
 /// # Safety
 /// `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
 #[no_mangle]
-pub unsafe extern "C" fn smf_drift_reaction_zeta4_size(
-    ev: *const SmfDriftReactionZeta4,
-) -> usize {
+pub unsafe extern "C" fn smf_drift_reaction_zeta4_size(ev: *const SmfDriftReactionZeta4) -> usize {
     if ev.is_null() {
         return 0;
     }
@@ -203,8 +200,7 @@ fn build_dr_zeta4(
 ) -> Result<InnerDrZeta4, semiflow::SemiflowError> {
     validate_u0_finite(u0)?;
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
-    let d4 =
-        Diffusion4thChernoff::new(unit_a_zeta4_ffi, zero_zeta4_ffi, zero_zeta4_ffi, 1.0, grid);
+    let d4 = Diffusion4thChernoff::new(unit_a_zeta4_ffi, zero_zeta4_ffi, zero_zeta4_ffi, 1.0, grid);
     let kernel = DriftReactionZeta4Chernoff::new(
         d4,
         half_b_zeta4_ffi,

@@ -44,12 +44,13 @@
 //! ```
 
 #![cfg(feature = "slow-tests")]
-#![allow(clippy::cast_precision_loss)]  // usize→f64 in OLS; n ≤ 256 ≤ 2^52
+#![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; n ≤ 256 ≤ 2^52
 #![allow(clippy::cast_possible_truncation)] // f64→usize for n_steps: always non-negative finite
-#![allow(clippy::cast_sign_loss)]       // same: ceil() result is positive
+#![allow(clippy::cast_sign_loss)] // same: ceil() result is positive
 
-use semiflow::chernoff::ChernoffFunction;
-use semiflow::{Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool};
+use semiflow::{
+    chernoff::ChernoffFunction, Grid1D, GridFn1D, KilledDirichletChernoff, ScratchPool,
+};
 
 // ---------------------------------------------------------------------------
 // Gate constants (normative — do NOT relax without ADR + properties.yaml bump)

@@ -50,11 +50,10 @@
     clippy::type_complexity
 )]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind, ReverseChernoff,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

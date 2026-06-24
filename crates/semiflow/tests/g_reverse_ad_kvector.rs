@@ -1,4 +1,4 @@
-//! `G_REVERSE_AD_GRADIENT (K-vector)` — RELEASE_BLOCKING gate for K>1 per-region
+//! `G_REVERSE_AD_GRADIENT (K-vector)` — `RELEASE_BLOCKING` gate for K>1 per-region
 //! gradients (§51.10, ADR-0177, issue #1).
 //!
 //! Isolated in its own binary so the peak-tracking global allocator in
@@ -12,7 +12,7 @@
 //! For each region r ∈ 0..K:
 //!   `|grad[r] − fd_r| / |fd_r| < 1e-9`
 //!
-//! Uses N_GRID=128, K=4, contiguous regions, distinct θ_r.
+//! Uses `N_GRID=128`, K=4, contiguous regions, distinct `θ_r`.
 //! Initial condition: Lorentzian `u₀(x) = 1 / (1 + (x/5)²)`.
 //!
 //! ## Run
@@ -70,9 +70,8 @@ fn dual_default_grid() -> Grid1D<Dual<f64>> {
 
 fn reverse_mode_grad_k1(tau: f64, n: usize) -> f64 {
     let f64_grid = f64_default_grid();
-    let kernel_f64 = DiffusionChernoff::with_closure(
-        |_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5_f64, f64_grid,
-    );
+    let kernel_f64 =
+        DiffusionChernoff::with_closure(|_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5_f64, f64_grid);
     let dual_grid = dual_default_grid();
     let kernel_dual = DiffusionChernoff::<Dual<f64>>::new(
         a_seeded_dual as fn(Dual<f64>) -> Dual<f64>,
@@ -86,7 +85,9 @@ fn reverse_mode_grad_k1(tau: f64, n: usize) -> f64 {
     let grid = f64_default_grid();
     let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
     let target = GridFn1D::from_fn(grid, |_| 0.0_f64);
-    let (_, grad) = rc.value_and_grad_k1(tau, n, &u0, &target).expect("K=1 grad");
+    let (_, grad) = rc
+        .value_and_grad_k1(tau, n, &u0, &target)
+        .expect("K=1 grad");
     grad
 }
 
@@ -219,9 +220,13 @@ fn g_reverse_ad_gradient_kvector() {
         0.7_f64,
         dual_grid,
     );
-    let rc = ReverseChernoff::new(kernel, kernel_dual, CheckpointSchedule::sqrt_n(N_STEPS_GRAD))
-        .with_region_map(rmap2)
-        .expect("region map size matches grid");
+    let rc = ReverseChernoff::new(
+        kernel,
+        kernel_dual,
+        CheckpointSchedule::sqrt_n(N_STEPS_GRAD),
+    )
+    .with_region_map(rmap2)
+    .expect("region map size matches grid");
     let u0 = GridFn1D::from_fn(grid, |x| 1.0 / (1.0 + (x / 5.0) * (x / 5.0)));
     let target = GridFn1D::from_fn(grid, |_| 0.0_f64);
     let theta_slice: &[f64] = &thetas;
@@ -244,9 +249,7 @@ fn g_reverse_ad_gradient_kvector() {
             "G_REVERSE_AD_GRADIENT (K-vector) FAIL r={r}: rel_err={rel_err:.3e} >= {GRAD_REL_GATE:.0e}"
         );
     }
-    println!(
-        "G_REVERSE_AD_GRADIENT (K-vector) PASS (K={k}, all rel_err < {GRAD_REL_GATE:.0e})"
-    );
+    println!("G_REVERSE_AD_GRADIENT (K-vector) PASS (K={k}, all rel_err < {GRAD_REL_GATE:.0e})");
 }
 
 // ---------------------------------------------------------------------------
@@ -339,9 +342,13 @@ fn g_reverse_ad_gradient_k2_uniform_cross_check() {
         theta_uniform,
         dual_default_grid(),
     );
-    let rc = ReverseChernoff::new(kernel, kernel_dual, CheckpointSchedule::sqrt_n(N_STEPS_GRAD))
-        .with_region_map(rmap2)
-        .expect("region map");
+    let rc = ReverseChernoff::new(
+        kernel,
+        kernel_dual,
+        CheckpointSchedule::sqrt_n(N_STEPS_GRAD),
+    )
+    .with_region_map(rmap2)
+    .expect("region map");
     let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
     let target = GridFn1D::from_fn(grid, |_| 0.0_f64);
     let theta_slice: &[f64] = &thetas_k2;

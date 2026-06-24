@@ -104,7 +104,11 @@ fn zero_f32(_: f32) -> f32 {
 
 fn mk_f32(g: Grid1D<f32>) -> WrapDiff<f32> {
     WrapDiff(DiffusionChernoff::<f32>::new(
-        a_f32, zero_f32, zero_f32, DIFFUSION_A, g,
+        a_f32,
+        zero_f32,
+        zero_f32,
+        DIFFUSION_A,
+        g,
     ))
 }
 
@@ -184,7 +188,10 @@ fn print_regime_map(tag: &str, errs: &[f64]) {
     for (idx, &n) in N_SWEEP.iter().enumerate() {
         let dx = (X_MAX - X_MIN) / (n - 1) as f64;
         if idx == 0 {
-            println!("{tag}: N={n:3}  dx={dx:.4}  self_err={:.4e}  seg=—", errs[idx]);
+            println!(
+                "{tag}: N={n:3}  dx={dx:.4}  self_err={:.4e}  seg=—",
+                errs[idx]
+            );
             continue;
         }
         let seg = (errs[idx].ln() - errs[idx - 1].ln())

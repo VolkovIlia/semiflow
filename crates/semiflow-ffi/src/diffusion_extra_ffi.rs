@@ -25,8 +25,7 @@ use semiflow::{
     TruncatedExpDiffusionChernoff,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Unit fn-pointers
@@ -347,19 +346,13 @@ fn build_trunc_exp4(
 // Evolve helpers
 // ---------------------------------------------------------------------------
 
-fn evolve_trunc_exp(
-    inner: &mut InnerTruncExp,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_trunc_exp(inner: &mut InnerTruncExp, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())
 }
 
-fn evolve_trunc_exp4(
-    inner: &mut InnerTruncExp4,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn evolve_trunc_exp4(inner: &mut InnerTruncExp4, t: f64) -> Result<(), semiflow::SemiflowError> {
     let result = inner.semigroup.evolve(t, &inner.current)?;
     inner.current.values = result.values;
     Ok(())

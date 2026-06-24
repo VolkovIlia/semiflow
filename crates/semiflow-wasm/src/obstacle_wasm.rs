@@ -88,7 +88,10 @@ impl Obstacle<f64> for WasmArrayObstacle {
                 value: active.len() as f64,
             });
         }
-        for (flag, (wv, gv)) in active.iter_mut().zip(w.values.iter().zip(self.values.iter())) {
+        for (flag, (wv, gv)) in active
+            .iter_mut()
+            .zip(w.values.iter().zip(self.values.iter()))
+        {
             *flag = *wv > *gv;
         }
         Ok(())
@@ -138,13 +141,19 @@ impl ObstacleVariant {
 
 fn extract_f64_buf(arr: &Float64Array, n: usize, label: &str) -> Result<Vec<f64>, JsValue> {
     if arr.length() as usize != n {
-        return Err(make_js_error("GridMismatch", &format!("{label} length must equal n")));
+        return Err(make_js_error(
+            "GridMismatch",
+            &format!("{label} length must equal n"),
+        ));
     }
     let mut buf = vec![0.0f64; n];
     arr.copy_to(&mut buf);
     for &v in &buf {
         if !v.is_finite() {
-            return Err(make_js_error("NanInf", &format!("{label} contains NaN or Inf")));
+            return Err(make_js_error(
+                "NanInf",
+                &format!("{label} contains NaN or Inf"),
+            ));
         }
     }
     Ok(buf)
@@ -309,8 +318,7 @@ impl ObstacleChernoffWasm {
         validate_evolve_obs(t, n_steps)?;
         let grid = self.current.grid;
         let src = self.current.values.clone();
-        let out = run_obs_evolve(&self.kernel, src, grid, t, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let out = run_obs_evolve(&self.kernel, src, grid, t, n_steps).map_err(|e| err_to_js(&e))?;
         self.current.values.clone_from(&out);
         Ok(fn_to_js_obs(&out))
     }

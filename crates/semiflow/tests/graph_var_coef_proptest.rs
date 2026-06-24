@@ -9,7 +9,6 @@
 use std::sync::Arc;
 
 use proptest::prelude::*;
-
 use semiflow::{
     chernoff::ApplyChernoffExt, state::HilbertState, Graph, GraphSignal, VarCoefGraphHeatChernoff,
 };

@@ -34,12 +34,9 @@
 
 use std::os::raw::c_double;
 
-use semiflow::{
-    ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff,
-};
+use semiflow::{ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, ObstacleChernoff};
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // FfiArrayObstacle (mirrors obstacle_ffi.rs — per ADR-0028 Amdt 2, no sharing)
@@ -61,10 +58,7 @@ impl semiflow::Obstacle<f64> for GammaArrayObstacle {
         0.0
     }
 
-    fn project_in_place(
-        &self,
-        dst: &mut GridFn1D<f64>,
-    ) -> Result<(), semiflow::SemiflowError> {
+    fn project_in_place(&self, dst: &mut GridFn1D<f64>) -> Result<(), semiflow::SemiflowError> {
         if dst.values.len() != self.values.len() {
             return Err(semiflow::SemiflowError::DomainViolation {
                 what: "GammaArrayObstacle: length mismatch",
@@ -159,7 +153,7 @@ struct GammaInner {
 
 /// Allocate an `ObstacleGamma` with a constant obstacle floor.
 ///
-/// `level` must be finite.  `n >= 4` (Grid1D requirement).
+/// `level` must be finite.  `n >= 4` (`Grid1D` requirement).
 ///
 /// # Safety
 /// `out` must be a valid non-null `*mut *mut SmfObstacleGamma`.
@@ -285,8 +279,11 @@ pub unsafe extern "C" fn smf_obstacle_gamma_inactive_gamma(
     defined_out: *mut *mut u8,
     count_out: *mut usize,
 ) -> SemiflowStatus {
-    if ptr.is_null() || v.is_null() || gamma_out.is_null()
-        || defined_out.is_null() || count_out.is_null()
+    if ptr.is_null()
+        || v.is_null()
+        || gamma_out.is_null()
+        || defined_out.is_null()
+        || count_out.is_null()
     {
         return SemiflowStatus::NullPtr;
     }
@@ -303,17 +300,14 @@ pub unsafe extern "C" fn smf_obstacle_gamma_inactive_gamma(
         };
         let mut gamma_fn = v_fn.zeroed_like();
         let mut defined_bool = vec![false; n];
-        let count = match inner.kernel.apply_gamma(&v_fn, &mut gamma_fn, &mut defined_bool) {
+        let count = match inner
+            .kernel
+            .apply_gamma(&v_fn, &mut gamma_fn, &mut defined_bool)
+        {
             Ok(c) => c,
             Err(e) => return SemiflowStatus::from(&e),
         };
-        // Allocate gamma buffer (Box<[f64]>).
-        let gamma_boxed: Box<[f64]> = gamma_fn.values.into_boxed_slice();
-        let gamma_ptr = Box::into_raw(gamma_boxed) as *mut f64;
-        // Allocate defined buffer (Box<[u8]>): 1 = true, 0 = false.
-        let defined_u8: Vec<u8> = defined_bool.iter().map(|&b| b as u8).collect();
-        let defined_boxed: Box<[u8]> = defined_u8.into_boxed_slice();
-        let defined_ptr = Box::into_raw(defined_boxed) as *mut u8;
+        let (gamma_ptr, defined_ptr) = alloc_gamma_outputs(gamma_fn.values, &defined_bool);
         unsafe {
             *gamma_out = gamma_ptr;
             *defined_out = defined_ptr;
@@ -367,7 +361,10 @@ fn build_gamma_const(
     let diff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
     let obs = ConstantObstacle::new(level)?;
     let kernel: GammaConst = ObstacleChernoff::new(diff, obs)?;
-    Ok(GammaInner { kernel: GammaVariant::Const(kernel), grid })
+    Ok(GammaInner {
+        kernel: GammaVariant::Const(kernel),
+        grid,
+    })
 }
 
 fn build_gamma_array(
@@ -387,15 +384,14 @@ fn build_gamma_array(
     let diff = DiffusionChernoff::new(|_| 1.0_f64, |_| 0.0_f64, |_| 0.0_f64, 1.0_f64, grid);
     let obs = GammaArrayObstacle::new(obstacle.to_vec())?;
     let kernel: GammaArray = ObstacleChernoff::new(diff, obs)?;
-    Ok(GammaInner { kernel: GammaVariant::Array(kernel), grid })
+    Ok(GammaInner {
+        kernel: GammaVariant::Array(kernel),
+        grid,
+    })
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn validate_gamma_domain(
-    xmin: f64,
-    xmax: f64,
-    n: usize,
-) -> Result<(), semiflow::SemiflowError> {
+fn validate_gamma_domain(xmin: f64, xmax: f64, n: usize) -> Result<(), semiflow::SemiflowError> {
     if !xmin.is_finite() || !xmax.is_finite() {
         return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_gamma: domain bounds must be finite",
@@ -415,4 +411,12 @@ fn validate_gamma_domain(
         });
     }
     Ok(())
+}
+
+/// Heap-allocate gamma (`f64`) and defined-mask (`u8`) buffers for FFI return.
+fn alloc_gamma_outputs(gamma_values: Vec<f64>, defined_bool: &[bool]) -> (*mut f64, *mut u8) {
+    let gamma_ptr = Box::into_raw(gamma_values.into_boxed_slice()).cast::<f64>();
+    let defined_u8: Vec<u8> = defined_bool.iter().map(|&b| u8::from(b)).collect();
+    let defined_ptr = Box::into_raw(defined_u8.into_boxed_slice()).cast::<u8>();
+    (gamma_ptr, defined_ptr)
 }

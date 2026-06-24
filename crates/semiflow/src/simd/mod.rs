@@ -33,40 +33,35 @@ mod scalar;
 // Type alias: F64x4 resolves to the fastest impl for the target arch.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Wave B3: G⁴ stencil SIMD kernels re-exported for truncated_exp4_cached.
+// ---------------------------------------------------------------------------
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+pub(crate) use aarch64::apply_g4_stencil_neon_4nodes;
+/// 4-lane f32 alias — NEON impl on aarch64+neon, scalar fallback elsewhere.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+pub(crate) use aarch64::F32x4Neon as F32x4;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) use aarch64::F64x4Neon as F64x4;
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+pub(crate) use scalar::F32x4Scalar as F32x4;
+#[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
+pub(crate) use scalar::F32x8Scalar as F32x8;
 #[cfg(not(any(
     all(target_arch = "x86_64", target_feature = "avx2"),
     all(target_arch = "aarch64", target_feature = "neon")
 )))]
 pub(crate) use scalar::F64x4Scalar as F64x4;
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
-pub(crate) use x86_64::F64x4Avx2 as F64x4;
-
+pub(crate) use x86_64::apply_g4_stencil_avx2_4nodes;
 // ---------------------------------------------------------------------------
 // Type alias: F32x8 (AVX2: 8 lanes) / F32x4 (NEON: 4 lanes).
 // ---------------------------------------------------------------------------
-
 /// 8-lane f32 alias — AVX2 impl on x86_64+avx2, scalar fallback elsewhere.
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
 pub(crate) use x86_64::F32x8Avx2 as F32x8;
-#[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
-pub(crate) use scalar::F32x8Scalar as F32x8;
-
-/// 4-lane f32 alias — NEON impl on aarch64+neon, scalar fallback elsewhere.
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub(crate) use aarch64::F32x4Neon as F32x4;
-#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-pub(crate) use scalar::F32x4Scalar as F32x4;
-
-// ---------------------------------------------------------------------------
-// Wave B3: G⁴ stencil SIMD kernels re-exported for truncated_exp4_cached.
-// ---------------------------------------------------------------------------
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub(crate) use aarch64::apply_g4_stencil_neon_4nodes;
 #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
-pub(crate) use x86_64::apply_g4_stencil_avx2_4nodes;
+pub(crate) use x86_64::F64x4Avx2 as F64x4;
 
 // ---------------------------------------------------------------------------
 // Test-hook: thread-local flag to force scalar path even on x86_64/aarch64.

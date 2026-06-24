@@ -100,7 +100,12 @@ impl TruncatedExp1D {
     /// # Errors
     /// Throws JS `Error` with `.kind` — see crate-level error table.
     #[wasm_bindgen(constructor)]
-    pub fn new(xmin: f64, xmax: f64, n: usize, u0: &Float64Array) -> Result<TruncatedExp1D, JsValue> {
+    pub fn new(
+        xmin: f64,
+        xmax: f64,
+        n: usize,
+        u0: &Float64Array,
+    ) -> Result<TruncatedExp1D, JsValue> {
         let buf = extract_u0(u0, n)?;
         let grid = make_grid(xmin, xmax, n)?;
         let kernel = TruncatedExpDiffusionChernoff::new(unit_a_ex, zero_ex, zero_ex, 1.0, grid);
@@ -241,12 +246,7 @@ impl DriftReaction1D {
         }
         let buf = extract_u0(u0, n)?;
         let grid = make_grid(xmin, xmax, n)?;
-        let kernel = DriftReactionChernoff::with_closure(
-            move |_| b,
-            move |_| c,
-            c.abs(),
-            grid,
-        );
+        let kernel = DriftReactionChernoff::with_closure(move |_| b, move |_| c, c.abs(), grid);
         let sg = ChernoffSemigroup::new(kernel, 100).map_err(|e| err_to_js(&e))?;
         let current = GridFn1D::new(grid, buf).map_err(|e| err_to_js(&e))?;
         Ok(DriftReaction1D { sg, current })
@@ -323,18 +323,15 @@ impl Shift1D {
             return Err(make_js_error("OutOfDomain", "a, b, c must be finite"));
         }
         if a <= 0.0 {
-            return Err(make_js_error("OutOfDomain", "a must be > 0 (strict ellipticity)"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "a must be > 0 (strict ellipticity)",
+            ));
         }
         let buf = extract_u0(u0, n)?;
         let grid = make_grid(xmin, xmax, n)?;
         let norm = a.abs() + b.abs() + c.abs();
-        let kernel = ShiftChernoff1D::with_closure(
-            move |_| a,
-            move |_| b,
-            move |_| c,
-            norm,
-            grid,
-        );
+        let kernel = ShiftChernoff1D::with_closure(move |_| a, move |_| b, move |_| c, norm, grid);
         let sg = ChernoffSemigroup::new(kernel, 100).map_err(|e| err_to_js(&e))?;
         let current = GridFn1D::new(grid, buf).map_err(|e| err_to_js(&e))?;
         Ok(Shift1D { sg, current })

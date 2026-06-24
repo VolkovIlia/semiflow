@@ -32,38 +32,44 @@ fn workspace_root() -> Option<std::path::PathBuf> {
     }
 }
 
-#[test]
-fn t_gridless_variance() {
+/// Check all skip conditions; return `Some(script_path)` or skip.
+fn check_preconditions() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     if env::var("SKIP_PYTHON_ORACLE").as_deref() == Ok("1") {
         eprintln!("T_GRIDLESS_VARIANCE: skipped (SKIP_PYTHON_ORACLE=1)");
-        return;
+        return None;
     }
-    if process::Command::new("python3").arg("--version").output().is_err() {
+    if process::Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("T_GRIDLESS_VARIANCE: skipped (python3 not on PATH)");
-        return;
+        return None;
     }
-    let root = match workspace_root() {
-        Some(r) => r,
-        None => {
-            eprintln!("T_GRIDLESS_VARIANCE: skipped (workspace root not found)");
-            return;
-        }
-    };
+    let root = workspace_root()?;
     let script_path = root.join(SCRIPT);
     if !script_path.exists() {
         eprintln!(
             "T_GRIDLESS_VARIANCE: skipped (script not found at {})",
             script_path.display()
         );
-        return;
+        return None;
     }
     let import_check = process::Command::new("python3")
         .args(["-c", "import sympy"])
         .output();
     if import_check.map_or(true, |o| !o.status.success()) {
         eprintln!("T_GRIDLESS_VARIANCE: skipped (sympy not importable)");
-        return;
+        return None;
     }
+    Some((root, script_path))
+}
+
+#[test]
+fn t_gridless_variance() {
+    let Some((root, script_path)) = check_preconditions() else {
+        return;
+    };
 
     let out = process::Command::new("python3")
         .arg(script_path.as_os_str())

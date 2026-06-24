@@ -94,15 +94,24 @@ fn parse_manifold_tag(
     match tag {
         0 => {
             let m = Torus::<f64, 2>::unit();
-            Ok(ManifoldEnum::Torus(ManifoldChernoff::new(m, curvature_correction)))
+            Ok(ManifoldEnum::Torus(ManifoldChernoff::new(
+                m,
+                curvature_correction,
+            )))
         }
         1 => {
             let m = Sphere2::with_radius(radius).map_err(|e| err_to_js(&e))?;
-            Ok(ManifoldEnum::Sphere(ManifoldChernoff::new(m, curvature_correction)))
+            Ok(ManifoldEnum::Sphere(ManifoldChernoff::new(
+                m,
+                curvature_correction,
+            )))
         }
         2 => {
             let m = Hyperbolic2::with_scale(radius).map_err(|e| err_to_js(&e))?;
-            Ok(ManifoldEnum::Hyperbolic(ManifoldChernoff::new(m, curvature_correction)))
+            Ok(ManifoldEnum::Hyperbolic(ManifoldChernoff::new(
+                m,
+                curvature_correction,
+            )))
         }
         _ => Err(make_js_error(
             "Unsupported",
@@ -117,7 +126,10 @@ fn parse_manifold_tag(
 
 fn extract_flat(u0: &Float64Array, expected: usize) -> Result<Vec<f64>, JsValue> {
     if u0.length() as usize != expected {
-        return Err(make_js_error("GridMismatch", "u0.length() must equal nx * ny"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "u0.length() must equal nx * ny",
+        ));
     }
     let mut buf = vec![0.0f64; expected];
     u0.copy_to(&mut buf);
@@ -152,8 +164,12 @@ fn vec_to_js_mfd(values: &[f64]) -> Float64Array {
 
 #[allow(clippy::cast_precision_loss, clippy::too_many_arguments)]
 fn build_manifold_wasm(
-    x0min: f64, x0max: f64, nx: usize,
-    x1min: f64, x1max: f64, ny: usize,
+    x0min: f64,
+    x0max: f64,
+    nx: usize,
+    x1min: f64,
+    x1max: f64,
+    ny: usize,
     u0: &[f64],
     kernel: ManifoldEnum,
 ) -> Result<(ManifoldEnum, GridFn2D<f64>), semiflow::SemiflowError> {
@@ -211,8 +227,12 @@ impl Manifold2D {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        x0min: f64, x0max: f64, nx: usize,
-        x1min: f64, x1max: f64, ny: usize,
+        x0min: f64,
+        x0max: f64,
+        nx: usize,
+        x1min: f64,
+        x1max: f64,
+        ny: usize,
         u0: &Float64Array,
         manifold_tag: u32,
         radius: f64,
@@ -223,7 +243,12 @@ impl Manifold2D {
         let (kernel, current) =
             build_manifold_wasm(x0min, x0max, nx, x1min, x1max, ny, &buf, kernel)
                 .map_err(|e| err_to_js(&e))?;
-        Ok(Manifold2D { kernel, current, nx, ny })
+        Ok(Manifold2D {
+            kernel,
+            current,
+            nx,
+            ny,
+        })
     }
 
     /// Advance state by time `t` using `n_steps` Chernoff steps.
@@ -253,15 +278,21 @@ impl Manifold2D {
     /// X-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn nx(&self) -> usize { self.nx }
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
 
     /// Y-axis node count.
     #[must_use]
     #[wasm_bindgen(getter)]
-    pub fn ny(&self) -> usize { self.ny }
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
 
     /// Total grid nodes (`nx * ny`).
     #[must_use]
     #[wasm_bindgen(js_name = "len")]
-    pub fn len_method(&self) -> usize { self.nx * self.ny }
+    pub fn len_method(&self) -> usize {
+        self.nx * self.ny
+    }
 }

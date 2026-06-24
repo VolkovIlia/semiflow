@@ -16,10 +16,9 @@
 #![allow(clippy::cast_lossless)]
 
 use allocation_counter::{self, AllocationInfo};
-
-use semiflow::diffusion4::Diffusion4thChernoff;
 use semiflow::{
-    ChernoffFunction, Grid1D, GridFn1D, SchrodingerChernoff, SchrodingerState, ScratchPool,
+    diffusion4::Diffusion4thChernoff, ChernoffFunction, Grid1D, GridFn1D, SchrodingerChernoff,
+    SchrodingerState, ScratchPool,
 };
 
 // ---------------------------------------------------------------------------

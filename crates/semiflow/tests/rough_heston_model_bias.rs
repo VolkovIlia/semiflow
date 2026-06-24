@@ -1,4 +1,4 @@
-//! A_ROUGH_HESTON_MODEL_BIAS — advisory record (ADR-0181 §D4, issue #9).
+//! `A_ROUGH_HESTON_MODEL_BIAS` — advisory record (ADR-0181 §D4, issue #9).
 //!
 //! NOT release-blocking. Measures and reports the three model-approximation
 //! sub-biases accumulated between the kernel's linearised/frozen-V₀ 4-factor
@@ -8,7 +8,7 @@
 //!
 //! (a) **frozen-V₀ vs stochastic-√V_t spot**: the kernel freezes spot diffusion
 //!     at `a_00 = ½V₀`; the true model has `½V_t` varying in time.
-//!     Measured: |C_frozen − C_stoch| / C_atm.
+//!     Measured: |`C_frozen` − `C_stoch`| / `C_atm`.
 //!
 //! (b) **reaction-coupling vs exact correlated cross-term**: the kernel uses a
 //!     leading-order linear coupling `c_{0k}·v_k` in the spot drift; the true
@@ -39,7 +39,15 @@
 //!     -- --ignored --nocapture
 //! ```
 
-#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::unreadable_literal,       // PCG64 constants and financial parameters
+    clippy::decimal_bitwise_operands, // PCG64 128-bit constants use decimal + shift
+    clippy::many_single_char_names,   // MC physics: v, m, e, z, r are domain names
+    clippy::similar_names,            // sqrt_vp/sqrt_va: canonical antithetic naming
+    clippy::cast_sign_loss,           // MC paths: f64→usize after positivity check
+)]
 
 // ── Canonical parameters (mirror mc_oracle constants exactly) ──
 
@@ -75,7 +83,7 @@ impl Pcg64 {
     const PCG_INC: u128 = 1_442_695_040_888_963_407u128 | (6_364_136_223_846_793_005u128 << 64);
 
     fn new(seed: u64) -> Self {
-        let state = (seed as u128) | ((seed.wrapping_mul(0x9e37_79b9_7f4a_7c15)) as u128) << 64;
+        let state = u128::from(seed) | u128::from(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15)) << 64;
         Self {
             state: state.wrapping_add(Self::PCG_INC),
             inc: Self::PCG_INC,
@@ -220,10 +228,10 @@ fn mc_frozen_vs_stochastic(
             }
         }
 
-        frozen_sum += (S_0 * x_frozen_p.exp() - K_ATM).max(0.0)
-            + (S_0 * x_frozen_a.exp() - K_ATM).max(0.0);
-        stoch_sum += (S_0 * x_stoch_p.exp() - K_ATM).max(0.0)
-            + (S_0 * x_stoch_a.exp() - K_ATM).max(0.0);
+        frozen_sum +=
+            (S_0 * x_frozen_p.exp() - K_ATM).max(0.0) + (S_0 * x_frozen_a.exp() - K_ATM).max(0.0);
+        stoch_sum +=
+            (S_0 * x_stoch_p.exp() - K_ATM).max(0.0) + (S_0 * x_stoch_a.exp() - K_ATM).max(0.0);
     }
 
     (
@@ -236,7 +244,11 @@ fn mc_frozen_vs_stochastic(
 
 fn print_bias(label: &str, c_ref: f64, c_model: f64, c_atm: f64) {
     let diff = (c_ref - c_model).abs();
-    let rel_pct = if c_atm > 1e-10 { diff / c_atm * 100.0 } else { 0.0 };
+    let rel_pct = if c_atm > 1e-10 {
+        diff / c_atm * 100.0
+    } else {
+        0.0
+    };
     println!(
         r#"{{"sub_bias":"{label}","abs_price_diff":{diff:.4},"rel_pct":{rel_pct:.2},"c_ref":{c_ref:.4},"c_model":{c_model:.4},"K_ATM":{K_ATM}}}"#
     );
@@ -246,28 +258,22 @@ fn print_bias(label: &str, c_ref: f64, c_model: f64, c_atm: f64) {
 // A_ROUGH_HESTON_MODEL_BIAS — advisory record (NEVER asserts-fail).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// A_ROUGH_HESTON_MODEL_BIAS (ADVISORY, ADR-0181 §D4).
+/// `A_ROUGH_HESTON_MODEL_BIAS` (ADVISORY, ADR-0181 §D4).
 ///
 /// Measures model-approximation bias between the kernel's 4-factor Markov model
 /// and the true rough-Heston SDE. Reports three sub-biases; never fails.
 /// Expected aggregate: O(H) ≈ 1–5% at H=0.1 (El Euch–Rosenbaum 2019).
 #[test]
-#[cfg_attr(not(feature = "slow-tests"), ignore)]
+#[cfg_attr(not(feature = "slow-tests"), ignore = "slow-tests feature required")]
 fn advisory_rough_heston_model_bias() {
-    eprintln!(
-        "[A_MODEL_BIAS] H=0.1 canonical params; 3-factor GL model; N_PATHS={N_PATHS}"
-    );
+    eprintln!("[A_MODEL_BIAS] H=0.1 canonical params; 3-factor GL model; N_PATHS={N_PATHS}");
     eprintln!("[A_MODEL_BIAS] All biases are advisory — this test never fails.");
 
     let mut rng = Pcg64::new(SEED);
 
     // Sub-biases (a) + (b): frozen-V₀ vs stochastic-√V_t (3-factor kernel model).
-    let (c_frozen, c_stoch) = mc_frozen_vs_stochastic(
-        &mut rng,
-        &GL_WEIGHTS_3,
-        &GL_EXPONENTS_3,
-        N_PAIRS,
-    );
+    let (c_frozen, c_stoch) =
+        mc_frozen_vs_stochastic(&mut rng, &GL_WEIGHTS_3, &GL_EXPONENTS_3, N_PAIRS);
     eprintln!("[A_MODEL_BIAS] K=ATM {K_ATM}: C_frozen={c_frozen:.4}  C_stoch={c_stoch:.4}");
     print_bias("frozen_v0", c_stoch, c_frozen, c_stoch);
 
@@ -277,7 +283,11 @@ fn advisory_rough_heston_model_bias() {
     // Emit as a fraction-of-total estimate, documented as approximate.
     let coupling_fraction = 0.30_f64; // approximate fraction attributable to coupling
     let coupling_bias = (c_stoch - c_frozen).abs() * coupling_fraction;
-    let coupling_pct = if c_stoch > 1e-10 { coupling_bias / c_stoch * 100.0 } else { 0.0 };
+    let coupling_pct = if c_stoch > 1e-10 {
+        coupling_bias / c_stoch * 100.0
+    } else {
+        0.0
+    };
     println!(
         r#"{{"sub_bias":"reaction_coupling","abs_price_diff":{coupling_bias:.4},"rel_pct":{coupling_pct:.2},"note":"approx_30pct_of_frozen_v0_bias","K_ATM":{K_ATM}}}"#
     );

@@ -43,8 +43,7 @@
     clippy::cast_sign_loss
 )]
 
-use std::os::raw::c_double;
-use std::sync::Arc;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{DiffusionChernoff, Dual, Grid1D, GridFn1D};
 

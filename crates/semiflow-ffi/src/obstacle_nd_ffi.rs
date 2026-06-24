@@ -127,6 +127,8 @@ pub unsafe extern "C" fn smf_obstacle_nd2_free(ptr: *mut SmfObstacleND2) {
 ///
 /// # Safety
 /// `ptr` live from `smf_obstacle_nd2_new`; `nx_out`, `ny_out` writable.
+// similar_names: nx_out/ny_out are the canonical C-ABI output parameter names.
+#[allow(clippy::similar_names)]
 #[no_mangle]
 pub unsafe extern "C" fn smf_obstacle_nd2_shape(
     ptr: *const SmfObstacleND2,
@@ -202,6 +204,8 @@ pub unsafe extern "C" fn smf_obstacle_nd2_apply(
 // Pure-Rust step helper (mirrors run_nd_step_2d in obstacle_gamma_py.rs)
 // ---------------------------------------------------------------------------
 
+// needless_pass_by_value: GridND is Copy-equivalent in usage; pass by value keeps callers cleaner.
+#[allow(clippy::needless_pass_by_value)]
 fn run_nd2_step(
     grid_nd: GridND<f64, 2>,
     v_vals: &[f64],
@@ -249,7 +253,12 @@ fn build_nd2_inner(
     let gx = Grid1D::new(xmin, xmax, nx)?;
     let gy = Grid1D::new(ymin, ymax, ny)?;
     let grid_nd = GridND::<f64, 2>::new([gx, gy])?;
-    Ok(Nd2Inner { level, grid_nd, nx, ny })
+    Ok(Nd2Inner {
+        level,
+        grid_nd,
+        nx,
+        ny,
+    })
 }
 
 fn validate_nd2_domain(

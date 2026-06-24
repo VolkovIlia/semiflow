@@ -15,8 +15,7 @@
 //! Cite: ADR-0078 (heat), ADR-0079 (complex), ADR-0130 (this).
 
 extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use num_traits::{Float, One, Zero};
 
@@ -313,8 +312,9 @@ fn apply_kirchhoff_projection_complex<C: SemiflowComplex>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use num_complex::Complex;
+
+    use super::*;
 
     type C64 = Complex<f64>;
 

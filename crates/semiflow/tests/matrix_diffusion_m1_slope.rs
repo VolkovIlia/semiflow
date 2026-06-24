@@ -11,9 +11,7 @@
 
 #![cfg(feature = "slow-tests")]
 
-use semiflow::{
-    ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
 const M: usize = 1;
 const N_GRID: usize = 128;

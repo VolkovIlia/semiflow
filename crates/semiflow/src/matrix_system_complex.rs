@@ -21,9 +21,7 @@
 //!
 //! ADR-0128; §33.7 AMENDMENT 2 (structure); §33.8 Para 3 (extension rationale).
 
-use alloc::boxed::Box;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec, vec::Vec};
 use core::marker::PhantomData;
 
 use num_traits::{Float, One, ToPrimitive, Zero};

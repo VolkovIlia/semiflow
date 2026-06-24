@@ -124,7 +124,11 @@ fn build_cx_kernel(
 /// Compute dx = (xmax − xmin) / (n − 1).
 #[allow(clippy::cast_precision_loss)]
 fn compute_dx_cx(xmin: f64, xmax: f64, n: usize) -> f64 {
-    if n > 1 { (xmax - xmin) / (n as f64 - 1.0) } else { 1.0 }
+    if n > 1 {
+        (xmax - xmin) / (n as f64 - 1.0)
+    } else {
+        1.0
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +178,12 @@ impl SchrodingerComplex1D {
     /// # Errors
     /// Throws JS `Error` with `.kind` — see crate-level error table.
     #[wasm_bindgen(constructor)]
-    pub fn new(xmin: f64, xmax: f64, n: usize, psi0: &Float64Array) -> Result<SchrodingerComplex1D, JsValue> {
+    pub fn new(
+        xmin: f64,
+        xmax: f64,
+        n: usize,
+        psi0: &Float64Array,
+    ) -> Result<SchrodingerComplex1D, JsValue> {
         let psi = extract_psi_cx(psi0, n)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let v_at_node = vec![0.0_f64; n];
@@ -182,7 +191,13 @@ impl SchrodingerComplex1D {
         build_cx_kernel(&v_at_node, grid).map_err(|e| err_to_js(&e))?;
         GridFnComplex1D::<C64>::new(grid, psi.clone()).map_err(|e| err_to_js(&e))?;
         let dx = compute_dx_cx(xmin, xmax, n);
-        Ok(SchrodingerComplex1D { v_at_node, values_cx: psi, grid, dx, n })
+        Ok(SchrodingerComplex1D {
+            v_at_node,
+            values_cx: psi,
+            grid,
+            dx,
+            n,
+        })
     }
 
     /// Construct with a pre-sampled real potential `V(x)`.
@@ -209,7 +224,13 @@ impl SchrodingerComplex1D {
         build_cx_kernel(&v_at_node, grid).map_err(|e| err_to_js(&e))?;
         GridFnComplex1D::<C64>::new(grid, psi.clone()).map_err(|e| err_to_js(&e))?;
         let dx = compute_dx_cx(xmin, xmax, n);
-        Ok(SchrodingerComplex1D { v_at_node, values_cx: psi, grid, dx, n })
+        Ok(SchrodingerComplex1D {
+            v_at_node,
+            values_cx: psi,
+            grid,
+            dx,
+            n,
+        })
     }
 
     /// Advance the wavefunction by time `t` using `n_steps` Chernoff steps.
@@ -253,9 +274,10 @@ impl SchrodingerComplex1D {
     /// Equals `1.0` for a normalised wavefunction; used to verify unitarity.
     #[must_use]
     pub fn norm_squared(&self) -> f64 {
-        let raw: f64 = self.values_cx.iter().fold(0.0_f64, |acc, z| {
-            acc + z.re * z.re + z.im * z.im
-        });
+        let raw: f64 = self
+            .values_cx
+            .iter()
+            .fold(0.0_f64, |acc, z| acc + z.re * z.re + z.im * z.im);
         raw * self.dx
     }
 }

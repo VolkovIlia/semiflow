@@ -231,7 +231,7 @@ impl ChernoffFunction<f64> for TruncatedExpDiffusionChernoff<f64> {
 
     /// Allocation-free override: g-grid buffers come from `scratch`; output reuses `dst`.
     ///
-    /// Bit-identical to [`apply`] by construction: same stencil + series arithmetic,
+    /// Bit-identical to [`Self::apply_f`] by construction: same stencil + series arithmetic,
     /// only the backing `Vec` storage is taken from the pool instead of the heap.
     ///
     /// Uses `take_vec`/`return_vec` (not `borrow_vec`) so that all four g-grid

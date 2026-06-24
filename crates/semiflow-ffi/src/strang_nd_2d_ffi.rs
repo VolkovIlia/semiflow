@@ -45,11 +45,10 @@
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::similar_names,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
-use std::os::raw::c_double;
-use std::sync::Arc;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{
     BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, ScratchPool,
@@ -362,7 +361,11 @@ fn build_inner_2d_unit(
     let dx = DiffusionChernoff::new(unit_a_2d, zero_2d, zero_2d, 1.0, gx);
     let dy = DiffusionChernoff::new(unit_a_2d, zero_2d, zero_2d, 1.0, gy);
     let strang = Strang2D::new(dx, dy);
-    Ok(Inner2D { strang, grid, size: nx * ny })
+    Ok(Inner2D {
+        strang,
+        grid,
+        size: nx * ny,
+    })
 }
 
 fn build_inner_2d_vara(
@@ -381,7 +384,11 @@ fn build_inner_2d_vara(
     let dx = build_axis_diffusion(ax_vals, xmin, xmax, nx, gx);
     let dy = build_axis_diffusion(ay_vals, ymin, ymax, ny, gy);
     let strang = Strang2D::new(dx, dy);
-    Ok(Inner2DVarA { strang, grid, size: nx * ny })
+    Ok(Inner2DVarA {
+        strang,
+        grid,
+        size: nx * ny,
+    })
 }
 
 /// Build a `DiffusionChernoff` from a tabulated 1D coefficient array.

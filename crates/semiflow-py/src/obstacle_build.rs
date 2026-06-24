@@ -92,12 +92,12 @@ fn build_array(
     current: GridFn1D<f64>,
     use_strang: bool,
 ) -> Result<ObstaclePyInner, semiflow::SemiflowError> {
-    let vals: Vec<f64> =
-        arr.extract()
-            .map_err(|_| semiflow::SemiflowError::DomainViolation {
-                what: "obstacle_array must be a sequence of floats",
-                value: 0.0,
-            })?;
+    let vals: Vec<f64> = arr
+        .extract()
+        .map_err(|_| semiflow::SemiflowError::DomainViolation {
+            what: "obstacle_array must be a sequence of floats",
+            value: 0.0,
+        })?;
     if vals.len() != current.grid.n {
         return Err(semiflow::SemiflowError::DomainViolation {
             what: "obstacle_array length must equal n",

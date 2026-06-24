@@ -11,8 +11,7 @@
 //! Amendment 1). Override via `REMIZOV_PARALLEL_THRESHOLD` env var at process
 //! startup (clamped to `[64, 1_000_000]`) for bench/test purposes.
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::error::SemiflowError;
 

@@ -40,7 +40,7 @@
 #![allow(
     clippy::assigning_clones,
     clippy::cast_precision_loss,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 use std::os::raw::{c_double, c_uint};

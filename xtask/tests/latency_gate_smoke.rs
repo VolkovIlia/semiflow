@@ -6,8 +6,7 @@
 //!
 //! ADR-0068 Track 2 — L-gate advisory harness (v2.6).
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 /// Resolve the workspace root by walking up from the manifest dir.
 fn workspace_root() -> PathBuf {

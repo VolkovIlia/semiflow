@@ -99,164 +99,161 @@ mod error;
 mod graph_wasm;
 mod graph_wasm_hi;
 mod greeks_wasm;
+mod gridless_wasm;
 mod handle;
 mod resolvent_jump_nd_wasm;
 mod resolvent_jump_wasm;
 mod reverse_ad_wasm;
 mod state;
-mod v3;
-mod wentzell_wasm;
-mod tt_wasm;
 mod tt_coupled_wasm;
 mod tt_varcoef_wasm;
-mod gridless_wasm;
+mod tt_wasm;
+mod v3;
+mod wentzell_wasm;
 
 #[cfg(feature = "full")]
-mod diffusion_hi_wasm;
+mod adaptive_wasm;
 #[cfg(feature = "full")]
-mod diffusion_extra_wasm;
+mod adjoint_wasm;
 #[cfg(feature = "full")]
-mod matrix_diffusion_wasm;
-#[cfg(feature = "full")]
-mod schrodinger_complex_wasm;
-#[cfg(feature = "full")]
-mod schrodinger_wasm;
+mod aniso_nd_wasm;
 #[cfg(feature = "full")]
 mod bc_wasm;
 #[cfg(feature = "full")]
 mod bc_wasm2;
 #[cfg(feature = "full")]
-mod strang_nd_wasm;
-#[cfg(feature = "full")]
-mod nonsep_wasm;
-#[cfg(feature = "full")]
-mod aniso_nd_wasm;
-#[cfg(feature = "full")]
-mod smolyak_wasm;
-#[cfg(feature = "full")]
-mod howland_wasm;
-#[cfg(feature = "full")]
-mod subordinated_wasm;
-#[cfg(feature = "full")]
-mod manifold_wasm;
-#[cfg(feature = "full")]
-mod hypoelliptic_wasm;
-#[cfg(feature = "full")]
-mod obstacle_wasm;
-#[cfg(feature = "full")]
-mod adjoint_wasm;
-#[cfg(feature = "full")]
-mod adaptive_wasm;
-#[cfg(feature = "full")]
-mod graph_heat_extra_wasm;
-#[cfg(feature = "full")]
-mod graph_adjoint_wasm;
-#[cfg(feature = "full")]
-mod graph_magnus_wasm;
-#[cfg(feature = "full")]
-mod quantum_graph_wasm;
-#[cfg(feature = "full")]
-mod strang_graph_wasm;
-#[cfg(feature = "full")]
 mod carnot_wasm;
 #[cfg(feature = "full")]
-mod point_eval_wasm;
+mod diffusion_extra_wasm;
 #[cfg(feature = "full")]
-mod expmv_wasm;
+mod diffusion_hi_wasm;
 #[cfg(feature = "full")]
 mod drift_reaction_zeta4_wasm;
 #[cfg(feature = "full")]
-mod killing_soft_wasm;
+mod expmv_wasm;
 #[cfg(feature = "full")]
-mod matrix_2d3d_wasm;
+mod graph_adjoint_wasm;
+#[cfg(feature = "full")]
+mod graph_heat_extra_wasm;
+#[cfg(feature = "full")]
+mod graph_magnus_wasm;
+#[cfg(feature = "full")]
+mod howland_wasm;
+#[cfg(feature = "full")]
+mod hypoelliptic_wasm;
+#[cfg(feature = "full")]
+mod killing_soft_wasm;
 #[cfg(feature = "full")]
 mod laplacian_wasm;
 #[cfg(feature = "full")]
+mod manifold_wasm;
+#[cfg(feature = "full")]
+mod matrix_2d3d_wasm;
+#[cfg(feature = "full")]
+mod matrix_diffusion_wasm;
+#[cfg(feature = "full")]
+mod nonsep_wasm;
+#[cfg(feature = "full")]
 mod obstacle_gamma_wasm;
+#[cfg(feature = "full")]
+mod obstacle_wasm;
+#[cfg(feature = "full")]
+mod point_eval_wasm;
+#[cfg(feature = "full")]
+mod quantum_graph_wasm;
+#[cfg(feature = "full")]
+mod schrodinger_complex_wasm;
+#[cfg(feature = "full")]
+mod schrodinger_wasm;
+#[cfg(feature = "full")]
+mod smolyak_wasm;
+#[cfg(feature = "full")]
+mod strang_graph_wasm;
+#[cfg(feature = "full")]
+mod strang_nd_wasm;
+#[cfg(feature = "full")]
+mod subordinated_wasm;
 
+#[cfg(feature = "full")]
+pub use adaptive_wasm::AdaptivePI1D;
 pub use adjoint_fp_wasm::AdjointFokkerPlanckV8;
-pub use graph_wasm::{GraphHeat, GraphPath};
-pub use graph_wasm_hi::GraphHeat6;
-pub use greeks_wasm::EvolverHeat1DGreeksV3;
-pub use resolvent_jump_nd_wasm::{ResolventJump2DV8, ResolventJump3DV8};
-pub use resolvent_jump_wasm::ResolventJumpV8;
-pub use reverse_ad_wasm::ReverseHeat1D;
-pub use state::Heat1D;
-pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
-pub use wentzell_wasm::{GammaFamily, WentzellV8};
-pub use tt_wasm::{TtState, TtEvolver};
-pub use tt_coupled_wasm::TtCoupledEvolver;
-pub use tt_varcoef_wasm::WasmVarCoefTtEvolver as VarCoefTtEvolver;
-pub use gridless_wasm::{MeasureState, GridlessEvolver};
-
 #[cfg(feature = "full")]
-pub use diffusion_hi_wasm::{Heat1D4th, Heat1D6th, Heat1DZeta4, Heat1DZeta6, Heat1DZeta8};
+pub use adjoint_wasm::Adjoint1D;
 #[cfg(feature = "full")]
-pub use diffusion_extra_wasm::{
-    DriftReaction1D, Shift1D, Strang1D, TruncatedExp1D, TruncatedExp4th1D,
-};
-#[cfg(feature = "full")]
-pub use matrix_diffusion_wasm::MatrixDiffusion1D;
-#[cfg(feature = "full")]
-pub use schrodinger_complex_wasm::SchrodingerComplex1D;
-#[cfg(feature = "full")]
-pub use schrodinger_wasm::Schrodinger1D;
+pub use aniso_nd_wasm::{AnisotropicShiftND2, AnisotropicShiftND3};
 #[cfg(feature = "full")]
 pub use bc_wasm::{KilledDirichlet1D, Killing1D, Reflected1D, Resolvent1D, Robin1D};
 #[cfg(feature = "full")]
 pub use bc_wasm2::DirichletHeat2nd1D;
 #[cfg(feature = "full")]
-pub use strang_nd_wasm::{Heat2D, Heat2DVarA, Heat3D, Heat3DVarA};
+pub use carnot_wasm::ComplexTripleJumpWasm;
 #[cfg(feature = "full")]
-pub use nonsep_wasm::{NonSeparable2D, NonSeparable2DAniso};
-#[cfg(feature = "full")]
-pub use aniso_nd_wasm::{AnisotropicShiftND2, AnisotropicShiftND3};
-#[cfg(feature = "full")]
-pub use smolyak_wasm::SmolyakD6;
-#[cfg(feature = "full")]
-pub use howland_wasm::Howland1D;
-#[cfg(feature = "full")]
-pub use subordinated_wasm::Subordinated1D;
-#[cfg(feature = "full")]
-pub use manifold_wasm::Manifold2D;
-#[cfg(feature = "full")]
-pub use hypoelliptic_wasm::{
-    HypoellipticChernoffEngel, HypoellipticChernoffHeisenberg, HypoellipticChernoffKolmogorov,
+pub use diffusion_extra_wasm::{
+    DriftReaction1D, Shift1D, Strang1D, TruncatedExp1D, TruncatedExp4th1D,
 };
 #[cfg(feature = "full")]
-pub use obstacle_wasm::ObstacleChernoffWasm; // Rust type name; JS sees `Obstacle1D` via js_name
+pub use diffusion_hi_wasm::{Heat1D4th, Heat1D6th, Heat1DZeta4, Heat1DZeta6, Heat1DZeta8};
 #[cfg(feature = "full")]
-pub use adjoint_wasm::Adjoint1D;
+pub use drift_reaction_zeta4_wasm::DriftReaction4th1D;
 #[cfg(feature = "full")]
-pub use adaptive_wasm::AdaptivePI1D;
+pub use expmv_wasm::DiffusionExpmv1D;
 #[cfg(feature = "full")]
 pub use graph_adjoint_wasm::GraphAdjointPresampled;
 #[cfg(feature = "full")]
 pub use graph_heat_extra_wasm::{GraphHeat4thWasm, VarCoefGraphHeatWasm};
 #[cfg(feature = "full")]
-pub use graph_magnus_wasm::{
-    MagnusGraphHeatWasm, MagnusGraphHeat6Wasm, VarCoefMagnusGraphWasm,
+pub use graph_magnus_wasm::{MagnusGraphHeat6Wasm, MagnusGraphHeatWasm, VarCoefMagnusGraphWasm};
+pub use graph_wasm::{GraphHeat, GraphPath};
+pub use graph_wasm_hi::GraphHeat6;
+pub use greeks_wasm::EvolverHeat1DGreeksV3;
+pub use gridless_wasm::{GridlessEvolver, MeasureState};
+#[cfg(feature = "full")]
+pub use howland_wasm::Howland1D;
+#[cfg(feature = "full")]
+pub use hypoelliptic_wasm::{
+    HypoellipticChernoffEngel, HypoellipticChernoffHeisenberg, HypoellipticChernoffKolmogorov,
 };
-#[cfg(feature = "full")]
-pub use quantum_graph_wasm::{QuantumGraphWasm, QuantumGraphHeatWasm};
-#[cfg(feature = "full")]
-pub use strang_graph_wasm::StrangGraphWasm;
-#[cfg(feature = "full")]
-pub use carnot_wasm::ComplexTripleJumpWasm;
-#[cfg(feature = "full")]
-pub use point_eval_wasm::PointEvalWasm;
-#[cfg(feature = "full")]
-pub use expmv_wasm::DiffusionExpmv1D;
-#[cfg(feature = "full")]
-pub use drift_reaction_zeta4_wasm::DriftReaction4th1D;
 #[cfg(feature = "full")]
 pub use killing_soft_wasm::Killing2nd1D;
 #[cfg(feature = "full")]
+pub use laplacian_wasm::{GraphTrajWasm, LaplacianWasm};
+#[cfg(feature = "full")]
+pub use manifold_wasm::Manifold2D;
+#[cfg(feature = "full")]
 pub use matrix_2d3d_wasm::{MatrixDiffusion2D, MatrixDiffusion3D};
 #[cfg(feature = "full")]
-pub use laplacian_wasm::{LaplacianWasm, GraphTrajWasm};
+pub use matrix_diffusion_wasm::MatrixDiffusion1D;
+#[cfg(feature = "full")]
+pub use nonsep_wasm::{NonSeparable2D, NonSeparable2DAniso};
 #[cfg(feature = "full")]
 pub use obstacle_gamma_wasm::{ObstacleGammaV8Wasm, ObstacleND2Wasm};
+#[cfg(feature = "full")]
+pub use obstacle_wasm::ObstacleChernoffWasm; // Rust type name; JS sees `Obstacle1D` via js_name
+#[cfg(feature = "full")]
+pub use point_eval_wasm::PointEvalWasm;
+#[cfg(feature = "full")]
+pub use quantum_graph_wasm::{QuantumGraphHeatWasm, QuantumGraphWasm};
+pub use resolvent_jump_nd_wasm::{ResolventJump2DV8, ResolventJump3DV8};
+pub use resolvent_jump_wasm::ResolventJumpV8;
+pub use reverse_ad_wasm::ReverseHeat1D;
+#[cfg(feature = "full")]
+pub use schrodinger_complex_wasm::SchrodingerComplex1D;
+#[cfg(feature = "full")]
+pub use schrodinger_wasm::Schrodinger1D;
+#[cfg(feature = "full")]
+pub use smolyak_wasm::SmolyakD6;
+pub use state::Heat1D;
+#[cfg(feature = "full")]
+pub use strang_graph_wasm::StrangGraphWasm;
+#[cfg(feature = "full")]
+pub use strang_nd_wasm::{Heat2D, Heat2DVarA, Heat3D, Heat3DVarA};
+#[cfg(feature = "full")]
+pub use subordinated_wasm::Subordinated1D;
+pub use tt_coupled_wasm::TtCoupledEvolver;
+pub use tt_varcoef_wasm::WasmVarCoefTtEvolver as VarCoefTtEvolver;
+pub use tt_wasm::{TtEvolver, TtState};
+pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
+pub use wentzell_wasm::{GammaFamily, WentzellV8};
 
 /// Return the `semiflow-wasm` crate version string (e.g. `"0.10.0"`).
 ///

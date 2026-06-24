@@ -90,7 +90,7 @@ pub enum BoundaryPolicy<F: SemiflowFloat = f64> {
     /// node `x₀ ∈ ∂R` where `σ_R(x₀) = x₀`, the ghost equals `−value(x₀)` and the
     /// antisymmetric extension forces `u(x₀) = 0` automatically (Dirichlet BC).
     ///
-    /// Consumed by `DirichletHeat2ndChernoff` (killing_order2.rs, §21.9, ADR-0176).
+    /// Consumed by `DirichletHeat2ndChernoff` (`killing_order2.rs`, §21.9, ADR-0176).
     /// **NOT for non-self-adjoint operators** — use `KillingChernoff` (§21.3) instead.
     OddReflect,
 }
@@ -301,7 +301,11 @@ pub(crate) fn bc_index<F: SemiflowFloat>(
 
 // Skew image for Robin BC: α=0 ⟹ weight 1 = even reflection = Neumann (see math §3.5.tris).
 #[inline]
-fn robin_skew_hit<F: crate::float::SemiflowFloat>(n: usize, n_i64: i64, idx: i64) -> BoundaryHit<F> {
+fn robin_skew_hit<F: crate::float::SemiflowFloat>(
+    n: usize,
+    n_i64: i64,
+    idx: i64,
+) -> BoundaryHit<F> {
     if idx < 0 {
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let d = (-idx) as u32;

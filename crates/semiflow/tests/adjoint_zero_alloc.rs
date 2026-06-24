@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
-
 use semiflow::{
     drift_reaction::DriftReactionChernoff, graph_heat::GraphHeatChernoff, AdjointChernoff,
     ChernoffFunction, Graph, GraphSignal, Grid1D, GridFn1D, Laplacian, ScratchPool,

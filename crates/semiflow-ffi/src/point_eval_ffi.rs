@@ -18,18 +18,12 @@
 //! Build with `--profile release-ffi` (`panic = "unwind"`).
 
 #![allow(unsafe_code)]
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-)]
+#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
 use std::os::raw::c_double;
 
 use semiflow::{
-    diffusion::DiffusionChernoff,
-    grid_fn::GridFn1D,
-    point_eval::PointEval as CorePointEval,
-    Grid1D,
+    diffusion::DiffusionChernoff, grid_fn::GridFn1D, point_eval::PointEval as CorePointEval, Grid1D,
 };
 
 use crate::status::SemiflowStatus;
@@ -84,8 +78,7 @@ pub unsafe extern "C" fn smf_point_eval_new(
         if let Err(e) = Grid1D::new(xmin, xmax, n) {
             return SemiflowStatus::from(&e);
         }
-        let raw = Box::into_raw(Box::new(PointEvalInner { xmin, xmax, n }))
-            .cast::<SmfPointEval>();
+        let raw = Box::into_raw(Box::new(PointEvalInner { xmin, xmax, n })).cast::<SmfPointEval>();
         unsafe { *out = raw };
         SemiflowStatus::Ok
     })
@@ -193,6 +186,9 @@ fn eval_at_rust(
         1.0_f64,
         grid,
     );
-    let src = GridFn1D { values: vals.to_vec(), grid };
+    let src = GridFn1D {
+        values: vals.to_vec(),
+        grid,
+    };
     kernel.eval_at(tau, &src, &[x], n_steps)
 }

@@ -38,13 +38,12 @@ use semiflow::{
     ChernoffSemigroup, Grid1D, GridFn1D,
 };
 
+// Re-export Subordinated1D from its own module for registration.
+pub(crate) use crate::subordinated_py::PySubordinated1D;
 use crate::{
     error::{from_core, new_pyerr},
     panic::catch_panic_py,
 };
-
-// Re-export Subordinated1D from its own module for registration.
-pub(crate) use crate::subordinated_py::PySubordinated1D;
 
 // ---------------------------------------------------------------------------
 // Shared helpers (pub(crate) so subordinated_py.rs can access them)

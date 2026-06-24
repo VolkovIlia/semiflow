@@ -42,12 +42,14 @@
 
 use pyo3::prelude::*;
 use semiflow::{
-    error::SemiflowError, CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind,
-    ReverseChernoff,
+    error::SemiflowError, CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D,
+    InterpKind, ReverseChernoff,
 };
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Kernel construction helpers (per-crate duplicate, ADR-0028 Amdt 2)

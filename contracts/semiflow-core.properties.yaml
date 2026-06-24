@@ -7106,7 +7106,7 @@ properties:
     cases: 4
     severity: RELEASE_BLOCKING
     blocks_release: true
-    gate: "F1 Greeks triple (value[N], delta[N], gamma[N]) byte-identical (0 ULP) across core ↔ FFI v3 ↔ PyO3 v3 ↔ WASM v3, AND delta/gamma match central-difference reference to ≤ 1e-10"
+    gate: "F1 Greeks triple (value[N], delta[N], gamma[N]) byte-identical (0 ULP) across core ↔ FFI v3 ↔ PyO3 v3 (native, shared libm); WASM v3 matches the scalar core golden to ≤ 1e-9 per-array relative error (native↔wasm32 libm gap, ADR-0183); AND delta/gamma match central-difference reference to ≤ 1e-10"
     purpose: |
       G_BINDING_GREEKS_PARITY (v8.0.0 F1 Greeks binding-surface parity meta-gate —
       math.md §46, ADR-0133, ADR-0028 Amendment 2):
@@ -7164,17 +7164,25 @@ properties:
               and np.array_equal(delta, golden.delta)
               and np.array_equal(gamma, golden.gamma)
 
-        Sub-test 4 (WASM v3):
+        Sub-test 4 (WASM v3) — TOLERANCE-BOUNDED (ADR-0183):
           const ev = new EvolverHeat1DGreeksV3(-10,10,64,u0,32);
           const {value, delta, gamma} = ev.greeks(0.05);
-          ASSERT value.every((v,i)=>Object.is(v, golden.value[i]))
-              && delta.every((v,i)=>Object.is(v, golden.delta[i]))
-              && gamma.every((v,i)=>Object.is(v, golden.gamma[i])).
+          ASSERT max_i |value[i] − golden.value[i]| / |golden.value[i]| ≤ 1e-9
+              && (same for delta, gamma).
+          The golden is the SCALAR core hyper-dual sweep (semiflow built
+          --no-default-features --features std) — an oracle independent of the
+          WASM SUT. WASM parity is NOT byte-identical: native↔wasm32 libm exp()
+          differs in the last ULP and amplifies over 32 Chernoff steps + the
+          hyper-dual chain rule to ≤ 6.1e-11 relative (≈285k ULP on the ~1e-23
+          Gaussian tail, where ULP is a misleading scale). The 1e-9 relative gate
+          still catches any marshalling bug (order-1 relative).
 
       Cross-binding match:
-        ASSERT FFI v3 triple == PyO3 v3 triple == WASM v3 triple == CORE golden
-        (pairwise byte-identical). The same Rust core runs in all four; any
-        divergence is a binding-boundary marshalling bug.
+        ASSERT FFI v3 triple == PyO3 v3 triple == CORE golden (native, byte-
+        identical, shared libm). WASM v3 triple matches the scalar CORE golden to
+        ≤ 1e-9 per-array relative error (ADR-0183). The same Rust core runs in
+        all four; any divergence beyond the irreducible native↔wasm32 libm gap is
+        a binding-boundary marshalling bug.
 
       Test files:
         - tests/binding_greeks_parity_ffi.rs   (drives ffi-greeks-smoke)

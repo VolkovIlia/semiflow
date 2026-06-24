@@ -21,13 +21,14 @@
 use std::sync::Arc;
 
 use semiflow::{
-    ChernoffSemigroup, ChernoffFunction, Graph, GraphHeatChernoff, GraphSignal,
-    StrangSplitGraph,
+    ChernoffFunction, ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, StrangSplitGraph,
 };
 use wasm_bindgen::prelude::*;
 
-use crate::error::{err_to_js, make_js_error};
-use crate::graph_wasm::GraphPath;
+use crate::{
+    error::{err_to_js, make_js_error},
+    graph_wasm::GraphPath,
+};
 
 // ---------------------------------------------------------------------------
 // StrangGraph
@@ -68,9 +69,12 @@ impl StrangGraphWasm {
     pub fn from_path(graph: &GraphPath) -> Result<StrangGraphWasm, JsValue> {
         let n = graph.n_nodes() as usize;
         let g = Arc::new(Graph::<f64>::path(n));
-        let strang = StrangSplitGraph::new_bipartite_path(&g)
-            .map_err(|e| err_to_js(&e))?;
-        Ok(Self { strang, graph: g, n_nodes: n })
+        let strang = StrangSplitGraph::new_bipartite_path(&g).map_err(|e| err_to_js(&e))?;
+        Ok(Self {
+            strang,
+            graph: g,
+            n_nodes: n,
+        })
     }
 
     /// Build from an even-length cycle graph `C_n` via edge-parity coloring.
@@ -83,9 +87,12 @@ impl StrangGraphWasm {
     pub fn from_cycle(graph: &GraphPath) -> Result<StrangGraphWasm, JsValue> {
         let n = graph.n_nodes() as usize;
         let g = Arc::new(Graph::<f64>::path(n));
-        let strang = StrangSplitGraph::new_bipartite_cycle(&g)
-            .map_err(|e| err_to_js(&e))?;
-        Ok(Self { strang, graph: g, n_nodes: n })
+        let strang = StrangSplitGraph::new_bipartite_cycle(&g).map_err(|e| err_to_js(&e))?;
+        Ok(Self {
+            strang,
+            graph: g,
+            n_nodes: n,
+        })
     }
 
     /// Evolve signal `f0` to time `t_final` with `n_steps` Strang steps.
@@ -94,12 +101,7 @@ impl StrangGraphWasm {
     ///
     /// # Errors
     /// See struct-level error table.
-    pub fn evolve(
-        &self,
-        t_final: f64,
-        n_steps: u32,
-        f0: &[f64],
-    ) -> Result<Vec<f64>, JsValue> {
+    pub fn evolve(&self, t_final: f64, n_steps: u32, f0: &[f64]) -> Result<Vec<f64>, JsValue> {
         validate_strang_inputs(f0, self.n_nodes, t_final, n_steps)?;
         let sg = ChernoffSemigroup::new(self.strang.clone(), n_steps as usize)
             .map_err(|e| err_to_js(&e))?;
@@ -132,7 +134,10 @@ fn validate_strang_inputs(
     n_steps: u32,
 ) -> Result<(), JsValue> {
     if f0.len() != n_nodes {
-        return Err(make_js_error("GridMismatch", "f0.length must equal n_nodes"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "f0.length must equal n_nodes",
+        ));
     }
     for &v in f0 {
         if !v.is_finite() {

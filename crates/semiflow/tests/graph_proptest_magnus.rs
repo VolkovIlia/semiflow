@@ -19,7 +19,7 @@ use semiflow::{
     graph::{Graph, Laplacian},
     graph_signal::GraphSignal,
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
-    ChernoffFunction, SemiflowError, ScratchPool, State,
+    ChernoffFunction, ScratchPool, SemiflowError, State,
 };
 
 // ---------------------------------------------------------------------------

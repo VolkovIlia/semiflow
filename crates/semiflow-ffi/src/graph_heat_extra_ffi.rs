@@ -1,8 +1,8 @@
 //! Graph-heat FFI parity (Round 10): `GraphHeat4thChernoff` and
 //! `MagnusGraphHeat6thChernoff`.
 //!
-//! - [`smf_ghc4_*`]  — `GraphHeat4thChernoff` (order-4, static Laplacian).
-//! - [`smf_mghc6_*`] — `MagnusGraphHeat6thChernoff` (K=6 time-varying Magnus).
+//! - `smf_ghc4_*`  — `GraphHeat4thChernoff` (order-4, static Laplacian).
+//! - `smf_mghc6_*` — `MagnusGraphHeat6thChernoff` (K=6 time-varying Magnus).
 //!
 //! See `graph_vc_ghc_ffi.rs` for `smf_vc_ghc_*` (variable-coefficient engine).
 //! All functions reuse the `SmfGraph` / `SmfGraphSig` opaque handles from
@@ -19,14 +19,15 @@
 
 use std::sync::Arc;
 
-use semiflow::scratch::ScratchPool;
 use semiflow::{
-    ChernoffSemigroup, GraphHeat4thChernoff, GraphSignal, LaplacianAtTime,
-    MagnusGraphHeat6thChernoff, Graph, Laplacian,
+    scratch::ScratchPool, ChernoffSemigroup, Graph, GraphHeat4thChernoff, GraphSignal, Laplacian,
+    LaplacianAtTime, MagnusGraphHeat6thChernoff,
 };
 
-use crate::graph_ffi::{SmfGraph, SmfGraphSig};
-use crate::status::SemiflowStatus;
+use crate::{
+    graph_ffi::{SmfGraph, SmfGraphSig},
+    status::SemiflowStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque handles
@@ -93,7 +94,10 @@ fn make_lap_at_t(cb: SmfLapAtTFn, user_data: *mut ()) -> LaplacianAtTime<f64> {
             let mut out: *mut SmfGraph = std::ptr::null_mut();
             // SAFETY: cb is a valid C fn-ptr; addr round-trips through usize.
             let rc = unsafe { cb(t, ptr, &mut out) };
-            assert!(rc == 0 && !out.is_null(), "smf_lap_at_t_fn failed (rc={rc})");
+            assert!(
+                rc == 0 && !out.is_null(),
+                "smf_lap_at_t_fn failed (rc={rc})"
+            );
             // SAFETY: out is a live Box<GraphInnerView> by ABI contract.
             let inner = unsafe { Box::from_raw(out.cast::<GraphInnerView>()) };
             Arc::new(Laplacian::assemble_combinatorial(&inner.graph))

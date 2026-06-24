@@ -1,4 +1,4 @@
-//! PyO3 binding for `VarCoefTt` — additive-separable variable-coefficient
+//! `PyO3` binding for `VarCoefTt` — additive-separable variable-coefficient
 //! TT evolver (ADR-0178, math §52.10, issue #2).
 //!
 //! Mirrors [`crate::tt_py`] for `TtEvolver` / `TtState`.
@@ -24,13 +24,14 @@
 //!
 //! `VarCoefOutOfClass` → `SemiflowError(kind='OutOfDomain')` (via `from_core`).
 
-use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::{prelude::*, types::PyList};
 use semiflow::VarCoefTt;
 
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
-use crate::tt_py::PyTtState;
+use crate::{
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+    tt_py::PyTtState,
+};
 
 // ---------------------------------------------------------------------------
 // VarCoefTtEvolver pyclass
@@ -43,22 +44,22 @@ use crate::tt_py::PyTtState;
 ///
 /// Parameters
 /// ----------
-/// a_axis : list[list[float]]
+/// `a_axis` : list[list[float]]
 ///     Per-axis diffusion `aⱼ(xⱼ)` — each inner list has length nⱼ,
 ///     all entries strictly positive.
-/// b_axis : list[list[float]]
+/// `b_axis` : list[list[float]]
 ///     Per-axis drift `bⱼ(xⱼ)` — each inner list length nⱼ.
-/// v_axis : list[list[float]]
+/// `v_axis` : list[list[float]]
 ///     Per-axis reaction `vⱼ(xⱼ)` — each inner list length nⱼ or empty
 ///     (empty means zero reaction on that axis).
 /// domain : list[tuple[float, float]]
 ///     Per-axis `(lo, hi)` domain bounds.  ``hi > lo`` required.
-/// eps_round : float
+/// `eps_round` : float
 ///     TT-rounding tolerance applied after each step (finite, >= 0).
 ///
 /// Raises
 /// ------
-/// SemiflowError
+/// `SemiflowError`
 ///     ``kind='OutOfDomain'`` — ``d == 0``, shape mismatch, ``nⱼ < 2``,
 ///     or any ``a_axis[j][i] <= 0``.
 ///     ``kind='NanInf'`` — non-finite value in any coefficient.
@@ -84,10 +85,12 @@ impl PyVarCoefTtEvolver {
             let v = extract_ragged(v_axis, "v_axis")?;
             let dom = extract_domain(domain, "domain")?;
             if !eps_round.is_finite() {
-                return Err(new_pyerr("NanInf", "VarCoefTtEvolver: eps_round is non-finite"));
+                return Err(new_pyerr(
+                    "NanInf",
+                    "VarCoefTtEvolver: eps_round is non-finite",
+                ));
             }
-            let ev = VarCoefTt::<f64>::new(a, b, v, dom, eps_round)
-                .map_err(|e| from_core(&e))?;
+            let ev = VarCoefTt::<f64>::new(a, b, v, dom, eps_round).map_err(|e| from_core(&e))?;
             Ok(Self { inner: ev })
         })
     }
@@ -101,33 +104,37 @@ impl PyVarCoefTtEvolver {
     ///
     /// Parameters
     /// ----------
-    /// state : TtState
+    /// state : `TtState`
     ///     Mutable carrier state (same `TtState` as `TtEvolver.evolve`).
-    /// t_final : float
+    /// `t_final` : float
     ///     Total evolution time (>= 0, finite).
-    /// n_steps : int
+    /// `n_steps` : int
     ///     Number of time steps (>= 1).
     ///
     /// Raises
     /// ------
-    /// SemiflowError
+    /// `SemiflowError`
     ///     ``kind='OutOfDomain'`` — ``n_steps == 0``, non-finite/negative
     ///     ``t_final``, or ``ev.ndim() != state.ndim()``.
-    fn evolve(
-        &self,
-        state: &mut PyTtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> PyResult<()> {
+    fn evolve(&self, state: &mut PyTtState, t_final: f64, n_steps: usize) -> PyResult<()> {
         catch_panic_py!({
             if n_steps == 0 {
-                return Err(new_pyerr("OutOfDomain", "VarCoefTtEvolver.evolve: n_steps must be >= 1"));
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "VarCoefTtEvolver.evolve: n_steps must be >= 1",
+                ));
             }
             if !t_final.is_finite() || t_final < 0.0 {
-                return Err(new_pyerr("OutOfDomain", "VarCoefTtEvolver.evolve: t_final must be finite >= 0"));
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "VarCoefTtEvolver.evolve: t_final must be finite >= 0",
+                ));
             }
             if self.inner.ndim() != state.inner.ndim() {
-                return Err(new_pyerr("OutOfDomain", "VarCoefTtEvolver.evolve: evolver ndim != state ndim"));
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "VarCoefTtEvolver.evolve: evolver ndim != state ndim",
+                ));
             }
             self.inner.evolve(t_final, n_steps, &mut state.inner);
             Ok(())
@@ -143,12 +150,18 @@ impl PyVarCoefTtEvolver {
 fn extract_ragged(list: &Bound<'_, PyList>, ctx: &str) -> PyResult<Vec<Vec<f64>>> {
     let d = list.len();
     if d == 0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: list is empty (d must be >= 1)")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: list is empty (d must be >= 1)"),
+        ));
     }
     let mut out = Vec::with_capacity(d);
     for (j, item) in list.iter().enumerate() {
         let v: Vec<f64> = item.extract::<Vec<f64>>().map_err(|_| {
-            new_pyerr("OutOfDomain", &format!("{ctx}: axis {j} is not a list[float]"))
+            new_pyerr(
+                "OutOfDomain",
+                &format!("{ctx}: axis {j} is not a list[float]"),
+            )
         })?;
         for &x in &v {
             if !x.is_finite() {
@@ -164,18 +177,30 @@ fn extract_ragged(list: &Bound<'_, PyList>, ctx: &str) -> PyResult<Vec<Vec<f64>>
 fn extract_domain(list: &Bound<'_, PyList>, ctx: &str) -> PyResult<Vec<(f64, f64)>> {
     let d = list.len();
     if d == 0 {
-        return Err(new_pyerr("OutOfDomain", &format!("{ctx}: domain list is empty")));
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{ctx}: domain list is empty"),
+        ));
     }
     let mut out = Vec::with_capacity(d);
     for (j, item) in list.iter().enumerate() {
         let pair: (f64, f64) = item.extract::<(f64, f64)>().map_err(|_| {
-            new_pyerr("OutOfDomain", &format!("{ctx}: domain[{j}] is not a (float, float) tuple"))
+            new_pyerr(
+                "OutOfDomain",
+                &format!("{ctx}: domain[{j}] is not a (float, float) tuple"),
+            )
         })?;
         if !pair.0.is_finite() || !pair.1.is_finite() {
-            return Err(new_pyerr("NanInf", &format!("{ctx}: domain[{j}] contains NaN/Inf")));
+            return Err(new_pyerr(
+                "NanInf",
+                &format!("{ctx}: domain[{j}] contains NaN/Inf"),
+            ));
         }
         if pair.0 >= pair.1 {
-            return Err(new_pyerr("OutOfDomain", &format!("{ctx}: domain[{j}].lo >= hi")));
+            return Err(new_pyerr(
+                "OutOfDomain",
+                &format!("{ctx}: domain[{j}].lo >= hi"),
+            ));
         }
         out.push(pair);
     }

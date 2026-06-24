@@ -18,9 +18,7 @@
     clippy::cast_possible_truncation
 )]
 
-use alloc::boxed::Box;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec, vec::Vec};
 use core::marker::PhantomData;
 
 use crate::{

@@ -113,10 +113,10 @@
 //!    `## Proven boundary` section citing the RELEASE-BLOCKING gate and the
 //!    mathematical scope.
 //!
-//! Six tokens: [`S3DriftSpectralEvolver`], [`S3DenseCouplingEvolver`],
-//! [`S3VarCoefEvolver`], [`S3NonSepVarCoefEvolver`], [`S3BurgersColeHopf`],
-//! [`S3ReactionDiffusion`].  Container types: [`AxisCoef`], [`CpTerm`], [`CpCoef`],
-//! [`CoefRole`], [`Reaction`].  See `docs/adr/0169-s3-honest-scope-public-api-promotion.md`.
+//! Six tokens: `S3DriftSpectralEvolver`, `S3DenseCouplingEvolver`,
+//! `S3VarCoefEvolver`, `S3NonSepVarCoefEvolver`, `S3BurgersColeHopf`,
+//! `S3ReactionDiffusion`.  Container types: `AxisCoef`, `CpTerm`, `CpCoef`,
+//! `CoefRole`, `Reaction`.  See `docs/adr/0169-s3-honest-scope-public-api-promotion.md`.
 //!
 //! See `contracts/semiflow-core.math.md` for the full mathematical specification.
 //!
@@ -169,9 +169,9 @@ pub mod diffusion4_zeta4;
 pub(crate) mod diffusion4_zeta4_stencil_ho;
 pub mod diffusion6;
 pub mod diffusion6_zeta6;
-pub(crate) mod diffusion_zeta_common;
 pub mod diffusion8_zeta8;
 mod diffusion_storage;
+pub(crate) mod diffusion_zeta_common;
 pub mod drift_reaction;
 pub mod drift_reaction_zeta4;
 pub mod dual;
@@ -180,6 +180,7 @@ pub mod expmv;
 pub mod float;
 pub(crate) mod gen_quadrature;
 pub mod graph;
+pub mod graph_adjoint_presampled;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
@@ -217,7 +218,6 @@ pub mod killing_soft;
 pub mod magnus6_graph;
 pub mod magnus_graph;
 pub mod magnus_graph_adjoint;
-pub mod graph_adjoint_presampled;
 pub(crate) mod magnus_graph_helpers;
 #[cfg(test)]
 mod magnus_graph_tests;
@@ -304,31 +304,27 @@ pub mod truncated_exp4_cached;
 pub mod tt_chernoff;
 pub mod tt_core;
 pub mod tt_coupled;
-pub mod tt_varcoef;
 pub(crate) mod tt_coupled_pair;
-pub(crate) mod tt_dense_expm;
 #[cfg(feature = "s3-poc")]
 pub mod tt_dense_coupling;
 #[cfg(not(feature = "s3-poc"))]
 pub(crate) mod tt_dense_coupling;
+pub(crate) mod tt_dense_expm;
+pub mod tt_varcoef;
 
 #[cfg(feature = "s3-poc")]
 pub mod tt_drift_spectral;
 #[cfg(not(feature = "s3-poc"))]
 pub(crate) mod tt_drift_spectral;
-
 #[cfg(feature = "s3-poc")]
 pub mod tt_nonlinear_spectral;
 #[cfg(not(feature = "s3-poc"))]
 pub(crate) mod tt_nonlinear_spectral;
-
-pub(crate) mod tt_spectral;
-
 #[cfg(feature = "s3-poc")]
 pub mod tt_nonsep_varcoef;
 #[cfg(not(feature = "s3-poc"))]
 pub(crate) mod tt_nonsep_varcoef;
-
+pub(crate) mod tt_spectral;
 #[cfg(feature = "s3-poc")]
 pub mod tt_varcoef_spectral;
 #[cfg(not(feature = "s3-poc"))]
@@ -340,9 +336,9 @@ pub mod tt_dense_coupling_api;
 #[cfg(feature = "s3-poc")]
 pub mod tt_drift_spectral_api;
 #[cfg(feature = "s3-poc")]
-pub mod tt_nonsep_varcoef_api;
-#[cfg(feature = "s3-poc")]
 pub mod tt_nonlinear_spectral_api;
+#[cfg(feature = "s3-poc")]
+pub mod tt_nonsep_varcoef_api;
 pub mod varcoef_magnus_graph;
 pub mod wentzell;
 
@@ -370,6 +366,9 @@ pub use crate::{
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
     graph::{Graph, Laplacian, LaplacianKind},
+    graph_adjoint_presampled::{
+        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
+    },
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
     graph_heat6::GraphHeat6thChernoff,
@@ -401,9 +400,6 @@ pub use crate::{
     killing_order2::DirichletHeat2ndChernoff,
     killing_soft::{ClosureKillingRate, Killing2ndChernoff, KillingRate},
     magnus6_graph::MagnusGraphHeat6thChernoff,
-    graph_adjoint_presampled::{
-        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
-    },
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
     manifold::{BoundedGeometryManifold, Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,
@@ -469,20 +465,19 @@ pub use crate::{
     varcoef_magnus_graph::{compute_rho_bar, VarCoefMagnusGraphHeatChernoff, WeightAtTime},
     wentzell::{DynamicWentzellChernoff, HalfSpaceWentzell, WentzellRegion},
 };
-
 // ── S³ public surface (v9.2.0, ADR-0169) ────────────────────────────────────
 // All six tokens are behind the non-default `s3-poc` feature.
 // Each wrapper enforces its class boundary at construction time (boundary-as-type).
 #[cfg(feature = "s3-poc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "s3-poc")))]
 pub use crate::{
-    tt_drift_spectral_api::S3DriftSpectralEvolver,
     tt_dense_coupling_api::S3DenseCouplingEvolver,
-    tt_varcoef_spectral::{AxisCoef, S3VarCoefEvolver},
-    tt_nonsep_varcoef::{CoefRole, CpCoef, CpTerm},
-    tt_nonsep_varcoef_api::S3NonSepVarCoefEvolver,
+    tt_drift_spectral_api::S3DriftSpectralEvolver,
     tt_nonlinear_spectral::Reaction,
     tt_nonlinear_spectral_api::{S3BurgersColeHopf, S3ReactionDiffusion},
+    tt_nonsep_varcoef::{CoefRole, CpCoef, CpTerm},
+    tt_nonsep_varcoef_api::S3NonSepVarCoefEvolver,
+    tt_varcoef_spectral::{AxisCoef, S3VarCoefEvolver},
 };
 
 /// Drain all thread-local parallel scratch pools on the calling thread.

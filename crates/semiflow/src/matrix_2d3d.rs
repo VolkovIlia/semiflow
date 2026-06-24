@@ -17,8 +17,7 @@
 //!
 //! Gate: `tests/g_matrix_2d3d.rs` — slope ≤ −0.80 for both 2D and 3D (ADR-0124).
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{
     chernoff::{ChernoffFunction, Growth},

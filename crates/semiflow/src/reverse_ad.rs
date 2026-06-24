@@ -30,7 +30,6 @@ use alloc::vec::Vec;
 // Backward sweep internals live in the sibling crate-root module `reverse_sweep`
 // (additive split — keeps this file ≤500 lines; declared in lib.rs).
 use crate::reverse_sweep::backward_sweep;
-
 use crate::{
     diffusion::DiffusionChernoff, dual::Dual, error::SemiflowError, float::SemiflowFloat,
     grid_fn::GridFn1D, reverse_region::RegionMap,
@@ -93,7 +92,8 @@ pub trait TransposeApply<F: SemiflowFloat>: Sized {
     ///
     /// # Errors
     /// Propagates `SemiflowError` from the underlying kernel.
-    fn apply_transpose_step(&self, tau: F, src: &GridFn1D<F>) -> Result<GridFn1D<F>, SemiflowError>;
+    fn apply_transpose_step(&self, tau: F, src: &GridFn1D<F>)
+        -> Result<GridFn1D<F>, SemiflowError>;
 }
 
 /// `DiffusionChernoff<F>` with constant `a(x) ≡ θ` is self-adjoint:
@@ -102,7 +102,11 @@ pub trait TransposeApply<F: SemiflowFloat>: Sized {
 /// This satisfies the §51.6 anti-dodge clause: the gate kernel MUST run on
 /// the default `Grid1D::new` (`SepticHermite`) grid.
 impl<F: SemiflowFloat> TransposeApply<F> for DiffusionChernoff<F> {
-    fn apply_transpose_step(&self, tau: F, src: &GridFn1D<F>) -> Result<GridFn1D<F>, SemiflowError> {
+    fn apply_transpose_step(
+        &self,
+        tau: F,
+        src: &GridFn1D<F>,
+    ) -> Result<GridFn1D<F>, SemiflowError> {
         // For constant-a: F is symmetric (no inner Strang shift term), so F^⊤ = F.
         // NORMATIVE (§51.5): this impl is valid ONLY for the constant-a case.
         // Variable-a usage is caller's responsibility (document OUT of scope).
@@ -275,8 +279,8 @@ impl<F: SemiflowFloat> ReverseChernoff<F> {
         schedule: CheckpointSchedule,
     ) -> Self {
         let n_grid = kernel.grid.n;
-        let region_map = RegionMap::contiguous(n_grid, 1)
-            .expect("K=1 region map always valid for n >= 1");
+        let region_map =
+            RegionMap::contiguous(n_grid, 1).expect("K=1 region map always valid for n >= 1");
         Self {
             kernel,
             kernel_dual,

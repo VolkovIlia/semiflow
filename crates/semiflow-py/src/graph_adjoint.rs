@@ -199,9 +199,7 @@ impl GraphAdjoint {
     }
 }
 
-// ---------------------------------------------------------------------------
 // GraphAdjointPresampled — pre-sampled path (ADR-0180)
-// ---------------------------------------------------------------------------
 
 /// Pre-sampled graph state-adjoint — no live Python callback during evolve.
 ///
@@ -211,24 +209,24 @@ impl GraphAdjoint {
 /// `evolve_state_adjoint` runs fully in `py.detach` (no GIL reacquisition
 /// per step) — see ADR-0031 §3, ADR-0180.
 ///
-/// Parameters (from_presampled)
+/// Parameters (`from_presampled`)
 /// ----------------------------
-/// graph : Graph or GraphPath
+/// graph : Graph or `GraphPath`
 ///     Graph topology.
-/// lap_at_t : callable
-///     ``t: float -> Graph | Laplacian | GraphPath``.  Called 2·n_steps times
+/// `lap_at_t` : callable
+///     ``t: float -> Graph | Laplacian | GraphPath``.  Called `2·n_steps` times
 ///     at construction; never called during evolve.
-/// rho_bar : float
+/// `rho_bar` : float
 ///     Gershgorin upper bound on ``ρ̄(L_G(t))``.
-/// n_steps : int
+/// `n_steps` : int
 ///     Number of adjoint time steps (must match `evolve_state_adjoint`).
-/// t_horizon : float
+/// `t_horizon` : float
 ///     Total time horizon (``τ = t_horizon / n_steps``).
 /// a : callable, optional
-///     ``t: float -> list[float]`` — node weights for VarCoef kernel.
+///     ``t: float -> list[float]`` — node weights for `VarCoef` kernel.
 /// kernel : str, optional
 ///     ``"magnus_graph"`` (default) or ``"varcoef_magnus_graph"``.
-/// convergence_check : bool, optional
+/// `convergence_check` : bool, optional
 ///     Enable Magnus radius guard (default ``True``).
 #[pyclass(name = "GraphAdjointPresampled")]
 pub struct GraphAdjointPresampled {
@@ -265,67 +263,29 @@ impl GraphAdjointPresampled {
         kernel: &str,
         convergence_check: bool,
     ) -> PyResult<Self> {
-        use crate::graph_py::{extract_laplacian_arc, resolve_graph_from_any, validate_n_steps,
-                               validate_rho_bar, validate_t_final};
+        use crate::graph_py::{
+            resolve_graph_from_any, validate_n_steps, validate_rho_bar, validate_t_final,
+        };
         validate_rho_bar(rho_bar)?;
         validate_n_steps(n_steps)?;
         validate_t_final(t_horizon)?;
         let g = resolve_graph_from_any(Some(graph), None)?;
         let ns = n_steps as usize;
+        #[allow(clippy::cast_precision_loss)]
         let tau = t_horizon / ns as f64;
-        // Build base CSR pattern from the static (t=0) Laplacian to get row_ptr/col_idx.
-        let base_lap = lap_at_t.call1(py, (0.0_f64,))
-            .map_err(|e| e)?;
-        let base_arc = extract_laplacian_arc(base_lap.bind(py), &g);
-        let row_ptr = base_arc.row_ptr().to_vec();
-        let col_idx = base_arc.col_idx().to_vec();
-        let nnz = col_idx.len();
-        // Sample at 2*n_steps GL4 abscissa times (GIL held throughout).
-        let mut times = vec![0.0_f64; 2 * ns];
-        fill_abscissa_times(t_horizon, ns, &mut times);
-        let mut vals_seq = vec![0.0_f64; 2 * ns * nnz];
-        for (idx, &t) in times.iter().enumerate() {
-            let lap_obj = lap_at_t.call1(py, (t,))?;
-            let lap_arc = extract_laplacian_arc(lap_obj.bind(py), &g);
-            let block = &lap_arc.vals();
-            vals_seq[idx * nnz..(idx + 1) * nnz].copy_from_slice(block);
-        }
-        let kind = LaplacianKind::Combinatorial;
-        let seq = PreSampledLaplacianSeq::new(row_ptr, col_idx, vals_seq, ns, kind)
-            .map_err(|e| crate::error::from_core(&e))?;
-        match kernel {
-            "magnus_graph" => {
-                let ps = MagnusGraphHeatChernoff::<f64>::from_presampled(
-                    seq, rho_bar, convergence_check,
-                ).map_err(|e| crate::error::from_core(&e))?;
-                Ok(GraphAdjointPresampled {
-                    variant: PresampledVariant::Magnus(ps),
-                    graph: g, n_steps: ns, tau,
-                })
-            }
-            "varcoef_magnus_graph" => {
-                let a_cb = a.ok_or_else(|| {
-                    crate::error::new_pyerr("OutOfDomain",
-                        "varcoef_magnus_graph requires a= callback")
-                })?;
-                let n = g.n_nodes();
-                let mut a_seq = vec![0.0_f64; 2 * ns * n];
-                for (idx, &t) in times.iter().enumerate() {
-                    let a_vals: Vec<f64> = a_cb.call1(py, (t,))?
-                        .bind(py).extract()?;
-                    a_seq[idx * n..(idx + 1) * n].copy_from_slice(&a_vals);
-                }
-                let ps = VarCoefMagnusGraphHeatChernoff::<f64>::from_presampled(
-                    seq, a_seq, rho_bar, rho_bar,
-                ).map_err(|e| crate::error::from_core(&e))?;
-                Ok(GraphAdjointPresampled {
-                    variant: PresampledVariant::VarCoef(ps),
-                    graph: g, n_steps: ns, tau,
-                })
-            }
-            other => Err(crate::error::new_pyerr("OutOfDomain",
-                &format!("unknown kernel '{other}'"))),
-        }
+        let (seq, times) = build_presampled_seq(py, &g, &lap_at_t, ns, t_horizon)?;
+        build_adjoint_variant(
+            py,
+            g,
+            seq,
+            &times,
+            ns,
+            tau,
+            rho_bar,
+            a,
+            kernel,
+            convergence_check,
+        )
     }
 
     /// Backward costate sweep: `lambda_n → lambda_0`.
@@ -342,7 +302,7 @@ impl GraphAdjointPresampled {
         use crate::graph_py::{extract_f64_vec, validate_signal_len};
         let lam = extract_f64_vec(lambda_n)?;
         validate_signal_len(&lam, self.graph.n_nodes())?;
-        let ns = n_steps.map(|v| v as usize).unwrap_or(self.n_steps);
+        let ns = n_steps.map_or(self.n_steps, |v| v as usize);
         if ns != self.n_steps {
             return Err(crate::error::new_pyerr(
                 "OutOfDomain",
@@ -352,12 +312,18 @@ impl GraphAdjointPresampled {
         let g = Arc::clone(&self.graph);
         let tau = self.tau;
         let out: Result<Vec<f64>, semiflow::SemiflowError> = match &self.variant {
-            PresampledVariant::Magnus(ps) => {
-                py.detach(|| presampled_magnus_evolve(ps, g, &lam, tau, ns))
-            }
-            PresampledVariant::VarCoef(ps) => {
-                py.detach(|| presampled_varcoef_evolve(ps, g, &lam, tau, ns))
-            }
+            PresampledVariant::Magnus(ps) => py.detach(|| {
+                let src = GraphSignal::from_fn(Arc::clone(&g), |i| lam[i as usize]);
+                let mut dst = GraphSignal::zeros(Arc::clone(&g));
+                ps.evolve_state_adjoint_into(tau, ns, &src, &mut dst, &mut ScratchPool::new())?;
+                Ok(dst.values().to_vec())
+            }),
+            PresampledVariant::VarCoef(ps) => py.detach(|| {
+                let src = GraphSignal::from_fn(Arc::clone(&g), |i| lam[i as usize]);
+                let mut dst = GraphSignal::zeros(Arc::clone(&g));
+                ps.evolve_state_adjoint_into(tau, ns, &src, &mut dst, &mut ScratchPool::new())?;
+                Ok(dst.values().to_vec())
+            }),
         };
         let result = out.map_err(|e| crate::error::from_core(&e))?;
         Ok(result.as_slice().to_pyarray(py))
@@ -374,9 +340,7 @@ impl GraphAdjointPresampled {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Phase-2 helpers (no Python types; called inside py.detach)
-// ---------------------------------------------------------------------------
 
 fn adjoint_magnus(
     graph: Arc<Graph<f64>>,
@@ -438,34 +402,98 @@ fn adjoint_varcoef(
     Ok(dst.values().to_vec())
 }
 
-// ---------------------------------------------------------------------------
-// Pre-sampled evolve helpers (no Python types, called inside py.detach)
-// ---------------------------------------------------------------------------
+// Pre-sampled construction helpers
 
-fn presampled_magnus_evolve(
-    ps: &PreSampledMagnusAdj<f64>,
-    graph: Arc<Graph<f64>>,
-    lam: &[f64],
-    tau: f64,
-    n_steps: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    let src = GraphSignal::from_fn(Arc::clone(&graph), |i| lam[i as usize]);
-    let mut dst = GraphSignal::zeros(Arc::clone(&graph));
-    let mut scratch = ScratchPool::new();
-    ps.evolve_state_adjoint_into(tau, n_steps, &src, &mut dst, &mut scratch)?;
-    Ok(dst.values().to_vec())
+/// Sample `lap_at_t` at 2·`n_steps` GL₄ abscissa times and build a
+/// `PreSampledLaplacianSeq`.  Returns `(seq, times)` so the caller
+/// can reuse `times` for the optional `a`-coefficient sampling.
+fn build_presampled_seq(
+    py: Python<'_>,
+    g: &Arc<Graph<f64>>,
+    lap_at_t: &Py<PyAny>,
+    ns: usize,
+    t_horizon: f64,
+) -> PyResult<(PreSampledLaplacianSeq<f64>, Vec<f64>)> {
+    use crate::graph_py::extract_laplacian_arc;
+    let base_lap = lap_at_t.call1(py, (0.0_f64,))?;
+    let base_arc = extract_laplacian_arc(base_lap.bind(py), g);
+    let row_ptr = base_arc.row_ptr().to_vec();
+    let col_idx = base_arc.col_idx().to_vec();
+    let nnz = col_idx.len();
+    let mut times = vec![0.0_f64; 2 * ns];
+    fill_abscissa_times(t_horizon, ns, &mut times);
+    let mut vals_seq = vec![0.0_f64; 2 * ns * nnz];
+    for (idx, &t) in times.iter().enumerate() {
+        let lap_obj = lap_at_t.call1(py, (t,))?;
+        let lap_arc = extract_laplacian_arc(lap_obj.bind(py), g);
+        vals_seq[idx * nnz..(idx + 1) * nnz].copy_from_slice(lap_arc.vals());
+    }
+    let kind = LaplacianKind::Combinatorial;
+    let seq = PreSampledLaplacianSeq::new(row_ptr, col_idx, vals_seq, ns, kind)
+        .map_err(|e| crate::error::from_core(&e))?;
+    Ok((seq, times))
 }
 
-fn presampled_varcoef_evolve(
-    ps: &PreSampledVarCoefAdj<f64>,
-    graph: Arc<Graph<f64>>,
-    lam: &[f64],
+/// Dispatch to Magnus or `VarCoef` variant and return a `GraphAdjointPresampled`.
+#[allow(clippy::too_many_arguments)]
+fn build_adjoint_variant(
+    py: Python<'_>,
+    g: Arc<Graph<f64>>,
+    seq: PreSampledLaplacianSeq<f64>,
+    times: &[f64],
+    ns: usize,
     tau: f64,
-    n_steps: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    let src = GraphSignal::from_fn(Arc::clone(&graph), |i| lam[i as usize]);
-    let mut dst = GraphSignal::zeros(Arc::clone(&graph));
-    let mut scratch = ScratchPool::new();
-    ps.evolve_state_adjoint_into(tau, n_steps, &src, &mut dst, &mut scratch)?;
-    Ok(dst.values().to_vec())
+    rho_bar: f64,
+    a: Option<Py<PyAny>>,
+    kernel: &str,
+    convergence_check: bool,
+) -> PyResult<GraphAdjointPresampled> {
+    match kernel {
+        "magnus_graph" => {
+            let ps =
+                MagnusGraphHeatChernoff::<f64>::from_presampled(seq, rho_bar, convergence_check)
+                    .map_err(|e| crate::error::from_core(&e))?;
+            Ok(GraphAdjointPresampled {
+                variant: PresampledVariant::Magnus(ps),
+                graph: g,
+                n_steps: ns,
+                tau,
+            })
+        }
+        "varcoef_magnus_graph" => build_varcoef_adjoint(py, g, seq, times, ns, tau, rho_bar, a),
+        other => Err(crate::error::new_pyerr(
+            "OutOfDomain",
+            &format!("unknown kernel '{other}'"),
+        )),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_varcoef_adjoint(
+    py: Python<'_>,
+    g: Arc<Graph<f64>>,
+    seq: PreSampledLaplacianSeq<f64>,
+    times: &[f64],
+    ns: usize,
+    tau: f64,
+    rho_bar: f64,
+    a: Option<Py<PyAny>>,
+) -> PyResult<GraphAdjointPresampled> {
+    let a_cb = a.ok_or_else(|| {
+        crate::error::new_pyerr("OutOfDomain", "varcoef_magnus_graph requires a= callback")
+    })?;
+    let n = g.n_nodes();
+    let mut a_seq = vec![0.0_f64; 2 * ns * n];
+    for (idx, &t) in times.iter().enumerate() {
+        let a_vals: Vec<f64> = a_cb.call1(py, (t,))?.bind(py).extract()?;
+        a_seq[idx * n..(idx + 1) * n].copy_from_slice(&a_vals);
+    }
+    let ps = VarCoefMagnusGraphHeatChernoff::<f64>::from_presampled(seq, a_seq, rho_bar, rho_bar)
+        .map_err(|e| crate::error::from_core(&e))?;
+    Ok(GraphAdjointPresampled {
+        variant: PresampledVariant::VarCoef(ps),
+        graph: g,
+        n_steps: ns,
+        tau,
+    })
 }

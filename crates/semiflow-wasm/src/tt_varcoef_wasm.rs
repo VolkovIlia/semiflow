@@ -37,8 +37,7 @@ use js_sys::{Float64Array, Uint32Array};
 use semiflow::VarCoefTt;
 use wasm_bindgen::prelude::*;
 
-use crate::error::make_js_error;
-use crate::tt_wasm::TtState;
+use crate::{error::make_js_error, tt_wasm::TtState};
 
 // ---------------------------------------------------------------------------
 // VarCoefTtEvolver JS class
@@ -48,7 +47,7 @@ use crate::tt_wasm::TtState;
 ///
 /// Advances a `TtState` in-place via `evolve(state, t_final, n_steps)`.
 ///
-/// ## Constructor parameters (Float64Array + Uint32Array pairs)
+/// ## Constructor parameters (`Float64Array` + `Uint32Array` pairs)
 ///
 /// Each ragged array is passed as `(data, offsets)` where `offsets` is a
 /// `Uint32Array` of length `n_axes + 1` (C-2 prefix-sum convention):
@@ -72,6 +71,11 @@ pub struct WasmVarCoefTtEvolver {
 #[wasm_bindgen(js_class = "VarCoefTtEvolver")]
 impl WasmVarCoefTtEvolver {
     /// Construct a `VarCoefTtEvolver`.
+    ///
+    /// # Errors
+    /// Returns a JS error with kind `"GridMismatch"` for zero axes or bad offsets,
+    /// `"NanInf"` for non-finite coefficients, or `"OutOfDomain"` for parabolicity
+    /// or shape violations.
     #[wasm_bindgen(constructor)]
     pub fn new(
         a_data: &Float64Array,
@@ -87,7 +91,10 @@ impl WasmVarCoefTtEvolver {
         let a_off = decode_offsets(a_offsets, "VarCoefTtEvolver.aOffsets")?;
         let n_axes = a_off.len() - 1;
         if n_axes == 0 {
-            return Err(make_js_error("GridMismatch", "VarCoefTtEvolver: n_axes must be >= 1"));
+            return Err(make_js_error(
+                "GridMismatch",
+                "VarCoefTtEvolver: n_axes must be >= 1",
+            ));
         }
         let b_off = decode_offsets(b_offsets, "VarCoefTtEvolver.bOffsets")?;
         let v_off = decode_offsets(v_offsets, "VarCoefTtEvolver.vOffsets")?;
@@ -98,7 +105,10 @@ impl WasmVarCoefTtEvolver {
             ));
         }
         if !eps_round.is_finite() {
-            return Err(make_js_error("NanInf", "VarCoefTtEvolver: epsRound must be finite"));
+            return Err(make_js_error(
+                "NanInf",
+                "VarCoefTtEvolver: epsRound must be finite",
+            ));
         }
         let a = extract_ragged(a_data, &a_off, n_axes, "aData")?;
         let b = extract_ragged(b_data, &b_off, n_axes, "bData")?;
@@ -117,21 +127,26 @@ impl WasmVarCoefTtEvolver {
 
     /// Evolve `state` in-place for `tFinal` using `nSteps` steps.
     ///
-    /// Throws `OutOfDomain` if `nSteps == 0`, `tFinal < 0`, or ndim mismatch.
-    pub fn evolve(
-        &self,
-        state: &mut TtState,
-        t_final: f64,
-        n_steps: usize,
-    ) -> Result<(), JsValue> {
+    /// # Errors
+    /// Returns `OutOfDomain` if `nSteps == 0`, `tFinal < 0`, or `ndim` mismatch.
+    pub fn evolve(&self, state: &mut TtState, t_final: f64, n_steps: usize) -> Result<(), JsValue> {
         if n_steps == 0 {
-            return Err(make_js_error("OutOfDomain", "VarCoefTtEvolver.evolve: nSteps must be >= 1"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "VarCoefTtEvolver.evolve: nSteps must be >= 1",
+            ));
         }
         if !t_final.is_finite() || t_final < 0.0 {
-            return Err(make_js_error("OutOfDomain", "VarCoefTtEvolver.evolve: tFinal must be finite >= 0"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "VarCoefTtEvolver.evolve: tFinal must be finite >= 0",
+            ));
         }
         if self.inner.ndim() != state.inner_mut().ndim() {
-            return Err(make_js_error("OutOfDomain", "VarCoefTtEvolver.evolve: ndim mismatch"));
+            return Err(make_js_error(
+                "OutOfDomain",
+                "VarCoefTtEvolver.evolve: ndim mismatch",
+            ));
         }
         self.inner.evolve(t_final, n_steps, state.inner_mut());
         Ok(())
@@ -146,16 +161,29 @@ impl WasmVarCoefTtEvolver {
 fn decode_offsets(offsets: &Uint32Array, ctx: &str) -> Result<Vec<usize>, JsValue> {
     let len = offsets.length() as usize;
     if len < 2 {
-        return Err(make_js_error("GridMismatch", &format!("{ctx}: offsets must have length >= 2")));
+        return Err(make_js_error(
+            "GridMismatch",
+            &format!("{ctx}: offsets must have length >= 2"),
+        ));
     }
-    let v: Vec<usize> = (0..len).map(|i| offsets.get_index(i as u32) as usize).collect();
+    // cast_possible_truncation: JS Uint32Array indices are u32; len < 2^32 by WASM constraints.
+    #[allow(clippy::cast_possible_truncation)]
+    let v: Vec<usize> = (0..len)
+        .map(|i| offsets.get_index(i as u32) as usize)
+        .collect();
     if v[0] != 0 {
-        return Err(make_js_error("GridMismatch", &format!("{ctx}: offsets[0] must be 0")));
+        return Err(make_js_error(
+            "GridMismatch",
+            &format!("{ctx}: offsets[0] must be 0"),
+        ));
     }
     for win in v.windows(2) {
         // Allow equal adjacent offsets (empty axis = zero-length reaction)
         if win[1] < win[0] {
-            return Err(make_js_error("GridMismatch", &format!("{ctx}: offsets must be non-decreasing")));
+            return Err(make_js_error(
+                "GridMismatch",
+                &format!("{ctx}: offsets must be non-decreasing"),
+            ));
         }
     }
     Ok(v)
@@ -170,7 +198,10 @@ fn extract_ragged(
 ) -> Result<Vec<Vec<f64>>, JsValue> {
     let total = off[n_axes];
     if data.length() as usize != total {
-        return Err(make_js_error("GridMismatch", &format!("{ctx}.length must equal offsets[n_axes]")));
+        return Err(make_js_error(
+            "GridMismatch",
+            &format!("{ctx}.length must equal offsets[n_axes]"),
+        ));
     }
     let mut raw = vec![0.0f64; total];
     data.copy_to(&mut raw);
@@ -179,7 +210,10 @@ fn extract_ragged(
         let sl = raw[off[j]..off[j + 1]].to_vec();
         for &x in &sl {
             if !x.is_finite() {
-                return Err(make_js_error("NanInf", &format!("{ctx}: axis {j} contains NaN/Inf")));
+                return Err(make_js_error(
+                    "NanInf",
+                    &format!("{ctx}: axis {j} contains NaN/Inf"),
+                ));
             }
         }
         slices.push(sl);
@@ -194,7 +228,10 @@ fn extract_domain(
     n_axes: usize,
 ) -> Result<Vec<(f64, f64)>, JsValue> {
     if lo.length() as usize != n_axes || hi.length() as usize != n_axes {
-        return Err(make_js_error("GridMismatch", "VarCoefTtEvolver: domLo/domHi length must equal n_axes"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "VarCoefTtEvolver: domLo/domHi length must equal n_axes",
+        ));
     }
     let mut lo_v = vec![0.0f64; n_axes];
     let mut hi_v = vec![0.0f64; n_axes];
@@ -205,9 +242,15 @@ fn extract_domain(
         .enumerate()
         .map(|(j, (&l, &h))| {
             if !l.is_finite() || !h.is_finite() {
-                Err(make_js_error("NanInf", &format!("VarCoefTtEvolver: domain[{j}] NaN/Inf")))
+                Err(make_js_error(
+                    "NanInf",
+                    &format!("VarCoefTtEvolver: domain[{j}] NaN/Inf"),
+                ))
             } else if l >= h {
-                Err(make_js_error("OutOfDomain", &format!("VarCoefTtEvolver: domain[{j}].lo >= hi")))
+                Err(make_js_error(
+                    "OutOfDomain",
+                    &format!("VarCoefTtEvolver: domain[{j}].lo >= hi"),
+                ))
             } else {
                 Ok((l, h))
             }

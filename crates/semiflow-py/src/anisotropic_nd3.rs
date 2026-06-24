@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn2D, GridFn3D, ScratchPool,
     Strang2D, Strang3D,

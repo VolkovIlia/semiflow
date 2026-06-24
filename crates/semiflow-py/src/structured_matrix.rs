@@ -9,7 +9,6 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-
 use semiflow::{
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     ChernoffSemigroup, Grid1D,

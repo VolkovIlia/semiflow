@@ -8,23 +8,21 @@
 //! dispatches to `catmull_rom_f32` (4-lane NEON / scalar).
 //!
 //! Determinism contract (ADR-0175): SIMD output is byte-identical to scalar
-//! via FORCE_SCALAR hook; verified by `SIMD_F32_BIT_EQUAL` gate.
+//! via `FORCE_SCALAR` hook; verified by `SIMD_F32_BIT_EQUAL` gate.
+//!
+//! `cast_possible_truncation`: This module intentionally casts f64 constants
+//! and coefficients to f32 — precision loss is the explicit design (ADR-0175).
+#![allow(clippy::cast_possible_truncation)]
 
+pub(super) use diffusion_zeta_common::{
+    validate_a_x_generic as validate_a_x_f32, validate_tau_generic as validate_tau_f32,
+};
 use num_traits::Float;
 
-use crate::{
-    diffusion_zeta_common,
-    error::SemiflowError,
-    grid_fn::GridFn1D,
-};
-
+use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
 #[cfg(feature = "simd")]
 use crate::simd::{F32x8, SimdF32x8};
-
-use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
-
-pub(super) use diffusion_zeta_common::{validate_a_x_generic as validate_a_x_f32,
-                                       validate_tau_generic as validate_tau_f32};
+use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
 // ---------------------------------------------------------------------------
 // γ⁶-A baseline (f32, uses sample_f32 with catmull_rom_f32 SIMD dispatcher).
@@ -49,19 +47,19 @@ pub(super) fn gamma6_a_baseline_f32(
     let a_pre = (dc.a)(x_pre);
     validate_a_x_f32(a_pre, x_pre)?;
 
-    let h   = 2.0_f32 * Float::sqrt(a_pre * tau);
+    let h = 2.0_f32 * Float::sqrt(a_pre * tau);
     let h_3 = 2.0_f32 * Float::sqrt(3.0_f32 * a_pre * tau);
     let j_5 = 2.0_f32 * Float::sqrt(kp * a_pre * tau);
 
     let post = |xr: f32| xr + s_half * (dc.a_prime)(xr);
 
-    let v_c  = sample_f32(f, post(x_pre))?;
-    let vnp  = sample_f32(f, post(x_pre + h))?;
-    let vnn  = sample_f32(f, post(x_pre - h))?;
-    let vfp  = sample_f32(f, post(x_pre + h_3))?;
-    let vfn  = sample_f32(f, post(x_pre - h_3))?;
-    let vep  = sample_f32(f, post(x_pre + j_5))?;
-    let ven  = sample_f32(f, post(x_pre - j_5))?;
+    let v_c = sample_f32(f, post(x_pre))?;
+    let vnp = sample_f32(f, post(x_pre + h))?;
+    let vnn = sample_f32(f, post(x_pre - h))?;
+    let vfp = sample_f32(f, post(x_pre + h_3))?;
+    let vfn = sample_f32(f, post(x_pre - h_3))?;
+    let vep = sample_f32(f, post(x_pre + j_5))?;
+    let ven = sample_f32(f, post(x_pre - j_5))?;
 
     Ok(w0 * v_c + w1 * (vnp + vnn) + w2 * (vfp + vfn) + w3 * (vep + ven))
 }
@@ -94,8 +92,18 @@ pub(super) fn fd9_scalar_f32(
     let fb3 = sample_f32(f, x + 4.0_f32 * delta)?;
 
     // Cast f64 coefficients to f32.
-    let (c0, c1, c2, c3) = (coeffs[0] as f32, coeffs[1] as f32, coeffs[2] as f32, coeffs[3] as f32);
-    let (c5, c6, c7, c8) = (coeffs[5] as f32, coeffs[6] as f32, coeffs[7] as f32, coeffs[8] as f32);
+    let (c0, c1, c2, c3) = (
+        coeffs[0] as f32,
+        coeffs[1] as f32,
+        coeffs[2] as f32,
+        coeffs[3] as f32,
+    );
+    let (c5, c6, c7, c8) = (
+        coeffs[5] as f32,
+        coeffs[6] as f32,
+        coeffs[7] as f32,
+        coeffs[8] as f32,
+    );
     let c4 = coeffs[4] as f32;
 
     // Reduction tree matching F32x8Scalar::horizontal_sum:
@@ -103,7 +111,7 @@ pub(super) fn fd9_scalar_f32(
     let lo = (fa0 * c0 + fa1 * c1) + (fa2 * c2 + fa3 * c3);
     let hi = (fb0 * c5 + fb1 * c6) + (fb2 * c7 + fb3 * c8);
     let sum_ab = lo + hi;
-    let tail   = c4 * sample_f32(f, x)?;
+    let tail = c4 * sample_f32(f, x)?;
 
     let denom = Float::powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
@@ -136,15 +144,21 @@ pub(super) fn fd9_simd_f32(
 
     let vals: [f32; 8] = [fa0, fa1, fa2, fa3, fb0, fb1, fb2, fb3];
     let ws: [f32; 8] = [
-        coeffs[0] as f32, coeffs[1] as f32, coeffs[2] as f32, coeffs[3] as f32,
-        coeffs[5] as f32, coeffs[6] as f32, coeffs[7] as f32, coeffs[8] as f32,
+        coeffs[0] as f32,
+        coeffs[1] as f32,
+        coeffs[2] as f32,
+        coeffs[3] as f32,
+        coeffs[5] as f32,
+        coeffs[6] as f32,
+        coeffs[7] as f32,
+        coeffs[8] as f32,
     ];
 
     let vv = F32x8::load_unaligned(&vals);
     let vw = F32x8::load_unaligned(&ws);
     let sum_ab = vv.mul(vw).horizontal_sum();
 
-    let tail  = (coeffs[4] as f32) * sample_f32(f, x)?;
+    let tail = (coeffs[4] as f32) * sample_f32(f, x)?;
     let denom = Float::powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
 }
@@ -200,9 +214,11 @@ pub(super) fn zeta6_correction_f32(
     let fd2 = fd9_f32(f, x, delta, &C2_9, 2)?;
     let fd3 = fd9_f32(f, x, delta, &C3_9, 3)?;
 
-    Ok(tau * tau * (a_val * a_prime_val * fd3
-        + (a_val * a_dbl_val / 2.0_f32) * fd2
-        + (a_prime_val * a_dbl_val / 4.0_f32) * fd1))
+    Ok(tau
+        * tau
+        * (a_val * a_prime_val * fd3
+            + (a_val * a_dbl_val / 2.0_f32) * fd2
+            + (a_prime_val * a_dbl_val / 4.0_f32) * fd1))
 }
 
 // ---------------------------------------------------------------------------
@@ -229,11 +245,13 @@ pub(super) fn apply_at_node_f32(
 ///
 /// Mirrors `GridFn1D<f64>::sample` → `Grid1D<f64>::interp` → `cubic_hermite_at`
 /// → `catmull_rom` (SIMD dispatcher), but for f32 values.
+// Result<> is kept for API parity with the f64 sample path — callers use `?`.
+#[allow(clippy::unnecessary_wraps)]
 #[inline]
 fn sample_f32(f: &GridFn1D<f32>, x: f32) -> Result<f32, SemiflowError> {
-    use crate::boundary::bc_value_generic;
-    use crate::grid_cubic::catmull_rom_f32;
     use num_traits::ToPrimitive;
+
+    use crate::{boundary::bc_value_generic, grid_cubic::catmull_rom_f32};
 
     let grid = &f.grid;
     let values = &f.values;
@@ -247,9 +265,9 @@ fn sample_f32(f: &GridFn1D<f32>, x: f32) -> Result<f32, SemiflowError> {
     let bnd = grid.boundary;
     let n = grid.n;
     let pm1 = bc_value_generic(bnd, values, n, idx - 1, dx);
-    let p0  = bc_value_generic(bnd, values, n, idx,     dx);
-    let p1  = bc_value_generic(bnd, values, n, idx + 1, dx);
-    let p2  = bc_value_generic(bnd, values, n, idx + 2, dx);
+    let p0 = bc_value_generic(bnd, values, n, idx, dx);
+    let p1 = bc_value_generic(bnd, values, n, idx + 1, dx);
+    let p2 = bc_value_generic(bnd, values, n, idx + 2, dx);
 
     Ok(catmull_rom_f32(pm1, p0, p1, p2, s))
 }

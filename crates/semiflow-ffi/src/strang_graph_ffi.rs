@@ -22,20 +22,19 @@
 //! Build with `--profile release-ffi` (`panic = "unwind"`).
 
 #![allow(unsafe_code)]
-#![allow(
-    clippy::cast_possible_truncation,
-)]
+#![allow(clippy::cast_possible_truncation)]
 
-use std::sync::Arc;
-use std::os::raw::c_double;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{
-    ChernoffSemigroup, ChernoffFunction, Graph, GraphHeatChernoff,
-    GraphSignal, strang_graph::StrangSplitGraph,
+    strang_graph::StrangSplitGraph, ChernoffFunction, ChernoffSemigroup, Graph, GraphHeatChernoff,
+    GraphSignal,
 };
 
-use crate::graph_ffi::{GraphInner, SmfGraph};
-use crate::status::SemiflowStatus;
+use crate::{
+    graph_ffi::{GraphInner, SmfGraph},
+    status::SemiflowStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque handle

@@ -45,14 +45,8 @@
 #![allow(clippy::cast_possible_truncation)] // f64→f32 casts are intentional (f32 precision test)
 
 use semiflow::{
-    chernoff::ApplyChernoffExt,
-    diffusion::DiffusionChernoff,
-    grid::Grid1D,
-    grid2d::Grid2D,
-    grid3d::Grid3D,
-    grid_fn2d::GridFn2D,
-    grid_fn3d::GridFn3D,
-    strang2d::Strang2D,
+    chernoff::ApplyChernoffExt, diffusion::DiffusionChernoff, grid::Grid1D, grid2d::Grid2D,
+    grid3d::Grid3D, grid_fn2d::GridFn2D, grid_fn3d::GridFn3D, strang2d::Strang2D,
     strang3d::Strang3D,
 };
 
@@ -155,20 +149,8 @@ fn run_2d_f64(n: usize) -> GridFn2D<f64> {
     let gx = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D x f64");
     let gy = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D y f64");
     let g2 = Grid2D::<f64>::new(gx, gy);
-    let dx = DiffusionChernoff::<f64>::new(
-        a_f64,
-        zero_f64,
-        zero_f64,
-        DIFFUSION_A,
-        gx,
-    );
-    let dy = DiffusionChernoff::<f64>::new(
-        a_f64,
-        zero_f64,
-        zero_f64,
-        DIFFUSION_A,
-        gy,
-    );
+    let dx = DiffusionChernoff::<f64>::new(a_f64, zero_f64, zero_f64, DIFFUSION_A, gx);
+    let dy = DiffusionChernoff::<f64>::new(a_f64, zero_f64, zero_f64, DIFFUSION_A, gy);
     let s2 = Strang2D::<_, _, f64>::new(dx, dy);
     let mut u = GridFn2D::<f64>::from_fn(g2, |x, y| (-x * x - y * y).exp());
     for _ in 0..N_STEPS {
@@ -203,20 +185,8 @@ fn run_2d_f32(n: usize) -> GridFn2D<f32> {
     let gx = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D x f32");
     let gy = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D y f32");
     let g2 = Grid2D::<f32>::new(gx, gy);
-    let dx = DiffusionChernoff::<f32>::new(
-        a_f32,
-        zero_f32,
-        zero_f32,
-        DIFFUSION_A,
-        gx,
-    );
-    let dy = DiffusionChernoff::<f32>::new(
-        a_f32,
-        zero_f32,
-        zero_f32,
-        DIFFUSION_A,
-        gy,
-    );
+    let dx = DiffusionChernoff::<f32>::new(a_f32, zero_f32, zero_f32, DIFFUSION_A, gx);
+    let dy = DiffusionChernoff::<f32>::new(a_f32, zero_f32, zero_f32, DIFFUSION_A, gy);
     let s2 = Strang2D::<_, _, f32>::new(dx, dy);
     let mut u = GridFn2D::<f32>::from_fn_generic(g2, |x, y| (-x * x - y * y).exp());
     for _ in 0..N_STEPS {
@@ -256,27 +226,9 @@ fn run_3d_f64(n: usize) -> GridFn3D<f64> {
     let gy = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D y f64");
     let gz = Grid1D::new(X_MIN, X_MAX, n).expect("Grid1D z f64");
     let g3 = Grid3D::<f64>::new(gx, gy, gz).expect("Grid3D f64");
-    let dx = DiffusionChernoff::<f64>::new(
-        a_f64,
-        zero_f64,
-        zero_f64,
-        DIFFUSION_A,
-        gx,
-    );
-    let dy = DiffusionChernoff::<f64>::new(
-        a_f64,
-        zero_f64,
-        zero_f64,
-        DIFFUSION_A,
-        gy,
-    );
-    let dz = DiffusionChernoff::<f64>::new(
-        a_f64,
-        zero_f64,
-        zero_f64,
-        DIFFUSION_A,
-        gz,
-    );
+    let dx = DiffusionChernoff::<f64>::new(a_f64, zero_f64, zero_f64, DIFFUSION_A, gx);
+    let dy = DiffusionChernoff::<f64>::new(a_f64, zero_f64, zero_f64, DIFFUSION_A, gy);
+    let dz = DiffusionChernoff::<f64>::new(a_f64, zero_f64, zero_f64, DIFFUSION_A, gz);
     let s3 = Strang3D::<_, _, _, f64>::new(dx, dy, dz);
     let mut u = GridFn3D::<f64>::from_fn(g3, |x, y, z| (-x * x - y * y - z * z).exp());
     for _ in 0..N_STEPS {
@@ -316,27 +268,9 @@ fn run_3d_f32(n: usize) -> GridFn3D<f32> {
     let gy = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D y f32");
     let gz = Grid1D::<f32>::new_generic(xmin, xmax, n).expect("Grid1D z f32");
     let g3 = Grid3D::<f32>::new_generic(gx, gy, gz).expect("Grid3D f32");
-    let dx = DiffusionChernoff::<f32>::new(
-        a_f32,
-        zero_f32,
-        zero_f32,
-        DIFFUSION_A,
-        gx,
-    );
-    let dy = DiffusionChernoff::<f32>::new(
-        a_f32,
-        zero_f32,
-        zero_f32,
-        DIFFUSION_A,
-        gy,
-    );
-    let dz = DiffusionChernoff::<f32>::new(
-        a_f32,
-        zero_f32,
-        zero_f32,
-        DIFFUSION_A,
-        gz,
-    );
+    let dx = DiffusionChernoff::<f32>::new(a_f32, zero_f32, zero_f32, DIFFUSION_A, gx);
+    let dy = DiffusionChernoff::<f32>::new(a_f32, zero_f32, zero_f32, DIFFUSION_A, gy);
+    let dz = DiffusionChernoff::<f32>::new(a_f32, zero_f32, zero_f32, DIFFUSION_A, gz);
     let s3 = Strang3D::<_, _, _, f32>::new(dx, dy, dz);
     let mut u = GridFn3D::<f32>::from_fn_generic(g3, |x, y, z| (-x * x - y * y - z * z).exp());
     for _ in 0..N_STEPS {

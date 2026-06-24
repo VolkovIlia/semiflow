@@ -43,13 +43,15 @@ extern crate alloc;
 
 use num_complex::Complex;
 
-use crate::carnot_complex_helpers::{cplx_diffuse_x1, cplx_diffuse_x2};
-use crate::chernoff::{ChernoffFunction, Growth};
-use crate::error::SemiflowError;
-use crate::grid_nd::{GridFnND, GridND};
-use crate::hormander::HypoellipticChernoff;
-use crate::scratch::ScratchPool;
-use crate::state::State;
+use crate::{
+    carnot_complex_helpers::{cplx_diffuse_x1, cplx_diffuse_x2},
+    chernoff::{ChernoffFunction, Growth},
+    error::SemiflowError,
+    grid_nd::{GridFnND, GridND},
+    hormander::HypoellipticChernoff,
+    scratch::ScratchPool,
+    state::State,
+};
 
 // ─── γ⋆ constant ─────────────────────────────────────────────────────────────
 
@@ -87,7 +89,7 @@ pub struct CplxGridFn5 {
 }
 
 impl CplxGridFn5 {
-    /// Lift a real `GridFnND<f64,5>` to complex by embedding f64 → Complex<f64>.
+    /// Lift a real `GridFnND<f64,5>` to complex by embedding f64 → `Complex<f64>`.
     #[must_use]
     pub fn from_real(src: &GridFnND<f64, 5>) -> Self {
         let values = src.values.iter().map(|&v| Complex::new(v, 0.0)).collect();

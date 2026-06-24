@@ -21,10 +21,9 @@
 )]
 
 use proptest::prelude::*;
-use semiflow::chernoff::ChernoffFunction;
 use semiflow::{
-    ClosureObstacle, ConstantObstacle, DiffusionChernoff, Grid1D, GridFn1D, Obstacle,
-    ObstacleChernoff, ScratchPool,
+    chernoff::ChernoffFunction, ClosureObstacle, ConstantObstacle, DiffusionChernoff, Grid1D,
+    GridFn1D, Obstacle, ObstacleChernoff, ScratchPool,
 };
 
 // ---------------------------------------------------------------------------

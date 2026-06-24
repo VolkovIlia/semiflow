@@ -104,7 +104,11 @@ fn pack_psi(re: &[f64], im: &[f64]) -> Float64Array {
 /// Compute dx = (xmax − xmin) / (n − 1).
 #[allow(clippy::cast_precision_loss)]
 fn compute_dx(xmin: f64, xmax: f64, n: usize) -> f64 {
-    if n > 1 { (xmax - xmin) / (n as f64 - 1.0) } else { 1.0 }
+    if n > 1 {
+        (xmax - xmin) / (n as f64 - 1.0)
+    } else {
+        1.0
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -147,13 +151,25 @@ impl Schrodinger1D {
     /// # Errors
     /// Throws JS `Error` with `.kind` — see crate-level error table.
     #[wasm_bindgen(constructor)]
-    pub fn new(xmin: f64, xmax: f64, n: usize, psi0: &Float64Array) -> Result<Schrodinger1D, JsValue> {
+    pub fn new(
+        xmin: f64,
+        xmax: f64,
+        n: usize,
+        psi0: &Float64Array,
+    ) -> Result<Schrodinger1D, JsValue> {
         let (re, im) = extract_psi(psi0, n)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let kinetic = Diffusion4thChernoff::new(unit_a_s, zero_d_s, zero_d_s, 1.0, grid);
         let chernoff = SchrodingerChernoff::new(kinetic, |_| 0.0).map_err(|e| err_to_js(&e))?;
         let dx = compute_dx(xmin, xmax, n);
-        Ok(Schrodinger1D { chernoff, re, im, grid, dx, n })
+        Ok(Schrodinger1D {
+            chernoff,
+            re,
+            im,
+            grid,
+            dx,
+            n,
+        })
     }
 
     /// Advance the wavefunction by time `t` using `n_steps` Chernoff steps.

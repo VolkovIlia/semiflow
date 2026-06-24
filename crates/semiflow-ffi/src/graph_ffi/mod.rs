@@ -3,7 +3,7 @@
 //! Mirrors the 1D heat ABI in `ffi.rs`. Each entry point:
 //! 1. Null-checks input pointers before `catch_panic!`.
 //! 2. Wraps its body in `catch_panic!` to convert Rust panics to
-//!    [`SemiflowStatus::Panic`] (UB-safe ABI boundary).
+//!    `SemiflowStatus::Panic` (UB-safe ABI boundary).
 //! 3. Uses `Box::into_raw` / `Box::from_raw` for the opaque handle idiom.
 //!
 //! # Ownership model
@@ -24,7 +24,7 @@
 //!
 //! Build the cdylib with `--profile release-ffi` (workspace `[profile.release-ffi]`
 //! sets `panic = "unwind"`). Every entry point uses `catch_panic!`; a panic is
-//! caught and returned as [`SemiflowStatus::Panic`] (value 99).
+//! caught and returned as `SemiflowStatus::Panic` (value 99).
 //!
 //! # Safety invariants (per function)
 //!
@@ -38,10 +38,9 @@
 
 use std::sync::Arc;
 
-use semiflow::scratch::ScratchPool;
 use semiflow::{
-    ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian, LaplacianAtTime,
-    MagnusGraphHeatChernoff,
+    scratch::ScratchPool, ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian,
+    LaplacianAtTime, MagnusGraphHeatChernoff,
 };
 
 mod ghc_mghc;

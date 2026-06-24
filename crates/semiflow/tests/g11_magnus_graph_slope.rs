@@ -22,7 +22,7 @@ use semiflow::{
     graph::{Graph, Laplacian},
     graph_signal::GraphSignal,
     magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff},
-    SemiflowError, ScratchPool, State,
+    ScratchPool, SemiflowError, State,
 };
 
 // ---------------------------------------------------------------------------

@@ -35,15 +35,14 @@
 #![allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
+    clippy::cast_sign_loss
 )]
 
-use std::sync::Arc;
-use std::os::raw::c_double;
+use std::{os::raw::c_double, sync::Arc};
 
 use semiflow::{
-    ChernoffSemigroup,
     quantum_graph::{QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
+    ChernoffSemigroup,
 };
 
 use crate::status::SemiflowStatus;

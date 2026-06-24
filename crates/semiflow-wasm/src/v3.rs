@@ -28,11 +28,10 @@
 
 #![allow(unsafe_code)]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     ChernoffFunction, DiffusionChernoff, Evolver, Grid1D, GridFn1D, Growth, ScratchPool,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

@@ -34,8 +34,12 @@ use crate::error::{err_to_js, make_js_error};
 // Coefficient fn-pointers (unit / zero) — fn-pointer variant (Copy-friendly)
 // ---------------------------------------------------------------------------
 
-extern "Rust" fn unit_a_adj(_: f64) -> f64 { 1.0 }
-extern "Rust" fn zero_adj(_: f64) -> f64 { 0.0 }
+extern "Rust" fn unit_a_adj(_: f64) -> f64 {
+    1.0
+}
+extern "Rust" fn zero_adj(_: f64) -> f64 {
+    0.0
+}
 
 // ---------------------------------------------------------------------------
 // 5-kernel enum (avoids Box<dyn ChernoffFunction>)
@@ -227,7 +231,10 @@ impl Adjoint1D {
         let kv = build_adj_kernel(xmin, xmax, n, kernel, self_adjoint)?;
         let grid = Grid1D::new(xmin, xmax, n).map_err(|e| err_to_js(&e))?;
         let current = GridFn1D::new(grid, buf).map_err(|e| err_to_js(&e))?;
-        Ok(Adjoint1D { kernel: kv, current })
+        Ok(Adjoint1D {
+            kernel: kv,
+            current,
+        })
     }
 
     /// Advance the adjoint state by time `t` using `n_steps` steps.
@@ -247,8 +254,8 @@ impl Adjoint1D {
         let tau = t / n_steps as f64;
         let grid = self.current.grid;
         let input = self.current.values.clone();
-        let out = run_adj_evolve(&self.kernel, grid, input, tau, n_steps)
-            .map_err(|e| err_to_js(&e))?;
+        let out =
+            run_adj_evolve(&self.kernel, grid, input, tau, n_steps).map_err(|e| err_to_js(&e))?;
         self.current.values.clone_from(&out);
         Ok(fn_to_js_adj(&out))
     }

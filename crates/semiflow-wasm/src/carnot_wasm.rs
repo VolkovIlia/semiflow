@@ -72,7 +72,11 @@ impl ComplexTripleJumpWasm {
         validate_domain(domain_lo, domain_hi, n_per_axis)?;
         // Eagerly construct to catch γ⋆ / inner kernel errors.
         ComplexTripleJump::new().map_err(|e| err_to_js(&e))?;
-        Ok(Self { domain_lo, domain_hi, n_per_axis })
+        Ok(Self {
+            domain_lo,
+            domain_hi,
+            n_per_axis,
+        })
     }
 
     /// Apply one order-4 step; return the real projection `Re(Ψ(τ)f)`.
@@ -132,11 +136,7 @@ impl ComplexTripleJumpWasm {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn build_grid(
-    lo: f64,
-    hi: f64,
-    n: usize,
-) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
+fn build_grid(lo: f64, hi: f64, n: usize) -> Result<GridND<f64, D>, semiflow::SemiflowError> {
     let ax = Grid1D::new(lo, hi, n)?;
     GridND::new([ax; D])
 }
@@ -146,7 +146,10 @@ fn validate_domain(lo: f64, hi: f64, n: usize) -> Result<(), JsValue> {
         return Err(make_js_error("OutOfDomain", "domain bounds must be finite"));
     }
     if lo >= hi {
-        return Err(make_js_error("GridMismatch", "domain_lo must be < domain_hi"));
+        return Err(make_js_error(
+            "GridMismatch",
+            "domain_lo must be < domain_hi",
+        ));
     }
     if n < 4 {
         return Err(make_js_error("GridMismatch", "n_per_axis must be >= 4"));

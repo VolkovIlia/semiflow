@@ -39,7 +39,7 @@
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::similar_names,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 extern crate alloc;
@@ -340,7 +340,11 @@ fn build_kolmogorov(
     let x0 = alloc::boxed::Box::new(KolmogorovPhaseSpace::x0_drift());
     let x1 = alloc::boxed::Box::new(KolmogorovPhaseSpace::x1_diffusion());
     let _ = KolmogorovHypoelliptic::<f64>::new(x0, [x1])?;
-    Ok(KolmogorovState { grid, current: u0.to_vec(), size })
+    Ok(KolmogorovState {
+        grid,
+        current: u0.to_vec(),
+        size,
+    })
 }
 
 // ─── Compute helper ───────────────────────────────────────────────────────────
@@ -367,7 +371,10 @@ pub(crate) fn check_len(
     expected: usize,
 ) -> Result<(), semiflow::SemiflowError> {
     if got != expected {
-        return Err(semiflow::SemiflowError::DomainViolation { what, value: got as f64 });
+        return Err(semiflow::SemiflowError::DomainViolation {
+            what,
+            value: got as f64,
+        });
     }
     Ok(())
 }

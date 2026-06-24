@@ -9,13 +9,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_possible_truncation)] // PCG u128→u64 bitwise truncation; intentional bit extraction
-#![allow(clippy::cast_precision_loss)]      // u32/usize→f64 for arithmetic; values ≤ 8192 ≤ 2^52
-#![allow(clippy::cast_lossless)]            // u32→f64 widening, always exact for u32
-#![allow(clippy::needless_range_loop)]      // index loops do index-cross arithmetic (matrix ops)
+#![allow(clippy::cast_precision_loss)] // u32/usize→f64 for arithmetic; values ≤ 8192 ≤ 2^52
+#![allow(clippy::cast_lossless)] // u32→f64 widening, always exact for u32
+#![allow(clippy::needless_range_loop)] // index loops do index-cross arithmetic (matrix ops)
 
-use semiflow::{
-    ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool,
-};
+use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
 const M: usize = 3;
 const N_GRID: usize = 128;

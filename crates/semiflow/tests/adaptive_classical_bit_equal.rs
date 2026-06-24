@@ -270,8 +270,9 @@ fn wave4_classical_final_state_bit_equal_to_v1() {
 
 #[cfg(test)]
 mod proptest_classical_pi {
-    use super::legacy;
     use semiflow::{ClassicalPI, StepController};
+
+    use super::legacy;
 
     /// Verify `ClassicalPI::propose_accept` is within 2 ULP of v1.0.0 `pi_step_factor`.
     ///

@@ -1,57 +1,27 @@
-//! FFI surface for `Laplacian<f64>` introspection + `GraphTraj` (degenerate)
-//! (C-parity pass, ADR-0028/0171).
+//! FFI surface for `Laplacian<f64>` introspection + `GraphTraj` (C-parity, ADR-0028/0171).
 //!
-//! Mirrors `semiflow-py` `laplacian_introspect.rs` + `structured_traj.rs`
-//! (`PyLaplacian` introspection methods and `PyGraphTraj` degenerate ctor).
+//! **`SmfLaplacian`**: `combinatorial`/`normalized` ctors, `free`, `n_nodes`,
+//! `is_combinatorial`, `is_normalized`, `spectral_bound`, `row_ptr`, `col_idx`,
+//! `vals`, `to_dense`; buffers freed via `smf_free_buf_usize`/`smf_free_buf_f64`.
 //!
-//! ## Entry points — `SmfLaplacian`
-//!
-//! - `smf_graph_laplacian_combinatorial(g, out)` → `SemiflowStatus`
-//! - `smf_graph_laplacian_normalized(g, out)`    → `SemiflowStatus`
-//! - `smf_laplacian_free(lap)` — null-safe
-//! - `smf_laplacian_n_nodes(lap)` → `usize` (0 if null)
-//! - `smf_laplacian_is_combinatorial(lap)` → `bool`
-//! - `smf_laplacian_is_normalized(lap)` → `bool`
-//! - `smf_laplacian_spectral_bound(lap)` → `f64`
-//! - `smf_laplacian_row_ptr(lap, out, len)` → `SemiflowStatus`
-//! - `smf_laplacian_col_idx(lap, out, len)` → `SemiflowStatus`
-//! - `smf_laplacian_vals(lap, out, len)`    → `SemiflowStatus`
-//! - `smf_laplacian_to_dense(lap, out, n)`  → `SemiflowStatus`
-//!
-//! ## Entry points — `SmfGraphTraj`
-//!
-//! - `smf_graph_traj_new(g, t_horizon, out)` → `SemiflowStatus`
-//! - `smf_graph_traj_free(traj)` — null-safe
-//! - `smf_graph_traj_n_nodes(traj)` → `usize` (0 if null)
-//! - `smf_graph_traj_n_segments(traj)` → `usize` (0 if null)
-//! - `smf_graph_traj_t_horizon(traj)` → `f64` (0.0 if null)
-//!
-//! ## Memory model for CSR / dense read-back
-//!
-//! Flat buffers are returned as freshly `Box`-allocated `Vec`s leaked via
-//! `Box::into_raw(boxed_slice)`.  The caller frees each buffer with
-//! `smf_free_buf_usize` / `smf_free_buf_f64` (exported below), which mirror
-//! the `smf_free` pattern used elsewhere.  Do NOT call `free()` from C —
-//! the allocator must match.
-//!
-//! ## Panic safety
-//!
-//! Every `extern "C"` body is wrapped in `catch_panic!`.
-//! Build with `--profile release-ffi` (`panic = "unwind"`).
+//! **`SmfGraphTraj`**: degenerate (fixed-topology, 1-segment) `new`/`free`/
+//! `n_nodes`/`n_segments`/`t_horizon`. Build with `--profile release-ffi`.
 
 #![allow(unsafe_code)]
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_precision_loss,
+    clippy::cast_precision_loss
 )]
 
 use std::sync::Arc;
 
 use semiflow::{Graph, Laplacian, LaplacianKind};
 
-use crate::graph_ffi::{GraphInner, SmfGraph};
-use crate::status::SemiflowStatus;
+use crate::{
+    graph_ffi::{GraphInner, SmfGraph},
+    status::SemiflowStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque handle structs
@@ -242,21 +212,11 @@ pub unsafe extern "C" fn smf_laplacian_spectral_bound(lap: *const SmfLaplacian) 
 // Caller frees each buffer with `smf_free_buf_usize` / `smf_free_buf_f64`.
 // Do NOT use C `free()` — the allocator must match Rust's global allocator.
 
-/// Copy the CSR row-pointer array (`len = n_nodes + 1`) into a newly
-/// allocated `*usize` buffer.  `*out` is set to the buffer start;
-/// `*len` is set to `n_nodes + 1`.
-///
-/// ## Return values
-/// - `Ok` (0)      — success.
-/// - `NullPtr` (5) — any argument is null.
-/// - `Panic` (99)  — internal Rust panic.
-///
-/// ## Ownership
+/// Copy CSR row-pointer array (`len = n_nodes + 1`) into a heap `*usize` buffer.
 /// Caller frees with `smf_free_buf_usize(*out, *len)`.
 ///
 /// # Safety
-/// - `lap` must be a valid pointer from `smf_graph_laplacian_*`.
-/// - `out` and `len` must be valid non-null write pointers.
+/// `lap` is a valid `smf_graph_laplacian_*` pointer; `out`/`len` are non-null.
 #[no_mangle]
 pub unsafe extern "C" fn smf_laplacian_row_ptr(
     lap: *const SmfLaplacian,
@@ -272,7 +232,7 @@ pub unsafe extern "C" fn smf_laplacian_row_ptr(
         let src = inner.lap.row_ptr();
         let boxed: Box<[usize]> = src.to_vec().into_boxed_slice();
         let n = boxed.len();
-        let ptr = Box::into_raw(boxed) as *mut usize;
+        let ptr = Box::into_raw(boxed).cast::<usize>();
         unsafe {
             *out = ptr;
             *len = n;
@@ -281,15 +241,11 @@ pub unsafe extern "C" fn smf_laplacian_row_ptr(
     })
 }
 
-/// Copy the CSR column-index array (`len = n_directed_edges`) into a newly
-/// allocated `*usize` buffer.
+/// Copy CSR column-index array (`len = n_directed_edges`, u32 widened to usize).
+/// Caller frees with `smf_free_buf_usize(*out, *len)`.
 ///
-/// The `col_idx` values are `u32` internally; they are widened to `usize`
-/// for a uniform index type matching `row_ptr`.
-///
-/// ## Return values / Ownership — same as `smf_laplacian_row_ptr`.
-///
-/// # Safety — same as `smf_laplacian_row_ptr`.
+/// # Safety
+/// Same as `smf_laplacian_row_ptr`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_laplacian_col_idx(
     lap: *const SmfLaplacian,
@@ -307,7 +263,7 @@ pub unsafe extern "C" fn smf_laplacian_col_idx(
         let v: Vec<usize> = src.iter().map(|&x| x as usize).collect();
         let boxed: Box<[usize]> = v.into_boxed_slice();
         let n = boxed.len();
-        let ptr = Box::into_raw(boxed) as *mut usize;
+        let ptr = Box::into_raw(boxed).cast::<usize>();
         unsafe {
             *out = ptr;
             *len = n;
@@ -316,13 +272,11 @@ pub unsafe extern "C" fn smf_laplacian_col_idx(
     })
 }
 
-/// Copy the CSR value array (`len = n_directed_edges`) into a newly
-/// allocated `*f64` buffer.
+/// Copy CSR value array (`len = n_directed_edges`) into a heap `*f64` buffer.
+/// Caller frees with `smf_free_buf_f64(*out, *len)`.
 ///
-/// ## Return values / Ownership — same as `smf_laplacian_row_ptr`
-/// (free with `smf_free_buf_f64`).
-///
-/// # Safety — same as `smf_laplacian_row_ptr`.
+/// # Safety
+/// Same as `smf_laplacian_row_ptr`.
 #[no_mangle]
 pub unsafe extern "C" fn smf_laplacian_vals(
     lap: *const SmfLaplacian,
@@ -338,7 +292,7 @@ pub unsafe extern "C" fn smf_laplacian_vals(
         let src = inner.lap.vals();
         let boxed: Box<[f64]> = src.to_vec().into_boxed_slice();
         let n = boxed.len();
-        let ptr = Box::into_raw(boxed) as *mut f64;
+        let ptr = Box::into_raw(boxed).cast::<f64>();
         unsafe {
             *out = ptr;
             *len = n;
@@ -377,9 +331,8 @@ pub unsafe extern "C" fn smf_laplacian_to_dense(
         // SAFETY: caller guarantees live Box<LaplacianInner>.
         let inner = unsafe { &*lap.cast::<LaplacianInner>() };
         let nn = inner.lap.n_nodes();
-        let size = match nn.checked_mul(nn) {
-            Some(s) => s,
-            None => return SemiflowStatus::OutOfDomain,
+        let Some(size) = nn.checked_mul(nn) else {
+            return SemiflowStatus::OutOfDomain;
         };
         let mut buf = vec![0.0_f64; size];
         let row_ptr = inner.lap.row_ptr();
@@ -392,7 +345,7 @@ pub unsafe extern "C" fn smf_laplacian_to_dense(
             }
         }
         let boxed: Box<[f64]> = buf.into_boxed_slice();
-        let ptr = Box::into_raw(boxed) as *mut f64;
+        let ptr = Box::into_raw(boxed).cast::<f64>();
         unsafe {
             *out = ptr;
             *n = nn;
@@ -401,19 +354,10 @@ pub unsafe extern "C" fn smf_laplacian_to_dense(
     })
 }
 
-// ---------------------------------------------------------------------------
-// Buffer free helpers (callers use these for CSR / dense read-back)
-// ---------------------------------------------------------------------------
-
-/// Free a `usize` buffer previously returned by `smf_laplacian_row_ptr` or
-/// `smf_laplacian_col_idx`.  Null-safe.
-///
-/// `len` must exactly match the length written to `*len` by the read-back
-/// function — it is used to reconstruct the correct `Box<[usize]>`.
+/// Free a `usize` buffer from `smf_laplacian_row_ptr` or `smf_laplacian_col_idx`. Null-safe.
 ///
 /// # Safety
-/// - `buf` must be null or a pointer from `smf_laplacian_row_ptr` /
-///   `smf_laplacian_col_idx`, with the matching `len`.
+/// `buf` is null or a matching `(ptr, len)` from the read-back function.
 #[no_mangle]
 pub unsafe extern "C" fn smf_free_buf_usize(buf: *mut usize, len: usize) {
     if buf.is_null() {
@@ -425,14 +369,10 @@ pub unsafe extern "C" fn smf_free_buf_usize(buf: *mut usize, len: usize) {
     }));
 }
 
-/// Free a `f64` buffer previously returned by `smf_laplacian_vals` or
-/// `smf_laplacian_to_dense`.  Null-safe.
-///
-/// `len` must match the total number of elements (for `to_dense` that is `n*n`).
+/// Free a `f64` buffer from `smf_laplacian_vals`/`smf_laplacian_to_dense`. Null-safe.
 ///
 /// # Safety
-/// - `buf` must be null or a pointer from `smf_laplacian_vals` /
-///   `smf_laplacian_to_dense`, with the matching `len`.
+/// `buf` is null or a matching `(ptr, len)` from the read-back function.
 #[no_mangle]
 pub unsafe extern "C" fn smf_free_buf_f64(buf: *mut f64, len: usize) {
     if buf.is_null() {
@@ -447,7 +387,6 @@ pub unsafe extern "C" fn smf_free_buf_f64(buf: *mut f64, len: usize) {
 // ---------------------------------------------------------------------------
 // SmfGraphTraj — degenerate fixed-topology constructor
 // ---------------------------------------------------------------------------
-
 /// Build a degenerate fixed-topology `GraphTraj` (1 segment, constant
 /// combinatorial Laplacian, horizon `t_horizon`).
 ///

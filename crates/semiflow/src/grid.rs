@@ -22,12 +22,11 @@ use alloc::vec::Vec;
 
 use num_traits::{float::FloatCore, Float};
 
-use crate::{error::SemiflowError, float::SemiflowFloat, grid_cubic::catmull_rom};
-
-// Re-export public boundary types so `use crate::grid::BoundaryPolicy` (etc.) still compile.
-pub use crate::boundary::{BoundaryPolicy, InterpKind, OobPolicy};
 // Re-export pub(crate) helpers for internal consumers in this file.
 pub(crate) use crate::boundary::{bc_value, bc_value_generic};
+// Re-export public boundary types so `use crate::grid::BoundaryPolicy` (etc.) still compile.
+pub use crate::boundary::{BoundaryPolicy, InterpKind, OobPolicy};
+use crate::{error::SemiflowError, float::SemiflowFloat, grid_cubic::catmull_rom};
 
 // ---------------------------------------------------------------------------
 // Grid1D

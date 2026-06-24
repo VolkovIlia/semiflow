@@ -6,6 +6,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0-beta.2] — 2026-06-24
+
+- Add PyPI long description: `pyproject.toml` now includes `readme = "README.md"` so
+  the `semiflow-pde` PyPI page renders the full README instead of "no description".
+- Refresh `crates/semiflow-py/README.md` after the `semiflow-core → semiflow` crate
+  rename: stale `semiflow-core` references replaced with `semiflow` throughout.
+- **Suckless compliance**: 24 over-budget functions/files reduced to ≤50 lines/function
+  and ≤500 lines/file via additive extraction into helper functions and sibling
+  `*_tests_mod.rs` include files (no public API changes, no symbol renames).
+- **Stable rustfmt** (ADR-0182): removed nightly-only `imports_granularity` /
+  `group_imports` from `rustfmt.toml`; CI `fmt` job now runs on stable toolchain.
+- **Honest WASM Greeks parity gate** (ADR-0183): `G_BINDING_GREEKS_PARITY`
+  sub-test 4 (WASM) previously asserted 0-ULP byte-equality against a "golden"
+  that had been regenerated from the WASM binary's own output — a vacuous gate
+  (WASM == WASM) masking a real native↔wasm32 divergence. The golden is now the
+  legitimate SCALAR core hyper-dual sweep (Richardson-FD-verified, oracle
+  independent of the WASM SUT), and the WASM criterion is a ≤ 1e-9 per-array
+  relative-error tolerance. Root cause: native↔wasm32 libm `exp()` differs in
+  the last ULP and amplifies over 32 Chernoff steps + the hyper-dual chain rule
+  to ≤ 6.1e-11 relative; 0-ULP is physically unreachable (the hyper-dual path is
+  not SIMD, so a scalar golden does not close the gap). FFI/PyO3 sub-tests stay
+  0-ULP (native, shared libm).
+
 ## [0.9.0-beta.1] — 2026-06-24
 
 - **Completes `semiflow-core → semiflow` rename**: the initial `0.9.0-beta`

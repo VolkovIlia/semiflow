@@ -21,11 +21,13 @@
 
 use std::sync::Arc;
 
+use semiflow::{ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian};
 use wasm_bindgen::prelude::*;
 
-use crate::error::{err_to_js, make_js_error};
-use crate::graph_wasm::GraphPath;
-use semiflow::{ChernoffSemigroup, Graph, GraphHeat6thChernoff, GraphSignal, Laplacian};
+use crate::{
+    error::{err_to_js, make_js_error},
+    graph_wasm::GraphPath,
+};
 
 // ---------------------------------------------------------------------------
 // GraphHeat6

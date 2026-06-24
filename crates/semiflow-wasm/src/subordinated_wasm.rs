@@ -36,8 +36,12 @@ use crate::error::{err_to_js, make_js_error};
 // Coefficient stubs
 // ---------------------------------------------------------------------------
 
-extern "Rust" fn unit_a_sub(_: f64) -> f64 { 1.0 }
-extern "Rust" fn zero_sub(_: f64) -> f64 { 0.0 }
+extern "Rust" fn unit_a_sub(_: f64) -> f64 {
+    1.0
+}
+extern "Rust" fn zero_sub(_: f64) -> f64 {
+    0.0
+}
 
 // ---------------------------------------------------------------------------
 // SubordinatorEnum — binding-side dispatch enum (mirrors semiflow-py)
@@ -147,7 +151,6 @@ fn build_subordinated_wasm(
     Ok((kernel, current))
 }
 
-
 // ---------------------------------------------------------------------------
 // Subordinated1D — JS class
 // ---------------------------------------------------------------------------
@@ -198,8 +201,8 @@ impl Subordinated1D {
     ) -> Result<Subordinated1D, JsValue> {
         let buf = extract_u0_sub(u0, n)?;
         let sub = parse_sub(subordinator_tag, alpha, c)?;
-        let (kernel, current) =
-            build_subordinated_wasm(xmin, xmax, n, &buf, sub, n_nodes).map_err(|e| err_to_js(&e))?;
+        let (kernel, current) = build_subordinated_wasm(xmin, xmax, n, &buf, sub, n_nodes)
+            .map_err(|e| err_to_js(&e))?;
         Ok(Subordinated1D { kernel, current })
     }
 

@@ -30,8 +30,7 @@
 extern crate alloc;
 use core::marker::PhantomData;
 
-use crate::error::SemiflowError;
-use crate::float::SemiflowFloat;
+use crate::{error::SemiflowError, float::SemiflowFloat};
 
 // ─── Heisenberg group helpers (batch H6 split) ───────────────────────────────
 #[path = "hormander_helpers.rs"]
@@ -142,13 +141,13 @@ impl<F: SemiflowFloat> KolmogorovPhaseSpace<F> {
         Self { _f: PhantomData }
     }
 
-    /// Construct the drift field `X₀ = v·∂_x` (D=2, x[0]=`x_pos`, x[1]=v).
+    /// Construct the drift field `X₀ = v·∂_x` (D=2, `x[0]`=`x_pos`, `x[1]`=v).
     #[must_use]
     pub fn x0_drift() -> KolmogorovDriftX0<F> {
         KolmogorovDriftX0 { _f: PhantomData }
     }
 
-    /// Construct the diffusion field `X₁ = ∂_v` (D=2, x[0]=`x_pos`, x[1]=v).
+    /// Construct the diffusion field `X₁ = ∂_v` (D=2, `x[0]`=`x_pos`, `x[1]`=v).
     #[must_use]
     pub fn x1_diffusion() -> KolmogorovDiffusionX1<F> {
         KolmogorovDiffusionX1 { _f: PhantomData }

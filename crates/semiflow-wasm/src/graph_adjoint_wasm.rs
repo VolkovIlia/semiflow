@@ -32,19 +32,19 @@ pub use full::*;
 
 #[cfg(feature = "full")]
 mod full {
-    use js_sys::Float64Array;
-    use wasm_bindgen::prelude::*;
+    use std::sync::Arc;
 
+    use js_sys::Float64Array;
     use semiflow::{
         graph::Graph,
         graph_adjoint_presampled::{
             fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj,
         },
         graph_signal::GraphSignal,
+        scratch::ScratchPool,
         LaplacianKind, MagnusGraphHeatChernoff,
     };
-    use semiflow::scratch::ScratchPool;
-    use std::sync::Arc;
+    use wasm_bindgen::prelude::*;
 
     use crate::error::{err_to_js, make_js_error};
 
@@ -53,7 +53,11 @@ mod full {
     // -------------------------------------------------------------------------
 
     fn kind_from_u32(kind: u32) -> LaplacianKind {
-        if kind == 1 { LaplacianKind::SymNormalized } else { LaplacianKind::Combinatorial }
+        if kind == 1 {
+            LaplacianKind::SymNormalized
+        } else {
+            LaplacianKind::Combinatorial
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -85,7 +89,10 @@ mod full {
         pub fn abscissaTimes(t_horizon: f64, n_steps: u32) -> Result<Float64Array, JsValue> {
             let ns = n_steps as usize;
             if ns == 0 || !t_horizon.is_finite() || t_horizon <= 0.0 {
-                return Err(make_js_error("OutOfDomain", "tHorizon must be finite > 0, nSteps >= 1"));
+                return Err(make_js_error(
+                    "OutOfDomain",
+                    "tHorizon must be finite > 0, nSteps >= 1",
+                ));
             }
             let mut buf = vec![0.0_f64; 2 * ns];
             fill_abscissa_times(t_horizon, ns, &mut buf);
@@ -118,7 +125,10 @@ mod full {
             let ns = n_steps as usize;
             let nn = n_nodes as usize;
             if ns == 0 || !t_horizon.is_finite() || t_horizon <= 0.0 {
-                return Err(make_js_error("OutOfDomain", "tHorizon > 0 and nSteps >= 1 required"));
+                return Err(make_js_error(
+                    "OutOfDomain",
+                    "tHorizon > 0 and nSteps >= 1 required",
+                ));
             }
             let rp: Vec<usize> = row_ptr.iter().map(|&x| x as usize).collect();
             let ci: Vec<u32> = col_idx.to_vec();
@@ -136,7 +146,12 @@ mod full {
                 .map_err(|e| err_to_js(&e))?;
             let graph = Arc::new(Graph::<f64>::path(nn.max(1)));
             let tau = t_horizon / ns as f64;
-            Ok(GraphAdjointPresampled { ps, graph, tau, n_steps: ns })
+            Ok(GraphAdjointPresampled {
+                ps,
+                graph,
+                tau,
+                n_steps: ns,
+            })
         }
 
         /// Backward costate sweep `lambdaN → lambda0`.

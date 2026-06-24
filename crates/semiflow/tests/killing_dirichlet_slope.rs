@@ -38,8 +38,7 @@ use core::f64::consts::PI;
 
 use semiflow::{
     killing::{BoxRegion, KillingChernoff},
-    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind,
-    ScratchPool,
+    BoundaryPolicy, ChernoffFunction, DiffusionChernoff, Grid1D, GridFn1D, InterpKind, ScratchPool,
 };
 
 // ---------------------------------------------------------------------------

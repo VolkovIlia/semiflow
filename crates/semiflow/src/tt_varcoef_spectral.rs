@@ -98,17 +98,17 @@ pub(crate) fn residual_tridiag<F: SemiflowFloat>(
         let ip = (i + 1) % n;
         let im = (i + n - 1) % n;
         // half-point diffusion: a_{i±1/2} = (a[i] + a[i±1]) / 2
-        let ahp = (a[i] + a[ip]) * half;  // a_{i+1/2}
-        let ahm = (a[i] + a[im]) * half;  // a_{i-1/2}
-        // L_j row entries (divergence-form FD)
-        let lj_up   = ahp / dx2 + b[i] / two_dx;
-        let lj_mid  = -(ahp + ahm) / dx2 + (if v.is_empty() { F::zero() } else { v[i] });
-        let lj_lo   = ahm / dx2 - b[i] / two_dx;
+        let ahp = (a[i] + a[ip]) * half; // a_{i+1/2}
+        let ahm = (a[i] + a[im]) * half; // a_{i-1/2}
+                                         // L_j row entries (divergence-form FD)
+        let lj_up = ahp / dx2 + b[i] / two_dx;
+        let lj_mid = -(ahp + ahm) / dx2 + (if v.is_empty() { F::zero() } else { v[i] });
+        let lj_lo = ahm / dx2 - b[i] / two_dx;
         // Subtract a0·Lap_fd (periodic FD Laplacian with coef=1):
         //   Lap_fd: lower = 1/dx², center = -2/dx², upper = 1/dx²
-        lower[i]  = lj_lo  - a0 / dx2;
+        lower[i] = lj_lo - a0 / dx2;
         center[i] = lj_mid + two * a0 / dx2; // lj_mid - a0*(-2/dx²) = lj_mid + 2a0/dx²
-        upper[i]  = lj_up  - a0 / dx2;
+        upper[i] = lj_up - a0 / dx2;
     }
 
     (lower, center, upper)
@@ -215,12 +215,16 @@ pub(crate) fn varcoef_evolve<F: SemiflowFloat>(
         for j in 0..d {
             let step_tau = if j == d - 1 { tau } else { half_tau };
             let imag = apply_axis_sweep(&mut u, n, d, j, dx, coef, step_tau);
-            if imag > max_imag { max_imag = imag; }
+            if imag > max_imag {
+                max_imag = imag;
+            }
         }
         // Backward half-sweep: j=d-2..0 with τ/2 (j=d-1 already done).
         for j in (0..d - 1).rev() {
             let imag = apply_axis_sweep(&mut u, n, d, j, dx, coef, half_tau);
-            if imag > max_imag { max_imag = imag; }
+            if imag > max_imag {
+                max_imag = imag;
+            }
         }
     }
     (u, max_imag)
@@ -259,7 +263,9 @@ fn apply_axis_sweep<F: SemiflowFloat>(
                 line[idx] = u[i_outer * n * stride + idx * stride + i_inner];
             }
             let imag = varcoef_axis_step(&mut line, n, dx, a_coef, b_coef, v_coef, tau);
-            if imag > max_imag { max_imag = imag; }
+            if imag > max_imag {
+                max_imag = imag;
+            }
             // Write back
             for idx in 0..n {
                 u[i_outer * n * stride + idx * stride + i_inner] = line[idx];
@@ -304,12 +310,7 @@ impl<F: SemiflowFloat> S3VarCoefEvolver<F> {
     /// # Errors
     /// Returns [`crate::SemiflowError::S3OutOfClass`] if any `a_axis[j]` has
     /// length != `n`, any `a_axis[j][i] ≤ 0`, or shape mismatches.
-    pub fn new(
-        n: usize,
-        d: usize,
-        dx: F,
-        coef: AxisCoef<F>,
-    ) -> Result<Self, crate::SemiflowError> {
+    pub fn new(n: usize, d: usize, dx: F, coef: AxisCoef<F>) -> Result<Self, crate::SemiflowError> {
         validate_varcoef(n, d, dx, &coef)?;
         Ok(Self { n, d, dx, coef })
     }
@@ -332,7 +333,9 @@ impl<F: SemiflowFloat> S3VarCoefEvolver<F> {
                 detail: "u0 length must equal n^d",
             });
         }
-        Ok(varcoef_evolve(u0, self.n, self.d, self.dx, &self.coef, tau, nsteps))
+        Ok(varcoef_evolve(
+            u0, self.n, self.d, self.dx, &self.coef, tau, nsteps,
+        ))
     }
 }
 
@@ -349,10 +352,14 @@ fn validate_varcoef<F: SemiflowFloat>(
         });
     }
     if n < 2 {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "n must be >= 2" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "n must be >= 2",
+        });
     }
     if dx <= F::zero() {
-        return Err(crate::SemiflowError::S3OutOfClass { detail: "dx must be > 0" });
+        return Err(crate::SemiflowError::S3OutOfClass {
+            detail: "dx must be > 0",
+        });
     }
     for (j, a_j) in coef.a_axis.iter().enumerate() {
         if a_j.len() != n {
@@ -375,125 +382,10 @@ fn validate_varcoef<F: SemiflowFloat>(
 // §E — Unit tests (fast; normative per contract §1.6)
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::tt_drift_spectral::apply_drift_spectral_axis;
-    use core::f64::consts::TAU;
-
-    // ── §1.6b: constant a, b=0 → residual_tridiag all ≈ 0 (≤1e-13) ────
-    // R = L_j - a0·Lap_fd; for const a=a0 and b=0, R=0 exactly.
-    #[test]
-    fn residual_zero_for_constant_a_zero_drift() {
-        let n = 8usize;
-        let dx = TAU / n as f64;
-        let a0 = 0.7f64;
-        let a_coef: Vec<f64> = vec![a0; n];
-        let b_zero: Vec<f64> = vec![0.0; n];
-        let v_zero: Vec<f64> = vec![0.0; n];
-        let (rl, rm, ru) = residual_tridiag(&a_coef, &b_zero, &v_zero, dx, a0);
-        let max_r = rl.iter().chain(rm.iter()).chain(ru.iter())
-            .map(|x: &f64| x.abs())
-            .fold(0.0f64, f64::max);
-        assert!(
-            max_r < 1e-13,
-            "residual_tridiag nonzero for const a, b=0: max={max_r:.3e} (expected <1e-13)"
-        );
-    }
-
-    // ── P₂ identity when R=0 ────────────────────────────────────────────
-    #[test]
-    fn p2_identity_when_r_zero() {
-        let n = 6usize;
-        let sub = vec![0.0f64; n];
-        let main_d = vec![0.0f64; n];
-        let sup = vec![0.0f64; n];
-        let mut u: Vec<f64> = (0..n).map(|i| (i as f64 * 0.3 + 0.1).sin()).collect();
-        let u_orig = u.clone();
-        p2_apply_tridiag(&mut u, &sub, &main_d, &sup, 0.05);
-        let max_err = u.iter().zip(u_orig.iter()).map(|(p, q)| (p - q).abs())
-            .fold(0.0f64, f64::max);
-        assert!(max_err < 1e-15, "P₂(s)·u ≠ u when R=0: max_err={max_err:.3e}");
-    }
-
-    // ── §1.6a: const-a, b=0 step equals ADR-0164 spectral (≤1e-12) ─────
-    // When a is constant and b=0: R=0 → P₂=I → step = k(τ) = spectral(a0, 0, τ).
-    #[test]
-    fn varcoef_step_const_a_zero_drift_equals_spectral() {
-        let n = 9usize;
-        let dx = TAU / n as f64;
-        let a0 = 0.6f64;
-        let a_coef: Vec<f64> = vec![a0; n];
-        let b_zero: Vec<f64> = vec![0.0; n];
-        let v_zero: Vec<f64> = vec![0.0; n];
-        let tau = 0.02f64;
-        let mut line1: Vec<f64> = (0..n).map(|i| (i as f64 * 0.47 + 0.2).cos()).collect();
-        let mut line2 = line1.clone();
-
-        // varcoef path (P₂=I for const a, b=0, so pure k(τ))
-        varcoef_axis_step(&mut line1, n, dx, &a_coef, &b_zero, &v_zero, tau);
-
-        // ADR-0164 spectral path with b=0
-        apply_drift_spectral_axis(&mut line2, n, dx, a0, 0.0, tau);
-
-        let max_err = line1.iter().zip(line2.iter()).map(|(p, q)| (p - q).abs())
-            .fold(0.0f64, f64::max);
-        assert!(
-            max_err < 1e-12,
-            "varcoef(const a, b=0) ≠ spectral(a0,0): max_err={max_err:.3e} (expected <1e-12)"
-        );
-    }
-
-    // ── varcoef_evolve produces finite output ───────────────────────────
-    #[test]
-    fn evolve_produces_finite_output() {
-        let n = 5usize;
-        let d = 3usize;
-        let dx = TAU / n as f64;
-        let xs: Vec<f64> = (0..n).map(|i| i as f64 * dx).collect();
-        let coef = AxisCoef {
-            a_axis: (0..d)
-                .map(|j| xs.iter().map(|&x| 0.5 + 0.2 * (x + 0.4 * j as f64).cos()).collect())
-                .collect(),
-            b_axis: (0..d)
-                .map(|j| xs.iter().map(|&x| 0.3 * (x + 0.2 * j as f64).sin()).collect())
-                .collect(),
-            v_axis: (0..d).map(|_| vec![0.0f64; n]).collect(),
-        };
-        let nd = n.pow(d as u32);
-        let u0: Vec<f64> = (0..nd).map(|i| (i as f64 * 0.31).sin()).collect();
-        let (u_out, max_imag) = varcoef_evolve(&u0, n, d, dx, &coef, 0.01, 4);
-        assert!(
-            u_out.iter().all(|x| x.is_finite()),
-            "evolve produced non-finite output"
-        );
-        assert!(
-            max_imag < 1e-9,
-            "max imag residue too large: {max_imag:.3e}"
-        );
-    }
+    include!("tt_varcoef_spectral_tests_mod.rs");
 }
 
-// §G — S3VarCoefEvolver boundary-rejection tests (s3-poc, v9.2.0)
 #[cfg(all(test, feature = "s3-poc"))]
 mod tests_s3 {
-    use super::*;
-    fn ok(n: usize, d: usize) -> AxisCoef<f64> { AxisCoef {
-        a_axis: (0..d).map(|_| vec![1.0f64; n]).collect(),
-        b_axis: (0..d).map(|_| vec![0.0f64; n]).collect(),
-        v_axis: (0..d).map(|_| vec![0.0f64; n]).collect(),
-    } }
-    #[test]
-    fn rejects_out_of_class() {
-        assert!(S3VarCoefEvolver::<f64>::new(1, 2, 0.1, ok(1, 2)).is_err()); // n<2
-        assert!(S3VarCoefEvolver::<f64>::new(4, 2, 0.0, ok(4, 2)).is_err()); // dx≤0
-        let mut c = ok(4, 2); c.a_axis[0][1] = -0.5;
-        assert!(S3VarCoefEvolver::<f64>::new(4, 2, 0.1, c).is_err()); // a≤0
-        let bad = AxisCoef {
-            a_axis: vec![vec![1.0f64; 4]],
-            b_axis: vec![vec![0.0; 4], vec![0.0; 4]],
-            v_axis: vec![vec![0.0; 4], vec![0.0; 4]],
-        };
-        assert!(S3VarCoefEvolver::<f64>::new(4, 2, 0.1, bad).is_err()); // shape mismatch
-    }
-    #[test]
-    fn accepts_valid() { assert!(S3VarCoefEvolver::<f64>::new(4, 2, 0.1, ok(4, 2)).is_ok()); }
+    include!("tt_varcoef_spectral_tests_s3_mod.rs");
 }

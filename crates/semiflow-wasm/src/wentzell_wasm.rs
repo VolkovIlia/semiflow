@@ -34,8 +34,6 @@
     clippy::too_many_arguments
 )]
 
-use wasm_bindgen::prelude::*;
-
 use semiflow::{
     error::SemiflowError,
     reflection::{HalfSpaceRegion, ReflectingRegion},
@@ -44,6 +42,7 @@ use semiflow::{
     wentzell::WentzellRegion,
     DiffusionChernoff, DynamicWentzellChernoff, Grid1D, GridFn1D, TimedChernoffFunction,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::error::{err_to_js, make_js_error};
 

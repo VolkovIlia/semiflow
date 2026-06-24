@@ -41,15 +41,13 @@ use semiflow::{
     ChernoffSemigroup,
 };
 
+// Re-export bc_kernels2 pyclasses for registration.
+pub(crate) use crate::bc_kernels2::PyDirichletHeat2nd1D;
+pub(crate) use crate::bc_kernels2::{PyReflected1D, PyRobin1D};
 use crate::{
     error::{from_core, new_pyerr},
     panic::catch_panic_py,
 };
-
-// Re-export bc_kernels2 pyclasses for registration.
-pub(crate) use crate::bc_kernels2::PyDirichletHeat2nd1D;
-pub(crate) use crate::bc_kernels2::PyReflected1D;
-pub(crate) use crate::bc_kernels2::PyRobin1D;
 
 // ---------------------------------------------------------------------------
 // Shared helpers

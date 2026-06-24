@@ -41,7 +41,6 @@ use semiflow::{
 
 // `ChernoffFunction` is used via `apply_into`; `State` is used via `zero_into`/`axpy_into`.
 // Both are needed at trait-method call sites.
-
 use crate::error::{from_core, new_pyerr};
 use crate::panic::catch_panic_py;
 

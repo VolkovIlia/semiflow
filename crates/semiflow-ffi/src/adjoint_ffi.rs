@@ -42,16 +42,17 @@
 #![allow(unsafe_code)]
 #![allow(clippy::too_many_arguments, clippy::cast_precision_loss)]
 
-use std::ffi::CStr;
-use std::os::raw::{c_double, c_int};
+use std::{
+    ffi::CStr,
+    os::raw::{c_double, c_int},
+};
 
 use semiflow::{
     AdjointChernoff, BoundaryPolicy, ChernoffFunction, Diffusion4thChernoff, Diffusion6thChernoff,
     DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ScratchPool, ShiftChernoff1D,
 };
 
-use crate::handle::validate_u0_finite;
-use crate::status::SemiflowStatus;
+use crate::{handle::validate_u0_finite, status::SemiflowStatus};
 
 // ---------------------------------------------------------------------------
 // Constant fn-pointers (unit a = 1.0 / half a = 0.5 / zero)
@@ -293,7 +294,11 @@ fn build_adjoint_inner(
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(BoundaryPolicy::Reflect);
     let current = GridFn1D::new(grid, u0.to_vec())?;
     let kv = build_kernel_variant(grid, kernel, self_adjoint)?;
-    Ok(AdjointInner { kernel: kv, n_steps, current })
+    Ok(AdjointInner {
+        kernel: kv,
+        n_steps,
+        current,
+    })
 }
 
 fn build_kernel_variant(
@@ -304,15 +309,21 @@ fn build_kernel_variant(
     match kernel {
         "heat2" => {
             let inner = DiffusionChernoff::new(unit_a_adj, zero_adj, zero_adj, 1.0, grid);
-            Ok(AdjKernelVariant::Diff2(AdjointChernoff::new_self_adjoint(inner)))
+            Ok(AdjKernelVariant::Diff2(AdjointChernoff::new_self_adjoint(
+                inner,
+            )))
         }
         "heat4" => {
             let inner = Diffusion4thChernoff::new(unit_a_adj, zero_adj, zero_adj, 1.0, grid);
-            Ok(AdjKernelVariant::Diff4(AdjointChernoff::new_self_adjoint(inner)))
+            Ok(AdjKernelVariant::Diff4(AdjointChernoff::new_self_adjoint(
+                inner,
+            )))
         }
         "heat6" => {
             let inner = Diffusion6thChernoff::new(unit_a_adj, zero_adj, zero_adj, 1.0, grid);
-            Ok(AdjKernelVariant::Diff6(AdjointChernoff::new_self_adjoint(inner)))
+            Ok(AdjKernelVariant::Diff6(AdjointChernoff::new_self_adjoint(
+                inner,
+            )))
         }
         "drift" => {
             let inner = DriftReactionChernoff::new(half_a_adj, zero_adj, 0.5, grid);
@@ -325,7 +336,9 @@ fn build_kernel_variant(
         }
         "shift" => {
             let inner = ShiftChernoff1D::new(half_a_adj, zero_adj, zero_adj, 0.5, grid);
-            Ok(AdjKernelVariant::Shift(AdjointChernoff::new_self_adjoint(inner)))
+            Ok(AdjKernelVariant::Shift(AdjointChernoff::new_self_adjoint(
+                inner,
+            )))
         }
         _ => Err(semiflow::SemiflowError::DomainViolation {
             what: "adjoint: unknown kernel; expected heat2|heat4|heat6|drift|shift",
@@ -338,10 +351,7 @@ fn build_kernel_variant(
 // Evolve helper
 // ---------------------------------------------------------------------------
 
-fn run_adjoint_evolve(
-    inner: &mut AdjointInner,
-    t: f64,
-) -> Result<(), semiflow::SemiflowError> {
+fn run_adjoint_evolve(inner: &mut AdjointInner, t: f64) -> Result<(), semiflow::SemiflowError> {
     let tau = t / inner.n_steps as f64;
     let grid = inner.current.grid;
     let src_vals = inner.current.values.clone();

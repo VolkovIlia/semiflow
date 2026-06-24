@@ -27,8 +27,10 @@
 #![allow(unsafe_code)]
 #![allow(clippy::cast_precision_loss)] // usize→f64 for N_STEPS: values ≤ 1000 ≤ 2^52
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use semiflow::{DiffusionChernoff, Dual, Grid1D, GridFn1D, InterpKind};
 

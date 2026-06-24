@@ -21,9 +21,9 @@
 #![allow(clippy::float_cmp)]
 
 use semiflow_ffi::{
-    smf_evolve, smf_state_free, smf_state_new_heat_1d_unit, smf_state_values,
-    smf_evolver_evolve_into_v3, smf_evolver_free_v3, smf_evolver_new_heat_1d_unit_v3,
-    smf_evolver_size_v3, smf_evolver_values_v3, smf_growth_v3, SemiflowStatus,
+    smf_evolve, smf_evolver_evolve_into_v3, smf_evolver_free_v3, smf_evolver_new_heat_1d_unit_v3,
+    smf_evolver_size_v3, smf_evolver_values_v3, smf_growth_v3, smf_state_free,
+    smf_state_new_heat_1d_unit, smf_state_values, SemiflowStatus,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,8 +86,7 @@ fn v3_byte_identical_to_v2() {
 
     // --- v2 path ---
     let mut state_v2 = std::ptr::null_mut();
-    let rc =
-        unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), N, &mut state_v2) };
+    let rc = unsafe { smf_state_new_heat_1d_unit(XMIN, XMAX, N, u0.as_ptr(), N, &mut state_v2) };
     assert_eq!(rc, SemiflowStatus::Ok);
 
     let rc = unsafe { smf_evolve(state_v2, T, N_STEPS) };

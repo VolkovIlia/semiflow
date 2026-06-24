@@ -1,7 +1,7 @@
 //! `DriftReaction4th1D` — order-4 palindromic Strang drift-reaction binding.
 //!
 //! Wraps `DriftReactionZeta4Chernoff` (ADR-0127, math §35).
-//! Palindromic R_sym(τ/2) ∘ K5(τ) ∘ R_sym(τ/2); order 4.
+//! Palindromic `R_sym(τ/2)` ∘ K5(τ) ∘ `R_sym(τ/2)`; order 4.
 //!
 //! Default coefficients: b(x) = 0.5, b'(x) = 0.0, c(x) = 0.0.
 //! Variable-coefficient support (via closures) is deferred per the
@@ -17,9 +17,11 @@ use semiflow::{
     ChernoffSemigroup, Diffusion4thChernoff, DriftReactionZeta4Chernoff, Grid1D, GridFn1D,
 };
 
-use crate::boundary::parse_boundary;
-use crate::error::{from_core, new_pyerr};
-use crate::panic::catch_panic_py;
+use crate::{
+    boundary::parse_boundary,
+    error::{from_core, new_pyerr},
+    panic::catch_panic_py,
+};
 
 // ---------------------------------------------------------------------------
 // Inner state
@@ -51,7 +53,7 @@ extern "Rust" fn half_b_dr4(_: f64) -> f64 {
 /// 1-D drift + reaction with order-4 palindromic Strang-K5 Chernoff kernel.
 ///
 /// Solves ``∂_t u = b(x)∂_x u + c(x)u`` using ``DriftReactionZeta4Chernoff``
-/// (palindromic R_sym(τ/2) ∘ K5(τ) ∘ R_sym(τ/2); order 4, ADR-0127).
+/// (palindromic `R_sym(τ/2)` ∘ K5(τ) ∘ `R_sym(τ/2)`; order 4, ADR-0127).
 ///
 /// Default coefficients: ``b(x) = 0.5``, ``b'(x) = 0.0``, ``c(x) = 0.0``.
 /// Variable-coefficient support is deferred (closure-capture ABI is a
@@ -106,6 +108,8 @@ impl DriftReaction4th1D {
     }
 
     /// Return the approximation order (always 4).
+    // unused_self: PyO3 requires `&self` on instance methods; the value is constant.
+    #[allow(clippy::unused_self)]
     fn order(&self) -> u32 {
         4
     }
@@ -156,14 +160,7 @@ fn build_zeta4_dr(
     let grid = Grid1D::new(xmin, xmax, n)?.with_boundary(boundary);
     let d4 = Diffusion4thChernoff::new(unit_a_dr4, zero_dr4, zero_dr4, 1.0, grid);
     // c_norm_bound = 0.5 (b=0.5, b'=0, c=0 → growth dominated by b=0.5)
-    let kernel = DriftReactionZeta4Chernoff::new(
-        d4,
-        half_b_dr4,
-        zero_dr4,
-        zero_dr4,
-        0.5,
-        grid,
-    );
+    let kernel = DriftReactionZeta4Chernoff::new(d4, half_b_dr4, zero_dr4, zero_dr4, 0.5, grid);
     let semigroup = ChernoffSemigroup::new(kernel, 100)?;
     let current = GridFn1D::new(grid, u0.to_vec())?;
     Ok(Zeta4DrInner { semigroup, current })

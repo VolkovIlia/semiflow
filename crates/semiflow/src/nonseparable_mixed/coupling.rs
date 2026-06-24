@@ -6,9 +6,8 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 
-use crate::{float::SemiflowFloat, grid2d::Grid2D, grid_fn2d::GridFn2D};
-
 use super::stencil::{cross_stencil_beta, cross_stencil_scalar};
+use crate::{float::SemiflowFloat, grid2d::Grid2D, grid_fn2d::GridFn2D};
 
 // ---------------------------------------------------------------------------
 // Private coupling trait — INTERNAL to nonseparable_mixed

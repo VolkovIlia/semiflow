@@ -67,10 +67,18 @@ impl<F: SemiflowFloat> PreSampledLaplacianSeq<F> {
         if vals_seq.len() != expected {
             return Err(SemiflowError::DomainViolation {
                 what: "PreSampledLaplacianSeq: vals_seq.len() must equal 2*n_steps*nnz",
+                // cast_precision_loss: diagnostic value only; exact for grid sizes < 2^52.
+                #[allow(clippy::cast_precision_loss)]
                 value: vals_seq.len() as f64,
             });
         }
-        Ok(Self { row_ptr, col_idx, vals_seq, n_steps, kind })
+        Ok(Self {
+            row_ptr,
+            col_idx,
+            vals_seq,
+            n_steps,
+            kind,
+        })
     }
 
     /// Reconstruct a `Laplacian` for adjoint step `k`, abscissa index `ci` (0 or 1).
@@ -104,6 +112,8 @@ impl<F: SemiflowFloat> PreSampledLaplacianSeq<F> {
 ///
 /// This is the public helper for C/FFI callers; identical ordering is used by
 /// `evolve_state_adjoint_presampled`.
+// cast_precision_loss: n_steps < 2^52 for any realistic time-stepping scenario.
+#[allow(clippy::cast_precision_loss)]
 pub fn fill_abscissa_times(t_horizon: f64, n_steps: usize, out: &mut [f64]) {
     let tau = t_horizon / n_steps as f64;
     for k in 0..n_steps {
@@ -139,7 +149,12 @@ impl<F: SemiflowFloat> MagnusGraphHeatChernoff<F> {
                 value: 0.0,
             });
         }
-        Ok(PreSampledMagnusAdj { seq, n_nodes, rho_bar_max, convergence_check })
+        Ok(PreSampledMagnusAdj {
+            seq,
+            n_nodes,
+            rho_bar_max,
+            convergence_check,
+        })
     }
 }
 
@@ -177,8 +192,13 @@ impl<F: SemiflowFloat> PreSampledMagnusAdj<F> {
         dst: &mut GraphSignal<F>,
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
-        validate_presampled_evolve(self.seq.n_steps, n_steps, self.rho_bar_max,
-            self.convergence_check, tau)?;
+        validate_presampled_evolve(
+            self.seq.n_steps,
+            n_steps,
+            self.rho_bar_max,
+            self.convergence_check,
+            tau,
+        )?;
         run_presampled_adj(tau, n_steps, &self.seq, src, dst, scratch)
     }
 }
@@ -212,21 +232,28 @@ impl<F: SemiflowFloat> VarCoefMagnusGraphHeatChernoff<F> {
         if a_seq.len() != expected_a {
             return Err(SemiflowError::DomainViolation {
                 what: "from_presampled(varcoef): a_seq.len() must equal 2*n_steps*n_nodes",
+                #[allow(clippy::cast_precision_loss)]
                 value: a_seq.len() as f64,
             });
         }
-        Ok(PreSampledVarCoefAdj { seq, a_seq, n_nodes, rho_bar_max, a_sup_max })
+        Ok(PreSampledVarCoefAdj {
+            seq,
+            a_seq,
+            n_nodes,
+            rho_bar_max,
+            a_sup_max,
+        })
     }
 }
 
-/// Presampled VarCoef Magnus graph adjoint (ADR-0180, VarCoef variant).
+/// Presampled `VarCoef` Magnus graph adjoint (ADR-0180, `VarCoef` variant).
 pub struct PreSampledVarCoefAdj<F: SemiflowFloat = f64> {
     pub(crate) seq: PreSampledLaplacianSeq<F>,
     pub(crate) a_seq: Vec<F>,
     pub(crate) n_nodes: usize,
     pub(crate) rho_bar_max: F,
     /// Stored for convergence-radius check and FFI surface; not used by the
-    /// pure-replay path (all values come from a_seq).
+    /// pure-replay path (all values come from `a_seq`).
     #[allow(dead_code)]
     pub(crate) a_sup_max: F,
 }
@@ -256,10 +283,17 @@ impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
         dst: &mut GraphSignal<F>,
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
-        validate_presampled_evolve(self.seq.n_steps, n_steps, self.rho_bar_max,
-            false, tau)?;
-        run_presampled_varcoef_adj(tau, n_steps, &self.seq, &self.a_seq, self.n_nodes,
-            src, dst, scratch)
+        validate_presampled_evolve(self.seq.n_steps, n_steps, self.rho_bar_max, false, tau)?;
+        run_presampled_varcoef_adj(
+            tau,
+            n_steps,
+            &self.seq,
+            &self.a_seq,
+            self.n_nodes,
+            src,
+            dst,
+            scratch,
+        )
     }
 }
 
@@ -267,7 +301,7 @@ impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
 // Shared private helpers
 // ---------------------------------------------------------------------------
 
-/// Validate n_steps match and optional Magnus radius check.
+/// Validate `n_steps` match and optional Magnus radius check.
 fn validate_presampled_evolve<F: SemiflowFloat>(
     ctor_steps: usize,
     evolve_steps: usize,
@@ -278,6 +312,7 @@ fn validate_presampled_evolve<F: SemiflowFloat>(
     if evolve_steps != ctor_steps {
         return Err(SemiflowError::DomainViolation {
             what: "presampled: n_steps at evolve must equal n_steps at construction",
+            #[allow(clippy::cast_precision_loss)]
             value: evolve_steps as f64,
         });
     }
@@ -313,7 +348,9 @@ fn run_presampled_adj<F: SemiflowFloat>(
     Ok(())
 }
 
-/// Core adjoint sweep for VarCoef variant using pre-sampled sequences.
+/// Core adjoint sweep for `VarCoef` variant using pre-sampled sequences.
+// All 8 arguments are required by the GL4 Magnus adjoint protocol (ADR-0180).
+#[allow(clippy::too_many_arguments)]
 fn run_presampled_varcoef_adj<F: SemiflowFloat>(
     tau: F,
     n_steps: usize,
@@ -343,7 +380,14 @@ fn run_presampled_varcoef_adj<F: SemiflowFloat>(
         sa1_buf.copy_from_slice(&sqrt_a1);
         sa2_buf.copy_from_slice(&sqrt_a2);
         apply_exp_omega4_la_adj_kernel(
-            &lap1, &sa1_buf, &lap2, &sa2_buf, tau, &lam, &mut lam_next, scratch,
+            &lap1,
+            &sa1_buf,
+            &lap2,
+            &sa2_buf,
+            tau,
+            &lam,
+            &mut lam_next,
+            scratch,
         );
         scratch.return_vec(sa2_buf);
         scratch.return_vec(sa1_buf);
@@ -387,9 +431,8 @@ mod tests {
         let rp = lap.row_ptr().to_vec();
         let ci = lap.col_idx().to_vec();
         // Only 1 block instead of 2*n_steps*nnz
-        let err = PreSampledLaplacianSeq::new(
-            rp, ci, vec![0.0_f64; 3], 2, LaplacianKind::Combinatorial,
-        );
+        let err =
+            PreSampledLaplacianSeq::new(rp, ci, vec![0.0_f64; 3], 2, LaplacianKind::Combinatorial);
         assert!(err.is_err());
     }
 
@@ -397,10 +440,12 @@ mod tests {
     fn fill_abscissa_times_order() {
         let n_steps = 4usize;
         let t_horizon = 0.5_f64;
+        #[allow(clippy::cast_precision_loss)]
         let tau = t_horizon / n_steps as f64;
         let mut out = vec![0.0_f64; 2 * n_steps];
         fill_abscissa_times(t_horizon, n_steps, &mut out);
         // Block 0: step 0 (last adjoint step), t_start = (n_steps-1)*tau
+        #[allow(clippy::cast_precision_loss)]
         let t_start0 = (n_steps - 1) as f64 * tau;
         assert!((out[0] - (t_start0 + GL4_C1_F64 * tau)).abs() < 1e-15);
         assert!((out[1] - (t_start0 + GL4_C2_F64 * tau)).abs() < 1e-15);

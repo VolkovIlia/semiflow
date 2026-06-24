@@ -356,7 +356,7 @@ impl<F: SemiflowFloat> Diffusion4thChernoff<F> {
 
     /// Allocation-free variant: writes `D_ζ⁴(τ) src` directly into `dst.values`.
     ///
-    /// Uses the generic scalar path (same as [`apply_f`]) but avoids the
+    /// Uses the generic scalar path (same as [`Self::apply_f`]) but avoids the
     /// intermediate `Vec` allocation by writing results element-by-element into
     /// the pre-allocated `dst` buffer. Required by `SchrodingerChernoff<F>`
     /// to satisfy the R4 zero-alloc invariant for non-f64 types.
@@ -367,7 +367,7 @@ impl<F: SemiflowFloat> Diffusion4thChernoff<F> {
     ///
     /// # Errors
     ///
-    /// Same as [`apply_f`].
+    /// Same as [`Self::apply_f`].
     pub fn apply_into_f(
         &self,
         tau: F,

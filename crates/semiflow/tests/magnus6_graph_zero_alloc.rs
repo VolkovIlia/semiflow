@@ -18,7 +18,6 @@
 use std::sync::Arc;
 
 use allocation_counter::{self, AllocationInfo};
-
 use semiflow::{
     magnus6_graph::MagnusGraphHeat6thChernoff, magnus_graph::LaplacianAtTime, ChernoffFunction,
     Graph, GraphSignal, Laplacian, ScratchPool,
