@@ -22,7 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        # macos-13 (Intel x86_64) dropped: runners scarce and queue indefinitely,
+        # blocking publish-pypi. macos-14 (arm64/Apple Silicon) covers modern Macs;
+        # Intel users can install from the sdist. Re-add macos-13 when runners stabilise.
+        os: [ubuntu-latest, macos-14, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
