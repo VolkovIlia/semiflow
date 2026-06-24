@@ -111,9 +111,12 @@ def test_version():
     v = rp.version()
     assert isinstance(v, str)
     assert len(v) > 0
-    # Must be a semver-shaped string (e.g. "0.10.0").
-    parts = v.split(".")
-    assert len(parts) == 3, f"unexpected version format: {v!r}"
+    # Must be a semver-shaped string (e.g. "0.10.0" or "0.9.0-beta.2").
+    # Strip pre-release / build-metadata suffixes before checking the
+    # three-part core, mirroring the Rust `version_is_semver` gate fix.
+    core = v.split("-")[0].split("+")[0]
+    parts = core.split(".")
+    assert len(parts) == 3, f"unexpected version core format: {v!r}"
 
 
 def test_negative_t_raises():

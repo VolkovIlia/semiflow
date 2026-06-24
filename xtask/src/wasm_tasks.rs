@@ -11,6 +11,19 @@
 //! for a smaller bundle.  Default uses `[profile.release]` for reproducible CI.
 //! See ADR-0028 Amendment 1 and D2 (v0.13.0).
 //!
+//! ### wasm-opt and bulk-memory (D3 fix, v0.13.x)
+//!
+//! wasm-pack 0.15.0 ignores unknown `package.metadata.wasm-pack.profile.*` keys
+//! (warns "unknown key and will be ignored").  When `--profile release-wasm` is
+//! passed, wasm-pack cannot find a matching metadata entry and falls back to its
+//! default wasm-opt invocation (`-O` only), which rejects the bulk-memory opcodes
+//! (`memory.copy` / `memory.fill`) that the Rust toolchain emits for memcpy/memset
+//! intrinsics.  The fix: pass `--no-opt` so wasm-pack skips its bundled wasm-opt
+//! for the `--size` path.  Size optimisation already comes from the `release-wasm`
+//! cargo profile (opt-level=z, lto=fat, codegen-units=1, strip=true); the
+//! `package.metadata.wasm-pack.profile.release` entry configures wasm-opt with
+//! `--enable-bulk-memory` for the default `--release` (non-size) path.
+//!
 //! ## wasm-test
 //!
 //! Runs `wasm-pack test crates/semiflow-wasm --node` by default.
@@ -35,7 +48,11 @@ pub fn wasm_build_with_args(args: &[String]) -> Result<()> {
     let crate_dir = root.join("crates").join("semiflow-wasm");
     let use_size_profile = args.iter().any(|a| a == "--size");
     let profile_args: &[&str] = if use_size_profile {
-        &["--profile", "release-wasm"]
+        // --no-opt: skip wasm-pack's bundled wasm-opt for the release-wasm path.
+        // wasm-pack 0.15.0 ignores the `release-wasm` metadata key and falls back
+        // to running wasm-opt without --enable-bulk-memory, causing a validator
+        // error.  Size is already optimised by the release-wasm rustc profile.
+        &["--profile", "release-wasm", "--no-opt"]
     } else {
         &[]
     };

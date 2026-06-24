@@ -77,6 +77,16 @@ typedef struct Option_SmfLapAtTFn Option_SmfLapAtTFn;
 typedef struct Option_SmfWeightAtTFn Option_SmfWeightAtTFn;
 
 /**
+ * Opaque FFI handle to `AdjointFokkerPlanckChernoff<DiffusionChernoff<f64>, f64, 1>`.
+ *
+ * Obtained from `smf_adjoint_fp_new_brownian_1d_v3`; passed to `_step_v3` /
+ * `_free_v3`. Do not dereference or allocate this struct from C.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfAdjointFpV3;
+
+/**
  * Opaque handle to `KillingChernoff<DiffusionChernoff, BoxRegion>`.
  */
 typedef struct {
@@ -119,16 +129,6 @@ typedef struct {
 } SmfDirichletHeat2nd1D;
 
 /**
- * Opaque FFI handle to `AdjointFokkerPlanckChernoff<DiffusionChernoff<f64>, f64, 1>`.
- *
- * Obtained from `smf_adjoint_fp_new_brownian_1d_v3`; passed to `_step_v3` /
- * `_free_v3`. Do not dereference or allocate this struct from C.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfAdjointFpV3;
-
-/**
  * Opaque handle to a `DriftReactionChernoff` evolver.
  */
 typedef struct {
@@ -141,36 +141,6 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfShift1D;
-
-/**
- * Opaque handle to a 2-component matrix-diffusion evolver.
- *
- * Obtain from `smf_matrix_diffusion_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
- * Do not dereference or allocate from C.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfMatrixDiffusion1D;
-
-/**
- * Opaque handle to a native-complex Schrödinger evolver.
- *
- * Obtain from `smf_schrodinger_cx_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
- * Do not dereference or allocate from C.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfSchrodingerComplex1D;
-
-/**
- * Opaque handle to a real-pair Schrödinger evolver.
- *
- * Obtain from `smf_schrodinger_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
- * Do not dereference or allocate from C.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfSchrodinger1D;
 
 /**
  * Opaque handle to a `TruncatedExpDiffusionChernoff` evolver.
@@ -220,6 +190,20 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfHeat1DZeta8;
+
+/**
+ * Opaque handle to a `DriftReactionZeta4Chernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfDriftReactionZeta4;
+
+/**
+ * Opaque handle to a `DiffusionExpmvChernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfExpmv1D;
 
 /**
  * Opaque handle to a semiflow semigroup state.
@@ -299,6 +283,54 @@ typedef struct {
 } SmfGreeksEvolverV3;
 
 /**
+ * Opaque C handle to `Box<MeasureState<f64, 1>>`.
+ *
+ * The dense 3^D particle tree is NEVER materialised — only sparse
+ * marginals and scalar observables cross the ABI (curse-escape, C-1).
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMeasureState;
+
+/**
+ * Opaque C handle to `Box<GridlessChernoff<f64, 1>>`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfGridlessEvolver;
+
+/**
+ * Opaque handle to a `Killing2ndChernoff` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfKilling2nd;
+
+/**
+ * Opaque handle to a `MatrixDiffusionChernoff2D` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMatrix2D;
+
+/**
+ * Opaque handle to a `MatrixDiffusionChernoff3D` evolver.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMatrix3D;
+
+/**
+ * Opaque handle to a 2-component matrix-diffusion evolver.
+ *
+ * Obtain from `smf_matrix_diffusion_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
+ * Do not dereference or allocate from C.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfMatrixDiffusion1D;
+
+/**
  * Opaque FFI handle to a `ResolventJumpChernoff<DiffusionChernoff<f64>, f64>`.
  *
  * C callers receive this from `smf_resolvent_jump_new_heat_1d_unit_v3` and
@@ -330,6 +362,26 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfResolventJump3DV3;
+
+/**
+ * Opaque handle to a native-complex Schrödinger evolver.
+ *
+ * Obtain from `smf_schrodinger_cx_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
+ * Do not dereference or allocate from C.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfSchrodingerComplex1D;
+
+/**
+ * Opaque handle to a real-pair Schrödinger evolver.
+ *
+ * Obtain from `smf_schrodinger_new`; pass to `_evolve`/`_values`/`_size`/`_free`.
+ * Do not dereference or allocate from C.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfSchrodinger1D;
 
 /**
  * Opaque handle to a `StrangSplit<DiffusionChernoff, DriftReactionChernoff>` evolver.
@@ -379,6 +431,31 @@ typedef struct {
 } SmfHeat3DVarA;
 
 /**
+ * Opaque C handle to `Box<CoupledTtChernoff<f64>>`.
+ *
+ * The coupled evolver advances `SmfTtState` in-place (same carrier).
+ * Free with `smf_tt_coupled_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfTtCoupledEvolver;
+
+/**
+ * Opaque C handle to `Box<TtState<f64>>`.  Curse-escape: the d-dim tensor is
+ * never materialised; only TT cores live behind the handle.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfTtState;
+
+/**
+ * Opaque C handle to `Box<TtChernoff<f64>>`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfTtEvolver;
+
+/**
  * Opaque handle to a v3.0 [`Evolver`] over `DiffusionChernoff<f64>`.
  *
  * C callers receive a `SmfEvolverV3 *` from `smf_evolver_new_heat_1d_unit_v3`
@@ -422,97 +499,6 @@ typedef struct {
 } SmfWentzellEvolverV3;
 
 /**
- * Opaque C handle to `Box<TtState<f64>>`.  Curse-escape: the d-dim tensor is
- * never materialised; only TT cores live behind the handle.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfTtState;
-
-/**
- * Opaque C handle to `Box<TtChernoff<f64>>`.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfTtEvolver;
-
-/**
- * Opaque C handle to `Box<CoupledTtChernoff<f64>>`.
- *
- * The coupled evolver advances `SmfTtState` in-place (same carrier).
- * Free with `smf_tt_coupled_free`.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfTtCoupledEvolver;
-
-/**
- * Opaque C handle to `Box<MeasureState<f64, 1>>`.
- *
- * The dense 3^D particle tree is NEVER materialised — only sparse
- * marginals and scalar observables cross the ABI (curse-escape, C-1).
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfMeasureState;
-
-/**
- * Opaque C handle to `Box<GridlessChernoff<f64, 1>>`.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfGridlessEvolver;
-
-/**
- * Opaque handle to a `DiffusionExpmvChernoff` evolver.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfExpmv1D;
-
-/**
- * Opaque handle to a `DriftReactionZeta4Chernoff` evolver.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfDriftReactionZeta4;
-
-/**
- * Opaque handle to a `Killing2ndChernoff` evolver.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfKilling2nd;
-
-/**
- * Opaque handle to a `MatrixDiffusionChernoff2D` evolver.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfMatrix2D;
-
-/**
- * Opaque handle to a `MatrixDiffusionChernoff3D` evolver.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfMatrix3D;
-
-/**
- * Opaque handle for `NonSep2D` (constant-beta coupling).
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfNonSep2D;
-
-/**
- * Opaque handle for `NonSep2DAniso` (pre-sampled β array).
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfNonSep2DAniso;
-
-/**
  * Opaque handle for a 2D anisotropic-shift evolver.
  *
  * Obtain from `smf_aniso_nd2_new`; free with `smf_aniso_nd2_free`.
@@ -529,6 +515,20 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfAnisoND3;
+
+/**
+ * Opaque handle for `NonSep2D` (constant-beta coupling).
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfNonSep2D;
+
+/**
+ * Opaque handle for `NonSep2DAniso` (pre-sampled β array).
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfNonSep2DAniso;
 
 /**
  * Opaque handle for the 6-D Smolyak sparse-grid evolver.
@@ -550,6 +550,15 @@ typedef struct {
 } SmfHowland1D;
 
 /**
+ * Opaque handle to a `ManifoldChernoff` 2D evolver.
+ *
+ * Obtain from `smf_manifold2d_new`; free with `smf_manifold2d_free`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfManifold2D;
+
+/**
  * Opaque handle to a `SubordinatedChernoff` 1D evolver.
  *
  * Obtain from `smf_subordinated1d_new`; free with `smf_subordinated1d_free`.
@@ -559,13 +568,13 @@ typedef struct {
 } SmfSubordinated1D;
 
 /**
- * Opaque handle to a `ManifoldChernoff` 2D evolver.
+ * Opaque handle for Engel-group hypoelliptic Chernoff evolver.
  *
- * Obtain from `smf_manifold2d_new`; free with `smf_manifold2d_free`.
+ * Obtain from `smf_hypo_engel_new`; free with `smf_hypo_engel_free`.
  */
 typedef struct {
   uint8_t _private[0];
-} SmfManifold2D;
+} SmfHypoEngel;
 
 /**
  * Opaque handle for the Heisenberg-group Chernoff kernel (no grid state).
@@ -585,15 +594,6 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfHypoKolmogorov;
-
-/**
- * Opaque handle for Engel-group hypoelliptic Chernoff evolver.
- *
- * Obtain from `smf_hypo_engel_new`; free with `smf_hypo_engel_free`.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfHypoEngel;
 
 /**
  * Opaque handle to a `GraphHeat4thChernoff<f64>` state.
@@ -621,6 +621,25 @@ typedef struct {
 typedef struct {
   uint8_t _private[0];
 } SmfVcGhc;
+
+/**
+ * Opaque handle to a `ComplexTripleJump` evolver (filiform-N5, D=5 fixed).
+ *
+ * Allocate with `smf_carnot_ctj_new`; free with `smf_carnot_ctj_drop`.
+ * Only `apply_real` is exposed — no complex buffer crossing (ADR-0138).
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfCarnotCtj;
+
+/**
+ * Opaque handle for 1-D unit-diffusion `PointEval`.
+ *
+ * Allocate with `smf_point_eval_new`; free with `smf_point_eval_drop`.
+ */
+typedef struct {
+  uint8_t _private[0];
+} SmfPointEval;
 
 /**
  * Opaque handle to a `QuantumGraph<f64>`.
@@ -651,25 +670,6 @@ typedef struct {
 } SmfStrangGraph;
 
 /**
- * Opaque handle to a `ComplexTripleJump` evolver (filiform-N5, D=5 fixed).
- *
- * Allocate with `smf_carnot_ctj_new`; free with `smf_carnot_ctj_drop`.
- * Only `apply_real` is exposed — no complex buffer crossing (ADR-0138).
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfCarnotCtj;
-
-/**
- * Opaque handle for 1-D unit-diffusion `PointEval`.
- *
- * Allocate with `smf_point_eval_new`; free with `smf_point_eval_drop`.
- */
-typedef struct {
-  uint8_t _private[0];
-} SmfPointEval;
-
-/**
  * Opaque C handle to `Box<VarCoefTt<f64>>`.
  */
 typedef struct {
@@ -677,13 +677,13 @@ typedef struct {
 } SmfVarCoefTtEvolver;
 
 /**
- * Opaque handle to a 1-D obstacle Chernoff evolver.
+ * Opaque handle to a 1-D adaptive PI integrator.
  *
- * Obtained from `smf_obstacle1d_new`; free with `smf_obstacle1d_free`.
+ * Obtained from `smf_adaptive_pi_new`; free with `smf_adaptive_pi_free`.
  */
 typedef struct {
   uint8_t _private[0];
-} SmfObstacle1D;
+} SmfAdaptivePI;
 
 /**
  * Opaque handle to a 1-D adjoint Chernoff evolver.
@@ -695,13 +695,13 @@ typedef struct {
 } SmfAdjoint1D;
 
 /**
- * Opaque handle to a 1-D adaptive PI integrator.
+ * Opaque handle to a 1-D obstacle Chernoff evolver.
  *
- * Obtained from `smf_adaptive_pi_new`; free with `smf_adaptive_pi_free`.
+ * Obtained from `smf_obstacle1d_new`; free with `smf_obstacle1d_free`.
  */
 typedef struct {
   uint8_t _private[0];
-} SmfAdaptivePI;
+} SmfObstacle1D;
 
 /**
  * Opaque handle to a `Laplacian<f64>`.
@@ -755,6 +755,70 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * Create an adjoint Fokker-Planck handle for the Brownian 1D benchmark.
+ *
+ * ## Parameters
+ * - `a`          — diffusion coefficient (`h = 2√(aτ)`). Must be ≥ 0 and finite.
+ * - `b`          — drift coefficient (`k = 2bτ`). Must be finite.
+ * - `c`          — reaction coefficient (mass factor `1 + τc`). Must be finite.
+ * - `max_steps`  — `DoS` cap: output buffer must hold `4^max_steps * n_in` Diracs.
+ * - `out_ev`     — receives the opaque pointer on success.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * - `out_ev` must be a valid writable `*mut *mut SmfAdjointFpV3`.
+ */
+SemiflowStatus smf_adjoint_fp_new_brownian_1d_v3(double a,
+                                                 double b,
+                                                 double c,
+                                                 uintptr_t max_steps,
+                                                 SmfAdjointFpV3 **out_ev);
+
+/**
+ * Free an adjoint FP handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * - `ev` must be null or a live pointer from `smf_adjoint_fp_new_brownian_1d_v3`.
+ */
+void smf_adjoint_fp_free_v3(SmfAdjointFpV3 *ev);
+
+/**
+ * Apply `n_steps` adjoint Fokker-Planck steps; write output Diracs into caller buffers.
+ *
+ * Input measure: `n_in` Diracs at `pos_in[i], w_in[i]` (both length `n_in`).
+ * Output measure written into `pos_out[0..out_n_written]` and `w_out[0..out_n_written]`
+ * where `out_n_written` is stored in `*out_n`.
+ *
+ * Output buffer capacity must be `out_cap >= 4^n_steps * n_in` Diracs.
+ * If `out_cap < 4^n_steps * n_in`, returns `GridMismatch`.
+ *
+ * Dirac count grows ×4 per step — bound `n_steps <= max_steps` (checked at call).
+ *
+ * ## Preconditions
+ * - `ev` non-null, from `smf_adjoint_fp_new_brownian_1d_v3`.
+ * - `tau > 0`, finite.
+ * - `n_steps >= 1` and `n_steps <= max_steps`.
+ * - `pos_in`, `w_in` non-null, length `n_in`.
+ * - `pos_out`, `w_out` non-null, length `out_cap >= 4^n_steps * n_in`.
+ * - `out_n` non-null.
+ *
+ * # Safety
+ * Raw pointer dereferences guarded by null checks and length validation.
+ */
+SemiflowStatus smf_adjoint_fp_step_v3(SmfAdjointFpV3 *ev,
+                                      double tau,
+                                      uintptr_t n_steps,
+                                      const double *pos_in,
+                                      const double *w_in,
+                                      uintptr_t n_in,
+                                      double *pos_out,
+                                      double *w_out,
+                                      uintptr_t out_cap,
+                                      uintptr_t *out_n);
 
 /**
  * Allocate a killing-region 1D heat evolver.
@@ -1089,7 +1153,7 @@ SemiflowStatus smf_dirichlet_heat2nd1d_new(double xmin,
                                            SmfDirichletHeat2nd1D **out);
 
 /**
- * Advance DirichletHeat2nd evolver by `t`; write values into `dst`.
+ * Advance `DirichletHeat2nd` evolver by `t`; write values into `dst`.
  *
  * # Safety
  * `ev` must be a live pointer from `smf_dirichlet_heat2nd1d_new`.
@@ -1120,76 +1184,12 @@ SemiflowStatus smf_dirichlet_heat2nd1d_values(const SmfDirichletHeat2nd1D *ev,
 uintptr_t smf_dirichlet_heat2nd1d_size(const SmfDirichletHeat2nd1D *ev);
 
 /**
- * Free a DirichletHeat2nd1D handle. Null-safe.
+ * Free a `DirichletHeat2nd1D` handle. Null-safe.
  *
  * # Safety
  * `ev` must be null or a live pointer from `smf_dirichlet_heat2nd1d_new`.
  */
 void smf_dirichlet_heat2nd1d_free(SmfDirichletHeat2nd1D *ev);
-
-/**
- * Create an adjoint Fokker-Planck handle for the Brownian 1D benchmark.
- *
- * ## Parameters
- * - `a`          — diffusion coefficient (`h = 2√(aτ)`). Must be ≥ 0 and finite.
- * - `b`          — drift coefficient (`k = 2bτ`). Must be finite.
- * - `c`          — reaction coefficient (mass factor `1 + τc`). Must be finite.
- * - `max_steps`  — `DoS` cap: output buffer must hold `4^max_steps * n_in` Diracs.
- * - `out_ev`     — receives the opaque pointer on success.
- *
- * ## Return values
- * `Ok` | `NullPtr` | `OutOfDomain` | `Panic`.
- *
- * # Safety
- * - `out_ev` must be a valid writable `*mut *mut SmfAdjointFpV3`.
- */
-SemiflowStatus smf_adjoint_fp_new_brownian_1d_v3(double a,
-                                                 double b,
-                                                 double c,
-                                                 uintptr_t max_steps,
-                                                 SmfAdjointFpV3 **out_ev);
-
-/**
- * Free an adjoint FP handle. Null-safe; do not use after this call.
- *
- * # Safety
- * - `ev` must be null or a live pointer from `smf_adjoint_fp_new_brownian_1d_v3`.
- */
-void smf_adjoint_fp_free_v3(SmfAdjointFpV3 *ev);
-
-/**
- * Apply `n_steps` adjoint Fokker-Planck steps; write output Diracs into caller buffers.
- *
- * Input measure: `n_in` Diracs at `pos_in[i], w_in[i]` (both length `n_in`).
- * Output measure written into `pos_out[0..out_n_written]` and `w_out[0..out_n_written]`
- * where `out_n_written` is stored in `*out_n`.
- *
- * Output buffer capacity must be `out_cap >= 4^n_steps * n_in` Diracs.
- * If `out_cap < 4^n_steps * n_in`, returns `GridMismatch`.
- *
- * Dirac count grows ×4 per step — bound `n_steps <= max_steps` (checked at call).
- *
- * ## Preconditions
- * - `ev` non-null, from `smf_adjoint_fp_new_brownian_1d_v3`.
- * - `tau > 0`, finite.
- * - `n_steps >= 1` and `n_steps <= max_steps`.
- * - `pos_in`, `w_in` non-null, length `n_in`.
- * - `pos_out`, `w_out` non-null, length `out_cap >= 4^n_steps * n_in`.
- * - `out_n` non-null.
- *
- * # Safety
- * Raw pointer dereferences guarded by null checks and length validation.
- */
-SemiflowStatus smf_adjoint_fp_step_v3(SmfAdjointFpV3 *ev,
-                                      double tau,
-                                      uintptr_t n_steps,
-                                      const double *pos_in,
-                                      const double *w_in,
-                                      uintptr_t n_in,
-                                      double *pos_out,
-                                      double *w_out,
-                                      uintptr_t out_cap,
-                                      uintptr_t *out_n);
 
 /**
  * Allocate a `DriftReactionChernoff` 1-D evolver (`b = 0.5`, `c = 0`).
@@ -1297,235 +1297,6 @@ uintptr_t smf_shift1d_size(const SmfShift1D *ev);
  * `ev` must be null or a live pointer from `smf_shift1d_new`.
  */
 void smf_shift1d_free(SmfShift1D *ev);
-
-/**
- * Allocate a 2-component matrix-diffusion evolver.
- *
- * # Parameters
- *
- * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
- * - `n`: number of grid nodes (must be >= 5 per ADR-0082).
- * - `a_diag`: diagonal diffusion coefficient (must be finite and > 0).
- * - `c_coupling`: off-diagonal reaction coefficient (any finite value).
- * - `u0`: initial condition; flat `f64` array of length `2*n`
- *   (`u0[k*2+i] = u_i(x_k)`); all values finite.
- * - `u0_len`: must equal `2*n`.
- * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
- * - `out`: non-null pointer to receive the handle.
- *
- * # Safety
- *
- * `u0` must point to `u0_len` readable `f64`s.
- * `out` must be a valid writable `*mut *mut SmfMatrixDiffusion1D`.
- */
-SemiflowStatus smf_matrix_diffusion_new(double xmin,
-                                        double xmax,
-                                        uintptr_t n,
-                                        double a_diag,
-                                        double c_coupling,
-                                        const double *u0,
-                                        uintptr_t u0_len,
-                                        uintptr_t n_steps,
-                                        SmfMatrixDiffusion1D **out);
-
-/**
- * Advance by time `t` and copy result into `dst` (flat buffer, length `2*n`).
- *
- * `t` must be finite and >= 0.
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_matrix_diffusion_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix_diffusion_evolve(SmfMatrixDiffusion1D *ev,
-                                           double t,
-                                           double *dst,
-                                           uintptr_t dst_len);
-
-/**
- * Copy current state into `dst` (flat buffer, length `2*n`).
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_matrix_diffusion_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix_diffusion_values(const SmfMatrixDiffusion1D *ev,
-                                           double *dst,
-                                           uintptr_t dst_len);
-
-/**
- * Return the number of grid nodes; 0 if `ev` is null.
- *
- * Note: the state buffer length is `2 * smf_matrix_diffusion_size(ev)`.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_matrix_diffusion_new`.
- */
-uintptr_t smf_matrix_diffusion_size(const SmfMatrixDiffusion1D *ev);
-
-/**
- * Free a handle from `smf_matrix_diffusion_new`. Null-safe.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_matrix_diffusion_new`.
- */
-void smf_matrix_diffusion_free(SmfMatrixDiffusion1D *ev);
-
-/**
- * Allocate a native-complex Schrödinger evolver.
- *
- * # Parameters
- *
- * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
- * - `n`: number of grid nodes (must be >= 4).
- * - `v`: pre-sampled `V(x_i)` values; length `n`; all finite. Pass null for
- *   the free-particle case (V = 0).
- * - `v_len`: length of `v`; must equal `n` when `v` is non-null.
- * - `psi0`: interleaved complex initial state `[re0,im0,re1,im1,…]`; length `2*n`.
- * - `psi0_len`: must equal `2*n`.
- * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
- * - `out`: non-null pointer to receive the handle.
- *
- * # Safety
- *
- * `v` (if non-null) must point to `v_len` readable `f64`s.
- * `psi0` must point to `psi0_len` readable `f64`s.
- * `out` must be a valid writable `*mut *mut SmfSchrodingerComplex1D`.
- */
-SemiflowStatus smf_schrodinger_cx_new(double xmin,
-                                      double xmax,
-                                      uintptr_t n,
-                                      const double *v,
-                                      uintptr_t v_len,
-                                      const double *psi0,
-                                      uintptr_t psi0_len,
-                                      uintptr_t n_steps,
-                                      SmfSchrodingerComplex1D **out);
-
-/**
- * Advance by time `t` and copy result into `dst` (interleaved re/im, length `2*n`).
- *
- * `t` must be finite and >= 0.
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_schrodinger_cx_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_schrodinger_cx_evolve(SmfSchrodingerComplex1D *ev,
-                                         double t,
-                                         double *dst,
-                                         uintptr_t dst_len);
-
-/**
- * Copy current wavefunction into `dst` (interleaved re/im, length `2*n`).
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_schrodinger_cx_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_schrodinger_cx_values(const SmfSchrodingerComplex1D *ev,
-                                         double *dst,
-                                         uintptr_t dst_len);
-
-/**
- * Return the number of grid nodes; 0 if `ev` is null.
- *
- * Note: the interleaved buffer length is `2 * smf_schrodinger_cx_size(ev)`.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_schrodinger_cx_new`.
- */
-uintptr_t smf_schrodinger_cx_size(const SmfSchrodingerComplex1D *ev);
-
-/**
- * Free a handle from `smf_schrodinger_cx_new`. Null-safe.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_schrodinger_cx_new`.
- */
-void smf_schrodinger_cx_free(SmfSchrodingerComplex1D *ev);
-
-/**
- * Allocate a real-pair Schrödinger evolver.
- *
- * # Parameters
- *
- * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
- * - `n`: number of grid nodes (must be >= 4).
- * - `v`: pre-sampled `V(x_i)` values; length `n`; all finite. Pass null for
- *   the free-particle case (V = 0).
- * - `v_len`: length of `v`; must equal `n` when `v` is non-null.
- * - `psi0`: interleaved complex initial state `[re0,im0,re1,im1,…]`; length `2*n`.
- * - `psi0_len`: must equal `2*n`.
- * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
- * - `out`: non-null pointer to receive the handle.
- *
- * # Safety
- *
- * `v` (if non-null) must point to `v_len` readable `f64`s.
- * `psi0` must point to `psi0_len` readable `f64`s.
- * `out` must be a valid writable `*mut *mut SmfSchrodinger1D`.
- */
-SemiflowStatus smf_schrodinger_new(double xmin,
-                                   double xmax,
-                                   uintptr_t n,
-                                   const double *v,
-                                   uintptr_t v_len,
-                                   const double *psi0,
-                                   uintptr_t psi0_len,
-                                   uintptr_t n_steps,
-                                   SmfSchrodinger1D **out);
-
-/**
- * Advance by time `t` and copy result into `dst` (interleaved re/im, length `2*n`).
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_schrodinger_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_schrodinger_evolve(SmfSchrodinger1D *ev,
-                                      double t,
-                                      double *dst,
-                                      uintptr_t dst_len);
-
-/**
- * Copy current wavefunction into `dst` (interleaved re/im, length `2*n`).
- *
- * # Safety
- *
- * `ev` must be a live pointer from `smf_schrodinger_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_schrodinger_values(const SmfSchrodinger1D *ev, double *dst, uintptr_t dst_len);
-
-/**
- * Return the number of grid nodes; 0 if `ev` is null.
- *
- * Note: the interleaved buffer length is `2 * smf_schrodinger_size(ev)`.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_schrodinger_new`.
- */
-uintptr_t smf_schrodinger_size(const SmfSchrodinger1D *ev);
-
-/**
- * Free a handle from `smf_schrodinger_new`. Null-safe.
- *
- * # Safety
- *
- * `ev` must be null or a live pointer from `smf_schrodinger_new`.
- */
-void smf_schrodinger_free(SmfSchrodinger1D *ev);
 
 /**
  * Allocate a K=4 truncated-exp 1-D diffusion evolver (unit `a = 1`).
@@ -1906,6 +1677,114 @@ uintptr_t smf_heat1d_zeta8_size(const SmfHeat1DZeta8 *ev);
  * `ev` must be null or a live `smf_heat1d_zeta8_new` handle.
  */
 void smf_heat1d_zeta8_free(SmfHeat1DZeta8 *ev);
+
+/**
+ * Allocate a `DriftReactionZeta4Chernoff` 1-D evolver.
+ *
+ * Solves `∂_t u = b(x)∂_x u + c(x)u` (order 4; palindromic `R_sym` ∘ K5 ∘ `R_sym`,
+ * ADR-0127). Default: `b = 0.5`, `b' = 0.0`, `c = 0.0`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfDriftReactionZeta4`.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_new(double xmin,
+                                            double xmax,
+                                            uintptr_t n,
+                                            const double *u0,
+                                            uintptr_t u0_len,
+                                            uintptr_t n_steps,
+                                            SmfDriftReactionZeta4 **out);
+
+/**
+ * Evolve `SmfDriftReactionZeta4` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_evolve(SmfDriftReactionZeta4 *ev,
+                                               double t,
+                                               double *dst_buf,
+                                               uintptr_t dst_len);
+
+/**
+ * Copy current `SmfDriftReactionZeta4` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_drift_reaction_zeta4_values(const SmfDriftReactionZeta4 *ev,
+                                               double *out_buf,
+                                               uintptr_t out_len);
+
+/**
+ * Return `SmfDriftReactionZeta4` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
+ */
+uintptr_t smf_drift_reaction_zeta4_size(const SmfDriftReactionZeta4 *ev);
+
+/**
+ * Free a `SmfDriftReactionZeta4` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
+ */
+void smf_drift_reaction_zeta4_free(SmfDriftReactionZeta4 *ev);
+
+/**
+ * Allocate a `DiffusionExpmvChernoff` 1-D evolver (unit diffusion `a = 1`).
+ *
+ * Solves `∂_t u = ∂²u` via tolerance-driven scaled truncated-Taylor (ADR-0121).
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfExpmv1D`.
+ */
+SemiflowStatus smf_expmv1d_new(double xmin,
+                               double xmax,
+                               uintptr_t n,
+                               const double *u0,
+                               uintptr_t u0_len,
+                               uintptr_t n_steps,
+                               SmfExpmv1D **out);
+
+/**
+ * Evolve `SmfExpmv1D` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_expmv1d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_expmv1d_evolve(SmfExpmv1D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfExpmv1D` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_expmv1d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_expmv1d_values(const SmfExpmv1D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfExpmv1D` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_expmv1d_new`.
+ */
+uintptr_t smf_expmv1d_size(const SmfExpmv1D *ev);
+
+/**
+ * Free a `SmfExpmv1D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_expmv1d_new`.
+ */
+void smf_expmv1d_free(SmfExpmv1D *ev);
 
 /**
  * Allocate a heat-equation state with diffusion coefficient `a(x) = 1.0`.
@@ -2726,6 +2605,379 @@ SemiflowStatus smf_heat1d_greeks_v3(SmfGreeksEvolverV3 *ev,
                                     uintptr_t len);
 
 /**
+ * Construct a `MeasureState<f64,1>` from particle buffers.
+ *
+ * `dim` must equal the compiled D (= 1 for this build); otherwise returns
+ * `Unsupported`.  `n_part` must be ≥ 1.  All positions/weights must be finite.
+ *
+ * On success, `*out_state` receives the freshly allocated handle.
+ *
+ * # Safety
+ * `positions` (length `n_part * dim`), `weights` (length `n_part`), and
+ * `out_state` must be valid non-null pointers.
+ */
+SemiflowStatus smf_measurestate_new(const double *positions,
+                                    const double *weights,
+                                    uintptr_t n_part,
+                                    uintptr_t dim,
+                                    SmfMeasureState **out_state);
+
+/**
+ * Free a `SmfMeasureState` handle. Null-safe.
+ *
+ * # Safety
+ * `state` must be null or a live pointer from `smf_measurestate_new`.
+ */
+void smf_measurestate_free(SmfMeasureState *state);
+
+/**
+ * Return the number of Dirac atoms. Returns 0 if `state` is null.
+ *
+ * # Safety
+ * `state` must be null or a live `SmfMeasureState` pointer.
+ */
+uintptr_t smf_measurestate_n_diracs(const SmfMeasureState *state);
+
+/**
+ * Write the total-variation norm `‖ρ‖_TV` into `*out_tv`.
+ *
+ * # Safety
+ * `state` and `out_tv` must be non-null valid pointers.
+ */
+SemiflowStatus smf_measurestate_total_variation(const SmfMeasureState *state, double *out_tv);
+
+/**
+ * Write the second moment `⟨x², ρ⟩` into `*out_m2`.
+ *
+ * # Safety
+ * `state` and `out_m2` must be non-null valid pointers.
+ */
+SemiflowStatus smf_measurestate_second_moment(const SmfMeasureState *state, double *out_m2);
+
+/**
+ * Write the 1-D marginal onto `axis` into caller-owned buffers.
+ *
+ * The marginal is the set of `(positions[i][axis], weights[i])` pairs for all
+ * Diracs `i`.  Curse-escape preserved: only a sparse marginal crosses the ABI,
+ * never a dense grid.
+ *
+ * Returns `GridMismatch` with `*out_n = n_diracs` if `cap < n_diracs` (retry
+ * signal).  Returns `OutOfDomain` if `axis >= COMPILED_D`.
+ *
+ * # Safety
+ * All pointer arguments must be non-null. `out_pos`/`out_wt` must be writable
+ * for `cap` f64 elements.
+ */
+SemiflowStatus smf_measurestate_marginal(const SmfMeasureState *state,
+                                         double *out_pos,
+                                         double *out_wt,
+                                         uintptr_t cap,
+                                         uintptr_t axis,
+                                         uintptr_t *out_n);
+
+/**
+ * Construct a `GridlessChernoff<f64,1>` evolver.
+ *
+ * `dim` must equal 1 (compiled D); otherwise returns `Unsupported`.
+ * `reduction_tag`: 0 = `WeightedVoronoi { cap: voronoi_cap }`,
+ *                  1 = `GaussianBackground` (pass-through stub).
+ *
+ * # Safety
+ * `a`, `b`, and `out_ev` must be valid non-null pointers with `dim` elements.
+ */
+SemiflowStatus smf_gridless_new(const double *a,
+                                const double *b,
+                                double c,
+                                uintptr_t dim,
+                                uint32_t reduction_tag,
+                                uintptr_t voronoi_cap,
+                                SmfGridlessEvolver **out_ev);
+
+/**
+ * Apply one Chernoff step of size `tau`: `dst` is overwritten with the
+ * push-forward of `src`.
+ *
+ * `src` is borrowed read-only; `dst` is overwritten entirely.  A fresh
+ * `ScratchPool` is created per call (matches v3 `evolve_into` pattern).
+ *
+ * # Safety
+ * `ev`, `src`, and `dst` must be non-null live pointers.
+ */
+SemiflowStatus smf_gridless_apply(const SmfGridlessEvolver *ev,
+                                  double tau,
+                                  const SmfMeasureState *src,
+                                  SmfMeasureState *dst);
+
+/**
+ * Evolve `state` in-place for time `t_final` using `n_steps` Chernoff steps.
+ *
+ * Uses two alternating scratch buffers to avoid re-allocating on each step.
+ * The final result is written back into `state`.
+ *
+ * # Safety
+ * `ev` and `state` must be non-null live pointers.
+ */
+SemiflowStatus smf_gridless_evolve(const SmfGridlessEvolver *ev,
+                                   double t_final,
+                                   uintptr_t n_steps,
+                                   SmfMeasureState *state);
+
+/**
+ * Free a `SmfGridlessEvolver` handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_gridless_new`.
+ */
+void smf_gridless_free(SmfGridlessEvolver *ev);
+
+/**
+ * Allocate a `Killing2ndChernoff` 1-D evolver (unit diffusion, constant κ).
+ *
+ * Solves `∂_t u = ∂²u − κ·u` via palindromic Strang; order 2 (ADR-0126).
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfKilling2nd`.
+ */
+SemiflowStatus smf_killing2nd_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
+                                  double kappa,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  uintptr_t n_steps,
+                                  SmfKilling2nd **out);
+
+/**
+ * Evolve `SmfKilling2nd` state by time `t`, writing result into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_killing2nd_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_killing2nd_evolve(SmfKilling2nd *ev,
+                                     double t,
+                                     double *dst_buf,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current `SmfKilling2nd` grid values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_killing2nd_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_killing2nd_values(const SmfKilling2nd *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfKilling2nd` grid size; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_killing2nd_new`.
+ */
+uintptr_t smf_killing2nd_size(const SmfKilling2nd *ev);
+
+/**
+ * Free a `SmfKilling2nd` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_killing2nd_new`.
+ */
+void smf_killing2nd_free(SmfKilling2nd *ev);
+
+/**
+ * Allocate a `MatrixDiffusionChernoff2D` evolver (M=2, constant scalar coefficients).
+ *
+ * Solves coupled 2-component 2D diffusion via palindromic Strang (order 2, ADR-0124).
+ *
+ * # Safety
+ * `u0` must point to `2*nx*ny` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfMatrix2D`.
+ */
+SemiflowStatus smf_matrix2d_new(double xmin,
+                                double xmax,
+                                uintptr_t nx,
+                                double ymin,
+                                double ymax,
+                                uintptr_t ny,
+                                double a_diag,
+                                double c_coupling,
+                                const double *u0,
+                                uintptr_t u0_len,
+                                uintptr_t n_steps,
+                                SmfMatrix2D **out);
+
+/**
+ * Evolve `SmfMatrix2D` state by time `t`, writing `2*nx*ny` values into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix2d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix2d_evolve(SmfMatrix2D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfMatrix2D` values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix2d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix2d_values(const SmfMatrix2D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfMatrix2D` buffer size (`2*nx*ny`); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix2d_new`.
+ */
+uintptr_t smf_matrix2d_size(const SmfMatrix2D *ev);
+
+/**
+ * Free a `SmfMatrix2D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix2d_new`.
+ */
+void smf_matrix2d_free(SmfMatrix2D *ev);
+
+/**
+ * Allocate a `MatrixDiffusionChernoff3D` evolver (M=2, constant scalar coefficients).
+ *
+ * Solves coupled 2-component 3D diffusion via palindromic Strang (order 2, ADR-0124).
+ *
+ * # Safety
+ * `u0` must point to `2*nx*ny*nz` readable `f64`s.
+ * `out` must be a valid `*mut *mut SmfMatrix3D`.
+ */
+SemiflowStatus smf_matrix3d_new(double xmin,
+                                double xmax,
+                                uintptr_t nx,
+                                double ymin,
+                                double ymax,
+                                uintptr_t ny,
+                                double zmin,
+                                double zmax,
+                                uintptr_t nz,
+                                double a_diag,
+                                double c_coupling,
+                                const double *u0,
+                                uintptr_t u0_len,
+                                uintptr_t n_steps,
+                                SmfMatrix3D **out);
+
+/**
+ * Evolve `SmfMatrix3D` state by time `t`, writing `2*nx*ny*nz` values into `dst_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix3d_new`.
+ * `dst_buf` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix3d_evolve(SmfMatrix3D *ev, double t, double *dst_buf, uintptr_t dst_len);
+
+/**
+ * Copy current `SmfMatrix3D` values into `out_buf`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_matrix3d_new`.
+ * `out_buf` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix3d_values(const SmfMatrix3D *ev, double *out_buf, uintptr_t out_len);
+
+/**
+ * Return `SmfMatrix3D` buffer size (`2*nx*ny*nz`); 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix3d_new`.
+ */
+uintptr_t smf_matrix3d_size(const SmfMatrix3D *ev);
+
+/**
+ * Free a `SmfMatrix3D` handle.  Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_matrix3d_new`.
+ */
+void smf_matrix3d_free(SmfMatrix3D *ev);
+
+/**
+ * Allocate a 2-component matrix-diffusion evolver.
+ *
+ * # Parameters
+ *
+ * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
+ * - `n`: number of grid nodes (must be >= 5 per ADR-0082).
+ * - `a_diag`: diagonal diffusion coefficient (must be finite and > 0).
+ * - `c_coupling`: off-diagonal reaction coefficient (any finite value).
+ * - `u0`: initial condition; flat `f64` array of length `2*n`
+ *   (`u0[k*2+i] = u_i(x_k)`); all values finite.
+ * - `u0_len`: must equal `2*n`.
+ * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
+ * - `out`: non-null pointer to receive the handle.
+ *
+ * # Safety
+ *
+ * `u0` must point to `u0_len` readable `f64`s.
+ * `out` must be a valid writable `*mut *mut SmfMatrixDiffusion1D`.
+ */
+SemiflowStatus smf_matrix_diffusion_new(double xmin,
+                                        double xmax,
+                                        uintptr_t n,
+                                        double a_diag,
+                                        double c_coupling,
+                                        const double *u0,
+                                        uintptr_t u0_len,
+                                        uintptr_t n_steps,
+                                        SmfMatrixDiffusion1D **out);
+
+/**
+ * Advance by time `t` and copy result into `dst` (flat buffer, length `2*n`).
+ *
+ * `t` must be finite and >= 0.
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_matrix_diffusion_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix_diffusion_evolve(SmfMatrixDiffusion1D *ev,
+                                           double t,
+                                           double *dst,
+                                           uintptr_t dst_len);
+
+/**
+ * Copy current state into `dst` (flat buffer, length `2*n`).
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_matrix_diffusion_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_matrix_diffusion_values(const SmfMatrixDiffusion1D *ev,
+                                           double *dst,
+                                           uintptr_t dst_len);
+
+/**
+ * Return the number of grid nodes; 0 if `ev` is null.
+ *
+ * Note: the state buffer length is `2 * smf_matrix_diffusion_size(ev)`.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_matrix_diffusion_new`.
+ */
+uintptr_t smf_matrix_diffusion_size(const SmfMatrixDiffusion1D *ev);
+
+/**
+ * Free a handle from `smf_matrix_diffusion_new`. Null-safe.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_matrix_diffusion_new`.
+ */
+void smf_matrix_diffusion_free(SmfMatrixDiffusion1D *ev);
+
+/**
  * Create a resolvent-jump handle for the unit-diffusion heat kernel.
  *
  * Constructs `ResolventJumpChernoff<DiffusionChernoff<f64>>` with unit `a=1`,
@@ -2909,6 +3161,158 @@ SemiflowStatus smf_resolvent_jump_3d_apply_v3(SmfResolventJump3DV3 *ev,
                                               uintptr_t g_len,
                                               double *out,
                                               uintptr_t out_len);
+
+/**
+ * Allocate a native-complex Schrödinger evolver.
+ *
+ * # Parameters
+ *
+ * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
+ * - `n`: number of grid nodes (must be >= 4).
+ * - `v`: pre-sampled `V(x_i)` values; length `n`; all finite. Pass null for
+ *   the free-particle case (V = 0).
+ * - `v_len`: length of `v`; must equal `n` when `v` is non-null.
+ * - `psi0`: interleaved complex initial state `[re0,im0,re1,im1,…]`; length `2*n`.
+ * - `psi0_len`: must equal `2*n`.
+ * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
+ * - `out`: non-null pointer to receive the handle.
+ *
+ * # Safety
+ *
+ * `v` (if non-null) must point to `v_len` readable `f64`s.
+ * `psi0` must point to `psi0_len` readable `f64`s.
+ * `out` must be a valid writable `*mut *mut SmfSchrodingerComplex1D`.
+ */
+SemiflowStatus smf_schrodinger_cx_new(double xmin,
+                                      double xmax,
+                                      uintptr_t n,
+                                      const double *v,
+                                      uintptr_t v_len,
+                                      const double *psi0,
+                                      uintptr_t psi0_len,
+                                      uintptr_t n_steps,
+                                      SmfSchrodingerComplex1D **out);
+
+/**
+ * Advance by time `t` and copy result into `dst` (interleaved re/im, length `2*n`).
+ *
+ * `t` must be finite and >= 0.
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_schrodinger_cx_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_schrodinger_cx_evolve(SmfSchrodingerComplex1D *ev,
+                                         double t,
+                                         double *dst,
+                                         uintptr_t dst_len);
+
+/**
+ * Copy current wavefunction into `dst` (interleaved re/im, length `2*n`).
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_schrodinger_cx_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_schrodinger_cx_values(const SmfSchrodingerComplex1D *ev,
+                                         double *dst,
+                                         uintptr_t dst_len);
+
+/**
+ * Return the number of grid nodes; 0 if `ev` is null.
+ *
+ * Note: the interleaved buffer length is `2 * smf_schrodinger_cx_size(ev)`.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_schrodinger_cx_new`.
+ */
+uintptr_t smf_schrodinger_cx_size(const SmfSchrodingerComplex1D *ev);
+
+/**
+ * Free a handle from `smf_schrodinger_cx_new`. Null-safe.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_schrodinger_cx_new`.
+ */
+void smf_schrodinger_cx_free(SmfSchrodingerComplex1D *ev);
+
+/**
+ * Allocate a real-pair Schrödinger evolver.
+ *
+ * # Parameters
+ *
+ * - `xmin`, `xmax`: grid boundaries (must be finite; `xmin < xmax`).
+ * - `n`: number of grid nodes (must be >= 4).
+ * - `v`: pre-sampled `V(x_i)` values; length `n`; all finite. Pass null for
+ *   the free-particle case (V = 0).
+ * - `v_len`: length of `v`; must equal `n` when `v` is non-null.
+ * - `psi0`: interleaved complex initial state `[re0,im0,re1,im1,…]`; length `2*n`.
+ * - `psi0_len`: must equal `2*n`.
+ * - `n_steps`: Chernoff steps per `evolve` call (must be >= 1).
+ * - `out`: non-null pointer to receive the handle.
+ *
+ * # Safety
+ *
+ * `v` (if non-null) must point to `v_len` readable `f64`s.
+ * `psi0` must point to `psi0_len` readable `f64`s.
+ * `out` must be a valid writable `*mut *mut SmfSchrodinger1D`.
+ */
+SemiflowStatus smf_schrodinger_new(double xmin,
+                                   double xmax,
+                                   uintptr_t n,
+                                   const double *v,
+                                   uintptr_t v_len,
+                                   const double *psi0,
+                                   uintptr_t psi0_len,
+                                   uintptr_t n_steps,
+                                   SmfSchrodinger1D **out);
+
+/**
+ * Advance by time `t` and copy result into `dst` (interleaved re/im, length `2*n`).
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_schrodinger_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_schrodinger_evolve(SmfSchrodinger1D *ev,
+                                      double t,
+                                      double *dst,
+                                      uintptr_t dst_len);
+
+/**
+ * Copy current wavefunction into `dst` (interleaved re/im, length `2*n`).
+ *
+ * # Safety
+ *
+ * `ev` must be a live pointer from `smf_schrodinger_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_schrodinger_values(const SmfSchrodinger1D *ev, double *dst, uintptr_t dst_len);
+
+/**
+ * Return the number of grid nodes; 0 if `ev` is null.
+ *
+ * Note: the interleaved buffer length is `2 * smf_schrodinger_size(ev)`.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_schrodinger_new`.
+ */
+uintptr_t smf_schrodinger_size(const SmfSchrodinger1D *ev);
+
+/**
+ * Free a handle from `smf_schrodinger_new`. Null-safe.
+ *
+ * # Safety
+ *
+ * `ev` must be null or a live pointer from `smf_schrodinger_new`.
+ */
+void smf_schrodinger_free(SmfSchrodinger1D *ev);
 
 /**
  * Allocate a Strang-split 1-D evolver (unit diffusion `a=1`, drift `b=0.5`, `c=0`).
@@ -3216,6 +3620,163 @@ uintptr_t smf_heat3d_vara_size(const SmfHeat3DVarA *ev);
 void smf_heat3d_vara_free(SmfHeat3DVarA *ev);
 
 /**
+ * Allocate a `TtCoupledEvolver` on the heap and write its pointer to `*out_ev`.
+ *
+ * # Safety
+ * All non-null pointer arguments must be valid for the stated lengths.
+ */
+SemiflowStatus smf_tt_coupled_new(const double *a,
+                                  const double *b,
+                                  double c,
+                                  uint32_t coupling_tag,
+                                  double tridiag_rho,
+                                  const uintptr_t *pairs_jk,
+                                  const double *pairs_rho,
+                                  uintptr_t n_pairs,
+                                  const double *dom_min,
+                                  const double *dom_max,
+                                  uintptr_t n_axes,
+                                  double eps_round,
+                                  SmfTtCoupledEvolver **out_ev);
+
+/**
+ * Evolve `state` for time `t_final` using `n_steps` Chernoff steps (in-place).
+ *
+ * Same carrier (`SmfTtState`) as the separable evolver — Gate C: `None` topology
+ * is bit-identical to `smf_tt_evolver_evolve`.
+ *
+ * # Safety
+ * `ev` and `state` must be non-null live pointers.
+ */
+SemiflowStatus smf_tt_coupled_evolve(const SmfTtCoupledEvolver *ev,
+                                     SmfTtState *state,
+                                     double t_final,
+                                     uintptr_t n_steps);
+
+/**
+ * Free a `SmfTtCoupledEvolver` handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_tt_coupled_new`.
+ */
+void smf_tt_coupled_free(SmfTtCoupledEvolver *ev);
+
+/**
+ * Build a rank-1 separable `TtState<f64>` from per-axis slice data.
+ *
+ * `data` / `offsets` follow C-2 ragged-array flattening:
+ *   axis `j` occupies `data[offsets[j] .. offsets[j+1]]`.
+ * `n_axes` must be ≥ 1; `offsets[0]` must be 0; all `n_j` must be ≥ 1.
+ *
+ * On success, `*out_state` is set to the freshly allocated handle.
+ *
+ * # Safety
+ * `data`, `offsets`, `out_state` must be valid non-null pointers with the
+ * stated lengths.
+ */
+SemiflowStatus smf_ttstate_new_separable(const double *data,
+                                         const uintptr_t *offsets,
+                                         uintptr_t n_axes,
+                                         SmfTtState **out_state);
+
+/**
+ * Free a `SmfTtState` handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * `state` must be null or a live pointer from `smf_ttstate_new_separable`.
+ */
+void smf_ttstate_free(SmfTtState *state);
+
+/**
+ * Return the number of modes (d). Returns 0 if `state` is null.
+ *
+ * # Safety
+ * `state` must be null or a live `SmfTtState` pointer.
+ */
+uintptr_t smf_ttstate_ndim(const SmfTtState *state);
+
+/**
+ * Write the mode size of `axis` into `*out_n`. Returns `OutOfDomain` if
+ * `axis >= ndim`.
+ *
+ * # Safety
+ * `state` and `out_n` must be non-null valid pointers.
+ */
+SemiflowStatus smf_ttstate_n_j(const SmfTtState *state, uintptr_t axis, uintptr_t *out_n);
+
+/**
+ * Return the peak bond rank. Returns 0 if `state` is null.
+ *
+ * # Safety
+ * `state` must be null or a live `SmfTtState` pointer.
+ */
+uintptr_t smf_ttstate_peak_rank(const SmfTtState *state);
+
+/**
+ * Return the total stored scalar count. Returns 0 if `state` is null.
+ *
+ * # Safety
+ * `state` must be null or a live `SmfTtState` pointer.
+ */
+uintptr_t smf_ttstate_storage_size(const SmfTtState *state);
+
+/**
+ * Compute the scalar projection `⟨f, u⟩` for a separable functional f.
+ *
+ * `data`/`offsets`/`n_axes` follow C-2 ragged-array convention; `n_axes`
+ * must equal `state.ndim()` and each functional length must equal `n_j(axis)`.
+ *
+ * # Safety
+ * All non-null pointer arguments must be valid for the stated lengths.
+ */
+SemiflowStatus smf_ttstate_inner_separable(const SmfTtState *state,
+                                           const double *data,
+                                           const uintptr_t *offsets,
+                                           uintptr_t n_axes,
+                                           double *out_value);
+
+/**
+ * Construct a separable `TtChernoff<f64>` evolver.
+ *
+ * `a[j]` / `b[j]` / `dom_min[j]` / `dom_max[j]` are per-axis arrays of
+ * length `n_axes`.  `eps_round` is the TT-rounding tolerance.
+ *
+ * # Safety
+ * All pointer arguments must be valid non-null pointers with `n_axes` f64 entries
+ * (or `*mut *mut SmfTtEvolver` for `out_ev`).
+ */
+SemiflowStatus smf_tt_evolver_new(const double *a,
+                                  const double *b,
+                                  double c,
+                                  const double *dom_min,
+                                  const double *dom_max,
+                                  uintptr_t n_axes,
+                                  double eps_round,
+                                  SmfTtEvolver **out_ev);
+
+/**
+ * Evolve `state` for time `t_final` using `n_steps` Chernoff steps (in-place).
+ *
+ * Returns `OutOfDomain` if `n_steps == 0`, `t_final` is non-finite/negative, or
+ * `ev.ndim() != state.ndim()`.
+ *
+ * # Safety
+ * `ev` and `state` must be non-null live pointers.
+ */
+SemiflowStatus smf_tt_evolver_evolve(const SmfTtEvolver *ev,
+                                     SmfTtState *state,
+                                     double t_final,
+                                     uintptr_t n_steps);
+
+/**
+ * Free a `SmfTtEvolver` handle. Null-safe; do not use after this call.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_tt_evolver_new`.
+ */
+void smf_tt_evolver_free(SmfTtEvolver *ev);
+
+/**
  * Create a v3.0 [`Evolver`] for the unit-diffusion heat equation.
  *
  * Solves `∂_t u = ∂_xx u` on `[xmin, xmax]` with `n_grid` nodes and
@@ -3396,697 +3957,6 @@ SemiflowStatus smf_wentzell_evolve_v3(SmfWentzellEvolverV3 *ev,
 void smf_wentzell_evolver_free_v3(SmfWentzellEvolverV3 *ev);
 
 /**
- * Build a rank-1 separable `TtState<f64>` from per-axis slice data.
- *
- * `data` / `offsets` follow C-2 ragged-array flattening:
- *   axis `j` occupies `data[offsets[j] .. offsets[j+1]]`.
- * `n_axes` must be ≥ 1; `offsets[0]` must be 0; all `n_j` must be ≥ 1.
- *
- * On success, `*out_state` is set to the freshly allocated handle.
- *
- * # Safety
- * `data`, `offsets`, `out_state` must be valid non-null pointers with the
- * stated lengths.
- */
-SemiflowStatus smf_ttstate_new_separable(const double *data,
-                                         const uintptr_t *offsets,
-                                         uintptr_t n_axes,
-                                         SmfTtState **out_state);
-
-/**
- * Free a `SmfTtState` handle. Null-safe; do not use after this call.
- *
- * # Safety
- * `state` must be null or a live pointer from `smf_ttstate_new_separable`.
- */
-void smf_ttstate_free(SmfTtState *state);
-
-/**
- * Return the number of modes (d). Returns 0 if `state` is null.
- *
- * # Safety
- * `state` must be null or a live `SmfTtState` pointer.
- */
-uintptr_t smf_ttstate_ndim(const SmfTtState *state);
-
-/**
- * Write the mode size of `axis` into `*out_n`. Returns `OutOfDomain` if
- * `axis >= ndim`.
- *
- * # Safety
- * `state` and `out_n` must be non-null valid pointers.
- */
-SemiflowStatus smf_ttstate_n_j(const SmfTtState *state, uintptr_t axis, uintptr_t *out_n);
-
-/**
- * Return the peak bond rank. Returns 0 if `state` is null.
- *
- * # Safety
- * `state` must be null or a live `SmfTtState` pointer.
- */
-uintptr_t smf_ttstate_peak_rank(const SmfTtState *state);
-
-/**
- * Return the total stored scalar count. Returns 0 if `state` is null.
- *
- * # Safety
- * `state` must be null or a live `SmfTtState` pointer.
- */
-uintptr_t smf_ttstate_storage_size(const SmfTtState *state);
-
-/**
- * Compute the scalar projection `⟨f, u⟩` for a separable functional f.
- *
- * `data`/`offsets`/`n_axes` follow C-2 ragged-array convention; `n_axes`
- * must equal `state.ndim()` and each functional length must equal `n_j(axis)`.
- *
- * # Safety
- * All non-null pointer arguments must be valid for the stated lengths.
- */
-SemiflowStatus smf_ttstate_inner_separable(const SmfTtState *state,
-                                           const double *data,
-                                           const uintptr_t *offsets,
-                                           uintptr_t n_axes,
-                                           double *out_value);
-
-/**
- * Construct a separable `TtChernoff<f64>` evolver.
- *
- * `a[j]` / `b[j]` / `dom_min[j]` / `dom_max[j]` are per-axis arrays of
- * length `n_axes`.  `eps_round` is the TT-rounding tolerance.
- *
- * # Safety
- * All pointer arguments must be valid non-null pointers with `n_axes` f64 entries
- * (or `*mut *mut SmfTtEvolver` for `out_ev`).
- */
-SemiflowStatus smf_tt_evolver_new(const double *a,
-                                  const double *b,
-                                  double c,
-                                  const double *dom_min,
-                                  const double *dom_max,
-                                  uintptr_t n_axes,
-                                  double eps_round,
-                                  SmfTtEvolver **out_ev);
-
-/**
- * Evolve `state` for time `t_final` using `n_steps` Chernoff steps (in-place).
- *
- * Returns `OutOfDomain` if `n_steps == 0`, `t_final` is non-finite/negative, or
- * `ev.ndim() != state.ndim()`.
- *
- * # Safety
- * `ev` and `state` must be non-null live pointers.
- */
-SemiflowStatus smf_tt_evolver_evolve(const SmfTtEvolver *ev,
-                                     SmfTtState *state,
-                                     double t_final,
-                                     uintptr_t n_steps);
-
-/**
- * Free a `SmfTtEvolver` handle. Null-safe; do not use after this call.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_tt_evolver_new`.
- */
-void smf_tt_evolver_free(SmfTtEvolver *ev);
-
-/**
- * Construct a `CoupledTtChernoff<f64>` evolver.
- *
- * Coupling topology is specified via `coupling_tag` (0=None, 1=Tridiagonal,
- * 2=Pairs). Pairs cross as `(pairs_jk[2*n_pairs], pairs_rho[n_pairs])`.
- *
- * **Fail-loud walls pre-checked here** (see contract C-4 / ADR-0162):
- * any `b_j ≠ 0`, non-adjacent pair, or non-SPD block → `OutOfDomain`.
- *
- * # Safety
- * All non-null pointer arguments must be valid for the stated lengths.
- */
-SemiflowStatus smf_tt_coupled_new(const double *a,
-                                  const double *b,
-                                  double c,
-                                  uint32_t coupling_tag,
-                                  double tridiag_rho,
-                                  const uintptr_t *pairs_jk,
-                                  const double *pairs_rho,
-                                  uintptr_t n_pairs,
-                                  const double *dom_min,
-                                  const double *dom_max,
-                                  uintptr_t n_axes,
-                                  double eps_round,
-                                  SmfTtCoupledEvolver **out_ev);
-
-/**
- * Evolve `state` for time `t_final` using `n_steps` Chernoff steps (in-place).
- *
- * Same carrier (`SmfTtState`) as the separable evolver — Gate C: `None` topology
- * is bit-identical to `smf_tt_evolver_evolve`.
- *
- * # Safety
- * `ev` and `state` must be non-null live pointers.
- */
-SemiflowStatus smf_tt_coupled_evolve(const SmfTtCoupledEvolver *ev,
-                                     SmfTtState *state,
-                                     double t_final,
-                                     uintptr_t n_steps);
-
-/**
- * Free a `SmfTtCoupledEvolver` handle. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_tt_coupled_new`.
- */
-void smf_tt_coupled_free(SmfTtCoupledEvolver *ev);
-
-/**
- * Construct a `MeasureState<f64,1>` from particle buffers.
- *
- * `dim` must equal the compiled D (= 1 for this build); otherwise returns
- * `Unsupported`.  `n_part` must be ≥ 1.  All positions/weights must be finite.
- *
- * On success, `*out_state` receives the freshly allocated handle.
- *
- * # Safety
- * `positions` (length `n_part * dim`), `weights` (length `n_part`), and
- * `out_state` must be valid non-null pointers.
- */
-SemiflowStatus smf_measurestate_new(const double *positions,
-                                    const double *weights,
-                                    uintptr_t n_part,
-                                    uintptr_t dim,
-                                    SmfMeasureState **out_state);
-
-/**
- * Free a `SmfMeasureState` handle. Null-safe.
- *
- * # Safety
- * `state` must be null or a live pointer from `smf_measurestate_new`.
- */
-void smf_measurestate_free(SmfMeasureState *state);
-
-/**
- * Return the number of Dirac atoms. Returns 0 if `state` is null.
- *
- * # Safety
- * `state` must be null or a live `SmfMeasureState` pointer.
- */
-uintptr_t smf_measurestate_n_diracs(const SmfMeasureState *state);
-
-/**
- * Write the total-variation norm `‖ρ‖_TV` into `*out_tv`.
- *
- * # Safety
- * `state` and `out_tv` must be non-null valid pointers.
- */
-SemiflowStatus smf_measurestate_total_variation(const SmfMeasureState *state, double *out_tv);
-
-/**
- * Write the second moment `⟨x², ρ⟩` into `*out_m2`.
- *
- * # Safety
- * `state` and `out_m2` must be non-null valid pointers.
- */
-SemiflowStatus smf_measurestate_second_moment(const SmfMeasureState *state, double *out_m2);
-
-/**
- * Write the 1-D marginal onto `axis` into caller-owned buffers.
- *
- * The marginal is the set of `(positions[i][axis], weights[i])` pairs for all
- * Diracs `i`.  Curse-escape preserved: only a sparse marginal crosses the ABI,
- * never a dense grid.
- *
- * Returns `GridMismatch` with `*out_n = n_diracs` if `cap < n_diracs` (retry
- * signal).  Returns `OutOfDomain` if `axis >= COMPILED_D`.
- *
- * # Safety
- * All pointer arguments must be non-null. `out_pos`/`out_wt` must be writable
- * for `cap` f64 elements.
- */
-SemiflowStatus smf_measurestate_marginal(const SmfMeasureState *state,
-                                         double *out_pos,
-                                         double *out_wt,
-                                         uintptr_t cap,
-                                         uintptr_t axis,
-                                         uintptr_t *out_n);
-
-/**
- * Construct a `GridlessChernoff<f64,1>` evolver.
- *
- * `dim` must equal 1 (compiled D); otherwise returns `Unsupported`.
- * `reduction_tag`: 0 = `WeightedVoronoi { cap: voronoi_cap }`,
- *                  1 = `GaussianBackground` (pass-through stub).
- *
- * # Safety
- * `a`, `b`, and `out_ev` must be valid non-null pointers with `dim` elements.
- */
-SemiflowStatus smf_gridless_new(const double *a,
-                                const double *b,
-                                double c,
-                                uintptr_t dim,
-                                uint32_t reduction_tag,
-                                uintptr_t voronoi_cap,
-                                SmfGridlessEvolver **out_ev);
-
-/**
- * Apply one Chernoff step of size `tau`: `dst` is overwritten with the
- * push-forward of `src`.
- *
- * `src` is borrowed read-only; `dst` is overwritten entirely.  A fresh
- * `ScratchPool` is created per call (matches v3 `evolve_into` pattern).
- *
- * # Safety
- * `ev`, `src`, and `dst` must be non-null live pointers.
- */
-SemiflowStatus smf_gridless_apply(const SmfGridlessEvolver *ev,
-                                  double tau,
-                                  const SmfMeasureState *src,
-                                  SmfMeasureState *dst);
-
-/**
- * Evolve `state` in-place for time `t_final` using `n_steps` Chernoff steps.
- *
- * Uses two alternating scratch buffers to avoid re-allocating on each step.
- * The final result is written back into `state`.
- *
- * # Safety
- * `ev` and `state` must be non-null live pointers.
- */
-SemiflowStatus smf_gridless_evolve(const SmfGridlessEvolver *ev,
-                                   double t_final,
-                                   uintptr_t n_steps,
-                                   SmfMeasureState *state);
-
-/**
- * Free a `SmfGridlessEvolver` handle. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_gridless_new`.
- */
-void smf_gridless_free(SmfGridlessEvolver *ev);
-
-/**
- * Allocate a `DiffusionExpmvChernoff` 1-D evolver (unit diffusion `a = 1`).
- *
- * Solves `∂_t u = ∂²u` via tolerance-driven scaled truncated-Taylor (ADR-0121).
- *
- * # Safety
- * `u0` must point to `u0_len` readable `f64`s.
- * `out` must be a valid `*mut *mut SmfExpmv1D`.
- */
-SemiflowStatus smf_expmv1d_new(double xmin,
-                               double xmax,
-                               uintptr_t n,
-                               const double *u0,
-                               uintptr_t u0_len,
-                               uintptr_t n_steps,
-                               SmfExpmv1D **out);
-
-/**
- * Evolve `SmfExpmv1D` state by time `t`, writing result into `dst_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_expmv1d_new`.
- * `dst_buf` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_expmv1d_evolve(SmfExpmv1D *ev, double t, double *dst_buf, uintptr_t dst_len);
-
-/**
- * Copy current `SmfExpmv1D` grid values into `out_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_expmv1d_new`.
- * `out_buf` must be valid for `out_len` writable `f64`s.
- */
-SemiflowStatus smf_expmv1d_values(const SmfExpmv1D *ev, double *out_buf, uintptr_t out_len);
-
-/**
- * Return `SmfExpmv1D` grid size; 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_expmv1d_new`.
- */
-uintptr_t smf_expmv1d_size(const SmfExpmv1D *ev);
-
-/**
- * Free a `SmfExpmv1D` handle.  Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_expmv1d_new`.
- */
-void smf_expmv1d_free(SmfExpmv1D *ev);
-
-/**
- * Allocate a `DriftReactionZeta4Chernoff` 1-D evolver.
- *
- * Solves `∂_t u = b(x)∂_x u + c(x)u` (order 4; palindromic R_sym ∘ K5 ∘ R_sym,
- * ADR-0127). Default: `b = 0.5`, `b' = 0.0`, `c = 0.0`.
- *
- * # Safety
- * `u0` must point to `u0_len` readable `f64`s.
- * `out` must be a valid `*mut *mut SmfDriftReactionZeta4`.
- */
-SemiflowStatus smf_drift_reaction_zeta4_new(double xmin,
-                                            double xmax,
-                                            uintptr_t n,
-                                            const double *u0,
-                                            uintptr_t u0_len,
-                                            uintptr_t n_steps,
-                                            SmfDriftReactionZeta4 **out);
-
-/**
- * Evolve `SmfDriftReactionZeta4` state by time `t`, writing result into `dst_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
- * `dst_buf` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_drift_reaction_zeta4_evolve(SmfDriftReactionZeta4 *ev,
-                                               double t,
-                                               double *dst_buf,
-                                               uintptr_t dst_len);
-
-/**
- * Copy current `SmfDriftReactionZeta4` grid values into `out_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_drift_reaction_zeta4_new`.
- * `out_buf` must be valid for `out_len` writable `f64`s.
- */
-SemiflowStatus smf_drift_reaction_zeta4_values(const SmfDriftReactionZeta4 *ev,
-                                               double *out_buf,
-                                               uintptr_t out_len);
-
-/**
- * Return `SmfDriftReactionZeta4` grid size; 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
- */
-uintptr_t smf_drift_reaction_zeta4_size(const SmfDriftReactionZeta4 *ev);
-
-/**
- * Free a `SmfDriftReactionZeta4` handle.  Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_drift_reaction_zeta4_new`.
- */
-void smf_drift_reaction_zeta4_free(SmfDriftReactionZeta4 *ev);
-
-/**
- * Allocate a `Killing2ndChernoff` 1-D evolver (unit diffusion, constant κ).
- *
- * Solves `∂_t u = ∂²u − κ·u` via palindromic Strang; order 2 (ADR-0126).
- *
- * # Safety
- * `u0` must point to `u0_len` readable `f64`s.
- * `out` must be a valid `*mut *mut SmfKilling2nd`.
- */
-SemiflowStatus smf_killing2nd_new(double xmin,
-                                  double xmax,
-                                  uintptr_t n,
-                                  double kappa,
-                                  const double *u0,
-                                  uintptr_t u0_len,
-                                  uintptr_t n_steps,
-                                  SmfKilling2nd **out);
-
-/**
- * Evolve `SmfKilling2nd` state by time `t`, writing result into `dst_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_killing2nd_new`.
- * `dst_buf` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_killing2nd_evolve(SmfKilling2nd *ev,
-                                     double t,
-                                     double *dst_buf,
-                                     uintptr_t dst_len);
-
-/**
- * Copy current `SmfKilling2nd` grid values into `out_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_killing2nd_new`.
- * `out_buf` must be valid for `out_len` writable `f64`s.
- */
-SemiflowStatus smf_killing2nd_values(const SmfKilling2nd *ev, double *out_buf, uintptr_t out_len);
-
-/**
- * Return `SmfKilling2nd` grid size; 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_killing2nd_new`.
- */
-uintptr_t smf_killing2nd_size(const SmfKilling2nd *ev);
-
-/**
- * Free a `SmfKilling2nd` handle.  Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_killing2nd_new`.
- */
-void smf_killing2nd_free(SmfKilling2nd *ev);
-
-/**
- * Allocate a `MatrixDiffusionChernoff2D` evolver (M=2, constant scalar coefficients).
- *
- * Solves coupled 2-component 2D diffusion via palindromic Strang (order 2, ADR-0124).
- *
- * # Safety
- * `u0` must point to `2*nx*ny` readable `f64`s.
- * `out` must be a valid `*mut *mut SmfMatrix2D`.
- */
-SemiflowStatus smf_matrix2d_new(double xmin,
-                                double xmax,
-                                uintptr_t nx,
-                                double ymin,
-                                double ymax,
-                                uintptr_t ny,
-                                double a_diag,
-                                double c_coupling,
-                                const double *u0,
-                                uintptr_t u0_len,
-                                uintptr_t n_steps,
-                                SmfMatrix2D **out);
-
-/**
- * Evolve `SmfMatrix2D` state by time `t`, writing `2*nx*ny` values into `dst_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_matrix2d_new`.
- * `dst_buf` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix2d_evolve(SmfMatrix2D *ev, double t, double *dst_buf, uintptr_t dst_len);
-
-/**
- * Copy current `SmfMatrix2D` values into `out_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_matrix2d_new`.
- * `out_buf` must be valid for `out_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix2d_values(const SmfMatrix2D *ev, double *out_buf, uintptr_t out_len);
-
-/**
- * Return `SmfMatrix2D` buffer size (`2*nx*ny`); 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_matrix2d_new`.
- */
-uintptr_t smf_matrix2d_size(const SmfMatrix2D *ev);
-
-/**
- * Free a `SmfMatrix2D` handle.  Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_matrix2d_new`.
- */
-void smf_matrix2d_free(SmfMatrix2D *ev);
-
-/**
- * Allocate a `MatrixDiffusionChernoff3D` evolver (M=2, constant scalar coefficients).
- *
- * Solves coupled 2-component 3D diffusion via palindromic Strang (order 2, ADR-0124).
- *
- * # Safety
- * `u0` must point to `2*nx*ny*nz` readable `f64`s.
- * `out` must be a valid `*mut *mut SmfMatrix3D`.
- */
-SemiflowStatus smf_matrix3d_new(double xmin,
-                                double xmax,
-                                uintptr_t nx,
-                                double ymin,
-                                double ymax,
-                                uintptr_t ny,
-                                double zmin,
-                                double zmax,
-                                uintptr_t nz,
-                                double a_diag,
-                                double c_coupling,
-                                const double *u0,
-                                uintptr_t u0_len,
-                                uintptr_t n_steps,
-                                SmfMatrix3D **out);
-
-/**
- * Evolve `SmfMatrix3D` state by time `t`, writing `2*nx*ny*nz` values into `dst_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_matrix3d_new`.
- * `dst_buf` must be valid for `dst_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix3d_evolve(SmfMatrix3D *ev, double t, double *dst_buf, uintptr_t dst_len);
-
-/**
- * Copy current `SmfMatrix3D` values into `out_buf`.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_matrix3d_new`.
- * `out_buf` must be valid for `out_len` writable `f64`s.
- */
-SemiflowStatus smf_matrix3d_values(const SmfMatrix3D *ev, double *out_buf, uintptr_t out_len);
-
-/**
- * Return `SmfMatrix3D` buffer size (`2*nx*ny*nz`); 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_matrix3d_new`.
- */
-uintptr_t smf_matrix3d_size(const SmfMatrix3D *ev);
-
-/**
- * Free a `SmfMatrix3D` handle.  Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_matrix3d_new`.
- */
-void smf_matrix3d_free(SmfMatrix3D *ev);
-
-/**
- * Construct a non-separable 2D evolver with constant coupling `c`.
- *
- * Solves `∂_t u = ∂_xx u + ∂_yy u + c·∂_xy u`.
- * Buffer layout: x-fastest, `idx(i,j) = j*nx + i`.
- *
- * ## Preconditions
- * `xmin < xmax`, `ymin < ymax` (finite); `nx,ny >= 4`.
- * `u0` non-null, length `nx*ny`, all finite.
- * `c` finite.
- *
- * # Safety
- * `u0` readable for `u0_len` f64s; `out_ev` writable as `*mut *mut SmfNonSep2D`.
- */
-SemiflowStatus smf_nonsep2d_new(double xmin,
-                                double xmax,
-                                uintptr_t nx,
-                                double ymin,
-                                double ymax,
-                                uintptr_t ny,
-                                double c,
-                                const double *u0,
-                                uintptr_t u0_len,
-                                SmfNonSep2D **out_ev);
-
-/**
- * Evolve state by `n_steps` of size `tau`. Output written to `out` (x-fastest).
- *
- * # Safety
- * `ev` non-null from `smf_nonsep2d_new`; `out` writable for `out_len` f64s.
- */
-SemiflowStatus smf_nonsep2d_evolve(SmfNonSep2D *ev,
-                                   double tau,
-                                   uintptr_t n_steps,
-                                   double *out,
-                                   uintptr_t out_len);
-
-/**
- * Return `nx * ny`; 0 if `ev` is null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_nonsep2d_new`.
- */
-uintptr_t smf_nonsep2d_size(const SmfNonSep2D *ev);
-
-/**
- * Copy current state into `out` (x-fastest, length `out_len`).
- *
- * # Safety
- * `ev` non-null; `out` writable for `out_len` f64s.
- */
-SemiflowStatus smf_nonsep2d_values(const SmfNonSep2D *ev, double *out, uintptr_t out_len);
-
-/**
- * Free a `SmfNonSep2D` handle. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_nonsep2d_new`.
- */
-void smf_nonsep2d_free(SmfNonSep2D *ev);
-
-/**
- * Construct a non-separable 2D evolver with position-dependent `β(x,y)`.
- *
- * Solves `∂_t u = ∂_xx u + ∂_yy u + β(x,y)·∂_xy u`.
- * `beta` is a flat x-fastest array of length `nx*ny`.
- * `beta_norm_bound`: upper bound on `‖β‖_∞`.
- *   Pass `< 0.0` to auto-compute as `1.1 * max|β|`.
- *
- * # Safety
- * `beta` readable for `beta_len` f64s; `u0` readable for `u0_len` f64s.
- * `out_ev` writable as `*mut *mut SmfNonSep2DAniso`.
- */
-SemiflowStatus smf_nonsep2d_aniso_new(double xmin,
-                                      double xmax,
-                                      uintptr_t nx,
-                                      double ymin,
-                                      double ymax,
-                                      uintptr_t ny,
-                                      const double *beta,
-                                      uintptr_t beta_len,
-                                      double beta_norm_bound,
-                                      const double *u0,
-                                      uintptr_t u0_len,
-                                      SmfNonSep2DAniso **out_ev);
-
-/**
- * Evolve aniso state by `n_steps` of size `tau`.
- *
- * # Safety
- * `ev` non-null; `out` writable for `out_len` f64s.
- */
-SemiflowStatus smf_nonsep2d_aniso_evolve(SmfNonSep2DAniso *ev,
-                                         double tau,
-                                         uintptr_t n_steps,
-                                         double *out,
-                                         uintptr_t out_len);
-
-/**
- * Return `nx * ny`; 0 if `ev` is null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_nonsep2d_aniso_new`.
- */
-uintptr_t smf_nonsep2d_aniso_size(const SmfNonSep2DAniso *ev);
-
-/**
- * Copy current state into `out`.
- *
- * # Safety
- * `ev` non-null; `out` writable for `out_len` f64s.
- */
-SemiflowStatus smf_nonsep2d_aniso_values(const SmfNonSep2DAniso *ev,
-                                         double *out,
-                                         uintptr_t out_len);
-
-/**
- * Free a `SmfNonSep2DAniso` handle. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_nonsep2d_aniso_new`.
- */
-void smf_nonsep2d_aniso_free(SmfNonSep2DAniso *ev);
-
-/**
  * Construct a 2D anisotropic-shift evolver from pre-sampled coefficient arrays.
  *
  * `a_values`: flat `2×2` SPD matrices, length `4 * nx * ny` (row-major).
@@ -4228,6 +4098,130 @@ SemiflowStatus smf_aniso_nd3_values(const SmfAnisoND3 *ev, double *out, uintptr_
 void smf_aniso_nd3_free(SmfAnisoND3 *ev);
 
 /**
+ * Construct a non-separable 2D evolver with constant coupling `c`.
+ *
+ * Solves `∂_t u = ∂_xx u + ∂_yy u + c·∂_xy u`.
+ * Buffer layout: x-fastest, `idx(i,j) = j*nx + i`.
+ *
+ * ## Preconditions
+ * `xmin < xmax`, `ymin < ymax` (finite); `nx,ny >= 4`.
+ * `u0` non-null, length `nx*ny`, all finite.
+ * `c` finite.
+ *
+ * # Safety
+ * `u0` readable for `u0_len` f64s; `out_ev` writable as `*mut *mut SmfNonSep2D`.
+ */
+SemiflowStatus smf_nonsep2d_new(double xmin,
+                                double xmax,
+                                uintptr_t nx,
+                                double ymin,
+                                double ymax,
+                                uintptr_t ny,
+                                double c,
+                                const double *u0,
+                                uintptr_t u0_len,
+                                SmfNonSep2D **out_ev);
+
+/**
+ * Evolve state by `n_steps` of size `tau`. Output written to `out` (x-fastest).
+ *
+ * # Safety
+ * `ev` non-null from `smf_nonsep2d_new`; `out` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_nonsep2d_evolve(SmfNonSep2D *ev,
+                                   double tau,
+                                   uintptr_t n_steps,
+                                   double *out,
+                                   uintptr_t out_len);
+
+/**
+ * Return `nx * ny`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_nonsep2d_new`.
+ */
+uintptr_t smf_nonsep2d_size(const SmfNonSep2D *ev);
+
+/**
+ * Copy current state into `out` (x-fastest, length `out_len`).
+ *
+ * # Safety
+ * `ev` non-null; `out` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_nonsep2d_values(const SmfNonSep2D *ev, double *out, uintptr_t out_len);
+
+/**
+ * Free a `SmfNonSep2D` handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_nonsep2d_new`.
+ */
+void smf_nonsep2d_free(SmfNonSep2D *ev);
+
+/**
+ * Construct a non-separable 2D evolver with position-dependent `β(x,y)`.
+ *
+ * Solves `∂_t u = ∂_xx u + ∂_yy u + β(x,y)·∂_xy u`.
+ * `beta` is a flat x-fastest array of length `nx*ny`.
+ * `beta_norm_bound`: upper bound on `‖β‖_∞`.
+ *   Pass `< 0.0` to auto-compute as `1.1 * max|β|`.
+ *
+ * # Safety
+ * `beta` readable for `beta_len` f64s; `u0` readable for `u0_len` f64s.
+ * `out_ev` writable as `*mut *mut SmfNonSep2DAniso`.
+ */
+SemiflowStatus smf_nonsep2d_aniso_new(double xmin,
+                                      double xmax,
+                                      uintptr_t nx,
+                                      double ymin,
+                                      double ymax,
+                                      uintptr_t ny,
+                                      const double *beta,
+                                      uintptr_t beta_len,
+                                      double beta_norm_bound,
+                                      const double *u0,
+                                      uintptr_t u0_len,
+                                      SmfNonSep2DAniso **out_ev);
+
+/**
+ * Evolve aniso state by `n_steps` of size `tau`.
+ *
+ * # Safety
+ * `ev` non-null; `out` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_nonsep2d_aniso_evolve(SmfNonSep2DAniso *ev,
+                                         double tau,
+                                         uintptr_t n_steps,
+                                         double *out,
+                                         uintptr_t out_len);
+
+/**
+ * Return `nx * ny`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_nonsep2d_aniso_new`.
+ */
+uintptr_t smf_nonsep2d_aniso_size(const SmfNonSep2DAniso *ev);
+
+/**
+ * Copy current state into `out`.
+ *
+ * # Safety
+ * `ev` non-null; `out` writable for `out_len` f64s.
+ */
+SemiflowStatus smf_nonsep2d_aniso_values(const SmfNonSep2DAniso *ev,
+                                         double *out,
+                                         uintptr_t out_len);
+
+/**
+ * Free a `SmfNonSep2DAniso` handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_nonsep2d_aniso_new`.
+ */
+void smf_nonsep2d_aniso_free(SmfNonSep2DAniso *ev);
+
+/**
  * Construct a 6-D Smolyak evolver (unit diffusion, level ℓ=9).
  *
  * ## Preconditions
@@ -4362,6 +4356,83 @@ uintptr_t smf_howland1d_size(const SmfHowland1D *ev);
 void smf_howland1d_free(SmfHowland1D *ev);
 
 /**
+ * Allocate a 2D Riemannian manifold Chernoff evolver.
+ *
+ * `manifold_tag`: 0 = torus, 1 = sphere2, 2 = hyperbolic2.
+ * `radius`      — sphere radius or hyperbolic scale; must be > 0.
+ *                 Ignored for torus.
+ * `curvature_correction` — apply R/12 correction (MMRS 2023 Thm 1).
+ *
+ * ## Preconditions
+ * - `x0min < x0max`, `x1min < x1max`, both finite; `nx >= 4`, `ny >= 4`.
+ * - `u0` non-null, `u0_len == nx*ny`, all finite.
+ * - `out` non-null.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Unsupported` | `Panic`.
+ *
+ * # Safety
+ * `u0` must point to `u0_len` readable `f64` values.
+ * `out` must be a valid writable `*mut *mut SmfManifold2D`.
+ */
+SemiflowStatus smf_manifold2d_new(double x0min,
+                                  double x0max,
+                                  uintptr_t nx,
+                                  double x1min,
+                                  double x1max,
+                                  uintptr_t ny,
+                                  unsigned int manifold_tag,
+                                  double radius,
+                                  bool curvature_correction,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  SmfManifold2D **out);
+
+/**
+ * Advance manifold evolver by time `t` using `n_steps` iterations.
+ *
+ * Writes `nx*ny` values into `dst` (row-major, x0-fastest).
+ * `tau = t / n_steps`.
+ *
+ * ## Return values
+ * `Ok` | `NullPtr` | `GridMismatch` | `OutOfDomain` | `Panic`.
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_manifold2d_new`.
+ * `dst` must be valid for `dst_len` writable `f64`s.
+ */
+SemiflowStatus smf_manifold2d_evolve(SmfManifold2D *ev,
+                                     double t,
+                                     uintptr_t n_steps,
+                                     double *dst,
+                                     uintptr_t dst_len);
+
+/**
+ * Copy current manifold values into `out` (row-major, x0-fastest).
+ *
+ * # Safety
+ * `ev` must be a live pointer from `smf_manifold2d_new`.
+ * `out` must be valid for `out_len` writable `f64`s.
+ */
+SemiflowStatus smf_manifold2d_values(const SmfManifold2D *ev, double *out, uintptr_t out_len);
+
+/**
+ * Return `nx * ny`; 0 if `ev` is null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ */
+uintptr_t smf_manifold2d_size(const SmfManifold2D *ev);
+
+/**
+ * Free a manifold handle. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ */
+void smf_manifold2d_free(SmfManifold2D *ev);
+
+/**
  * Allocate a subordinated 1D heat evolver.
  *
  * `subordinator_tag`: 0 = stable, 1 = gamma, 2 = `inverse_gaussian`.
@@ -4440,81 +4511,72 @@ uintptr_t smf_subordinated1d_size(const SmfSubordinated1D *ev);
 void smf_subordinated1d_free(SmfSubordinated1D *ev);
 
 /**
- * Allocate a 2D Riemannian manifold Chernoff evolver.
+ * Allocate an Engel-group hypoelliptic Chernoff evolver.
  *
- * `manifold_tag`: 0 = torus, 1 = sphere2, 2 = hyperbolic2.
- * `radius`      — sphere radius or hyperbolic scale; must be > 0.
- *                 Ignored for torus.
- * `curvature_correction` — apply R/12 correction (MMRS 2023 Thm 1).
+ * Wraps `HypoellipticChernoff<f64, 4, 2>` on ℝ⁴ (step-3 Carnot, D=4, M=2).
+ * All 4 axes share the same `[xmin, xmax, n]` parameters.
+ *
+ * ## Buffer layout (axis-0-fastest)
+ * Flat f64 array of length `n**4`:
+ *   `idx(i0,i1,i2,i3) = i3*n³ + i2*n² + i1*n + i0`
  *
  * ## Preconditions
- * - `x0min < x0max`, `x1min < x1max`, both finite; `nx >= 4`, `ny >= 4`.
- * - `u0` non-null, `u0_len == nx*ny`, all finite.
- * - `out` non-null.
+ * `xmin < xmax` (finite); `n >= 4`. `u0` non-null, `u0_len == n**4`, all finite.
+ * `out` non-null.
  *
  * ## Return values
- * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Unsupported` | `Panic`.
+ * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Panic`.
  *
  * # Safety
- * `u0` must point to `u0_len` readable `f64` values.
- * `out` must be a valid writable `*mut *mut SmfManifold2D`.
+ * `u0` must point to `u0_len` readable f64 values.
+ * `out` must be a valid writable `*mut *mut SmfHypoEngel`.
  */
-SemiflowStatus smf_manifold2d_new(double x0min,
-                                  double x0max,
-                                  uintptr_t nx,
-                                  double x1min,
-                                  double x1max,
-                                  uintptr_t ny,
-                                  unsigned int manifold_tag,
-                                  double radius,
-                                  bool curvature_correction,
+SemiflowStatus smf_hypo_engel_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
                                   const double *u0,
                                   uintptr_t u0_len,
-                                  SmfManifold2D **out);
+                                  SmfHypoEngel **out);
 
 /**
- * Advance manifold evolver by time `t` using `n_steps` iterations.
+ * Advance Engel state by time `t` using `n_steps` iterations (τ = `t/n_steps`).
  *
- * Writes `nx*ny` values into `dst` (row-major, x0-fastest).
- * `tau = t / n_steps`.
- *
- * ## Return values
- * `Ok` | `NullPtr` | `GridMismatch` | `OutOfDomain` | `Panic`.
+ * Writes `n**4` values into `dst` (axis-0-fastest). Updates internal state.
  *
  * # Safety
- * `ev` must be a live pointer from `smf_manifold2d_new`.
- * `dst` must be valid for `dst_len` writable `f64`s.
+ * `ev` must be a live pointer from `smf_hypo_engel_new`.
+ * `dst` must be valid for `dst_len` writable f64s.
  */
-SemiflowStatus smf_manifold2d_evolve(SmfManifold2D *ev,
+SemiflowStatus smf_hypo_engel_evolve(SmfHypoEngel *ev,
                                      double t,
                                      uintptr_t n_steps,
                                      double *dst,
                                      uintptr_t dst_len);
 
 /**
- * Copy current manifold values into `out` (row-major, x0-fastest).
+ * Copy current Engel state into `out` (axis-0-fastest, length `n**4`).
  *
  * # Safety
- * `ev` must be a live pointer from `smf_manifold2d_new`.
- * `out` must be valid for `out_len` writable `f64`s.
+ * `ev` must be a live pointer from `smf_hypo_engel_new`.
+ * `out` must be valid for `out_len` writable f64s.
  */
-SemiflowStatus smf_manifold2d_values(const SmfManifold2D *ev, double *out, uintptr_t out_len);
+SemiflowStatus smf_hypo_engel_values(const SmfHypoEngel *ev, double *out, uintptr_t out_len);
 
 /**
- * Return `nx * ny`; 0 if `ev` is null.
+ * Return `n**4`; 0 if `ev` is null.
  *
  * # Safety
- * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
  */
-uintptr_t smf_manifold2d_size(const SmfManifold2D *ev);
+uintptr_t smf_hypo_engel_size(const SmfHypoEngel *ev);
 
 /**
- * Free a manifold handle. Null-safe.
+ * Free an Engel handle. Null-safe; do not use after this call.
  *
  * # Safety
- * `ev` must be null or a live pointer from `smf_manifold2d_new`.
+ * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
  */
-void smf_manifold2d_free(SmfManifold2D *ev);
+void smf_hypo_engel_free(SmfHypoEngel *ev);
 
 /**
  * Construct the Heisenberg-group Chernoff kernel.
@@ -4644,74 +4706,6 @@ uintptr_t smf_hypo_kolmogorov_size(const SmfHypoKolmogorov *ev);
  * `ev` must be null or a live pointer from `smf_hypo_kolmogorov_new`.
  */
 void smf_hypo_kolmogorov_free(SmfHypoKolmogorov *ev);
-
-/**
- * Allocate an Engel-group hypoelliptic Chernoff evolver.
- *
- * Wraps `HypoellipticChernoff<f64, 4, 2>` on ℝ⁴ (step-3 Carnot, D=4, M=2).
- * All 4 axes share the same `[xmin, xmax, n]` parameters.
- *
- * ## Buffer layout (axis-0-fastest)
- * Flat f64 array of length `n**4`:
- *   `idx(i0,i1,i2,i3) = i3*n³ + i2*n² + i1*n + i0`
- *
- * ## Preconditions
- * `xmin < xmax` (finite); `n >= 4`. `u0` non-null, `u0_len == n**4`, all finite.
- * `out` non-null.
- *
- * ## Return values
- * `Ok` | `NullPtr` | `GridMismatch` | `NanInf` | `OutOfDomain` | `Panic`.
- *
- * # Safety
- * `u0` must point to `u0_len` readable f64 values.
- * `out` must be a valid writable `*mut *mut SmfHypoEngel`.
- */
-SemiflowStatus smf_hypo_engel_new(double xmin,
-                                  double xmax,
-                                  uintptr_t n,
-                                  const double *u0,
-                                  uintptr_t u0_len,
-                                  SmfHypoEngel **out);
-
-/**
- * Advance Engel state by time `t` using `n_steps` iterations (τ = `t/n_steps`).
- *
- * Writes `n**4` values into `dst` (axis-0-fastest). Updates internal state.
- *
- * # Safety
- * `ev` must be a live pointer from `smf_hypo_engel_new`.
- * `dst` must be valid for `dst_len` writable f64s.
- */
-SemiflowStatus smf_hypo_engel_evolve(SmfHypoEngel *ev,
-                                     double t,
-                                     uintptr_t n_steps,
-                                     double *dst,
-                                     uintptr_t dst_len);
-
-/**
- * Copy current Engel state into `out` (axis-0-fastest, length `n**4`).
- *
- * # Safety
- * `ev` must be a live pointer from `smf_hypo_engel_new`.
- * `out` must be valid for `out_len` writable f64s.
- */
-SemiflowStatus smf_hypo_engel_values(const SmfHypoEngel *ev, double *out, uintptr_t out_len);
-
-/**
- * Return `n**4`; 0 if `ev` is null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
- */
-uintptr_t smf_hypo_engel_size(const SmfHypoEngel *ev);
-
-/**
- * Free an Engel handle. Null-safe; do not use after this call.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_hypo_engel_new`.
- */
-void smf_hypo_engel_free(SmfHypoEngel *ev);
 
 /**
  * Construct a `GraphHeat4thChernoff` (order-4) state.
@@ -4887,6 +4881,112 @@ SemiflowStatus smf_vc_ghc_current(const SmfVcGhc *state, double *buf, uint32_t b
  * `state` must be null or a pointer from `smf_vc_ghc_new` not yet freed.
  */
 void smf_vc_ghc_drop(SmfVcGhc *state);
+
+/**
+ * Construct a `ComplexTripleJump` evolver.
+ *
+ * Parameters:
+ * - `domain_lo`: lower bound of each axis (finite, same for all 5 axes).
+ * - `domain_hi`: upper bound (`> domain_lo`).
+ * - `n_per_axis`: grid nodes per axis (`>= 4`).
+ * - `out`: receives the handle on success.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfCarnotCtj`.
+ */
+SemiflowStatus smf_carnot_ctj_new(double domain_lo,
+                                  double domain_hi,
+                                  uintptr_t n_per_axis,
+                                  SmfCarnotCtj **out);
+
+/**
+ * Apply one order-4 complex triple-jump step; write real projection to `dst`.
+ *
+ * `u0` is a flat `f64` array of length `n_per_axis^5` (real input).
+ * `dst` receives the real projection `Re(Ψ(τ)f)`; must be length `n_per_axis^5`.
+ * `tau >= 0`, finite.
+ *
+ * # Safety
+ * `ev` live from `smf_carnot_ctj_new`;
+ * `u0` readable `u0_len` f64s; `dst` writable `dst_len` f64s.
+ */
+SemiflowStatus smf_carnot_ctj_apply_real(const SmfCarnotCtj *ev,
+                                         double tau,
+                                         const double *u0,
+                                         uintptr_t u0_len,
+                                         double *dst,
+                                         uintptr_t dst_len);
+
+/**
+ * Return `n_per_axis^5`; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_carnot_ctj_new`.
+ */
+uintptr_t smf_carnot_ctj_size(const SmfCarnotCtj *ev);
+
+/**
+ * Verify γ⋆ satisfies the cubic `2γ³ + (1−2γ)³ = 0` with Re > 0.
+ *
+ * Returns 1 on pass, 0 on failure.
+ */
+int32_t smf_carnot_ctj_verify_gamma_star(void);
+
+/**
+ * Free a `SmfCarnotCtj`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_carnot_ctj_new` not yet freed.
+ */
+void smf_carnot_ctj_drop(SmfCarnotCtj *ev);
+
+/**
+ * Construct a `PointEval` with 1-D unit diffusion (`a ≡ 1`).
+ *
+ * Parameters:
+ * - `xmin`, `xmax`: grid boundaries (finite, `xmin < xmax`).
+ * - `n`: number of grid nodes (`>= 4`).
+ * - `out`: receives handle on success.
+ *
+ * # Safety
+ * `out` must be a valid writable `*mut *mut SmfPointEval`.
+ */
+SemiflowStatus smf_point_eval_new(double xmin, double xmax, uintptr_t n, SmfPointEval **out);
+
+/**
+ * Evaluate `(F(τ))^{n_steps} u0` at point `x`.
+ *
+ * `u0` is a flat `f64` array of length `n`.
+ * Returns the scalar approximation at `x` through `*out_val`.
+ * `n_steps >= 1`, `tau >= 0` and finite.
+ *
+ * # Safety
+ * `ev` live from `smf_point_eval_new`;
+ * `u0` readable `u0_len` f64s; `out_val` writable f64 pointer.
+ */
+SemiflowStatus smf_point_eval_eval_at(const SmfPointEval *ev,
+                                      double tau,
+                                      const double *u0,
+                                      uintptr_t u0_len,
+                                      double x,
+                                      uint32_t n_steps,
+                                      double *out_val);
+
+/**
+ * Return grid node count `n`; 0 if null.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_point_eval_new`.
+ */
+uintptr_t smf_point_eval_size(const SmfPointEval *ev);
+
+/**
+ * Free a `SmfPointEval`. Null-safe.
+ *
+ * # Safety
+ * `ev` must be null or a live pointer from `smf_point_eval_new` not yet freed.
+ */
+void smf_point_eval_drop(SmfPointEval *ev);
 
 /**
  * Build a path graph `P_{n_edges+1}` and write the handle to `*out`.
@@ -5071,112 +5171,6 @@ uint32_t smf_strang_graph_order(const SmfStrangGraph *ev);
 void smf_strang_graph_drop(SmfStrangGraph *ev);
 
 /**
- * Construct a `ComplexTripleJump` evolver.
- *
- * Parameters:
- * - `domain_lo`: lower bound of each axis (finite, same for all 5 axes).
- * - `domain_hi`: upper bound (`> domain_lo`).
- * - `n_per_axis`: grid nodes per axis (`>= 4`).
- * - `out`: receives the handle on success.
- *
- * # Safety
- * `out` must be a valid writable `*mut *mut SmfCarnotCtj`.
- */
-SemiflowStatus smf_carnot_ctj_new(double domain_lo,
-                                  double domain_hi,
-                                  uintptr_t n_per_axis,
-                                  SmfCarnotCtj **out);
-
-/**
- * Apply one order-4 complex triple-jump step; write real projection to `dst`.
- *
- * `u0` is a flat `f64` array of length `n_per_axis^5` (real input).
- * `dst` receives the real projection `Re(Ψ(τ)f)`; must be length `n_per_axis^5`.
- * `tau >= 0`, finite.
- *
- * # Safety
- * `ev` live from `smf_carnot_ctj_new`;
- * `u0` readable `u0_len` f64s; `dst` writable `dst_len` f64s.
- */
-SemiflowStatus smf_carnot_ctj_apply_real(const SmfCarnotCtj *ev,
-                                         double tau,
-                                         const double *u0,
-                                         uintptr_t u0_len,
-                                         double *dst,
-                                         uintptr_t dst_len);
-
-/**
- * Return `n_per_axis^5`; 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_carnot_ctj_new`.
- */
-uintptr_t smf_carnot_ctj_size(const SmfCarnotCtj *ev);
-
-/**
- * Verify γ⋆ satisfies the cubic `2γ³ + (1−2γ)³ = 0` with Re > 0.
- *
- * Returns 1 on pass, 0 on failure.
- */
-int32_t smf_carnot_ctj_verify_gamma_star(void);
-
-/**
- * Free a `SmfCarnotCtj`. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_carnot_ctj_new` not yet freed.
- */
-void smf_carnot_ctj_drop(SmfCarnotCtj *ev);
-
-/**
- * Construct a `PointEval` with 1-D unit diffusion (`a ≡ 1`).
- *
- * Parameters:
- * - `xmin`, `xmax`: grid boundaries (finite, `xmin < xmax`).
- * - `n`: number of grid nodes (`>= 4`).
- * - `out`: receives handle on success.
- *
- * # Safety
- * `out` must be a valid writable `*mut *mut SmfPointEval`.
- */
-SemiflowStatus smf_point_eval_new(double xmin, double xmax, uintptr_t n, SmfPointEval **out);
-
-/**
- * Evaluate `(F(τ))^{n_steps} u0` at point `x`.
- *
- * `u0` is a flat `f64` array of length `n`.
- * Returns the scalar approximation at `x` through `*out_val`.
- * `n_steps >= 1`, `tau >= 0` and finite.
- *
- * # Safety
- * `ev` live from `smf_point_eval_new`;
- * `u0` readable `u0_len` f64s; `out_val` writable f64 pointer.
- */
-SemiflowStatus smf_point_eval_eval_at(const SmfPointEval *ev,
-                                      double tau,
-                                      const double *u0,
-                                      uintptr_t u0_len,
-                                      double x,
-                                      uint32_t n_steps,
-                                      double *out_val);
-
-/**
- * Return grid node count `n`; 0 if null.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_point_eval_new`.
- */
-uintptr_t smf_point_eval_size(const SmfPointEval *ev);
-
-/**
- * Free a `SmfPointEval`. Null-safe.
- *
- * # Safety
- * `ev` must be null or a live pointer from `smf_point_eval_new` not yet freed.
- */
-void smf_point_eval_drop(SmfPointEval *ev);
-
-/**
  * Construct a `VarCoefTt<f64>` evolver.
  *
  * Three CSR-ragged arrays carry the per-axis coefficient vectors:
@@ -5235,65 +5229,63 @@ uintptr_t smf_varcoef_tt_evolver_ndim(const SmfVarCoefTtEvolver *ev);
 void smf_varcoef_tt_evolver_free(SmfVarCoefTtEvolver *ev);
 
 /**
- * Allocate a 1-D obstacle Chernoff evolver.
+ * Allocate a 1-D adaptive PI integrator.
  *
- * - `obs_buf == NULL` → constant obstacle at `level`.
- * - `obs_buf != NULL` → array obstacle; `obs_len` must equal `n`.
- * - `b == 0 && c == 0` → pure-diffusion fast path.
- * - Otherwise → Strang-split inner.
+ * `kernel` must be NUL-terminated: `"heat2"`, `"heat4"`, `"heat6"`,
+ * `"drift"`, or `"shift"`.
  *
  * # Safety
- * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfObstacle1D`.
- * `obs_buf` readable for `obs_len` f64s when non-null.
+ * `kernel` must be a valid NUL-terminated C string.
+ * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfAdaptivePI`.
  */
-SemiflowStatus smf_obstacle1d_new(double xmin,
-                                  double xmax,
-                                  uintptr_t n,
-                                  uintptr_t n_steps,
-                                  double a,
-                                  double b,
-                                  double c,
-                                  double level,
-                                  const double *obs_buf,
-                                  uintptr_t obs_len,
-                                  const double *u0,
-                                  uintptr_t u0_len,
-                                  SmfObstacle1D **out);
+SemiflowStatus smf_adaptive_pi_new(double xmin,
+                                   double xmax,
+                                   uintptr_t n,
+                                   const char *kernel,
+                                   double tol_abs,
+                                   double tol_rel,
+                                   const double *u0,
+                                   uintptr_t u0_len,
+                                   SmfAdaptivePI **out);
 
 /**
- * Evolve the obstacle evolver by time `t` and write grid values to `dst_buf`.
+ * Evolve by time `t` using adaptive PI substeps; write result to `dst_buf`.
+ *
+ * `steps_accepted` and `steps_rejected` are optional — pass NULL to ignore.
  *
  * # Safety
- * `ev` live pointer from `smf_obstacle1d_new`; `dst_buf` writable for `dst_len` f64s.
+ * `ev` live from `smf_adaptive_pi_new`; `dst_buf` writable for `dst_len` f64s.
  */
-SemiflowStatus smf_obstacle1d_evolve(SmfObstacle1D *ev,
-                                     double t,
-                                     double *dst_buf,
-                                     uintptr_t dst_len);
+SemiflowStatus smf_adaptive_pi_evolve(SmfAdaptivePI *ev,
+                                      double t,
+                                      double *dst_buf,
+                                      uintptr_t dst_len,
+                                      uintptr_t *steps_accepted,
+                                      uintptr_t *steps_rejected);
 
 /**
  * Copy current grid values into `out_buf`.
  *
  * # Safety
- * `ev` live pointer; `out_buf` writable for `out_len` f64s.
+ * `ev` live; `out_buf` writable for `out_len` f64s.
  */
-SemiflowStatus smf_obstacle1d_values(const SmfObstacle1D *ev, double *out_buf, uintptr_t out_len);
+SemiflowStatus smf_adaptive_pi_values(const SmfAdaptivePI *ev, double *out_buf, uintptr_t out_len);
 
 /**
  * Return grid size; 0 if null.
  *
  * # Safety
- * `ev` must be null or live from `smf_obstacle1d_new`.
+ * `ev` must be null or live from `smf_adaptive_pi_new`.
  */
-uintptr_t smf_obstacle1d_size(const SmfObstacle1D *ev);
+uintptr_t smf_adaptive_pi_size(const SmfAdaptivePI *ev);
 
 /**
- * Free a `SmfObstacle1D` handle.  Null-safe.
+ * Free a `SmfAdaptivePI` handle.  Null-safe.
  *
  * # Safety
- * `ev` must be null or live from `smf_obstacle1d_new`.
+ * `ev` must be null or live from `smf_adaptive_pi_new`.
  */
-void smf_obstacle1d_free(SmfObstacle1D *ev);
+void smf_adaptive_pi_free(SmfAdaptivePI *ev);
 
 /**
  * Allocate a 1-D adjoint Chernoff evolver.
@@ -5357,63 +5349,65 @@ uint32_t smf_adjoint1d_order(const SmfAdjoint1D *ev);
 void smf_adjoint1d_free(SmfAdjoint1D *ev);
 
 /**
- * Allocate a 1-D adaptive PI integrator.
+ * Allocate a 1-D obstacle Chernoff evolver.
  *
- * `kernel` must be NUL-terminated: `"heat2"`, `"heat4"`, `"heat6"`,
- * `"drift"`, or `"shift"`.
+ * - `obs_buf == NULL` → constant obstacle at `level`.
+ * - `obs_buf != NULL` → array obstacle; `obs_len` must equal `n`.
+ * - `b == 0 && c == 0` → pure-diffusion fast path.
+ * - Otherwise → Strang-split inner.
  *
  * # Safety
- * `kernel` must be a valid NUL-terminated C string.
- * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfAdaptivePI`.
+ * `u0` readable for `u0_len` f64s; `out` writable `*mut *mut SmfObstacle1D`.
+ * `obs_buf` readable for `obs_len` f64s when non-null.
  */
-SemiflowStatus smf_adaptive_pi_new(double xmin,
-                                   double xmax,
-                                   uintptr_t n,
-                                   const char *kernel,
-                                   double tol_abs,
-                                   double tol_rel,
-                                   const double *u0,
-                                   uintptr_t u0_len,
-                                   SmfAdaptivePI **out);
+SemiflowStatus smf_obstacle1d_new(double xmin,
+                                  double xmax,
+                                  uintptr_t n,
+                                  uintptr_t n_steps,
+                                  double a,
+                                  double b,
+                                  double c,
+                                  double level,
+                                  const double *obs_buf,
+                                  uintptr_t obs_len,
+                                  const double *u0,
+                                  uintptr_t u0_len,
+                                  SmfObstacle1D **out);
 
 /**
- * Evolve by time `t` using adaptive PI substeps; write result to `dst_buf`.
- *
- * `steps_accepted` and `steps_rejected` are optional — pass NULL to ignore.
+ * Evolve the obstacle evolver by time `t` and write grid values to `dst_buf`.
  *
  * # Safety
- * `ev` live from `smf_adaptive_pi_new`; `dst_buf` writable for `dst_len` f64s.
+ * `ev` live pointer from `smf_obstacle1d_new`; `dst_buf` writable for `dst_len` f64s.
  */
-SemiflowStatus smf_adaptive_pi_evolve(SmfAdaptivePI *ev,
-                                      double t,
-                                      double *dst_buf,
-                                      uintptr_t dst_len,
-                                      uintptr_t *steps_accepted,
-                                      uintptr_t *steps_rejected);
+SemiflowStatus smf_obstacle1d_evolve(SmfObstacle1D *ev,
+                                     double t,
+                                     double *dst_buf,
+                                     uintptr_t dst_len);
 
 /**
  * Copy current grid values into `out_buf`.
  *
  * # Safety
- * `ev` live; `out_buf` writable for `out_len` f64s.
+ * `ev` live pointer; `out_buf` writable for `out_len` f64s.
  */
-SemiflowStatus smf_adaptive_pi_values(const SmfAdaptivePI *ev, double *out_buf, uintptr_t out_len);
+SemiflowStatus smf_obstacle1d_values(const SmfObstacle1D *ev, double *out_buf, uintptr_t out_len);
 
 /**
  * Return grid size; 0 if null.
  *
  * # Safety
- * `ev` must be null or live from `smf_adaptive_pi_new`.
+ * `ev` must be null or live from `smf_obstacle1d_new`.
  */
-uintptr_t smf_adaptive_pi_size(const SmfAdaptivePI *ev);
+uintptr_t smf_obstacle1d_size(const SmfObstacle1D *ev);
 
 /**
- * Free a `SmfAdaptivePI` handle.  Null-safe.
+ * Free a `SmfObstacle1D` handle.  Null-safe.
  *
  * # Safety
- * `ev` must be null or live from `smf_adaptive_pi_new`.
+ * `ev` must be null or live from `smf_obstacle1d_new`.
  */
-void smf_adaptive_pi_free(SmfAdaptivePI *ev);
+void smf_obstacle1d_free(SmfObstacle1D *ev);
 
 /**
  * Assemble the combinatorial Laplacian `L = D − W` from `graph`.
@@ -5493,45 +5487,29 @@ bool smf_laplacian_is_normalized(const SmfLaplacian *lap);
 double smf_laplacian_spectral_bound(const SmfLaplacian *lap);
 
 /**
- * Copy the CSR row-pointer array (`len = n_nodes + 1`) into a newly
- * allocated `*usize` buffer.  `*out` is set to the buffer start;
- * `*len` is set to `n_nodes + 1`.
- *
- * ## Return values
- * - `Ok` (0)      — success.
- * - `NullPtr` (5) — any argument is null.
- * - `Panic` (99)  — internal Rust panic.
- *
- * ## Ownership
+ * Copy CSR row-pointer array (`len = n_nodes + 1`) into a heap `*usize` buffer.
  * Caller frees with `smf_free_buf_usize(*out, *len)`.
  *
  * # Safety
- * - `lap` must be a valid pointer from `smf_graph_laplacian_*`.
- * - `out` and `len` must be valid non-null write pointers.
+ * `lap` is a valid `smf_graph_laplacian_*` pointer; `out`/`len` are non-null.
  */
 SemiflowStatus smf_laplacian_row_ptr(const SmfLaplacian *lap, uintptr_t **out, uintptr_t *len);
 
 /**
- * Copy the CSR column-index array (`len = n_directed_edges`) into a newly
- * allocated `*usize` buffer.
+ * Copy CSR column-index array (`len = n_directed_edges`, u32 widened to usize).
+ * Caller frees with `smf_free_buf_usize(*out, *len)`.
  *
- * The `col_idx` values are `u32` internally; they are widened to `usize`
- * for a uniform index type matching `row_ptr`.
- *
- * ## Return values / Ownership — same as `smf_laplacian_row_ptr`.
- *
- * # Safety — same as `smf_laplacian_row_ptr`.
+ * # Safety
+ * Same as `smf_laplacian_row_ptr`.
  */
 SemiflowStatus smf_laplacian_col_idx(const SmfLaplacian *lap, uintptr_t **out, uintptr_t *len);
 
 /**
- * Copy the CSR value array (`len = n_directed_edges`) into a newly
- * allocated `*f64` buffer.
+ * Copy CSR value array (`len = n_directed_edges`) into a heap `*f64` buffer.
+ * Caller frees with `smf_free_buf_f64(*out, *len)`.
  *
- * ## Return values / Ownership — same as `smf_laplacian_row_ptr`
- * (free with `smf_free_buf_f64`).
- *
- * # Safety — same as `smf_laplacian_row_ptr`.
+ * # Safety
+ * Same as `smf_laplacian_row_ptr`.
  */
 SemiflowStatus smf_laplacian_vals(const SmfLaplacian *lap, double **out, uintptr_t *len);
 
@@ -5557,27 +5535,18 @@ SemiflowStatus smf_laplacian_vals(const SmfLaplacian *lap, double **out, uintptr
 SemiflowStatus smf_laplacian_to_dense(const SmfLaplacian *lap, double **out, uintptr_t *n);
 
 /**
- * Free a `usize` buffer previously returned by `smf_laplacian_row_ptr` or
- * `smf_laplacian_col_idx`.  Null-safe.
- *
- * `len` must exactly match the length written to `*len` by the read-back
- * function — it is used to reconstruct the correct `Box<[usize]>`.
+ * Free a `usize` buffer from `smf_laplacian_row_ptr` or `smf_laplacian_col_idx`. Null-safe.
  *
  * # Safety
- * - `buf` must be null or a pointer from `smf_laplacian_row_ptr` /
- *   `smf_laplacian_col_idx`, with the matching `len`.
+ * `buf` is null or a matching `(ptr, len)` from the read-back function.
  */
 void smf_free_buf_usize(uintptr_t *buf, uintptr_t len);
 
 /**
- * Free a `f64` buffer previously returned by `smf_laplacian_vals` or
- * `smf_laplacian_to_dense`.  Null-safe.
- *
- * `len` must match the total number of elements (for `to_dense` that is `n*n`).
+ * Free a `f64` buffer from `smf_laplacian_vals`/`smf_laplacian_to_dense`. Null-safe.
  *
  * # Safety
- * - `buf` must be null or a pointer from `smf_laplacian_vals` /
- *   `smf_laplacian_to_dense`, with the matching `len`.
+ * `buf` is null or a matching `(ptr, len)` from the read-back function.
  */
 void smf_free_buf_f64(double *buf, uintptr_t len);
 
@@ -5644,7 +5613,7 @@ double smf_graph_traj_t_horizon(const SmfGraphTraj *traj);
 /**
  * Allocate an `ObstacleGamma` with a constant obstacle floor.
  *
- * `level` must be finite.  `n >= 4` (Grid1D requirement).
+ * `level` must be finite.  `n >= 4` (`Grid1D` requirement).
  *
  * # Safety
  * `out` must be a valid non-null `*mut *mut SmfObstacleGamma`.
@@ -5843,7 +5812,7 @@ SemiflowStatus smf_graph_adjoint_new_presampled(uintptr_t n_nodes,
                                                 SmfGraphAdjoint **out);
 
 /**
- * Construct a pre-sampled VarCoef graph state-adjoint (ADR-0180).
+ * Construct a pre-sampled `VarCoef` graph state-adjoint (ADR-0180).
  *
  * Adds `a_seq` (len `2*n_steps*n_nodes`) and `a_sup_max` over the base
  * `smf_graph_adjoint_new_presampled` parameters.
@@ -5885,6 +5854,10 @@ SemiflowStatus smf_graph_adjoint_evolve_state_adjoint(const SmfGraphAdjoint *h,
 
 /**
  * Return the number of graph nodes. Returns 0 if `h` is null.
+ *
+ * # Safety
+ * `h` must be null or a valid pointer to a live `SmfGraphAdjoint` returned by
+ * a constructor. No aliasing or use-after-free.
  */
 uintptr_t smf_graph_adjoint_n_nodes(const SmfGraphAdjoint *h);
 
