@@ -53,12 +53,11 @@ fn exp_diagonal_5x5() {
             result[i][i]
         );
         // Off-diagonal must be near zero.
-        for j in 0..5 {
+        for (j, &val) in result[i].iter().enumerate() {
             if j != i {
                 assert!(
-                    result[i][j].abs() < 1e-12,
-                    "off-diag [{i}][{j}] = {}",
-                    result[i][j]
+                    val.abs() < 1e-12,
+                    "off-diag [{i}][{j}] = {val}"
                 );
             }
         }
@@ -107,8 +106,8 @@ fn squarings_zero_for_small_norm() {
 fn squarings_positive_for_large_norm() {
     // Row 0 has ‖row‖ = 100, so ‖A‖_∞ = 100 >> θ₁₃ → need squarings.
     let mut a = [[0.0_f64; 5]; 5];
-    for j in 0..5 {
-        a[0][j] = 20.0_f64;
+    for entry in &mut a[0] {
+        *entry = 20.0_f64;
     }
     let s = compute_squarings::<f64, 5>(&a);
     assert!(s > 0, "expected > 0 squarings for large-norm matrix, got {s}");
@@ -119,13 +118,12 @@ fn squarings_positive_for_large_norm() {
 #[test]
 fn mm_eye_is_identity_5x5() {
     let eye = mm_eye::<f64, 5>();
-    for i in 0..5 {
-        for j in 0..5 {
+    for (i, row) in eye.iter().enumerate() {
+        for (j, &val) in row.iter().enumerate() {
             let expected = if i == j { 1.0 } else { 0.0 };
             assert!(
-                (eye[i][j] - expected).abs() < 1e-15,
-                "eye[{i}][{j}] = {}",
-                eye[i][j]
+                (val - expected).abs() < 1e-15,
+                "eye[{i}][{j}] = {val}"
             );
         }
     }

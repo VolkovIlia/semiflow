@@ -12,7 +12,11 @@
 //   9. apply_into: finite output for small tau.
 //  10. in_subspace: true for n>=5 finite, false for NaN value.
 
+use crate::approximation::ApproximationSubspace;
+use crate::chernoff::ApplyChernoffExt;
 use crate::grid::Grid1D;
+use crate::state::State;
+use crate::ChernoffFunction;
 use num_complex::Complex;
 type C64 = Complex<f64>;
 
@@ -101,7 +105,6 @@ fn point_view_set_point_roundtrip() {
 fn norm_sup_zero_state_is_zero() {
     let grid = make_grid(8);
     let state = MatrixGridFnComplex1D::<C64, 2>::new(grid);
-    use crate::state::State;
     assert!(state.norm_sup() < 1e-15, "norm_sup of zero state non-zero");
 }
 
@@ -111,7 +114,6 @@ fn norm_sup_nonzero_state_is_positive() {
     let state = MatrixGridFnComplex1D::<C64, 2>::from_fn(grid, |x| {
         [c(x, 0.0), c(0.0, 1.0)]
     });
-    use crate::state::State;
     assert!(state.norm_sup() > 0.0, "norm_sup should be positive");
 }
 
@@ -123,7 +125,6 @@ fn order_is_2() {
     let kernel =
         MatrixDiffusionChernoffComplex::<C64, 2>::new(identity_a, zero_b, zero_b, grid)
             .unwrap();
-    use crate::ChernoffFunction;
     assert_eq!(kernel.order(), 2);
 }
 
@@ -136,7 +137,6 @@ fn apply_negative_tau_errors() {
     let src = MatrixGridFnComplex1D::<C64, 2>::from_fn(grid, |x| [c(x, 0.0), c(0.0, 0.0)]);
     let mut dst = MatrixGridFnComplex1D::<C64, 2>::new(grid);
     let mut scratch = crate::scratch::ScratchPool::new();
-    use crate::ChernoffFunction;
     assert!(kernel.apply_into(-0.01, &src, &mut dst, &mut scratch).is_err());
 }
 
@@ -147,9 +147,8 @@ fn apply_finite_output_for_small_tau() {
         MatrixDiffusionChernoffComplex::<C64, 2>::new(identity_a, zero_b, zero_b, grid)
             .unwrap();
     let src = MatrixGridFnComplex1D::<C64, 2>::from_fn(grid, |x| {
-        [c((x * 3.14).sin(), 0.0), c(0.0, (x * 3.14).cos())]
+        [c((x * core::f64::consts::PI).sin(), 0.0), c(0.0, (x * core::f64::consts::PI).cos())]
     });
-    use crate::chernoff::ApplyChernoffExt;
     let dst = kernel.apply_chernoff(0.01, &src).unwrap();
     for v in &dst.values {
         assert!(v.is_finite(), "non-finite output: {v}");
@@ -165,7 +164,6 @@ fn in_subspace_true_for_valid_state() {
         MatrixDiffusionChernoffComplex::<C64, 2>::new(identity_a, zero_b, zero_b, grid)
             .unwrap();
     let f = MatrixGridFnComplex1D::<C64, 2>::from_fn(grid, |x| [c(x, 0.0), c(0.0, 0.0)]);
-    use crate::approximation::ApproximationSubspace;
     assert!(ApproximationSubspace::<2, f64>::in_subspace(&kernel, &f));
 }
 
@@ -177,6 +175,5 @@ fn in_subspace_false_for_nan_value() {
             .unwrap();
     let mut f = MatrixGridFnComplex1D::<C64, 2>::from_fn(grid, |x| [c(x, 0.0), c(0.0, 0.0)]);
     f.values[2] = c(f64::NAN, 0.0);
-    use crate::approximation::ApproximationSubspace;
     assert!(!ApproximationSubspace::<2, f64>::in_subspace(&kernel, &f));
 }

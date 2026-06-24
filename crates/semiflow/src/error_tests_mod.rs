@@ -11,7 +11,7 @@ use super::*;
 fn domain_violation_display() {
     let e = SemiflowError::DomainViolation {
         what: "test invariant",
-        value: 3.14,
+        value: core::f64::consts::PI,
     };
     let s = e.to_string();
     assert!(s.contains("domain violation"), "got: {s}");
@@ -114,6 +114,6 @@ fn clone_and_debug_round_trip() {
         value: 0.0,
     };
     let cloned = e.clone();
-    let debug = alloc::format!("{:?}", cloned);
+    let debug = alloc::format!("{cloned:?}");
     assert!(debug.contains("DomainViolation"), "got: {debug}");
 }

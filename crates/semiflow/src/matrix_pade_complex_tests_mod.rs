@@ -71,8 +71,8 @@ fn exp_ih_is_unitary_2x2() {
     for r in 0..2 {
         for col in 0..2 {
             let mut s = c(0.0, 0.0);
-            for k in 0..2 {
-                s += u[k][r].conj() * u[k][col];
+            for uk in &u {
+                s += uk[r].conj() * uk[col];
             }
             uhu[r][col] = s;
         }

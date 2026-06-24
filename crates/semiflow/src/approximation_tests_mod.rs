@@ -39,7 +39,7 @@ fn gridfn(n: usize, f: impl Fn(f64) -> f64) -> GridFn1D<f64> {
 #[test]
 fn diffusion_in_subspace_true_for_5pts() {
     let dc = make_diffusion(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     assert!(
         ApproximationSubspace::<2, f64>::in_subspace(&dc, &f),
         "expected true for 16-pt grid"
@@ -72,7 +72,7 @@ fn diffusion_in_subspace_false_for_nan_value() {
 #[test]
 fn diffusion_jet_k2_returns_3_slots() {
     let dc = make_diffusion(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     let zero = gridfn(16, |_| 0.0);
     let mut out = [zero.clone(), zero.clone(), zero];
     ApproximationSubspace::<2, f64>::jet(&dc, &f, &mut out).unwrap();
@@ -99,21 +99,21 @@ fn diffusion_jet_k2_wrong_out_len_errors() {
 #[test]
 fn d4_in_subspace_k2_true_for_9pts() {
     let dc = make_d4(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     assert!(ApproximationSubspace::<2, f64>::in_subspace(&dc, &f));
 }
 
 #[test]
 fn d4_in_subspace_k4_true_for_9pts() {
     let dc = make_d4(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     assert!(ApproximationSubspace::<4, f64>::in_subspace(&dc, &f));
 }
 
 #[test]
 fn d4_jet_k4_writes_5_slots() {
     let dc = make_d4(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     let zero = gridfn(16, |_| 0.0);
     let mut out = vec![zero; 5];
     ApproximationSubspace::<4, f64>::jet(&dc, &f, &mut out).unwrap();
@@ -126,7 +126,7 @@ fn d4_jet_k4_writes_5_slots() {
 #[test]
 fn assert_in_subspace_ok_for_valid_datum() {
     let dc = make_diffusion(16);
-    let f = gridfn(16, |x| x.sin());
+    let f = gridfn(16, f64::sin);
     assert_in_subspace::<_, f64, 2>(&dc, &f).unwrap();
 }
 
@@ -214,7 +214,7 @@ fn d4_k2_jet_wrong_out_len_errors() {
 fn te4_k6_in_subspace_true_for_16pts() {
     let grid = Grid1D::new(0.0_f64, 1.0, 16).unwrap();
     let kernel = TruncatedExp4thDiffusionChernoff::new(|_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid);
-    let f = GridFn1D::from_fn(grid, |x| x.sin());
+    let f = GridFn1D::from_fn(grid, f64::sin);
     assert!(
         ApproximationSubspace::<6, f64>::in_subspace(&kernel, &f),
         "in_subspace should be true for 16 pts"
@@ -226,7 +226,7 @@ fn te4_k6_in_subspace_false_for_10pts() {
     // K=6 requires >= 13 pts.
     let grid = Grid1D::new(0.0_f64, 1.0, 10).unwrap();
     let kernel = TruncatedExp4thDiffusionChernoff::new(|_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid);
-    let f = GridFn1D::from_fn(grid, |x| x.sin());
+    let f = GridFn1D::from_fn(grid, f64::sin);
     assert!(
         !ApproximationSubspace::<6, f64>::in_subspace(&kernel, &f),
         "in_subspace should be false for 10 pts (need >= 13)"
@@ -239,7 +239,7 @@ fn te4_k6_in_subspace_false_for_10pts() {
 fn te4_k6_jet_writes_7_slots() {
     let grid = Grid1D::new(0.0_f64, 1.0, 16).unwrap();
     let kernel = TruncatedExp4thDiffusionChernoff::new(|_| 1.0_f64, |_| 0.0, |_| 0.0, 1.0, grid);
-    let f = GridFn1D::from_fn(grid, |x| x.sin());
+    let f = GridFn1D::from_fn(grid, f64::sin);
     let zero = GridFn1D::from_fn(grid, |_| 0.0_f64);
     let mut out: alloc::vec::Vec<_> = (0..7).map(|_| zero.clone()).collect();
     ApproximationSubspace::<6, f64>::jet(&kernel, &f, &mut out).unwrap();

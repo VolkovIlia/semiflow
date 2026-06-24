@@ -88,7 +88,7 @@ fn verify_residual_ok_for_positive_lambda() {
     let wrapper = make_residual_wrapper(32);
     let f = make_datum(32);
     let result = wrapper.verify_residual(1.0_f64, &f);
-    assert!(result.is_ok(), "verify_residual failed: {:?}", result);
+    assert!(result.is_ok(), "verify_residual failed: {result:?}");
     let err = result.unwrap();
     assert!(err.is_finite(), "residual is non-finite: {err}");
     assert!(err >= 0.0, "residual is negative: {err}");
@@ -113,7 +113,7 @@ fn fresh_from_fn_gives_correct_values() {
 #[test]
 fn sample_at_empty_coords_returns_err() {
     let grid = Grid1D::new(0.0_f64, 1.0, 16).unwrap();
-    let gf = GridFn1D::from_fn(grid, |x| x.sin());
+    let gf = GridFn1D::from_fn(grid, f64::sin);
     let result = gf.sample_at(&[]);
     assert!(result.is_err(), "expected Err for empty coordinate slice");
 }
@@ -125,7 +125,7 @@ fn sample_at_valid_point_returns_ok() {
     let grid = Grid1D::new(0.0_f64, 1.0, 16).unwrap();
     let gf = GridFn1D::from_fn(grid, |x| x * 2.0);
     let result = gf.sample_at(&[0.5_f64]);
-    assert!(result.is_ok(), "sample_at failed: {:?}", result);
+    assert!(result.is_ok(), "sample_at failed: {result:?}");
     let v = result.unwrap();
     assert!(v.is_finite(), "sample_at returned non-finite: {v}");
 }
