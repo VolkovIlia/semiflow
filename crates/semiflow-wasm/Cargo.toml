@@ -32,13 +32,21 @@ wasm-bindgen-test = "0.3"
 [lints]
 workspace = true
 
-# wasm-pack 0.9.1 bundles a wasm-opt that is too old to handle multi-table
-# wasm output from current Rust ("Only 1 table definition allowed in MVP").
-# Disable wasm-opt in both the default release and the new release-wasm profile.
-# Size optimisations come from [profile.release-wasm] rustc flags (D2, v0.13.0)
-# rather than from wasm-opt post-processing.
+# wasm-pack 0.15.0 bundles wasm-opt 117 (supports bulk-memory ops).  The
+# default release path enables wasm-opt with --enable-bulk-memory so that the
+# bulk-memory opcodes emitted by the Rust toolchain (memcpy/memset intrinsics)
+# pass wasm-validator; without this flag wasm-opt 117 rejects the binary.
+#
+# The `--size` path (xtask wasm-build --size) uses `--no-opt` to skip wasm-pack's
+# bundled wasm-opt entirely: wasm-pack 0.15.0 does not recognise the custom
+# "release-wasm" profile key (it warns "unknown key and will be ignored") and
+# falls back to running wasm-opt with `-O` only, which also rejects bulk-memory.
+# Size is optimised by the `[profile.release-wasm]` rustc flags (opt-level=z,
+# lto=fat, codegen-units=1, strip=true) — see D2 (v0.13.0) and ADR-0028.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = ["-O", "--enable-bulk-memory"]
 
+# Kept for documentation; wasm-pack 0.15.0 ignores this key with a warning.
+# The --size xtask path passes --no-opt to avoid the bulk-memory validator error.
 [package.metadata.wasm-pack.profile.release-wasm]
-wasm-opt = false
+wasm-opt = ["-O", "--enable-bulk-memory"]
