@@ -92,14 +92,16 @@ fn torus_growth_is_contraction() {
 fn sphere2_constant_approximately_preserved() {
     // Chart grid for S²: θ ∈ [0.2, 2.9] (avoiding poles), φ ∈ [0, 2π].
     let gx = Grid1D::new(0.2_f64, 2.9, 8).unwrap();
-    let gy = Grid1D::new(0.0_f64, 6.28318, 8).unwrap();
+    let gy = Grid1D::new(0.0_f64, core::f64::consts::TAU, 8).unwrap();
     let grid = Grid2D::new(gx, gy);
     let s2 = Sphere2::<f64>::unit();
     let kernel = ManifoldChernoff::new(s2, false);
     let src = constant_fn2d(grid, 1.5);
     let dst = kernel.apply_chernoff(0.01, &src).unwrap();
     // With small tau constant should be nearly preserved.
-    let rel_err = l2_dist(&dst, &src) / (src.values.len() as f64).sqrt() / 1.5;
+    #[allow(clippy::cast_precision_loss)] // test grid is tiny (≤64 pts); cast is exact
+    let n_f64 = src.values.len() as f64;
+    let rel_err = l2_dist(&dst, &src) / n_f64.sqrt() / 1.5;
     assert!(
         rel_err < 0.05,
         "sphere2 constant not preserved: rel_err={rel_err:.4}"

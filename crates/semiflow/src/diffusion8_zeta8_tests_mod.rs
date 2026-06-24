@@ -105,7 +105,7 @@ fn negative_bound_returns_err() {
 fn apply_chernoff_gives_finite_output() {
     let k = make_d8(16);
     let grid = k.grid;
-    let src = GridFn1D::from_fn(grid, |x| x.sin());
+    let src = GridFn1D::from_fn(grid, f64::sin);
     let dst = k.apply_chernoff(0.01_f64, &src).unwrap();
     assert_eq!(dst.values.len(), src.values.len());
     for v in &dst.values {

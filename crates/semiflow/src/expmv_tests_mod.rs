@@ -34,7 +34,7 @@ fn constant_state(grid: Grid1D<f64>, val: f64) -> GridFn1D<f64> {
 fn tau_zero_is_identity() {
     let kernel = make_kernel(32);
     let grid = kernel.grid;
-    let src = GridFn1D::from_fn(grid, |x| x.sin());
+    let src = GridFn1D::from_fn(grid, f64::sin);
     let dst = kernel.apply_chernoff(0.0, &src).unwrap();
     for (s, d) in src.values.iter().zip(dst.values.iter()) {
         assert!(

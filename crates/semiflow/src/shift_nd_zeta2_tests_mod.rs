@@ -17,6 +17,10 @@ use crate::{
     ChernoffFunction,
 };
 
+/// Boxed closure type for a single `grad_a` component (D=2).
+type GradAFn2 = alloc::boxed::Box<dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync>;
+type GradAVec2 = alloc::vec::Vec<GradAFn2>;
+
 /// Build a D=2 isotropic unit-diffusion base kernel on an N×N grid.
 fn make_base_kernel(n: usize) -> AnisotropicShiftChernoffND<f64, 2> {
     let ax = Grid1D::new(-3.0_f64, 3.0, n).unwrap();
@@ -40,7 +44,7 @@ fn make_base_kernel(n: usize) -> AnisotropicShiftChernoffND<f64, 2> {
 
 /// Build an `AnisotropicShiftZeta2ND<f64,2>` with constant A and zero grad.
 ///
-/// Zero grad_a means the ζ² correction is zero, so this is equivalent to the base kernel.
+/// Zero `grad_a` means the ζ² correction is zero, so this is equivalent to the base kernel.
 fn make_zeta2_zero_grad(n: usize) -> AnisotropicShiftZeta2ND<f64, 2> {
     let base = make_base_kernel(n);
     let a_ij = |_x: &[f64; 2], a: &mut SquareMatrix<f64, 2>| {
@@ -50,15 +54,9 @@ fn make_zeta2_zero_grad(n: usize) -> AnisotropicShiftZeta2ND<f64, 2> {
         a.set(1, 0, 0.0);
     };
     // All four grad_a closures return zero (constant A).
-    let grad_a: alloc::vec::Vec<alloc::boxed::Box<dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync>> =
-        (0..4)
-            .map(|_| {
-                let b: alloc::boxed::Box<
-                    dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync,
-                > = alloc::boxed::Box::new(|_x: &[f64; 2]| [0.0_f64; 2]);
-                b
-            })
-            .collect();
+    let grad_a: GradAVec2 = (0..4)
+        .map(|_| -> GradAFn2 { alloc::boxed::Box::new(|_x: &[f64; 2]| [0.0_f64; 2]) })
+        .collect();
     AnisotropicShiftZeta2ND::new(base, a_ij, grad_a).unwrap()
 }
 
@@ -92,15 +90,9 @@ fn growth_inherits_from_inner() {
 fn wrong_grad_a_len_returns_err() {
     let base = make_base_kernel(8);
     // Provide only 3 closures instead of D*D = 4.
-    let grad_a: alloc::vec::Vec<alloc::boxed::Box<dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync>> =
-        (0..3)
-            .map(|_| {
-                let b: alloc::boxed::Box<
-                    dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync,
-                > = alloc::boxed::Box::new(|_x: &[f64; 2]| [0.0_f64; 2]);
-                b
-            })
-            .collect();
+    let grad_a: GradAVec2 = (0..3)
+        .map(|_| -> GradAFn2 { alloc::boxed::Box::new(|_x: &[f64; 2]| [0.0_f64; 2]) })
+        .collect();
     let result = AnisotropicShiftZeta2ND::<f64, 2>::new(
         base,
         |_x, _a| {},
