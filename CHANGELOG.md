@@ -6,6 +6,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0-beta.3] — 2026-06-25
+
+### Fixed
+- **@semiflow/wasm npm description**: corrected the stale package description and
+  README (the old text referenced the pre-release crate name `semiflow-core`, the
+  private repo's internal `v9.0.0` history, and falsely claimed TT/gridless are not
+  exposed via WASM — they are: `TtEvolver`/`TtState`/`GridlessEvolver` etc. are
+  registered in `lib.rs`). npm 0.9.0-beta.2 shipped immutably with the old text;
+  this version corrects it.
+
+### Note
+- Documentation-only release — no library code change from 0.9.0-beta.2.
+
 ## [0.9.0-beta.2] — 2026-06-24
 
 - Add PyPI long description: `pyproject.toml` now includes `readme = "README.md"` so
