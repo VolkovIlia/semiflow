@@ -4,6 +4,7 @@
 [![Docs.rs](https://img.shields.io/badge/docs.rs-semiflow-blue)](https://docs.rs/semiflow)
 [![Crates.io](https://img.shields.io/crates/v/semiflow)](https://crates.io/crates/semiflow)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
 > **Status: `0.9.0-beta`** — first public beta. The API is stabilizing toward
 > `1.0`; minor versions may make breaking changes. Bug reports and feedback welcome.
@@ -248,15 +249,15 @@ repo) which reads [`CITATION.cff`](CITATION.cff), or use this BibTeX entry:
   author    = {Volkov, Ilia},
   title     = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year      = {2026},
-  version   = {0.9.0-beta},
-  url       = {https://github.com/VolkovIlia/semiflow},
-  note      = {DOI: pending (Zenodo archive of the next GitHub Release)}
+  version   = {0.9.0-beta.2},
+  doi       = {10.5281/zenodo.20837851},
+  url       = {https://doi.org/10.5281/zenodo.20837851}
 }
 ```
 
-DOI: **pending** — will be minted automatically when the maintainer publishes a
-GitHub Release with the Zenodo↔GitHub integration enabled. The DOI will appear
-in `CITATION.cff` and here at that time.
+DOI (concept DOI — always resolves to the latest version):
+**[10.5281/zenodo.20837851](https://doi.org/10.5281/zenodo.20837851)**
+See [`CITATION.cff`](CITATION.cff) for the full CFF entry.
 
 **Underlying theorem** — always cite this alongside the software:
 
