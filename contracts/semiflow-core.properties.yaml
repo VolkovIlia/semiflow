@@ -9427,7 +9427,7 @@ advisory_records:
     introduced_in: v0.9.0-beta
     authority: ADR-0181
 
-notes:
+implementation_notes:
   - id: rough_heston_two_tier_design
     title: "Two-tier (I/II) error design for the production rough-Heston pricer"
     body: |
@@ -9452,3 +9452,59 @@ notes:
         Carr-Cisek-Pintar 2021 (GL 3-factor Markov model); math.md §33.9.
     introduced_in: v0.9.0-beta
     authority: ADR-0181
+
+  # --- ADR-0185 / math.md §54 — graph Krylov action + Fréchet gradient ---
+  - name: G_GRAPH_EXPMV_DENSE
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error ≤ 1e-10)"
+    rationale: |
+      G_GRAPH_EXPMV_DENSE (RELEASE_BLOCKING, ADR-0185 §54.7): A1 `graph_expmv`
+      action `e^{−tL_G}·v` vs the DENSE reference `e^{−tL}·v` built from the CSR
+      Laplacian + matrix_system_exp::mat_exp_pade13, on a small graph (N ≤ 12)
+      with t‖L‖ in the ≥10 regime. Tolerance-driven kernel (order() = u32::MAX),
+      so NO slope assertion — a single backward-error datum, mirroring
+      g_expmv_div_form_action_accuracy and G_MATRIX_PADE_M5 (dense oracle REUSE,
+      no sympy).
+    gate: "sup_error <= 1e-10"
+    test_file: "tests/graph_expmv_dense.rs::g_graph_expmv_dense"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185
+
+  - name: G_GRAPH_FRECHET_FD
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel-err ≤ 1e-7)"
+    rationale: |
+      G_GRAPH_FRECHET_FD (RELEASE_BLOCKING, ADR-0185 §54.5–§54.7): A2
+      `graph_expmv_frechet` directional gradient ⟨∂J/∂w, δw⟩ vs central finite
+      difference (J(w+εδw)−J(w−εδw))/(2ε) for seeded-random w, δw. REUSES the
+      §43.6 oracle T_ADJOINT_STATE_SENSITIVITY (scripts/verify_adjoint_state_sensitivity.py),
+      which is method-agnostic (finite-differences J(w±εδw)) — no new sympy
+      oracle. Equivalence to the §43.4 per-step gradient is NUMERICAL not 0-ULP
+      (different algorithm; §54.6).
+    gate: "rel_err <= 1e-7"
+    test_file: "tests/graph_frechet_fd.rs::g_graph_frechet_fd"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185
+
+  - name: G_GRAPH_EXPMV_DEPTH_FLAT
+    type: STRUCTURAL_PERFORMANCE
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (matvec-count band ratio ≤ 4 across t ∈ {1,4,16,64})"
+    rationale: |
+      G_GRAPH_EXPMV_DEPTH_FLAT (RELEASE_BLOCKING, ADR-0185 §54.4): instrumented
+      SpMV counter asserts N_mv(ε, t) for t ∈ {1,4,16,64} at fixed ε stays within
+      a constant band (max/min ≤ 4), confirming the action is depth-independent
+      (√(tλ_max)·polylog growth, NOT linear-in-depth). Contrast the per-step
+      baseline N_mv ∝ n_steps. Structural/perf gate — no numerical oracle.
+    gate: "matvec_count_band_ratio <= 4"
+    test_file: "tests/graph_expmv_depth_flat.rs::g_graph_expmv_depth_flat"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185

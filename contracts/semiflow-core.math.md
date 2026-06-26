@@ -12441,3 +12441,172 @@ Mathematical basis: §53 ADR-0168 (Cole-Hopf exact transform, Strang-split RD).
 
 **RELEASE-BLOCKING gate**: `g_s3_nonlinear` — Cole-Hopf sub-gate error ≤ 1e-9;
 Strang sub-gate slope ≤ −1.9.
+
+---
+
+## §54 — Depth-independent graph-semigroup action and edge-weight Fréchet gradient via Krylov (ADR-0185, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for the two new graph primitives `graph_expmv` (A1) and
+> `graph_expmv_frechet` (A2). Closes #10 speed ceilings (c) per-step stepping and
+> (d) `O(edges·n_steps)` edge-weight gradient. ML-framework plumbing stays in
+> `revssm` (ADR-0115). Symmetric `L_G` only (see §54.6 boundary).
+
+### §54.1 — Setting
+
+Let `L_G = Σ_{(i,j)∈E} w_{ij}(e_i−e_j)(e_i−e_j)ᵀ` be the combinatorial graph
+Laplacian: symmetric positive-semidefinite with spectrum `σ(L_G) ⊂ [0, λ_max]`,
+`λ_max ≤ 2·max_i d_i` (Gershgorin on the CSR row sums; `Laplacian::spectral_radius_bound`
+supplies an upper bound). The action `u(t) = e^{−tL_G} v` is the exact graph-heat
+semigroup at depth `t`. The per-step Chernoff kernels (§12) approximate it by
+`(S(t/n))^n`, costing `Θ(n)` SpMVs. §54.2–§54.3 give a depth-independent action
+whose SpMV count is set by `(ε, t λ_max)` and is **flat in `t`** (§54.4).
+
+### §54.2 — Lanczos action (NORMATIVE, adaptive / tolerance-driven path)
+
+Because `L_G` is symmetric, the Krylov subspace `K_m(L_G, v) = span{v, L_G v, …,
+L_G^{m-1} v}` admits the symmetric Lanczos 3-term recurrence
+
+```text
+β_0 q_0 = 0,  q_1 = v/‖v‖,
+for k = 1..m:
+    z      = L_G q_k − β_{k-1} q_{k-1}
+    α_k    = ⟨q_k, z⟩
+    z      = z − α_k q_k
+    β_k    = ‖z‖,   q_{k+1} = z/β_k
+```
+
+yielding `Q_m = [q_1 … q_m]` and the tridiagonal `T_m = Q_mᵀ L_G Q_m`
+(`diag = α`, off-diag = `β`). The Lanczos approximation to the action is
+
+```text
+e^{−tL_G} v ≈ ‖v‖ · Q_m · exp(−t T_m) · e_1        (NORMATIVE).
+```
+
+`exp(−t T_m)` is a DENSE `m×m` exponential (`m ≤ 30`) computed by the existing
+`matrix_system_exp::mat_exp_pade13` backend (Padé[13/13], Higham 2005, ADR-0125)
+— no new dense-exp code. Step-scaling `(s, m)` selection mirrors §45 / `expmv.rs`
+`select_s_m` on the bound `‖L_G‖ ≤ λ_max`: choose the cheapest `(s, m)` with
+`(t/s)·λ_max ≤ θ_m` and `m ≤ m_max`. The Krylov dimension `m` is
+**depth-independent**: by Saad (1992) Theorem 4.7 the error obeys
+
+```text
+‖e^{−tL_G}v − (Lanczos_m)‖ ≤ C · (e·tλ_max / (4m))^m   for m ≥ tλ_max/2,
+```
+
+so `m ≈ √(tλ_max)·polylog(1/ε)` suffices; once `s` caps `(t/s)λ_max ≤ θ_m`, `m`
+is bounded by a constant `≈ 20–40` regardless of `t`. Memory: `m` basis vectors
+(`O(m·N)`), depth-INDEPENDENT.
+
+### §54.3 — Chebyshev action (NORMATIVE, default O(1)-vector path)
+
+Map `σ(L_G) ⊂ [0, λ_max]` to `[−1, 1]` by `x = 2λ/λ_max − 1`. The semigroup
+symbol `e^{−tλ}` has the Chebyshev expansion (NORMATIVE)
+
+```text
+e^{−tL_G} v = Σ_{k=0}^{m} c_k(t, λ_max) · T_k(B) v,
+B = (2 L_G − λ_max I)/λ_max,
+c_k = (2 − δ_{k0}) · e^{−tλ_max/2} · I_k(−tλ_max/2),
+```
+
+`I_k` the modified Bessel function, `T_k` the Chebyshev polynomial applied to the
+SHIFTED Laplacian `B` by the 3-term recurrence
+`T_{k+1}(B)v = 2 B T_k(B)v − T_{k-1}(B)v`. This uses **two persistent work
+vectors** (`T_{k-1}v`, `T_k v`) plus the accumulator — **no Krylov basis is
+stored**. The degree `m` is set by the exponential decay of `|c_k|` (Bessel tail):
+`m(ε, tλ_max) = min{ m : Σ_{k>m}|c_k| ≤ ε }`, again `≈ √(tλ_max)·polylog(1/ε)`,
+flat in `t` at fixed `ε`. `λ_max` is computed ONCE per graph (Gershgorin or a
+fixed-seed power iteration to relative tolerance `1e-3`; over-estimation only
+raises `m` slightly, never breaks correctness — same conservative-bound rationale
+as §45 / ADR-0121).
+
+`graph_expmv` exposes Chebyshev as the DEFAULT (lowest memory) and Lanczos as the
+adaptive path when the spectral bound is loose or a strict per-call tolerance is
+requested. `order()` is `u32::MAX` (tolerance-driven; §45 / ADR-0121 contract) —
+slope gates (§27/§40) are INAPPLICABLE.
+
+### §54.4 — Depth-independence statement (NORMATIVE)
+
+Fix `ε`. The SpMV count of §54.2–§54.3 is `N_mv(ε, t) = s·m` with
+`m ≈ √((t/s)λ_max)·polylog(1/ε)` and `s = ⌈tλ_max/(θ_m)⌉`, hence
+`N_mv = Θ(√(tλ_max)·polylog(1/ε))` — sub-linear in `t` and, after step-scaling,
+**bounded by a constant band across the depths `t ∈ {1,4,16,64}` at fixed `ε`**,
+versus the per-step baseline `N_mv^{step} = Θ(n_steps)` which grows linearly with
+the requested depth resolution. This is the formal content of gate
+`G_GRAPH_EXPMV_DEPTH_FLAT` (§54.5).
+
+### §54.5 — Augmented Fréchet gradient (NORMATIVE, A2)
+
+For a scalar `J(u)`, `u = e^{−tL(w)} v`, the gradient w.r.t. the edge-weight
+vector `w` is assembled from the Fréchet derivative of the matrix exponential.
+With the augmented `2N×2N` block-upper-triangular operator (Al-Mohy–Higham 2009)
+
+```text
+Â(E) = [[ −tL_G,  −tE ],
+        [   0,   −tL_G ]],     exp(Â(E)) = [[ e^{−tL_G},  D(E) ],
+                                            [    0,       e^{−tL_G} ]],
+```
+
+the top-right block `D(E) = L_exp(−tL_G, −tE)` is the directional Fréchet
+derivative of `e^{−tL_G}` in direction `−tE`. Acting on the stacked seed
+`[0; v]` gives `[D(E)v; e^{−tL_G}v]`, so the JVP in one edge direction
+`E = ∂L_G/∂w_{ij} = (e_i−e_j)(e_i−e_j)ᵀ` (§43.2, rank-1, 4 nonzeros) is ONE
+augmented action — computed by the SAME §54.2/§54.3 path applied to the
+block operator `Â` (its diagonal action reuses `graph_expmv`; only the
+off-diagonal `−tE` coupling is seed-specific).
+
+**Full edge-weight gradient by VJP (NORMATIVE; one solve for all edges).** For
+`g = ∂J/∂u` the upstream cotangent, the adjoint of the augmented action evaluated
+on the stacked seed `[g; 0]` yields, by the block transpose structure and the
+trace identity `⟨g, D(E)v⟩ = ⟨ (L_exp)^⋆(g) , E v ⟩`, the costate from which every
+edge partial reads off as
+
+```text
+∂J/∂w_{ij} = ⟨ p_i − p_j , v_i − v_j ⟩,      (p := the augmented costate vector)
+```
+
+i.e. ALL `n_params` edge partials are extracted from ONE augmented adjoint solve
+plus a contraction against the rank-1 stencils of `GeneratorSensitivity::apply_param_deriv`
+(§43.2) — `O(n_params)` cheap reads, NOT `O(n_params)` solves and NOT the
+`O(edges·n_steps)` per-step sweep of §43.4. The augmented operator shares the
+symmetric diagonal `−tL_G`, so its action is depth-independent (§54.4).
+
+### §54.6 — Equivalence and 0-ULP scope (NORMATIVE boundary)
+
+`graph_expmv_frechet` returns the SAME mathematical quantity `∂J/∂w` (length
+`n_params`), the SAME `[C, N]` batched shape, and the SAME ascending-channel-index
+accumulation (ADR-0184 D4) as `adjoint_state_gradient_batched` (§43.4). It is a
+DIFFERENT algorithm (augmented Krylov of the continuous action) from the per-step
+Magnus discrete adjoint, hence:
+
+- **0-ULP bit-equality (ADR-0184 D5) applies to the channel-batching axis ONLY**:
+  batched-Krylov == per-channel-Krylov loop (same kernel `C` times). That axis
+  needs NO new oracle.
+- **Equivalence to the §43.4 per-step gradient is NUMERICAL**, not bit-exact: the
+  two agree as `n_steps → ∞` / at matched accuracy. It is gated by the §43.6
+  finite-difference oracle `T_ADJOINT_STATE_SENSITIVITY`
+  (`scripts/verify_adjoint_state_sensitivity.py`), which finite-differences
+  `J(w±εδw)` and is method-agnostic — it covers A2 UNCHANGED. No new sympy oracle.
+
+### §54.7 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_GRAPH_EXPMV_DENSE` | `graph_expmv(L,v,t)` vs dense `e^{−tL}v` (dense `L` from CSR + `mat_exp_pade13`), small graph (`N ≤ 12`), `t‖L‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE; no sympy, cf. `G_MATRIX_PADE_M5`) |
+| `G_GRAPH_FRECHET_FD` | `⟨∂J/∂w, δw⟩` (A2) vs central FD `(J(w+εδw)−J(w−εδw))/(2ε)`, seeded-random `w, δw` | rel-err `≤ 1e-7` | `T_ADJOINT_STATE_SENSITIVITY` §43.6 (REUSE; no new oracle) |
+| `G_GRAPH_EXPMV_DEPTH_FLAT` | instrumented SpMV count `N_mv(ε,t)` for `t ∈ {1,4,16,64}` at fixed `ε` stays within a constant band; per-step baseline grows ∝ depth | band ratio `max/min ≤ 4` (vs per-step linear) | instrumentation counter (structural; no oracle) |
+
+All three RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the
+shipping release. A1 gates (`_DENSE`, `_DEPTH_FLAT`) ship with A1; the Fréchet
+gate ships with A2.
+
+### §54.8 — References
+
+- A. H. Al-Mohy, N. J. Higham (2011), *Computing the action of the matrix
+  exponential*, SIAM J. Sci. Comput. 33(2):488–511, DOI 10.1137/100788860.
+- A. H. Al-Mohy, N. J. Higham (2009), *Computing the Fréchet derivative of the
+  matrix exponential…*, SIAM J. Matrix Anal. Appl. 30(4):1639–1657,
+  DOI 10.1137/080716426.
+- Y. Saad (1992), *Analysis of some Krylov subspace approximations to the matrix
+  exponential operator*, SIAM J. Numer. Anal. 29(1):209–228 — §54.2 error bound.
+- §42 (transpose-exact state adjoint), §43 (adjoint-state sensitivity + §43.6 FD
+  oracle), §45 (1-D `expmv`); ADR-0185 (contract authority), ADR-0121, ADR-0184.

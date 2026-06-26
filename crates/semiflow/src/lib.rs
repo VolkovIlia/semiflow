@@ -186,6 +186,7 @@ mod graph_batched_tests;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
+pub mod graph_frechet; pub mod graph_krylov;
 pub mod graph_sensitivity;
 pub(crate) mod graph_sensitivity_helpers;
 mod graph_sensitivity_tests;
@@ -368,12 +369,12 @@ pub use crate::{
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
     graph::{Graph, Laplacian, LaplacianKind},
-    graph_adjoint_presampled::{
-        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
-    },
+    graph_adjoint_presampled::{fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj},
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
+    graph_frechet::graph_expmv_frechet,
     graph_heat6::GraphHeat6thChernoff,
+    graph_krylov::{dense_graph_expmv_ref, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
     graph_sensitivity::{
         adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
         EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity,
@@ -382,8 +383,7 @@ pub use crate::{
     graph_traj::{GraphTraj, SegmentWeightFn, MAX_GRAPH_TRAJ_SEGMENTS},
     graph_var_coef::VarCoefGraphHeatChernoff,
     grid::{BoundaryPolicy, Grid1D, InterpKind, OobPolicy},
-    grid2d::Grid2D,
-    grid3d::Grid3D,
+    grid2d::Grid2D, grid3d::Grid3D,
     grid_fn::GridFn1D,
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
