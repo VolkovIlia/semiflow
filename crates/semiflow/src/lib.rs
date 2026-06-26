@@ -186,9 +186,8 @@ mod graph_batched_tests;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
-pub mod graph_frechet; pub mod graph_krylov;
-pub mod graph_sensitivity;
-pub(crate) mod graph_sensitivity_helpers;
+pub mod entry_sensitivity; pub mod graph_frechet; pub mod graph_krylov; pub mod mass_operator; pub mod symmetric_operator;
+pub mod graph_sensitivity; pub(crate) mod graph_sensitivity_helpers;
 mod graph_sensitivity_tests;
 pub mod graph_signal;
 pub mod graph_traj;
@@ -373,8 +372,9 @@ pub use crate::{
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
     graph_frechet::graph_expmv_frechet,
-    graph_heat6::GraphHeat6thChernoff,
-    graph_krylov::{dense_graph_expmv_ref, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
+    graph_heat6::GraphHeat6thChernoff, entry_sensitivity::EntrySensitivity,
+    graph_krylov::{dense_graph_expmv_ref, graph_expmv_krylov, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
+    mass_operator::{dense_massk_expmv_ref, mass_lumped_evolve, MassKOperator, TriangularFactor}, symmetric_operator::{dense_csr_expmv_ref, SymmetricLinearOp, SymmetricOperator},
     graph_sensitivity::{
         adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
         EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity,

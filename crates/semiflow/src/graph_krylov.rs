@@ -18,6 +18,7 @@ use crate::{
     matrix_pade::mat_exp_pade13,
     scratch::ScratchPool,
     state::State,
+    symmetric_operator::SymmetricLinearOp,
 };
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ const THETA_M: &[(u32, f64)] = &[
 // ── KrylovPath ───────────────────────────────────────────────────────────────
 
 /// Algorithm variant for [`GraphKrylovChernoff`].
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum KrylovPath {
     /// Chebyshev expansion — two work vectors, degree from Bessel decay. Default.
     #[default]
@@ -133,10 +134,10 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
         validate_tau(tau)?;
         match &self.path {
             KrylovPath::Chebyshev => {
-                chebyshev_action(&self.laplacian, src, dst, tau, self.lambda_max, self.tol, scratch)
+                chebyshev_action(&*self.laplacian, src, dst, tau, self.lambda_max, self.tol, scratch)
             }
             KrylovPath::Lanczos { m_max } => {
-                lanczos_action(&self.laplacian, src, dst, tau, self.lambda_max, *m_max, scratch)
+                lanczos_action(&*self.laplacian, src, dst, tau, self.lambda_max, *m_max, scratch)
             }
         }
     }
@@ -308,7 +309,7 @@ include!("graph_krylov_helpers.rs");
 // Must return Result<> to satisfy the `apply_into` dispatch call-site. Body is always Ok(()).
 #[allow(clippy::unnecessary_wraps)]
 fn chebyshev_action<F: SemiflowFloat>(
-    lap: &Laplacian<F>,
+    op: &impl SymmetricLinearOp<F>,
     src: &GraphSignal<F>,
     dst: &mut GraphSignal<F>,
     tau: F,
@@ -336,7 +337,7 @@ fn chebyshev_action<F: SemiflowFloat>(
     for i in 0..n { result[i] = c0 * src_v[i]; }
 
     if m >= 1 {
-        chebyshev_accumulate(lap, src_v, &mut t_prev, &mut t_curr, &mut spmv, &mut result, n, m, scale, two, z, em_z);
+        chebyshev_accumulate(op, src_v, &mut t_prev, &mut t_curr, &mut spmv, &mut result, n, m, scale, two, z, em_z);
     }
 
     dst.zero_into();
@@ -393,9 +394,9 @@ fn build_exp_tridiag<F: SemiflowFloat>(
     mat_exp_pade13::<F, MAX_LANCZOS_DIM>(&t_mat)
 }
 
-/// One Lanczos step: `dst ≈ e^{-tau·L_G} · src` using m Krylov iterations.
+/// One Lanczos step: `dst ≈ e^{-tau·A} · src` using m Krylov iterations.
 fn lanczos_step_inner<F: SemiflowFloat>(
-    lap: &Laplacian<F>,
+    op: &impl SymmetricLinearOp<F>,
     src: &[F],
     dst: &mut [F],
     tau: F,
@@ -421,7 +422,7 @@ fn lanczos_step_inner<F: SemiflowFloat>(
     for i in 0..n { q_curr[i] = src[i] * inv_v; }
     q_basis[0..n].copy_from_slice(&q_curr);
 
-    let m_actual = lanczos_iterate(lap, &mut q_curr, &mut q_prev, &mut z_buf, &mut q_basis, &mut alpha, &mut beta, n, m);
+    let m_actual = lanczos_iterate(op, &mut q_curr, &mut q_prev, &mut z_buf, &mut q_basis, &mut alpha, &mut beta, n, m);
 
     // Reconstruct dst = Q_m · e^{-τ T_m} · (‖v‖ e_1)
     let exp_t = build_exp_tridiag(&alpha, &beta, tau, m_actual)?;
@@ -442,7 +443,7 @@ fn lanczos_step_inner<F: SemiflowFloat>(
 // 7 args by necessity — 4 LaplacianAction state vars + tau/lambda_max/m_max/scratch.
 #[allow(clippy::too_many_arguments)]
 fn lanczos_action<F: SemiflowFloat>(
-    lap: &Laplacian<F>,
+    op: &impl SymmetricLinearOp<F>,
     src: &GraphSignal<F>,
     dst: &mut GraphSignal<F>,
     tau: F,
@@ -461,7 +462,7 @@ fn lanczos_action<F: SemiflowFloat>(
     current.copy_from_slice(src.values());
 
     for _ in 0..s {
-        lanczos_step_inner(lap, &current, &mut next, step_tau, m, scratch)?;
+        lanczos_step_inner(op, &current, &mut next, step_tau, m, scratch)?;
         core::mem::swap(&mut current, &mut next);
     }
     dst.zero_into();
@@ -471,6 +472,10 @@ fn lanczos_action<F: SemiflowFloat>(
     scratch.return_vec(next);
     Ok(())
 }
+
+// ── Slice-based helpers (graph_expmv_krylov) ─────────────────────────────────
+// Included at module scope: has full access to chebyshev_accumulate, lanczos_step_inner, etc.
+include!("graph_krylov_slice_helpers.rs");
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

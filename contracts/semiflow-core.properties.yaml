@@ -9508,3 +9508,79 @@ implementation_notes:
     feature_gate: "slow-tests"
     introduced_in: TBD
     authority: ADR-0185
+
+  # ── Issue #13 gates (ADR-0186, §55) ───────────────────────────────────────
+
+  - name: G_SYMOP_DENSE
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=1.883e-13 ≤ 1e-10)"
+    rationale: |
+      G_SYMOP_DENSE (RELEASE_BLOCKING, ADR-0186 §55.2): `graph_expmv_krylov`
+      called on a `SymmetricOperator` assembled from raw CSR (N=10 path Laplacian)
+      vs `dense_csr_expmv_ref` (Padé-13 oracle). Chebyshev path at tol=1e-12.
+      Confirms that the externally-assembled entry point produces the same result
+      as the graph-assembly path; the sup_error of 1.883e-13 is non-trivial
+      (confirms real computation, not trivially-zero vector).
+    gate: "sup_error <= 1e-10"
+    test_file: "tests/sym_op_dense.rs::g_symop_dense"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_MASSK_LUMPED
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=2.220e-14 ≤ 1e-8)"
+    rationale: |
+      G_MASSK_LUMPED (RELEASE_BLOCKING, ADR-0186 §55.3): `mass_lumped_evolve`
+      (Krylov on `Â = D^{−½}KD^{−½}`) vs reference pipeline:
+      pre-scale v → `dense_csr_expmv_ref(Â, τ, ·)` → post-scale. N=6 path
+      Laplacian K; masses = [1.0, 2.0, 1.5, 0.8, 1.2, 0.9]. Non-unit masses
+      guarantee non-trivial coupling (sup_error 2.220e-14 >> machine zero for
+      a zero-solution).
+    gate: "sup_error <= 1e-8"
+    test_file: "tests/massk_lumped.rs::g_massk_lumped"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_MASSK_CONSISTENT
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=3.501e-10 ≤ 1e-8)"
+    rationale: |
+      G_MASSK_CONSISTENT (RELEASE_BLOCKING, ADR-0186 §55.4): `MassKOperator::evolve`
+      (Krylov on `Â = R^{−T}KR^{−1}`, dense Cholesky M=RᵀR) vs
+      `dense_massk_expmv_ref` (Padé-13 oracle). N=6 path Laplacian K; tridiagonal
+      consistent-mass M (M[i,i]=2, M[i,i±1]=0.5). Off-diagonal mass entries
+      create non-trivial congruence; sup_error 3.501e-10 confirms the Cholesky
+      solve chain is correct and the result is not degenerate.
+    gate: "sup_error <= 1e-8"
+    test_file: "tests/massk_consistent.rs::g_massk_consistent"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_SYMOP_ENTRY_FRECHET
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (max rel_err=3.901e-10 ≤ 1e-7 across 3 entries)"
+    rationale: |
+      G_SYMOP_ENTRY_FRECHET (RELEASE_BLOCKING, ADR-0186 §55.5–§55.6):
+      `EntrySensitivity` + `graph_expmv_frechet` directional gradient
+      ⟨dJ/dL_{ij}, δL_{ij}⟩ vs central finite difference on a N=3 triangle
+      (edges (0,1,1.0),(1,2,0.7),(0,2,0.4)) with distinct weights ensuring
+      [L, ∂L/∂L_{ij}] ≠ 0 for every entry. Three off-diagonal entries tested:
+      (0,1), (1,2), (0,2). Measured rel_err: 2.038e-10, 2.052e-10, 3.901e-10.
+      Non-commutativity invalidates the naive right-endpoint rectangle rule;
+      the Duhamel integral (augmented Fréchet) must be correct for this to pass.
+    gate: "rel_err <= 1e-7 per entry"
+    test_file: "tests/sym_op_entry_frechet.rs::g_symop_entry_frechet"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186

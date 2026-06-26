@@ -12610,3 +12610,173 @@ gate ships with A2.
   exponential operator*, SIAM J. Numer. Anal. 29(1):209–228 — §54.2 error bound.
 - §42 (transpose-exact state adjoint), §43 (adjoint-state sensitivity + §43.6 FD
   oracle), §45 (1-D `expmv`); ADR-0185 (contract authority), ADR-0121, ADR-0184.
+
+## §55 — Generic externally-assembled symmetric-operator action and `(M, K)` generalized path (ADR-0186, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for Issue #13. Generalises §54 (A1/A2) from the zero-row-sum
+> graph Laplacian to ANY externally-assembled symmetric positive-semidefinite sparse
+> operator `L` (CSR), adds the generalized `(M, K)` mass path `e^{−τ M⁻¹K}`, and the
+> generic single-entry Fréchet adjoint. Reuses §54.2/§54.3 (Krylov action), §54.5
+> (Duhamel Fréchet), §43.6 (FD oracle), §45 (`mat_exp_pade13`). Symmetric `L` only;
+> PSD is a precondition (see §55.6 boundary). ML plumbing stays in `revssm` (ADR-0115).
+
+### §55.1 — Generic symmetric action: dropping zero-row-sum is FREE (NORMATIVE)
+
+Let `L ∈ ℝ^{N×N}` be symmetric (`L = Lᵀ`) and positive-semidefinite, stored in CSR,
+with NO structural constraint on row sums (`Σ_j L[i,j] ≠ 0` is allowed — e.g. a FEM
+stiffness `K` with Robin/convective boundary terms, or spatially-varying anisotropic
+conductivity). Its spectrum satisfies `σ(L) ⊂ [0, λ_max]` with the Gershgorin bound
+`λ_max ≤ max_i Σ_j |L[i,j]|` (`gershgorin_bound_csr`, exact upper bound for any CSR).
+
+The §54.2 Lanczos recurrence and the §54.3 Chebyshev expansion are functions of `L`
+**only through the matvec `x ↦ L x` and the scalar bound `λ_max`** — neither uses the
+combinatorial structure `L = Σ w_{ij}(e_i−e_j)(e_i−e_j)ᵀ`, the zero row sums, nor the
+diagonal-last CSR invariant. Hence (NORMATIVE):
+
+```text
+u(τ) = e^{−τL} v ,   L symmetric PSD CSR (arbitrary row sums),
+```
+
+is computed by the **unchanged** §54.2/§54.3 action. Formally: the §54 helpers depend
+on `L` through the interface `SymmetricLinearOp = { n(), λ_max bound, apply(x)→Lx }`;
+the graph Laplacian and a generic symmetric CSR are two instances of it. Symmetry is
+the ONLY requirement (it makes the Krylov projection `T_m = Q_mᵀ L Q_m` tridiagonal
+via the 3-term recurrence; the Chebyshev real-coefficient expansion requires real
+spectrum, i.e. symmetry). Correctness, the depth-independence statement (§54.4), and
+`order() = u32::MAX` carry over verbatim.
+
+**Validation (NORMATIVE).** A generic CSR is admitted iff: (i) CSR shape/range valid
+(ADR-0180 `from_csr_parts`); (ii) finite entries; (iii) **symmetric**
+`|L[i,j] − L[j,i]| ≤ sym_tol` for all stored `(i,j)` — checked in `O(nnz·log d)` by
+per-row binary search on the sorted column indices (no_std, no hashmap); (iv) PSD
+*necessary* check `L[i,i] ≥ 0` (a symmetric PSD matrix has non-negative diagonal;
+full PSD is NOT verified and remains the caller's precondition — see §55.6).
+
+### §55.2 — Generalized `(M, K)`: similarity to a symmetric operator (NORMATIVE)
+
+For a symmetric PSD stiffness `K` and a symmetric positive-DEFINITE mass `M`, the
+consistent-mass semigroup is `u(τ) = e^{−τ M⁻¹K} v`. The generator `M⁻¹K` is
+NON-symmetric in the standard inner product, but is **self-adjoint in the `M`-inner
+product** and therefore *similar* to a symmetric matrix. With the Cholesky factor
+`M = RᵀR` (`R` upper-triangular, SPD ⇒ exists, unique with positive diagonal):
+
+```text
+Â := R^{−T} K R^{−1}   is symmetric PSD,           (congruence of K)
+M⁻¹K = R^{−1}R^{−T}K = R^{−1} Â R,                 (similarity)
+∴  e^{−τ M⁻¹K} = R^{−1} e^{−τÂ} R          (NORMATIVE).
+```
+
+Hence the generalized action is (NORMATIVE):
+
+```text
+w0 = R v ;   w = e^{−τÂ} w0   (via §54 Krylov on Â) ;   u = R^{−1} w .
+```
+
+`σ(Â) = σ(M⁻¹K) ⊂ [0, λ_max(M⁻¹K)]` (similar matrices share the spectrum), so `Â` is
+a legitimate symmetric PSD operator for §54. The bound used for substep selection is
+`λ_max(Â) ≤ λ_max(K) / λ_min(M)`, with `λ_max(K)` from Gershgorin and `λ_min(M)` from
+the Gershgorin lower bound `min_i(M[i,i] − Σ_{j≠i}|M[i,j]|)` when positive, else a
+short fixed-iteration inverse power estimate using `R`-solves (over-estimation only
+raises the substep count `s`; never breaks correctness — §54.3 rationale). The
+**Lanczos path is the default** for `(M,K)` (it adapts to `σ(Â)` and needs only a
+loose `λ_max`).
+
+**Â is never materialised (NORMATIVE).** Forming `Â = R^{−T}KR^{−1}` densifies (the
+inverse factor fills in). Instead its matvec is the **3-stage chain**
+
+```text
+Â x  =  R^{−T} ( K ( R^{−1} x ) ) :
+        y = R^{−1} x   (back-substitution,  O(N²) dense R / O(nnz_R) sparse R)
+        z = K y        (CSR SpMV,            O(nnz_K))
+        Âx = R^{−T} z  (forward-substitution)
+```
+
+so `K` stays sparse and only triangular solves are added. This is the `MassKOperator`
+instance of `SymmetricLinearOp`. The Cholesky factor `R` is supplied by the caller
+(binding: `scipy`/`sksparse`) or built by a small in-crate **dense** Cholesky for
+moderate `N`; large sparse consistent mass with fill-reducing reordering is OUT OF
+SCOPE (§55.6) — supply `R`, or use the lumped path §55.3.
+
+### §55.3 — Lumped-mass fast path: diagonal congruence stays sparse (NORMATIVE)
+
+When `M = D = diag(m_1,…,m_N)` is diagonal with `m_i > 0` (mass lumping), `R = D^{1/2}`
+is diagonal and the congruence keeps `K` sparse entrywise:
+
+```text
+Â = D^{−1/2} K D^{−1/2},   Â[i,j] = K[i,j] / √(m_i m_j)   (CSR entry scaling),
+e^{−τ M⁻¹K} = D^{−1/2} e^{−τÂ} D^{1/2},
+∴  w0 = √m ⊙ v ;  w = e^{−τÂ} w0  (§54 Krylov on the SPARSE Â) ;  u = w ⊘ √m .
+```
+
+This is the production fast path: `Â` is assembled as a genuine `SymmetricOperator`
+(CSR), the action reuses §54 unchanged, and there is no factorisation and no triangular
+solve. Use it whenever the mass matrix is (or is approximated by) a diagonal.
+
+### §55.4 — Generic single-entry Fréchet adjoint (NORMATIVE)
+
+A2's Duhamel gradient (§54.5) for `J = Σ_c ⟨dj_c, e^{−tL} u0_c⟩`,
+
+```text
+∂J/∂θ_k = t ∫₀¹ ⟨ e^{−(1−s)tL} dj_c , (∂A/∂θ_k) e^{−stL} u0_c ⟩ ds   (GL8, exact),
+A = −L,
+```
+
+is **agnostic to the parameterisation** `θ`: it depends on `θ` only through the
+provider `(∂A/∂θ_k)·v` (`GeneratorSensitivity::apply_param_deriv`). For a generic
+symmetric operator the natural parameters are the **independent symmetric entries**
+`L_{ij}` (`i ≤ j`). Treating `L_{ij} = L_{ji}` as ONE symmetric degree of freedom,
+
+```text
+(∂L/∂L_{ij}) = e_i e_jᵀ + e_j e_iᵀ   (i ≠ j),      (∂L/∂L_{ii}) = e_i e_iᵀ ,
+⇒ (∂L/∂L_{ij}) v :  out[i] += v[j], out[j] += v[i]   (i ≠ j);   out[i] += v[i]  (i = j),
+(∂A/∂L_{ij}) = −(∂L/∂L_{ij})        (generator sign).
+```
+
+This single-entry stencil (`EntrySensitivity`) is the generic analogue of the §43.2
+rank-1 edge stencil. Substituting it into the **unchanged** `graph_expmv_frechet`
+yields `∂J/∂L_{ij}` exactly (including non-commuting `[L, ∂L/∂L_{ij}] ≠ 0`), for the
+direct symmetric-`L` path. **Convention (NORMATIVE):** the reported derivative is
+w.r.t. the *symmetric* entry (perturbing `L_{ij}` and `L_{ji}` together by the same
+amount). A caller perturbing only one triangle differs by the obvious factor; the FD
+gate §55.5 perturbs the symmetric pair to match. Differentiability of the
+consistent-`(M,K)` congruence (through `R`) is OUT OF SCOPE for #13.
+
+### §55.5 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_SYMOP_DENSE` | `SymmetricOperator::krylov` action `e^{−τL}v` vs dense `mat_exp_pade13(−τL)`, **non-zero-row-sum** Robin-BC 1-D stiffness `L` (`N ≤ 12`), `τ‖L‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE §45/§54.7; no sympy) |
+| `G_MASSK_LUMPED` | `mass_lumped_evolve` vs dense `e^{−τ D⁻¹K}v`, diagonal `M = D` (seeded random `m_i ∈ [0.5,2]`) + Robin `K` (`N ≤ 12`) | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` of `−τ D⁻¹K` (REUSE) |
+| `G_MASSK_CONSISTENT` | `MassKOperator::evolve` vs dense `e^{−τ M⁻¹K}v`, **non-diagonal** consistent FEM mass `M = (h/6)·tridiag(1,4,1)` + Robin `K` (`N ≤ 12`) | `sup_error ≤ 1e-9` | dense `mat_exp_pade13` of `−τ M⁻¹K`, `M⁻¹K` via in-crate dense Cholesky solve (REUSE) |
+| `G_SYMOP_ENTRY_FRECHET` | `⟨∂J/∂entries, δ⟩` (A2 + `EntrySensitivity`) vs central FD `(J(L+εδ)−J(L−εδ))/(2ε)`, tracked set incl. ≥1 **off-diagonal** entry on a **non-zero-row-sum** `L` | rel-err `≤ 1e-7` | §43.6 FD pattern (`T_ADJOINT_STATE_SENSITIVITY`; REUSE, no new oracle) |
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).** `G_SYMOP_DENSE` and
+`G_SYMOP_ENTRY_FRECHET` assert `∃ i : Σ_j L[i,j] ≠ 0` (the Robin rows), so a
+zero-row-sum (combinatorial-Laplacian) shortcut cannot satisfy them.
+`G_MASSK_CONSISTENT` asserts `∃ i : M[i,i+1] ≠ 0` (genuinely non-diagonal `M`), so a
+lumped-diagonal shortcut fails the `1e-9` tolerance. All four RELEASE_BLOCKING,
+`feature_gate: slow-tests`, `introduced_in` the shipping release; no new sympy oracle.
+
+### §55.6 — Boundary and PSD precondition (NORMATIVE)
+
+- **Symmetric only.** Non-symmetric `L` (directed/advective without symmetrisation)
+  breaks the Lanczos tridiagonalisation and the real Chebyshev expansion ⇒ requires
+  Arnoldi/GMRES-type methods, explicitly OUT OF SCOPE (would be a separate ADR).
+- **PSD is a precondition.** `Growth::contraction()` and the depth-independent bound
+  rest on `σ(L) ⊂ [0, ∞)`. Only the necessary check `L[i,i] ≥ 0` is enforced; a
+  symmetric but indefinite `L` still *runs* (the action is still `e^{−τL}v`), but the
+  contraction/“flat in depth” guarantees no longer hold and accuracy near negative
+  eigenvalues degrades — caller's responsibility.
+- **Consistent-mass scale.** The in-crate Cholesky is dense `O(N³)` (moderate `N`);
+  large sparse consistent mass requires a caller-supplied factor `R` (binding path)
+  or the lumped path §55.3. Consistent-`(M,K)` differentiability is out of scope.
+
+### §55.7 — References
+
+- G. Strang, G. J. Fix, *An Analysis of the Finite Element Method*, Prentice-Hall
+  1973 — consistent vs lumped mass; generalized eigenproblem congruence.
+- B. N. Parlett, *The Symmetric Eigenvalue Problem*, SIAM 1998 — `R^{−T}KR^{−1}`
+  reduction of `Kx = λMx` to standard symmetric form.
+- §54 (A1 Krylov action + A2 Duhamel Fréchet — the reused mechanism), §45
+  (`mat_exp_pade13` oracle), §43.2/§43.6 (`GeneratorSensitivity` + FD oracle).
+- ADR-0186 (contract authority), ADR-0185, ADR-0180, ADR-0115, ADR-0125.

@@ -8,7 +8,7 @@
 /// Mutates the three Chebyshev work vectors and the `result` accumulator in place.
 #[allow(clippy::too_many_arguments)]
 fn chebyshev_accumulate<F: SemiflowFloat>(
-    lap: &Laplacian<F>,
+    op: &impl SymmetricLinearOp<F>,
     src_v: &[F],
     t_prev: &mut Vec<F>,
     t_curr: &mut Vec<F>,
@@ -22,14 +22,14 @@ fn chebyshev_accumulate<F: SemiflowFloat>(
     em_z: F,
 ) {
     // k=1: SpMV; T_1(B)v = (2/λ)·L·v − v
-    lap.apply_into_slice(src_v, spmv);
+    op.apply_into_slice(src_v, spmv);
     t_prev.copy_from_slice(src_v); // t_prev = T_0 = v
     for i in 0..n { t_curr[i] = scale * spmv[i] - src_v[i]; }
     let c1 = -two * em_z * bessel_i_k(1, z);
     for i in 0..n { result[i] += c1 * t_curr[i]; }
     // k=2..=m: T_{k+1} = 2B·T_k − T_{k-1} = 2·scale·L·T_k − 2·T_k − T_{k-1}
     for k in 2..=m {
-        lap.apply_into_slice(t_curr, spmv);
+        op.apply_into_slice(t_curr, spmv);
         // Compute T_{k+1} in-place into t_prev (T_{k-1} slot)
         for i in 0..n {
             t_prev[i] = two * scale * spmv[i] - two * t_curr[i] - t_prev[i];
@@ -48,7 +48,7 @@ fn chebyshev_accumulate<F: SemiflowFloat>(
 /// returns `m_actual ≤ m` (early exits when an invariant subspace is found).
 #[allow(clippy::too_many_arguments)]
 fn lanczos_iterate<F: SemiflowFloat>(
-    lap: &Laplacian<F>,
+    op: &impl SymmetricLinearOp<F>,
     q_curr: &mut [F],
     q_prev: &mut [F],
     z_buf: &mut [F],
@@ -60,7 +60,7 @@ fn lanczos_iterate<F: SemiflowFloat>(
 ) -> usize {
     let mut m_actual = 0usize;
     for k in 0..m {
-        lap.apply_into_slice(q_curr, z_buf);
+        op.apply_into_slice(q_curr, z_buf);
         alpha[k] = q_curr.iter().zip(z_buf.iter()).map(|(&a, &b)| a * b).fold(F::zero(), |s, x| s + x);
         for i in 0..n { z_buf[i] = z_buf[i] - alpha[k] * q_curr[i] - beta[k] * q_prev[i]; }
         let bk1 = z_buf.iter().map(|&x| x * x).fold(F::zero(), |s, x| s + x).sqrt();
