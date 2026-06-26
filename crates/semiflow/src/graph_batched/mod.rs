@@ -375,7 +375,7 @@ impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
 /// `u0_cols` and `dj_cols` are `[C, N]` flat.  `grad_theta` (length `n_params`)
 /// is **zeroed once** then accumulated in ascending channel index (ADR-0184 D4).
 ///
-/// 0-ULP identical to calling [`adjoint_state_gradient`] C times in ascending
+/// 0-ULP identical to calling [`crate::adjoint_state_gradient`] C times in ascending
 /// channel order: each channel's gradient is computed via `accumulate_grad_channel`
 /// into a zeroed temp (`adjoint_state_gradient` zeros its output buffer on entry),
 /// then added into `grad_theta`. Fixed accumulation order `c = 0..n_cols` preserves

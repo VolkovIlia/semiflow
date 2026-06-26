@@ -13,8 +13,8 @@
 //! ## Wave 5 (ADR-0045) — generic-over-F lift
 //!
 //! All functions are now generic over `F: SemiflowFloat + Send + Sync`.
-//! Thread-local pools are dispatched via the sealed [`ParallelPool3D`] trait
-//! (see [`parallel_pool`]). The f64 codegen path is **byte-identical** to Wave 2.
+//! Thread-local pools are dispatched via the sealed `ParallelPool3D` trait
+//! (see [`crate::parallel_pool`]). The f64 codegen path is **byte-identical** to Wave 2.
 //!
 //! ## Wave 2 (ADR-0042) thread-local pools
 //!
