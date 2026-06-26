@@ -25,15 +25,9 @@ Key directories:
 
 Minimum Supported Rust Version: **1.78**.
 
-An active issue with `clap_lex`/edition2024 requires a stable-toolchain
-workaround when invoking xtask commands:
-
-```bash
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- <command>
-```
-
-The `rust-toolchain.toml` at repo root pins the default channel; override only
-when the toolchain resolver misbehaves with nightly features.
+The `rust-toolchain.toml` at repo root pins `channel = "stable"`. No env-var
+override is needed; `cargo run -p xtask -- <command>` works as-is on rustc ≥1.85
+(edition 2024 support was stabilised in 1.85; clap_lex 0.7.x builds fine on 1.96+).
 
 ## Build & Test Matrix
 
