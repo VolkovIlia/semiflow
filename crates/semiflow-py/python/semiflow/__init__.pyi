@@ -5914,3 +5914,122 @@ class MatrixDiffusion3D:
     def order(self) -> int: ...
     def evolve(self, t: float, n_steps: int = 100) -> None: ...
     def values(self) -> NDArray[np.float64]: ...
+
+
+# ---------------------------------------------------------------------------
+# feat/graph-krylov-frechet-a1a2 — A1 Krylov action + A2 Fréchet VJP (ADR-0185)
+# ---------------------------------------------------------------------------
+
+@final
+class GraphKrylov:
+    """Depth-independent graph action ``e^{-t L_G}·v`` via Krylov methods (A1, §54, ADR-0185).
+
+    Accepts a symmetric ``Laplacian`` (combinatorial or normalised).
+    ``evolve_batched`` applies it to a ``[N, C]`` feature matrix in ONE FFI hop
+    with ONE GIL release (ADR-0031, ADR-0184 D1).
+
+    Parameters
+    ----------
+    laplacian : Laplacian
+        Pre-assembled symmetric Laplacian (:meth:`Laplacian.combinatorial`).
+    path : str, optional
+        ``"chebyshev"`` (default, O(1) work vectors, Bessel-tail degree) or
+        ``"lanczos"`` (m-dim Krylov basis + Padé, adaptive depth).
+    tol : float, optional
+        Target accuracy ε.  Default ``1e-10``.
+    m_max : int, optional
+        Max Krylov dimension for ``path="lanczos"`` (ignored for Chebyshev).
+        Capped at 18 internally.  Default ``18``.
+
+    Raises
+    ------
+    SemiflowError
+        kind='OutOfDomain' if ``tol <= 0``, ``tol`` is not finite,
+        or ``path`` is neither ``"chebyshev"`` nor ``"lanczos"``.
+    """
+
+    def __init__(
+        self,
+        laplacian: Laplacian,
+        *,
+        path: str = "chebyshev",
+        tol: float = 1e-10,
+        m_max: int = 18,
+    ) -> None: ...
+
+    def evolve_batched(
+        self,
+        t: float,
+        features_nc: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Apply ``e^{-t L_G}`` to ``features_nc`` (``[N, C]``); single GIL release.
+
+        Implemented as one Chernoff step (``n_steps = 1``) at time ``t`` — the
+        depth-independent single Krylov solve (§54.4).
+        Returns ``[N, C]`` float64 array.
+
+        Parameters
+        ----------
+        t : float
+            Evolution time.  Must be non-negative and finite.
+        features_nc : NDArray[np.float64]
+            Input feature matrix; shape ``(n_nodes, C)``, C >= 1; dtype float64.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Output; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' on layout mismatch or ``t < 0``.
+        """
+        ...
+
+    def n_nodes(self) -> int:
+        """Return the number of graph nodes (= rows/columns of the Laplacian)."""
+        ...
+
+
+def graph_expmv_frechet(
+    gk: GraphKrylov,
+    u0: NDArray[np.float64],
+    dj: NDArray[np.float64],
+    *,
+    t: float,
+    params: list[tuple[int, int]],
+) -> NDArray[np.float64]:
+    """VJP gradient ``∂J/∂w`` via the Fréchet–Duhamel integral (A2, §54.5, ADR-0185).
+
+    Computes ``∂J/∂w_k = t ∫₀¹ ⟨e^{−(1−s)tL}dj_c, (∂A/∂w_k) e^{−stL}u0_c⟩ ds``
+    summed over channels using 8-point Gauss-Legendre quadrature.  Exact for all
+    graph topologies including non-commuting edge directions.
+
+    Parameters
+    ----------
+    gk : GraphKrylov
+        Krylov solver owning the Laplacian ``L``.
+    u0 : NDArray[np.float64]
+        Batched initial conditions; shape ``(N, C)``.
+    dj : NDArray[np.float64]
+        Batched loss-gradient vectors ``∂J/∂u_final``; shape ``(N, C)``.
+    t : float
+        Evolution time ``t > 0``.  Keyword-only.
+    params : list[tuple[int, int]]
+        Explicit undirected edge pairs ``(i, j)`` (0-indexed).  Each pair
+        identifies one edge-weight parameter ``w_k``.
+        ``"all_edges"`` is **not** accepted — pass an explicit list.
+
+    Returns
+    -------
+    NDArray[np.float64]
+        Summed ``∂J/∂w`` over all channels; 1-D array of length ``len(params)``.
+
+    Raises
+    ------
+    SemiflowError
+        kind='OutOfDomain' if ``t <= 0``, ``t`` is non-finite, ``u0``/``dj``
+        shapes differ, any edge index out of range, or ``params`` is a string.
+    """
+    ...

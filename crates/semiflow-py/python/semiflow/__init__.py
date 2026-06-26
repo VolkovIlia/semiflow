@@ -109,6 +109,9 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     Killing2nd1D,
     MatrixDiffusion2D,
     MatrixDiffusion3D,
+    # feat/graph-krylov-frechet-a1a2 — A1 Krylov action + A2 Fréchet VJP (ADR-0185)
+    GraphKrylov,
+    graph_expmv_frechet,
 )
 
 __all__ = [
@@ -219,4 +222,7 @@ __all__ = [
     "Killing2nd1D",
     "MatrixDiffusion2D",
     "MatrixDiffusion3D",
+    # feat/graph-krylov-frechet-a1a2 — A1 Krylov action + A2 Fréchet VJP (ADR-0185)
+    "GraphKrylov",
+    "graph_expmv_frechet",
 ]
