@@ -1,55 +1,19 @@
-//! Graph PDE Python classes for `semiflow-py`.
+//! Graph PDE Python classes: [`GraphPath`], [`GraphHeat`], [`MagnusGraphHeat`].
 //!
-//! Exposes [`GraphPath`], [`GraphHeat`], and [`MagnusGraphHeat`] to Python,
-//! mirroring the v0.10.0 `Heat1D` pyclass pattern (commit c3a6fe5) and the
-//! v0.11.0 GIL-release pattern (ADR-0031, commit 07a4689).
-//!
-//! ## Python API
-//!
-//! ```python
-//! import numpy as np
-//! from semiflow import GraphPath, GraphHeat, MagnusGraphHeat, SemiflowError
-//!
-//! g = GraphPath(64)                             # P_64 path graph
-//! gh = GraphHeat(g, rho_bar=4.0)               # order-1 heat
-//! u0 = np.exp(-np.arange(64)**2 / 64.0)
-//! u1 = gh.evolve(t_final=0.5, n_steps=50, f0=u0)
-//!
-//! def lap_at_t(t):
-//!     return g                                  # time-independent shortcut
-//! mghc = MagnusGraphHeat(g, lap_at_t, rho_bar=4.0)
-//! u2 = mghc.evolve(t_final=0.5, n_steps=50, f0=u0)
-//! ```
-//!
-//! ## GIL policy (ADR-0031)
-//!
-//! [`GraphHeat::evolve`] and [`MagnusGraphHeat::evolve`] use the three-phase
-//! pattern:
-//! 1. **Pre-flight (GIL held)**: validate, copy `f0` into owned `Vec<f64>`.
-//! 2. **Compute (GIL released via `py.detach`)**: pure-Rust kernel.
-//! 3. **Post-flight (GIL held)**: convert result to `PyArray1<f64>`.
-//!
-//! **[`MagnusGraphHeat`] callback note**: the Python `lap_at_t` callable is
-//! invoked from within the GIL-released window via `Python::attach` to
-//! re-acquire the GIL just for the callback (ADR-0059 R2 mitigation: at most
-//! 4 GIL re-acquires per Magnus K=4 step).  Total GIL overhead is
-//! `O(4 · n_steps)` callback entries; typical latency ~2-5 µs each.
-//!
-//! ## dtype support (Issue #3, ADR-0115)
-//!
-//! `GraphHeat` and `MagnusGraphHeat` accept an optional `dtype="f32"` kwarg.
-//! The default `"f64"` path is unchanged.  fp16 is explicitly REJECTED.
+//! GIL three-phase pattern (ADR-0031): validate→detach→scatter.
+//! Batched helpers (ADR-0184): gather `[N,C]`→`[C,N]`, scatter back.
+//! dtype dispatch: optional `"f32"` flag (ADR-0115); fp16 rejected.
 
 #![allow(unsafe_code)]
 
 use std::sync::Arc;
 
-use numpy::ToPyArray;
+use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{ChernoffSemigroup, Graph, GraphHeatChernoff, GraphSignal, Laplacian};
 
 use crate::{
-    dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype},
+    dtype_dispatch::{cast_f64_to_f32, parse_dtype, reject_f32_for_batched, Dtype},
     error::{from_core, new_pyerr},
     graph_extra::{PyGraph, PyLaplacian},
     graph_heat_f32::compute_graph_heat_f32,
@@ -60,21 +24,8 @@ use crate::{
 // GraphPath — P_n path graph
 // ---------------------------------------------------------------------------
 
-/// Path graph on `n_nodes` nodes with unit edge weights.
-///
-/// Represents the path graph `0 — 1 — 2 — … — (n-1)` with all edge
-/// weights equal to 1.  Used as the topology for [`GraphHeat`] and
-/// [`MagnusGraphHeat`].
-///
-/// Parameters
-/// ----------
-/// `n_nodes` : int
-///     Number of nodes.  Must be ≥ 1.
-///
-/// Raises
-/// ------
-/// `SemiflowError`
-///     ``kind='OutOfDomain'`` if ``n_nodes == 0``.
+/// Path graph `0—1—2—…—(n-1)` with unit edge weights.
+/// Used as topology for [`GraphHeat`] / [`MagnusGraphHeat`].
 #[pyclass(name = "GraphPath")]
 pub struct GraphPath {
     pub(crate) inner: Arc<Graph<f64>>,
@@ -125,16 +76,7 @@ pub struct GraphHeat {
 
 #[pymethods]
 impl GraphHeat {
-    /// Create a graph heat state from a graph or a pre-assembled Laplacian.
-    ///
-    /// Accepts ``graph`` (`GraphPath` or Graph) or ``laplacian`` (Laplacian).
-    /// ``laplacian`` takes precedence.  The graph is used as topology carrier.
-    ///
-    /// Parameters
-    /// ----------
-    /// dtype : str, optional
-    ///     ``"f64"`` (default) or ``"f32"``.  When ``"f32"``, the Chernoff
-    ///     kernel runs in single precision; ``evolve()`` returns ``float32``.
+    /// Create from graph or pre-assembled Laplacian.  `dtype` = "f64" or "f32".
     #[new]
     #[pyo3(signature = (graph=None, laplacian=None, *, rho_bar, dtype="f64"))]
     fn new(
@@ -161,6 +103,43 @@ impl GraphHeat {
             gh.dtype = dt;
             Ok(gh)
         })
+    }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` Chernoff steps; single GIL release.
+    ///
+    /// Three-phase ADR-0031: (1) validate + gather ``[N,C]`` → ``[C,N]``; (2) detach;
+    /// (3) scatter ``[C,N]`` → ``[N,C]``.  dtype="f32" rejected; use :meth:`evolve` per channel.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if self.dtype == Dtype::F32 {
+            return Err(reject_f32_for_batched());
+        }
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.graph.n_nodes())?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let chernoff = self.chernoff.clone();
+        let graph = Arc::clone(&self.graph);
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched(
+                &chernoff,
+                &graph,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
     }
 
     /// Evolve ``f0`` to ``t=t_final`` using ``n_steps`` Chernoff steps.
@@ -433,7 +412,6 @@ pub(crate) fn make_lap_at_t_f32(
     graph: Arc<Graph<f64>>,
 ) -> semiflow::LaplacianAtTime<f32> {
     use crate::graph_heat_f32::build_lap_f32_from_lap_f64;
-    // LaplacianAtTime<f32> = Box<dyn Fn(f32) -> Arc<Laplacian<f32>> + ...>
     Box::new(move |t: f32| {
         Python::attach(|py| {
             let lap64: Arc<Laplacian<f64>> = match callback.call1(py, (f64::from(t),)) {
@@ -463,4 +441,60 @@ pub(crate) fn extract_laplacian_arc(
         return Arc::new(Laplacian::assemble_combinatorial(&gp.inner));
     }
     Arc::new(Laplacian::assemble_combinatorial(fallback))
+}
+
+// ---------------------------------------------------------------------------
+// Batched gather / scatter helpers (pub(crate) — shared by all graph py modules)
+// ---------------------------------------------------------------------------
+
+/// Validate ``[N, C]`` shape; return ``[n_nodes, n_cols]``.
+pub(crate) fn validate_batched_shape(shape: &[usize], expected_n: usize) -> PyResult<[usize; 2]> {
+    if shape.len() != 2 {
+        return Err(new_pyerr("GridMismatch", "f0 must be 2-D [N, C]"));
+    }
+    if shape[0] != expected_n {
+        return Err(new_pyerr(
+            "GridMismatch",
+            &format!("f0.shape[0]={} != n_nodes={}", shape[0], expected_n),
+        ));
+    }
+    if shape[1] == 0 {
+        return Err(new_pyerr("OutOfDomain", "n_cols must be >= 1"));
+    }
+    Ok([shape[0], shape[1]])
+}
+
+/// Gather Python ``[N, C]`` row-major view into owned ``[C, N]`` channel-major Vec.
+///
+/// `dst[c*N + i] = src[i, c]`.  Mandatory GIL-boundary copy (ADR-0184 D1).
+pub(crate) fn gather_nc_to_cn(
+    arr: &numpy::ndarray::ArrayView2<'_, f64>,
+    n: usize,
+    c: usize,
+) -> Vec<f64> {
+    let mut out = vec![0.0f64; n * c];
+    for col in 0..c {
+        for row in 0..n {
+            out[col * n + row] = arr[[row, col]];
+        }
+    }
+    out
+}
+
+/// Scatter ``[C, N]`` channel-major slice into a ``[N, C]`` `PyArray2` (GIL held).
+pub(crate) fn scatter_cn_to_nc<'py>(
+    src: &[f64],
+    n: usize,
+    c: usize,
+    py: Python<'py>,
+) -> Bound<'py, PyArray2<f64>> {
+    let mut out = vec![0.0f64; n * c];
+    for col in 0..c {
+        for row in 0..n {
+            out[row * c + col] = src[col * n + row];
+        }
+    }
+    let arr =
+        numpy::ndarray::Array2::from_shape_vec((n, c), out).expect("shape matches allocation");
+    arr.into_pyarray(py)
 }

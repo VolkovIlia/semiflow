@@ -181,6 +181,8 @@ pub mod float;
 pub(crate) mod gen_quadrature;
 pub mod graph;
 pub mod graph_adjoint_presampled;
+pub mod graph_batched;
+mod graph_batched_tests;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;

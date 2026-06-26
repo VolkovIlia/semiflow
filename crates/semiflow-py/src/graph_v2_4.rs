@@ -43,7 +43,7 @@
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
     varcoef_magnus_graph::{
@@ -57,8 +57,9 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_extra::{resolve_lap_and_graph, PyGraph, PyLaplacian},
     graph_py::{
-        extract_f64_vec, extract_laplacian_arc, validate_n_steps, validate_rho_bar,
-        validate_signal_len, validate_t_final,
+        extract_f64_vec, extract_laplacian_arc, gather_nc_to_cn, scatter_cn_to_nc,
+        validate_batched_shape, validate_n_steps, validate_rho_bar, validate_signal_len,
+        validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -147,6 +148,38 @@ impl GraphHeat6 {
     #[getter]
     fn n_nodes(&self) -> usize {
         self.n_nodes
+    }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` steps; single GIL release.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.n_nodes)?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let lap = Arc::clone(&self.laplacian);
+        let graph = Arc::clone(&self.graph);
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let chernoff = GraphHeat6thChernoff::new(lap);
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched(
+                &chernoff,
+                &graph,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
     }
 }
 
@@ -298,6 +331,46 @@ impl VarCoefMagnusGraph {
     #[getter]
     fn n_nodes(&self) -> usize {
         self.n_nodes
+    }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` `VarCoef` Magnus K=4 steps; single GIL release.
+    ///
+    /// GL₄ + a-coefficient samples are hoisted ONCE shared across all ``C`` channels.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.n_nodes)?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let graph = Arc::clone(&self.graph);
+        let lap_cb = self.lap_callback.clone_ref(py);
+        let a_cb = self.a_callback.clone_ref(py);
+        let rho = self.rho_bar_max;
+        let a_sup = self.a_sup_max;
+        let cc = self.convergence_check;
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let lap_fn = make_lap_at_t_py(lap_cb, Arc::clone(&graph));
+            let a_fn = make_a_at_t_py(a_cb, n_nodes);
+            let mc = VarCoefMagnusGraphHeatChernoff::<f64>::new(n_nodes, lap_fn, a_fn, rho, a_sup)?
+                .with_radius_check(cc);
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched_varcoef_magnus(
+                &mc,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
     }
 
     /// Estimate ``(rho_bar_max, a_sup_max)`` over ``[t0, t1]`` via

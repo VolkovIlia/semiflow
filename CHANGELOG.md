@@ -6,6 +6,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Batched multi-channel evolve** (`evolve_batched`) for the graph-heat kernels
+  (`GraphHeat`, `GraphHeat4th`, `GraphHeat6`, `MagnusGraphHeat`, `MagnusGraphHeat6`,
+  `VarCoefGraphHeat`, `VarCoefMagnusGraph`) and batched adjoint paths
+  (`evolve_state_adjoint_batched` on `GraphAdjointPresampled`, `edge_weight_grad_batched`).
+  Evolves an `[N, C]` feature matrix in ONE Rust call / one GIL release (ADR-0184).
+  Bit-exact (0-ULP) identical to the per-channel loop.
+
+### Changed
+
+- **Python wheel now compiled with `simd` + `parallel`** (previously built with
+  `default-features=false, features=["std"]` — scalar-only).
+
+### Performance (measured, i7-12700K)
+
+- Forward batched (C=4): **2.1×–5.6× faster** than the per-channel Python loop
+  (`MagnusGraphHeat` 540 µs → 96 µs via Laplacian hoisting + single PyO3 call).
+- Peak Python memory (C=4): **~23× lower**.
+- Adjoint state-sweep (C=4): **1.0×–1.8×** faster.
+- **Honest caveat — edge-weight gradient path**: `edge_weight_grad_batched` shows
+  **~1.0× (no speedup)**. This path is Rust-compute-bound — O(edges) sensitivity
+  per channel — not Python-overhead-bound; batching gives correctness + fewer PyO3
+  calls, not a throughput gain. No blanket gradient speedup is claimed.
+
 ## [0.9.0-beta.3] — 2026-06-25
 
 ### Fixed

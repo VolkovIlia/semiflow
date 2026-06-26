@@ -1199,6 +1199,39 @@ class GraphHeat:
         """
         ...
 
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release (ADR-0031).
+
+        Bit-identical to calling :meth:`evolve` C times (same Chernoff kernel,
+        called in ascending channel index, ADR-0184).
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of Chernoff steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' on invalid parameters.
+            kind='GridMismatch' if ``f0.shape[0] != graph.n_nodes()``.
+        """
+        ...
+
 
 @final
 class MagnusGraphHeat:
@@ -1286,6 +1319,39 @@ class MagnusGraphHeat:
         ------
         SemiflowError
             kind='OutOfDomain' / 'ConvergenceFailed' on invalid parameters.
+        """
+        ...
+
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release.
+
+        GL₄ Laplacian samples are hoisted ONCE and shared across all channels
+        (ADR-0031 / ADR-0184).  Bit-identical to calling :meth:`evolve` C times.
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of Magnus steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' / 'ConvergenceFailed' on invalid parameters.
+            kind='GridMismatch' if ``f0.shape[0] != n_nodes``.
         """
         ...
 
@@ -1556,6 +1622,112 @@ class GraphAdjoint:
         """Return the number of graph nodes."""
         ...
 
+@final
+class GraphAdjointPresampled:
+    """Pre-sampled graph state-adjoint for the truncated Magnus K=4 map (ADR-0180).
+
+    Samples the ``lap_at_t`` (and optionally ``a_at_t``) callbacks ONCE at
+    construction (at ``2·n_steps`` GL₄ abscissa times), stores the sequence,
+    then runs all adjoint operations fully inside ``py.detach`` with NO
+    per-step Python re-entry.
+
+    Supports ``kernel="magnus_graph"`` and ``kernel="varcoef_magnus_graph"``.
+    """
+
+    @classmethod
+    def from_presampled(
+        cls,
+        graph: "Graph | GraphPath",
+        lap_at_t: "Callable[[float], Any]",
+        rho_bar: float,
+        n_steps: int,
+        t_horizon: float,
+        a: "Callable[[float], list[float]] | None" = None,
+        kernel: str = "magnus_graph",
+        convergence_check: bool = True,
+    ) -> "GraphAdjointPresampled":
+        """Sample callbacks at construction; store Laplacian sequence.
+
+        Parameters
+        ----------
+        graph : Graph or GraphPath
+            Fixed-topology graph.
+        lap_at_t : callable
+            ``t: float -> Graph | Laplacian | GraphPath``.
+        rho_bar : float
+            Upper bound on ``ρ̄(L_G(t))``.
+        n_steps : int
+            Number of adjoint steps (must match call-time ``n_steps``).
+        t_horizon : float
+            Total time horizon; used to compute ``tau = t_horizon / n_steps``.
+        a : callable, optional
+            ``t: float -> list[float]`` — node weights (varcoef kernel only).
+        kernel : str, optional
+            ``"magnus_graph"`` (default) or ``"varcoef_magnus_graph"``.
+        convergence_check : bool, optional
+            Enable convergence-radius guard (default ``True``).
+
+        Returns
+        -------
+        GraphAdjointPresampled
+        """
+        ...
+
+    def evolve_state_adjoint(
+        self,
+        lambda_n: NDArray[np.float64],
+        n_steps: "int | None" = None,
+    ) -> NDArray[np.float64]:
+        """Backward costate sweep (pre-sampled): ``lambda_n → lambda_0``.
+
+        Runs fully in ``py.detach``; no GIL re-entry per step.
+
+        Parameters
+        ----------
+        lambda_n : NDArray[np.float64]
+            Terminal costate; length ``n_nodes``.
+        n_steps : int, optional
+            Must equal the value supplied at construction (default: use construction value).
+
+        Returns
+        -------
+        NDArray[np.float64]
+            λ₀; length ``n_nodes``.
+        """
+        ...
+
+    def evolve_state_adjoint_batched(
+        self,
+        lambda_cols: NDArray[np.float64],
+        n_steps: "int | None" = None,
+    ) -> NDArray[np.float64]:
+        """Batched backward costate sweep; single GIL release (ADR-0031).
+
+        Pre-sampled Laplacian sequence is shared across all ``C`` channels.
+        Bit-identical to calling :meth:`evolve_state_adjoint` C times.
+
+        Parameters
+        ----------
+        lambda_cols : NDArray[np.float64]
+            Batched terminal costates; shape ``(n_nodes, C)``.
+        n_steps : int, optional
+            Must equal the construction value (default: use construction value).
+
+        Returns
+        -------
+        NDArray[np.float64]
+            λ₀ columns; shape ``(n_nodes, C)``.
+        """
+        ...
+
+    def n_nodes(self) -> int:
+        """Number of graph nodes."""
+        ...
+
+    def n_steps(self) -> int:
+        """Number of construction-time steps."""
+        ...
+
 # ---------------------------------------------------------------------------
 # Phase 5 — Graph topology & advanced graph kernels
 # ---------------------------------------------------------------------------
@@ -1810,6 +1982,36 @@ class GraphHeat4th:
         """
         ...
 
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release (ADR-0031).
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            ``kind='OutOfDomain'`` on invalid parameters.
+            ``kind='GridMismatch'`` if ``f0.shape[0] != n_nodes``.
+        """
+        ...
+
 
 @final
 class VarCoefGraphHeat:
@@ -1869,6 +2071,39 @@ class VarCoefGraphHeat:
         ------
         SemiflowError
             ``kind='OutOfDomain'`` on invalid parameters.
+        """
+        ...
+
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release (ADR-0031).
+
+        Always returns ``float64`` regardless of construction ``dtype``
+        (ADR-0184 batched layout invariant).
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            ``kind='OutOfDomain'`` on invalid parameters.
+            ``kind='GridMismatch'`` if ``f0.shape[0] != n_nodes``.
         """
         ...
 
@@ -1940,6 +2175,39 @@ class MagnusGraphHeat6:
         """
         ...
 
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release.
+
+        GL₆ Laplacian samples are hoisted ONCE (three GL₆ abscissae total)
+        and shared across all channels (ADR-0031 / ADR-0184).
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of Magnus K=6 steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            ``kind='OutOfDomain'`` / ``kind='ConvergenceFailed'`` on invalid parameters.
+            ``kind='GridMismatch'`` if ``f0.shape[0] != n_nodes``.
+        """
+        ...
+
 @final
 class GraphHeat6:
     """Sixth-order static graph heat equation: ``∂ₜu = −L_G u`` (ADR-0062).
@@ -1996,6 +2264,36 @@ class GraphHeat6:
         ------
         SemiflowError
             ``kind='OutOfDomain'`` on invalid parameters.
+        """
+        ...
+
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release (ADR-0031).
+
+        Parameters
+        ----------
+        t_final : float
+            Time horizon.  Must be finite and >= 0.
+        n_steps : int
+            Number of steps.  Must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            ``kind='OutOfDomain'`` on invalid parameters.
+            ``kind='GridMismatch'`` if ``f0.shape[0] != n_nodes``.
         """
         ...
 
@@ -2078,6 +2376,39 @@ class VarCoefMagnusGraph:
         ------
         SemiflowError
             ``kind='OutOfDomain'`` / ``kind='ConvergenceFailed'`` on invalid params.
+        """
+        ...
+
+    def evolve_batched(
+        self,
+        t_final: float,
+        n_steps: int,
+        f0: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` initial conditions simultaneously; single GIL release.
+
+        GL₄ Laplacian samples are hoisted ONCE and shared across all channels
+        (ADR-0031 / ADR-0184).  Bit-identical to calling :meth:`evolve` C times.
+
+        Parameters
+        ----------
+        t_final : float
+            Duration; must be finite and >= 0.
+        n_steps : int
+            Number of Magnus K=4 steps; must be >= 1.
+        f0 : NDArray[np.float64]
+            Batched initial conditions; shape ``(n_nodes, C)``, C >= 1.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Result; shape ``(n_nodes, C)``.
+
+        Raises
+        ------
+        SemiflowError
+            ``kind='OutOfDomain'`` / ``kind='ConvergenceFailed'`` on invalid params.
+            ``kind='GridMismatch'`` if ``f0.shape[0] != n_nodes``.
         """
         ...
 
@@ -4419,6 +4750,52 @@ def edge_weight_grad(
     -------
     NDArray[np.float64]
         ``∂J/∂w`` for each requested edge (same order as ``params``).
+
+    Notes
+    -----
+    GIL released during the Rust compute loop (ADR-0031).
+    """
+    ...
+
+def edge_weight_grad_batched(
+    graph: "Graph | GraphPath | None" = None,
+    a: None = None,
+    *,
+    u0_cols: NDArray[np.float64],
+    dj_du_n_cols: NDArray[np.float64],
+    t: float,
+    n_steps: int,
+    rho_bar: float,
+    params: "list[tuple[int, int]] | Literal['all_edges']",
+) -> NDArray[np.float64]:
+    """Summed adjoint-state gradient ``Σ_c ∂J_c/∂w`` over ``C`` channels.
+
+    Equivalent to calling :func:`edge_weight_grad` C times and summing, but
+    uses a single shared forward+adjoint pass (0-ULP identical, ADR-0184 D4).
+
+    Parameters
+    ----------
+    graph : Graph or GraphPath, optional
+        Fixed-topology graph.
+    a : None
+        Reserved; must be ``None``.
+    u0_cols : NDArray[np.float64]
+        Batched initial conditions; shape ``(n_nodes, C)``.
+    dj_du_n_cols : NDArray[np.float64]
+        Batched terminal sensitivities; shape ``(n_nodes, C)``.
+    t : float
+        Total evolution time.
+    n_steps : int
+        Number of Magnus K=4 steps.
+    rho_bar : float
+        Upper bound on ``ρ̄(L_G)``.
+    params : list[tuple[int, int]] or "all_edges"
+        Which edge weights to differentiate.
+
+    Returns
+    -------
+    NDArray[np.float64]
+        ``Σ_c ∂J_c/∂w`` for each requested edge (same order as ``params``).
 
     Notes
     -----

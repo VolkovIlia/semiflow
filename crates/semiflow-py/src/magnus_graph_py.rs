@@ -10,18 +10,19 @@
 
 use std::sync::Arc;
 
-use numpy::ToPyArray;
+use numpy::{PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeatChernoff};
 
 use crate::{
-    dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype},
+    dtype_dispatch::{cast_f64_to_f32, parse_dtype, reject_f32_for_batched, Dtype},
     error::from_core,
     graph_extra::PyLaplacian,
     graph_heat_f32::compute_magnus_graph_f32,
     graph_py::{
-        extract_f64_vec, extract_laplacian_arc, make_lap_at_t_f32, resolve_graph_from_any,
-        validate_n_steps, validate_rho_bar, validate_signal_len, validate_t_final,
+        extract_f64_vec, extract_laplacian_arc, gather_nc_to_cn, make_lap_at_t_f32,
+        resolve_graph_from_any, scatter_cn_to_nc, validate_batched_shape, validate_n_steps,
+        validate_rho_bar, validate_signal_len, validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -153,6 +154,48 @@ impl MagnusGraphHeat {
             }
         })
     }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` Magnus K=4 steps; single GIL release.
+    ///
+    /// GL₄ Laplacian samples are hoisted ONCE and shared across all ``C`` channels.
+    /// Three-phase ADR-0031: (1) validate + gather; (2) detach; (3) scatter.
+    ///
+    /// **dtype**: ``"f64"`` only.  ``dtype="f32"`` is rejected at runtime with
+    /// ``SemiflowError(kind="OutOfDomain")``; call :meth:`evolve` per channel for f32.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if self.dtype == Dtype::F32 {
+            return Err(reject_f32_for_batched());
+        }
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.graph.n_nodes())?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let graph = Arc::clone(&self.graph);
+        let cb = self.lap_callback.clone_ref(py);
+        let rho = self.rho_bar_max;
+        let cc = self.convergence_check;
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let mc = build_magnus_for_batched(&graph, cb, rho, cc)?;
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched_magnus(
+                &mc,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,4 +307,24 @@ fn compute_magnus_graph(
     }
 
     Ok(state.values().to_vec())
+}
+
+/// Build a [`MagnusGraphHeatChernoff`] for the batched path (inside `py.detach`).
+///
+/// The `lap_at_t` callback re-acquires the GIL via `Python::attach` when sampled.
+/// For `evolve_batched_magnus` the hoisting samples it ONCE (two GL₄ abscissae).
+fn build_magnus_for_batched(
+    graph: &Arc<Graph<f64>>,
+    callback: Py<PyAny>,
+    rho_bar_max: f64,
+    convergence_check: bool,
+) -> Result<MagnusGraphHeatChernoff<f64>, semiflow::SemiflowError> {
+    let g2 = Arc::clone(graph);
+    let lap_at_t: LaplacianAtTime<f64> = Box::new(move |t: f64| {
+        Python::attach(|py| match callback.call1(py, (t,)) {
+            Ok(v) => extract_laplacian_arc(v.bind(py), &g2),
+            Err(_) => Arc::new(Laplacian::assemble_combinatorial(&g2)),
+        })
+    });
+    MagnusGraphHeatChernoff::new(Arc::clone(graph), lap_at_t, rho_bar_max, convergence_check)
 }

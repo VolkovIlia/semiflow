@@ -84,7 +84,7 @@ impl<F: SemiflowFloat> PreSampledLaplacianSeq<F> {
     /// Reconstruct a `Laplacian` for adjoint step `k`, abscissa index `ci` (0 or 1).
     ///
     /// Block index = `2k + ci`; copies `nnz` values from `vals_seq`.
-    fn lap_for_step(&self, k: usize, ci: usize) -> Result<Laplacian<F>, SemiflowError> {
+    pub(crate) fn lap_for_step(&self, k: usize, ci: usize) -> Result<Laplacian<F>, SemiflowError> {
         let nnz = self.col_idx.len();
         let block = 2 * k + ci;
         let start = block * nnz;

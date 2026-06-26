@@ -1,29 +1,16 @@
-//! `GraphAdjoint` — graph state-adjoint Python class (Issue #2, ADR-0115).
+//! `GraphAdjoint` / `GraphAdjointPresampled` — graph state-adjoint (Issue #2, ADR-0115, ADR-0180).
 //!
-//! Computes `S⋆(τ) · λ` — the transpose of the implemented degree-4 Taylor map
-//! for the Magnus K=4 graph heat equation (math.md §42, Theorem 42.1).
+//! Computes `S⋆(τ) · λ` for Magnus K=4; batched variant added in Issue #10.
+//! Kernels: `magnus_graph`, `varcoef_magnus_graph`.
 //!
-//! Supports `kernel="magnus_graph"` and `kernel="varcoef_magnus_graph"`.
-//!
-//! ## Pre-sampled path (ADR-0180)
-//!
-//! `GraphAdjoint.from_presampled(...)` samples the `lap_at_t` callback ONCE
-//! under GIL at construction (at the `2·n_steps` GL₄ abscissa times), stores
-//! the weight sequence, then runs `evolve_state_adjoint` FULLY in `py.detach`
-//! with NO per-step Python re-entry. This closes the PyO3-only deferral from
-//! the v0.9.0-beta launch.
-//!
-//! ## GIL policy (ADR-0031)
-//!
-//! Closure path: validate (GIL), compute+callback (GIL released, per-step reattach).
-//! Pre-sampled path: validate+sample (GIL held once), replay evolve (fully detached).
+//! GIL: closure path releases per-step; pre-sampled path releases fully (ADR-0031).
 
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
     graph_adjoint_presampled::{
@@ -37,8 +24,9 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_extra::PyLaplacian,
     graph_py::{
-        extract_f64_vec, extract_laplacian_arc, resolve_graph_from_any, validate_n_steps,
-        validate_rho_bar, validate_signal_len, validate_t_final,
+        extract_f64_vec, extract_laplacian_arc, gather_nc_to_cn, resolve_graph_from_any,
+        scatter_cn_to_nc, validate_batched_shape, validate_n_steps, validate_rho_bar,
+        validate_signal_len, validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -63,29 +51,10 @@ pub(crate) enum KernelConfig {
 // GraphAdjoint pyclass
 // ---------------------------------------------------------------------------
 
-/// Graph state-adjoint for the truncated Magnus K=4 map (Issue #2, ADR-0115).
+/// Graph state-adjoint for the Magnus K=4 map (Issue #2, ADR-0115).
 ///
-/// Computes the backward costate sweep `λ_0 = S⋆_1 ⋯ S⋆_n · λ_n` where each
-/// step applies `S⋆(τ) = Σ_{m=0..4} (Ω₄ᵀ)^m/m!` — the transpose of the
-/// degree-4 Taylor map (math.md §42 Theorem 42.1, sign-flipped commutator).
-///
-/// Parameters
-/// ----------
-/// graph : Graph or `GraphPath`, optional
-///     Fixed-topology graph.
-/// laplacian : Laplacian, optional
-///     Pre-assembled Laplacian for the topology.
-/// `lap_at_t` : callable
-///     ``t: float -> Graph | Laplacian | GraphPath``
-/// `rho_bar` : float
-///     Upper bound on ``ρ̄(L_G(t))``.
-/// a : callable, optional
-///     ``t: float -> list[float]`` — node weights.
-///     Required for ``kernel="varcoef_magnus_graph"``.
-/// kernel : str, optional
-///     ``"magnus_graph"`` (default) or ``"varcoef_magnus_graph"``.
-/// `convergence_check` : bool, optional
-///     Enable convergence-radius guard (default ``True``).
+/// Backward costate sweep `λ_0 = S⋆_1 ⋯ S⋆_n · λ_n`.
+/// See Python `.pyi` stub for full API docs.
 #[pyclass(name = "GraphAdjoint")]
 pub struct GraphAdjoint {
     config: KernelConfig,
@@ -201,33 +170,10 @@ impl GraphAdjoint {
 
 // GraphAdjointPresampled — pre-sampled path (ADR-0180)
 
-/// Pre-sampled graph state-adjoint — no live Python callback during evolve.
+/// Pre-sampled graph state-adjoint — no live Python callback during evolve (ADR-0180).
 ///
-/// Construct via `GraphAdjointPresampled.from_presampled(...)`. The
-/// `lap_at_t` callback is called ONCE under GIL at construction on the
-/// `2·n_steps` GL₄ abscissa times. The backward sweep in
-/// `evolve_state_adjoint` runs fully in `py.detach` (no GIL reacquisition
-/// per step) — see ADR-0031 §3, ADR-0180.
-///
-/// Parameters (`from_presampled`)
-/// ----------------------------
-/// graph : Graph or `GraphPath`
-///     Graph topology.
-/// `lap_at_t` : callable
-///     ``t: float -> Graph | Laplacian | GraphPath``.  Called `2·n_steps` times
-///     at construction; never called during evolve.
-/// `rho_bar` : float
-///     Gershgorin upper bound on ``ρ̄(L_G(t))``.
-/// `n_steps` : int
-///     Number of adjoint time steps (must match `evolve_state_adjoint`).
-/// `t_horizon` : float
-///     Total time horizon (``τ = t_horizon / n_steps``).
-/// a : callable, optional
-///     ``t: float -> list[float]`` — node weights for `VarCoef` kernel.
-/// kernel : str, optional
-///     ``"magnus_graph"`` (default) or ``"varcoef_magnus_graph"``.
-/// `convergence_check` : bool, optional
-///     Enable Magnus radius guard (default ``True``).
+/// Construct via `from_presampled`. Callbacks called ONCE at construction;
+/// backward sweep runs fully in `py.detach`. See `.pyi` stub for full API.
 #[pyclass(name = "GraphAdjointPresampled")]
 pub struct GraphAdjointPresampled {
     variant: PresampledVariant,
@@ -337,6 +283,56 @@ impl GraphAdjointPresampled {
     /// Number of construction-time steps.
     fn n_steps(&self) -> usize {
         self.n_steps
+    }
+
+    /// Batched backward costate sweep: ``lambda_cols`` (``[N, C]``) → ``[N, C]``.
+    ///
+    /// Each channel ``c`` is evolved independently; single GIL release (ADR-0031).
+    /// The presampled Laplacian sequence is shared across channels.
+    #[pyo3(signature = (lambda_cols, n_steps=None))]
+    fn evolve_state_adjoint_batched<'py>(
+        &self,
+        py: Python<'py>,
+        lambda_cols: PyReadonlyArray2<'py, f64>,
+        n_steps: Option<u32>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let n = self.graph.n_nodes();
+        let [n_nodes, n_cols] = validate_batched_shape(lambda_cols.shape(), n)?;
+        let ns = n_steps.map_or(self.n_steps, |v| v as usize);
+        if ns != self.n_steps {
+            return Err(new_pyerr(
+                "OutOfDomain",
+                &format!("n_steps={ns} != construction n_steps={}", self.n_steps),
+            ));
+        }
+        let src = gather_nc_to_cn(&lambda_cols.as_array(), n_nodes, n_cols);
+        let tau = self.tau;
+        let out: Result<Vec<f64>, semiflow::SemiflowError> = match &self.variant {
+            PresampledVariant::Magnus(ps) => py.detach(|| {
+                let mut dst = vec![0.0f64; n_nodes * n_cols];
+                ps.evolve_state_adjoint_batched_into(
+                    tau,
+                    ns,
+                    &src,
+                    &mut dst,
+                    &mut ScratchPool::new(),
+                )?;
+                Ok(dst)
+            }),
+            PresampledVariant::VarCoef(ps) => py.detach(|| {
+                let mut dst = vec![0.0f64; n_nodes * n_cols];
+                ps.evolve_state_adjoint_batched_into(
+                    tau,
+                    ns,
+                    &src,
+                    &mut dst,
+                    &mut ScratchPool::new(),
+                )?;
+                Ok(dst)
+            }),
+        };
+        let result = out.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&result, n_nodes, n_cols, py))
     }
 }
 

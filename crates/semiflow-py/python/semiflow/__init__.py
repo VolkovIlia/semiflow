@@ -68,8 +68,11 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     Heat2DVarA,
     Heat3DVarA,
     # Issue #1 — adjoint-state parameter-sensitivity (ADR-0115)
+    # Issue #10 — batched evolve (ADR-0184)
     GraphAdjoint,
+    GraphAdjointPresampled,
     edge_weight_grad,
+    edge_weight_grad_batched,
     # v6.3.0 — obstacle / variational-inequality Chernoff (math §44)
     ObstacleChernoff,
     # v8.0.0 F1 — Dual-AD Greeks (ADR-0133 A3)
@@ -175,8 +178,11 @@ __all__ = [
     "Heat2DVarA",
     "Heat3DVarA",
     # Issue #1 — adjoint-state parameter-sensitivity (ADR-0115)
+    # Issue #10 — batched evolve (ADR-0184)
     "GraphAdjoint",
+    "GraphAdjointPresampled",
     "edge_weight_grad",
+    "edge_weight_grad_batched",
     # v6.3.0 — obstacle / variational-inequality Chernoff (math §44)
     "ObstacleChernoff",
     # v8.0.0 F1 — Dual-AD Greeks (ADR-0133 A3)
