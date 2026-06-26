@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
     ChernoffSemigroup, Graph, GraphHeat4thChernoff, GraphSignal, Laplacian,
@@ -14,12 +14,13 @@ use semiflow::{
 };
 
 use crate::{
-    dtype_dispatch::{cast_f64_to_f32, parse_dtype, Dtype},
+    dtype_dispatch::{cast_f64_to_f32, parse_dtype, reject_f32_for_batched, Dtype},
     error::{from_core, new_pyerr},
     graph_extra::{resolve_lap_and_graph, PyGraph, PyLaplacian},
     graph_heat_f32::compute_var_coef_f32,
     graph_py::{
-        extract_f64_vec, validate_n_steps, validate_rho_bar, validate_signal_len, validate_t_final,
+        extract_f64_vec, gather_nc_to_cn, scatter_cn_to_nc, validate_batched_shape,
+        validate_n_steps, validate_rho_bar, validate_signal_len, validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -100,6 +101,38 @@ impl GraphHeat4th {
                 py.detach(|| compute_heat4(lap, graph, &input, t_final, n_st));
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))
         })
+    }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` steps; single GIL release.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.n_nodes)?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let lap = Arc::clone(&self.laplacian);
+        let graph = Arc::clone(&self.graph);
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let chernoff = GraphHeat4thChernoff::new(lap);
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched(
+                &chernoff,
+                &graph,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
     }
 }
 
@@ -201,6 +234,45 @@ impl VarCoefGraphHeat {
                 }
             }
         })
+    }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` steps; single GIL release.
+    ///
+    /// **dtype**: ``"f64"`` only.  ``dtype="f32"`` is rejected at runtime with
+    /// ``SemiflowError(kind="OutOfDomain")``; call :meth:`evolve` per channel for f32.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if self.dtype == Dtype::F32 {
+            return Err(reject_f32_for_batched());
+        }
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.n_nodes)?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let graph = Arc::clone(&self.graph);
+        let a_vec = self.a.clone();
+        let rho = self.rho_bar;
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let chernoff = VarCoefGraphHeatChernoff::new(Arc::clone(&graph), a_vec, rho)?;
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched(
+                &chernoff,
+                &graph,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
     }
 }
 

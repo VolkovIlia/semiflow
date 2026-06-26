@@ -22,7 +22,7 @@ use crate::{
 /// Acquires **22 scratch buffers** and returns all before returning
 /// (R4 zero-alloc invariant, ADR-0114).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn apply_exp_omega6_kernel<F: SemiflowFloat>(
+pub(crate) fn apply_exp_omega6_kernel<F: SemiflowFloat>(
     lap1: &Laplacian<F>,
     lap2: &Laplacian<F>,
     lap3: &Laplacian<F>,

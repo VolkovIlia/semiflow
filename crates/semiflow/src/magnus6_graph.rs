@@ -55,6 +55,8 @@ use crate::{
 #[path = "magnus6_graph_helpers.rs"]
 mod helpers;
 
+pub(crate) use helpers::apply_exp_omega6_kernel;
+
 // ---------------------------------------------------------------------------
 // GL₆ constants (NORMATIVE — DO NOT CHANGE; see contracts §16.1)
 // ---------------------------------------------------------------------------
@@ -118,9 +120,9 @@ pub struct MagnusGraphHeat6thChernoff<F: SemiflowFloat = f64> {
     /// `t ↦ Arc<Laplacian<F>>` — caller-supplied sampler.
     lap_at_t: LaplacianAtTime<F>,
     /// Gershgorin radius bound `ρ̄_max`.
-    rho_bar_max: F,
+    pub(crate) rho_bar_max: F,
     /// If `true`, each `apply_into` checks `ρ̄_max · τ < π/2`.
-    convergence_radius_check: bool,
+    pub(crate) convergence_radius_check: bool,
 }
 
 impl<F: SemiflowFloat> MagnusGraphHeat6thChernoff<F> {

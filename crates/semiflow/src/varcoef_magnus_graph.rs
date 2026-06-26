@@ -295,7 +295,11 @@ fn apply_varcoef_magnus_k4_at<F: SemiflowFloat>(
 }
 
 /// Validate that sampled weight vectors have correct length and positive finite entries.
-fn validate_a_weights<F: SemiflowFloat>(n: usize, a1: &[F], a2: &[F]) -> Result<(), SemiflowError> {
+pub(crate) fn validate_a_weights<F: SemiflowFloat>(
+    n: usize,
+    a1: &[F],
+    a2: &[F],
+) -> Result<(), SemiflowError> {
     if a1.len() != n || a2.len() != n {
         return Err(SemiflowError::DomainViolation {
             what: "VarCoefMagnusGraphHeatChernoff: a_at_t(t).len() != n_nodes",
@@ -320,7 +324,7 @@ fn validate_a_weights<F: SemiflowFloat>(n: usize, a1: &[F], a2: &[F]) -> Result<
 ///
 /// R4 zero-alloc: 7 scratch buffers acquired and returned.
 #[allow(clippy::too_many_arguments)]
-fn apply_exp_omega4_la_kernel<F: SemiflowFloat>(
+pub(crate) fn apply_exp_omega4_la_kernel<F: SemiflowFloat>(
     lap1: &Laplacian<F>,
     sqrt_a1: &[F],
     lap2: &Laplacian<F>,

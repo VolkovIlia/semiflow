@@ -23,7 +23,7 @@
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, ToPyArray};
+use numpy::{PyArray1, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
     adjoint_state_gradient, EdgeWeightSensitivity, Graph, GraphSignal, Laplacian, LaplacianAtTime,
@@ -34,8 +34,8 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_extra::PyLaplacian,
     graph_py::{
-        extract_f64_vec, resolve_graph_from_any, validate_n_steps, validate_rho_bar,
-        validate_signal_len, validate_t_final,
+        extract_f64_vec, gather_nc_to_cn, resolve_graph_from_any, validate_batched_shape,
+        validate_n_steps, validate_rho_bar, validate_signal_len, validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -181,9 +181,123 @@ fn compute_edge_weight_grad(
     Ok(grad)
 }
 
-/// Register `edge_weight_grad` in the Python module.
+/// Compute `∂J/∂w` summed over `C` channels: `u0_cols` and `dj_du_n_cols` are `[N, C]`.
+///
+/// The result is `Σ_c ∂J_c/∂w` — identical to calling :func:`edge_weight_grad` C times
+/// and summing, but uses a single forward+adjoint pass shared across channels (0-ULP).
+///
+/// Parameters
+/// ----------
+/// graph : Graph, `GraphPath`, or Laplacian
+///     Fixed-topology graph.
+/// a : None
+///     Reserved; must be ``None``.
+/// `u0_cols` : ndarray[float64, shape (N, C)]
+///     Batched initial conditions (one per column).
+/// `dj_du_n_cols` : ndarray[float64, shape (N, C)]
+///     Batched terminal sensitivities ``∂J_c/∂u_n`` (one per column).
+/// t : float
+///     Total evolution time.
+/// `n_steps` : int
+///     Number of Magnus K=4 steps.
+/// `rho_bar` : float
+///     Upper bound on ``ρ̄(L_G)``.
+/// params : list[tuple[int,int]] or "`all_edges`"
+///     Which edge weights to differentiate.
+///
+/// Returns
+/// -------
+/// np.ndarray[float64]
+///     Summed ``∂J/∂w`` over all channels for each requested edge.
+#[pyfunction]
+#[pyo3(signature = (graph=None, a=None, *, u0_cols, dj_du_n_cols, t, n_steps, rho_bar, params))]
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+pub fn edge_weight_grad_batched<'py>(
+    py: Python<'py>,
+    graph: Option<&Bound<'_, PyAny>>,
+    a: Option<&Bound<'_, PyAny>>,
+    u0_cols: PyReadonlyArray2<'py, f64>,
+    dj_du_n_cols: PyReadonlyArray2<'py, f64>,
+    t: f64,
+    n_steps: u32,
+    rho_bar: f64,
+    params: &Bound<'_, PyAny>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    catch_panic_py!({
+        validate_t_final(t)?;
+        validate_n_steps(n_steps)?;
+        validate_rho_bar(rho_bar)?;
+        if a.is_some() {
+            return Err(new_pyerr(
+                "OutOfDomain",
+                "edge_weight_grad_batched: a != None (varcoef path not yet implemented)",
+            ));
+        }
+        let g = resolve_graph_from_any(graph, None::<&PyLaplacian>)?;
+        let [n_nodes, n_cols] = validate_batched_shape(u0_cols.shape(), g.n_nodes())?;
+        let [n2, c2] = validate_batched_shape(dj_du_n_cols.shape(), g.n_nodes())?;
+        if n2 != n_nodes || c2 != n_cols {
+            return Err(new_pyerr(
+                "OutOfDomain",
+                &format!("u0_cols shape [{n_nodes},{n_cols}] != dj_du_n_cols shape [{n2},{c2}]"),
+            ));
+        }
+        let u0_cn = gather_nc_to_cn(&u0_cols.as_array(), n_nodes, n_cols);
+        let dj_cn = gather_nc_to_cn(&dj_du_n_cols.as_array(), n_nodes, n_cols);
+        let edge_pairs = parse_params(params, &g)?;
+        let n = n_steps as usize;
+        #[allow(clippy::cast_precision_loss)]
+        let tau = t / n as f64;
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = {
+            let gc = Arc::clone(&g);
+            py.detach(move || {
+                compute_edge_weight_grad_batched(gc, u0_cn, dj_cn, tau, n, rho_bar, edge_pairs)
+            })
+        };
+        let out = result.map_err(|e| from_core(&e))?;
+        Ok(out.as_slice().to_pyarray(py))
+    })
+}
+
+/// Pure-Rust batched compute (called inside `py.detach`).
+#[allow(clippy::too_many_arguments)]
+fn compute_edge_weight_grad_batched(
+    graph: Arc<Graph<f64>>,
+    u0_cn: Vec<f64>,
+    dj_cn: Vec<f64>,
+    tau: f64,
+    n_steps: usize,
+    rho_bar: f64,
+    edge_pairs: Vec<(usize, usize)>,
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    let g2 = Arc::clone(&graph);
+    let lap: LaplacianAtTime<f64> =
+        Box::new(move |_t| Arc::new(Laplacian::assemble_combinatorial(&g2)));
+    let mc = MagnusGraphHeatChernoff::new(Arc::clone(&graph), lap, rho_bar, true)?;
+    let n_params = edge_pairs.len();
+    let sens = EdgeWeightSensitivity {
+        params: edge_pairs,
+        n_nodes: graph.n_nodes(),
+    };
+    let mut grad = vec![0.0_f64; n_params];
+    let mut scratch = ScratchPool::new();
+    semiflow::graph_batched::adjoint_state_gradient_batched(
+        &mc,
+        &u0_cn,
+        &dj_cn,
+        n_steps,
+        tau,
+        &sens,
+        &mut grad,
+        &mut scratch,
+    )?;
+    Ok(grad)
+}
+
+/// Register `edge_weight_grad` and `edge_weight_grad_batched` in the Python module.
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let _ = py;
     m.add_function(wrap_pyfunction!(edge_weight_grad, m)?)?;
+    m.add_function(wrap_pyfunction!(edge_weight_grad_batched, m)?)?;
     Ok(())
 }

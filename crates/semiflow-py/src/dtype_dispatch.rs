@@ -75,3 +75,13 @@ pub(crate) fn cast_f64_to_f32(v: &[f64]) -> Vec<f32> {
 pub(crate) fn cast_f32_to_f64(v: &[f32]) -> Vec<f64> {
     v.iter().map(|&x| f64::from(x)).collect()
 }
+
+/// Rejection error for `evolve_batched` when `dtype="f32"` is set at construction.
+///
+/// Centralises the message across all graph kernel classes that expose `evolve_batched`.
+pub(crate) fn reject_f32_for_batched() -> PyErr {
+    new_pyerr(
+        "OutOfDomain",
+        "evolve_batched requires dtype=\"f64\"; use evolve() per channel for f32",
+    )
+}

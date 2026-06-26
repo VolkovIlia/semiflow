@@ -34,7 +34,7 @@
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
     Graph, GraphSignal, Laplacian, LaplacianAtTime, MagnusGraphHeat6thChernoff, ScratchPool,
@@ -44,8 +44,9 @@ use crate::{
     error::from_core,
     graph_extra::{PyGraph, PyLaplacian},
     graph_py::{
-        extract_f64_vec, extract_laplacian_arc, resolve_graph_topology, validate_n_steps,
-        validate_rho_bar, validate_signal_len, validate_t_final,
+        extract_f64_vec, extract_laplacian_arc, gather_nc_to_cn, resolve_graph_topology,
+        scatter_cn_to_nc, validate_batched_shape, validate_n_steps, validate_rho_bar,
+        validate_signal_len, validate_t_final,
     },
     panic::catch_panic_py,
 };
@@ -182,6 +183,41 @@ impl MagnusGraphHeat6 {
             Ok(result.as_slice().to_pyarray(py))
         })
     }
+
+    /// Evolve ``f0`` (``[N, C]``) for ``n_steps`` Magnus K=6 steps; single GIL release.
+    ///
+    /// GL₆ Laplacian samples are hoisted ONCE and shared across all ``C`` channels.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t_final: f64,
+        n_steps: u32,
+        f0: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        validate_t_final(t_final)?;
+        validate_n_steps(n_steps)?;
+        let [n_nodes, n_cols] = validate_batched_shape(f0.shape(), self.graph.n_nodes())?;
+        let src = gather_nc_to_cn(&f0.as_array(), n_nodes, n_cols);
+        let graph = Arc::clone(&self.graph);
+        let cb = self.lap_callback.clone_ref(py);
+        let rho = self.rho_bar_max;
+        let cc = self.convergence_check;
+        let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(|| {
+            let mc = build_magnus6_for_batched(&graph, cb, rho, cc)?;
+            let mut dst = vec![0.0f64; n_nodes * n_cols];
+            semiflow::graph_batched::evolve_batched_magnus6(
+                &mc,
+                t_final,
+                n_steps as usize,
+                &src,
+                &mut dst,
+            )?;
+            Ok(dst)
+        });
+        let dst = result.map_err(|e| from_core(&e))?;
+        Ok(scatter_cn_to_nc(&dst, n_nodes, n_cols, py))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -234,4 +270,24 @@ fn compute_magnus6(
     }
 
     Ok(state.values().to_vec())
+}
+
+/// Build a [`MagnusGraphHeat6thChernoff`] inside `py.detach` for the batched path.
+///
+/// `lap_at_t` re-acquires the GIL via `Python::attach`.
+/// `evolve_batched_magnus6` hoists it ONCE (three GL₆ abscissae total).
+fn build_magnus6_for_batched(
+    graph: &Arc<Graph<f64>>,
+    callback: Py<PyAny>,
+    rho_bar_max: f64,
+    convergence_check: bool,
+) -> Result<MagnusGraphHeat6thChernoff<f64>, semiflow::SemiflowError> {
+    let g2 = Arc::clone(graph);
+    let lap_at_t: LaplacianAtTime<f64> = Box::new(move |t: f64| {
+        Python::attach(|py| match callback.call1(py, (t,)) {
+            Ok(v) => extract_laplacian_arc(v.bind(py), &g2),
+            Err(_) => Arc::new(Laplacian::assemble_combinatorial(&g2)),
+        })
+    });
+    MagnusGraphHeat6thChernoff::new(Arc::clone(graph), lap_at_t, rho_bar_max, convergence_check)
 }
