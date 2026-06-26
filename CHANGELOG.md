@@ -4,7 +4,9 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.1-beta] — 2026-06-26
+
+First 0.9.1 series beta — adds the batched multi-channel graph evolve API (#10) and ships the Python wheel with SIMD+parallel.
 
 ### Added
 
