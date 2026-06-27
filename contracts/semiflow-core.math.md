@@ -12519,20 +12519,46 @@ fixed-seed power iteration to relative tolerance `1e-3`; over-estimation only
 raises `m` slightly, never breaks correctness — same conservative-bound rationale
 as §45 / ADR-0121).
 
+**Stiff-regime substep scaling (NORMATIVE, Issue #11).** When `z = τ·λ_max/2` exceeds
+`Z_SAFE = 200`, the coefficient `c_k = e^{-z}·I_k(z)` would overflow/underflow in
+f64 arithmetic (`e^{-z} → 0`, `I_k(z) → ∞`, product `0·∞ = NaN`).  The
+implementation avoids NaN by splitting: choose `s = ⌈z / 200⌉` substeps and apply
+the expansion with step `τ_sub = τ/s` so every substep's `z_sub = τ_sub·λ_max/2 ≤ 200`.
+The semigroup property `e^{-τA} = (e^{-(τ/s)A})^s` is EXACT; the s-fold composition
+introduces no approximation error beyond the per-substep Chebyshev truncation.
+For `z ≤ 200` (all normalised graphs, most practical cases), `s = 1` and this path is
+identical to the single-step Chebyshev above.  The implementation additionally asserts
+(fail-loud) that the output of every substep is finite; a non-finite result returns
+`SemiflowError::DomainViolation` rather than silently propagating NaN.
+
 `graph_expmv` exposes Chebyshev as the DEFAULT (lowest memory) and Lanczos as the
 adaptive path when the spectral bound is loose or a strict per-call tolerance is
 requested. `order()` is `u32::MAX` (tolerance-driven; §45 / ADR-0121 contract) —
 slope gates (§27/§40) are INAPPLICABLE.
 
-### §54.4 — Depth-independence statement (NORMATIVE)
+### §54.4 — Depth-independence statement (NORMATIVE, scope-qualified)
 
-Fix `ε`. The SpMV count of §54.2–§54.3 is `N_mv(ε, t) = s·m` with
+Fix `ε`. For the Lanczos path (§54.2), the SpMV count is `N_mv(ε, t) = s·m` with
 `m ≈ √((t/s)λ_max)·polylog(1/ε)` and `s = ⌈tλ_max/(θ_m)⌉`, hence
 `N_mv = Θ(√(tλ_max)·polylog(1/ε))` — sub-linear in `t` and, after step-scaling,
 **bounded by a constant band across the depths `t ∈ {1,4,16,64}` at fixed `ε`**,
 versus the per-step baseline `N_mv^{step} = Θ(n_steps)` which grows linearly with
 the requested depth resolution. This is the formal content of gate
 `G_GRAPH_EXPMV_DEPTH_FLAT` (§54.5).
+
+**Scope qualification for the Chebyshev path (Issue #11, NORMATIVE).**  The
+depth-flat property above holds for the Chebyshev path (§54.3) only when
+`z = t·λ_max/2 ≤ Z_SAFE = 200` for all queried depths, i.e. for **normalised
+graphs** (`λ_max ≲ 2`) where `z_max ≤ t_max ≈ 64` at the maximum gate depth.
+In that regime the stiff-regime substep count `s = ⌈z / Z_SAFE⌉ = 1` throughout
+and the `Θ(√(tλ_max))` cost formula is unchanged.
+
+For **stiff operators** (large `λ_max`), the Chebyshev substep count grows as
+`s ≈ t·λ_max / (2·Z_SAFE)` and the total SpMV count becomes
+`N_mv = s · m ≈ (t·λ_max / 400) · √(z_sub)·polylog(1/ε)` — linear in `t·λ_max`,
+matching the Lanczos depth-linear regime.  Gate `G_CONS_SYMOP` (§54.x, Issue #11)
+tests the Chebyshev path on the conservative k=[1,100,1] operator (λ_max≈25600,
+z≈6400) and lies outside the depth-flat scope.
 
 ### §54.5 — Augmented Fréchet gradient (NORMATIVE, A2)
 
@@ -12780,3 +12806,198 @@ lumped-diagonal shortcut fails the `1e-9` tolerance. All four RELEASE_BLOCKING,
 - §54 (A1 Krylov action + A2 Duhamel Fréchet — the reused mechanism), §45
   (`mat_exp_pade13` oracle), §43.2/§43.6 (`GeneratorSensitivity` + FD oracle).
 - ADR-0186 (contract authority), ADR-0185, ADR-0180, ADR-0115, ADR-0125.
+
+## §56 — Conservative (divergence-form) variable-coefficient diffusion with harmonic-mean faces and symmetric carrier (ADR-0187, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for Issue #11. Adds the CONSERVATIVE / flux-continuous
+> discretisation of `∂_t u = ∂_x(k(x) ∂_x u)` (and its separable 2-D/3-D analogue),
+> using harmonic-mean face conductivities — the standard scheme for **discontinuous**
+> `k` (sharp material interfaces). Contrasts with the existing NON-conservative
+> pointwise-expanded form `a·f'' + a'·f'` of §9.2.3 (`DiffusionChernoff`), which
+> requires `a ∈ C³` and breaks heat-flux continuity at a jump. The assembled operator
+> is symmetric negative-semidefinite, so `A = −L_k` is a symmetric PSD CSR consumable
+> by §55 `SymmetricOperator::from_csr` and the §54 Krylov exact action — this is the
+> **Issue #11 → #13 → #14 bridge** (#11 assembles flux-continuously; #13 propagates
+> exactly and unconditionally-stably; #14 is the stiff multilayer application).
+> Linear / structure-preserving / identity-compatible. `k > 0` required.
+
+### §56.1 — Conservative discretisation (NORMATIVE)
+
+Let `k(x) > 0` be sampled at the `n` grid nodes `x_i` (uniform spacing `dx`), with
+node values `k_i`. Each interior **face** `i+½` (between nodes `i` and `i+1`) carries
+the **harmonic-mean** face conductivity (NORMATIVE; standard for discontinuous `k`,
+Patankar 1980 §4.2-4 — it is the conductivity of two half-cell resistances in series):
+
+```text
+k_{i+½} = 2·k_i·k_{i+1} / (k_i + k_{i+1}) .                          (56.1.a)
+```
+
+The **face transmissibility** (optionally including a thin contact resistance `R_c`,
+§56.3) is
+
+```text
+T_{i+½} = 1 / ( dx / k_{i+½}  +  R_c^{i+½} ) ,   R_c^{i+½} ≥ 0 (default 0).  (56.1.b)
+```
+
+With `R_c = 0` this collapses to `T_{i+½} = k_{i+½}/dx`. The **conservative stencil**
+(flux-difference form; `F_{i+½} := T_{i+½}(u_{i+1} − u_i)` is the discrete face flux):
+
+```text
+(L_k u)_i = [ F_{i+½} − F_{i−½} ] / dx
+          = [ T_{i+½}(u_{i+1}−u_i) − T_{i−½}(u_i−u_{i−1}) ] / dx .       (56.1.c)
+```
+
+For `R_c = 0` this is exactly the issue's `off-diag = k_{i±½}/dx²`,
+`diag = −(k_{i−½}+k_{i+½})/dx²`. Because the SAME face flux `F_{i+½}` enters row `i`
+(with `+`) and row `i+1` (with `−`), the scheme is **discretely conservative**:
+flux leaving cell `i` equals flux entering cell `i+1` at every face, at machine
+precision, independent of any jump in `k`.
+
+### §56.2 — Symmetric PSD carrier property (NORMATIVE — the #13 bridge)
+
+The matrix `L_k` of (56.1.c) is **symmetric**: the off-diagonal entries
+`L_k[i,i+1] = T_{i+½}/dx = L_k[i+1,i]` are shared. It is **negative semidefinite**:
+the Dirichlet energy is `⟨u, L_k u⟩ = −Σ_faces T_{i+½}(u_{i+1}−u_i)² ≤ 0` (all
+`T_{i+½} > 0`). Hence
+
+```text
+A := −L_k    is symmetric positive-semidefinite,  diag(A)_i ≥ 0,        (56.2.a)
+```
+
+and the heat semigroup is `u(τ) = e^{τ L_k} v = e^{−τ A} v`. Therefore (NORMATIVE)
+`A` assembled in CSR is admitted by §55 `SymmetricOperator::from_csr` (which validates
+finiteness, `diag ≥ 0`, and symmetry), and the §54 Krylov action computes `e^{−τA}v`
+**exactly and unconditionally stably** (no CFL / no τ-stability limit — the relevant
+property for a stiff 100:1 stack). Row/column indices of the 1-D operator per row are
+`{i−1, i, i+1}`, already sorted ⇒ they satisfy the §55.1 sorted-CSR invariant (I3)
+by construction. This is the resolution of the stiffness contradiction: #11 contributes
+ONLY the symmetric flux-continuous **assembly**; the exact stable propagation reuses
+the §55/§54 machinery already in the topology (ADR-0187 design-tension paragraph).
+
+### §56.3 — Contact resistance (thin bonded-joint interface) (NORMATIVE)
+
+A thin imperfect interface (bonded joint, thermal contact) is modelled by a **lumped
+thermal contact resistance** `R_c ≥ 0` (units `K·m²·W⁻¹`, i.e. length/conductivity)
+in **series** with the two half-cell conductive resistances — exactly the
+`+ R_c^{i+½}` term of (56.1.b). The series conductance identity is
+
+```text
+1 / T_{i+½} = dx/k_{i+½} + R_c^{i+½}      ( = R_left½ + R_right½ + R_contact ). (56.3.a)
+```
+
+`R_c` is supplied per-face (length `n−1`); absent ⇒ all-zero (perfect contact). The
+model is purely resistive (no interfacial heat capacitance); this boundary is stated
+in §56.8 and the ADR.
+
+### §56.4 — Steady-state series-resistance oracle (NORMATIVE — gate basis, no sympy)
+
+At steady state `∂_x(k ∂_x u) = 0` ⇒ the flux `q = −k u_x` is **constant in `x`**.
+Across a slab `i` of thickness `t_i` and conductivity `k_i` the temperature drop is
+
+```text
+ΔT_i = q · R_i ,   R_i = t_i / k_i ;   across a contact joint:  ΔT_c = q · R_c.  (56.4.a)
+```
+
+For a stack with total drop `ΔT_tot` between fixed end temperatures,
+
+```text
+q = ΔT_tot / R_tot ,   R_tot = Σ_i (t_i/k_i) + Σ (contact) R_c .       (56.4.b)
+```
+
+This is a closed-form **analytic oracle** (no sympy). **Exactness claim (NORMATIVE):**
+when each material interface lies on a **face** (between two nodes, each node carrying
+its own material `k`), the conservative discrete steady solution of (56.1.c) reproduces
+(56.4.a)-(56.4.b) — per-layer `ΔT_i` and the single constant interface flux `q` — to
+machine precision (the harmonic mean is the *exact* series combination of the two
+half-cell resistances). **Necessity / teeth (NORMATIVE):** the NON-conservative
+pointwise form `a·f'' + a'·f'` (§9.2.3) with piecewise-constant `a = k` (`a' ≡ 0`) has
+steady solution `a·u_xx = 0 ⇒ u_xx = 0` GLOBALLY ⇒ a single straight line ⇒ **equal**
+`ΔT` per equal-thickness layer, independent of `k_i`, and a **discontinuous** interface
+flux. It therefore violates (56.4.a) by an `O(k_max/k_min)` factor on a sharp stack —
+this is asserted as a failing baseline in gate `G_CONS_NONCONS_FAILS`.
+
+### §56.5 — Separable 2-D / 3-D analogue (NORMATIVE)
+
+For the separable operator `L_k = Σ_d ∂_{x_d}(k_d(x_d) ∂_{x_d})` (per-axis
+conductivities `k_d`), each axis is discretised by the 1-D harmonic-mean stencil
+(56.1.c). Two equivalent NORMATIVE realisations:
+
+- **Semigroup path:** Strang splitting of the per-axis 1-D
+  `ConservativeDiffusionChernoff` via `AxisLift` (mirrors the §-Strang2D/Strang3D
+  tensor pattern); global consistency order 2.
+- **Carrier path:** the full 5-point (2-D) / 7-point (3-D) CSR with per-axis
+  harmonic-mean faces, emitted with **sorted** columns (§55.1 I3) ⇒
+  `SymmetricOperator` ⇒ §54 Krylov exact action `e^{−τA}v`.
+
+The full-tensor non-separable cross term `∂_x(k ∂_y u)` is **OUT OF SCOPE** (§56.8).
+
+### §56.6 — Order (NORMATIVE)
+
+`ConservativeDiffusionChernoff` declares consistency **order 2** (`order() = 2`,
+`Growth::contraction()`), matching the §9.2.3 `DiffusionChernoff` convention and the
+recommended A-stable trapezoidal/Crank–Nicolson single step
+`S(τ) = (I − ½τ L_k)^{-1}(I + ½τ L_k)` (one `O(n)` tridiagonal solve, no CFL). For
+SMOOTH `k` the spatial discretisation is order 2 (harmonic and arithmetic means agree
+to `O(dx²)`). For DISCONTINUOUS `k` the pointwise spatial order near the jump reduces
+to 1 (intrinsic to finite-volume on a non-smooth coefficient) **while the steady
+series-resistance network of §56.4 is reproduced exactly on aligned faces** — these are
+not in conflict (the acceptance metric is the steady network, not the pointwise
+near-jump truncation), and the distinction is documented.
+
+### §56.7 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_CONS_SERIES` | Conservative steady **Dirichlet** solve on a SHARP 3-layer stack `k = [1, 100, 1]` (equal thickness, NO smoothing): per-layer `ΔT_i` and the single constant interface flux `q` vs the analytic series-resistance network (56.4) | per-layer `ΔT` rel-err `≤ 1e-2` (1%) AND face-flux spread `max_i|q_i−q̄|/q̄ ≤ 1e-2` | analytic series-resistance closed form (56.4); steady solve via test-local Thomas / `matrix_inv` (REUSE; **no sympy**) |
+| `G_CONS_NONCONS_FAILS` (**TEETH**) | The SAME sharp stack + SAME oracle, solved with the NON-conservative `DiffusionChernoff` node operator (`a = k` piecewise-const, `a' ≡ 0`, §9.2.3): assert it MISSES the series-resistance profile | per-layer `ΔT` rel-err **`≥ 0.5` (≥50%)** — assertion of **FAILURE** | same analytic oracle (56.4) |
+| `G_CONS_SYMOP` | Assemble `A = −L_k` (sharp stack, `N ≤ 12`) → `SymmetricOperator::from_csr` (must ACCEPT: symmetry + `diag ≥ 0` pass); Krylov action `e^{−τA}v` vs dense `mat_exp_pade13(−τA)`, `τ‖A‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE §45/§55.5; **no sympy**) |
+| `G_CONS_ORDER` | `ConservativeDiffusionChernoff` temporal **order 2** on a SMOOTH `k(x)=1+½·sin(x)`: self-convergence slope (probe vs `2N−1` refinement, Richardson) | slope `≤ −1.95` | self-convergence (REUSE §-Richardson pattern; **no sympy**) |
+| `G_CONS_CONTACT` | Steady solve with a contact joint `R_c > 0` on a 2-layer bonded stack: interface jump `ΔT_c` vs `q·R_c` (56.3)-(56.4) | rel-err `≤ 1e-2` | analytic series + contact (56.4); test-local Thomas (REUSE; **no sympy**) |
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).**
+`G_CONS_SERIES`/`G_CONS_SYMOP`/`G_CONS_NONCONS_FAILS` assert the operand has a REAL
+jump: `max_i k_i / min_i k_i ≥ 50` AND at the interface face `k_i ≠ k_{i+1}` (so the
+harmonic mean `k_{i+½}` is strictly between them and differs from the arithmetic mean
+— a smoothed coefficient cannot satisfy the assertion). `G_CONS_NONCONS_FAILS` is the
+**teeth**: by asserting the non-conservative form FAILS the SAME `<1%` test by `≥50%`,
+the passing of `G_CONS_SERIES` proves the conservative scheme is **necessary**, not
+incidental. `G_CONS_SYMOP` additionally asserts `from_csr` accepted a non-trivial `A`
+(`diag > 0`, at least one off-diagonal `< 0`, ≥1 face with `k_L ≠ k_R`).
+`G_CONS_ORDER` asserts a genuine multi-`τ` refinement (a slope, not a single point).
+All five RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the shipping
+release; **no new sympy oracle**.
+
+### §56.8 — Boundary and honest scope (NORMATIVE)
+
+- **`k > 0` required** — the harmonic mean (56.1.a) and PSD property assume strictly
+  positive conductivity; non-positive or non-finite `k_i` ⇒ `DomainViolation`.
+- **Symmetric NSD by construction** — `A = −L_k` is PSD with `diag ≥ 0`; consumable by
+  §55 and the §54 Krylov contraction. No indefinite/advective term is added.
+- **Interface-on-face invariant** — material interfaces MUST lie on faces (between
+  nodes); each node carries its own material `k_i`. This makes the harmonic mean the
+  exact series of two half-cell resistances and (56.4) exact. A node sitting exactly on
+  a discontinuity is ill-posed (ambiguous `k_i`) and is the caller's responsibility.
+- **Boundary conditions** — Neumann (zero-flux, insulated) is natural: the boundary
+  node keeps only its interior face ⇒ zero row sum ⇒ singular constant-nullspace
+  operator (the physically-correct insulated semigroup). Dirichlet (fixed end
+  temperatures) is imposed by interior reduction (boundary contributions moved to the
+  RHS) for the steady solve, reusing `BoundaryPolicy`.
+- **Discontinuous-`k` spatial order is 1 near the jump** (FV intrinsic), but the steady
+  series network (56.4) is exact on aligned faces — documented, not hidden (§56.6).
+- **Contact resistance is purely resistive** (no interfacial capacitance).
+- **Full-tensor non-separable** `∂_x(k ∂_y u)` is OUT OF SCOPE (separable axes only).
+- **Bit-stable** — deterministic f64 assembly + tridiagonal Thomas / Krylov (no
+  parallel-reduction reordering); identity-compatible (`k ≡ const`, `R_c ≡ 0` recovers
+  the constant-coefficient heat operator exactly).
+
+### §56.9 — References
+
+- S. V. Patankar, *Numerical Heat Transfer and Fluid Flow*, Hemisphere 1980, §4.2-4 —
+  harmonic-mean interface conductivity for discontinuous/conjugate conductivity.
+- H. K. Versteeg, W. Malalasekera, *An Introduction to Computational Fluid Dynamics:
+  The Finite Volume Method*, 2nd ed., Pearson 2007 — conservative FV discretisation,
+  face fluxes, series-resistance interface treatment.
+- §55 (`SymmetricOperator::from_csr` carrier — the consumed bridge), §54 (A1 Krylov
+  exact action `e^{−τA}v`), §45 (`mat_exp_pade13` dense oracle), §9.2.3
+  (`DiffusionChernoff` — the non-conservative contrast).
+- ADR-0187 (contract authority), ADR-0186 (#13 carrier), ADR-0008 (ζ-A diffusion).

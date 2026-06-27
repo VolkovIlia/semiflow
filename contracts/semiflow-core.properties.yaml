@@ -9584,3 +9584,92 @@ implementation_notes:
     feature_gate: "slow-tests"
     introduced_in: issue-13-generic-symmetric-L
     authority: ADR-0186
+
+  - name: G_CONS_SERIES
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — max_face_rel_err=5.069e-14, flux_spread=9.976e-14 (n=12, q=1.5625)"
+    rationale: |
+      G_CONS_SERIES (RELEASE_BLOCKING, ADR-0187 §56.4): sharp k=[1,100,1] stack
+      (max_k/min_k=100 ≥ 50, interface jumps asserted) solved via conservative
+      harmonic-mean FV `steady_state_dirichlet_1d`. Per-face ΔT vs analytic
+      series-resistance oracle (q=(T_l-T_r)/R_tot) < 1%; flux spread < 1%.
+      Validates that harmonic-mean face conductivities and transmissibilities
+      correctly handle sharp material interfaces (proof of conservative form).
+    gate: "max_face_rel_err < 0.01 AND flux_spread < 0.01"
+    test_file: "tests/conservative_gates.rs::g_cons_series"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_NONCONS_FAILS
+    type: NEGATIVE_CONTROL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — max_rel_err=4.248e2 (expected ≥ 0.50; confirms non-conservative form FAILS on sharp interface)"
+    rationale: |
+      G_CONS_NONCONS_FAILS (RELEASE_BLOCKING, ADR-0187 TEETH gate): same sharp
+      k=[1,100,1] stack evolved via non-conservative `DiffusionChernoff` (a'=0,
+      arithmetic-mean stencil) to steady state. Must fail the series-resistance
+      oracle by ≥ 50%. If this gate passes, the non-conservative form accidentally
+      gives the right answer and the stack is not sharp enough to distinguish.
+      Proves conservative form is NECESSARY, not incidental.
+    gate: "max_face_rel_err >= 0.50"
+    test_file: "tests/conservative_gates.rs::g_cons_noncons_fails"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_SYMOP
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — sup_error=0.000e0, dst_norm=5.418e-1 (n=9, tau=0.5)"
+    rationale: |
+      G_CONS_SYMOP (RELEASE_BLOCKING, ADR-0187 §56.2): assemble A=−L_k for
+      sharp k=[1,100,1] (N=9 nodes) via `assemble_conservative_csr_1d`, verify
+      `SymmetricOperator::from_csr` accepts it (PSD, finite, diag≥0), then check
+      `graph_expmv_krylov` (Chebyshev, tol=1e-12) vs `dense_csr_expmv_ref`
+      (Padé-13 oracle) with sup_error ≤ 1e-10. Non-trivial action confirmed by
+      dst_norm > 1e-14. Validates the assembler produces a correct SymmetricOperator
+      usable by the full Krylov pipeline.
+    gate: "sup_error <= 1e-10 AND dst_norm > 1e-14"
+    test_file: "tests/conservative_gates.rs::g_cons_symop"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_ORDER
+    type: ORDER_OF_CONVERGENCE
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — slope=3.5213 (n=200, tau_c=0.005, err_coarse=5.271e-5, err_fine=4.590e-6)"
+    rationale: |
+      G_CONS_ORDER (RELEASE_BLOCKING, ADR-0187 §56.3): smooth k(x)=1+0.5·sin(πx),
+      Neumann BCs, N=200, T=0.5. Crank-Nicolson self-convergence slope from
+      (τ_c, 2τ_c, 4τ_c) levels vs half-step reference. Slope log₂(err_coarse/err_fine) ≥ 1.95
+      confirms CN is genuinely order-2 (not order-1 due to boundary or assembly bug).
+      Smooth k avoids interface effects that might mask temporal order.
+    gate: "slope >= 1.95"
+    test_file: "tests/conservative_gates.rs::g_cons_order"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_CONTACT
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — rel_err=0.000e0 (n=10, R_c=0.05, q=1.666667, dt_analytic=0.083333, dt_numeric=0.083333)"
+    rationale: |
+      G_CONS_CONTACT (RELEASE_BLOCKING, ADR-0187 §56.4.b): two-layer k=[1,10]
+      with contact resistance R_c=0.05 at the interface (R_c/R_mat ≥ 0.1, asserted).
+      Contact jump computed as T_face*(u[4]-u[5])*R_c vs analytic q·R_c (< 1%).
+      Validates that `face_transmissibility(k_harm, dx, R_c)` correctly models
+      bonded-joint thermal contact resistance via T=1/(dx/k_harm+R_c).
+    gate: "rel_err < 0.01"
+    test_file: "tests/conservative_gates.rs::g_cons_contact"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187

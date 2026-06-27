@@ -162,6 +162,7 @@ pub mod carnot_stepk;
 pub(crate) mod carnot_stepk_helpers;
 pub mod chernoff;
 pub mod complex;
+pub mod conservative; pub mod conservative_assemble;
 pub mod controller;
 pub mod diffusion;
 pub mod diffusion4;
@@ -353,9 +354,8 @@ pub use crate::{
     carnot_complex::{ComplexTripleJump, CplxGridFn5, GAMMA_STAR},
     carnot_stepk::{Filiform5X1, Filiform5X2},
     chernoff::{ApplyChernoffExt, ChernoffFunction, ChernoffSemigroup, Evolver, Growth},
-    complex::SemiflowComplex,
-    controller::{ClassicalPI, H211bFilter, StepController},
-    diffusion::DiffusionChernoff,
+    complex::SemiflowComplex, conservative::{ConservativeDiffusionChernoff, steady_state_dirichlet_1d}, conservative_assemble::{assemble_conservative_csr_1d, assemble_conservative_csr_nd},
+    controller::{ClassicalPI, H211bFilter, StepController}, diffusion::DiffusionChernoff,
     diffusion4::Diffusion4thChernoff,
     diffusion4_zeta4::Diffusion4thZeta4Chernoff,
     diffusion6::Diffusion6thChernoff,
