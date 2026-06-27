@@ -4,6 +4,17 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1-beta] — 2026-06-27
+
+### Performance
+- **Channel-parallel graph evolve** (ADR-0184 D3): `evolve_batched` and the batched
+  adjoint now split channels across cores via `std::thread::scope` (gated behind
+  `parallel`, C≥2), each worker with its own `ScratchPool`. The graph Krylov ML path
+  was previously single-threaded (the `parallel` feature only covered Strang2D/3D grid
+  kernels). Bit-identical to serial (0-ULP; forward + ascending-index gradient
+  reduction per ADR-0184 D4/D5). Measured ~5–6× on i7-12700K (612–1942% CPU). Closes
+  the "speed" half of the memory↔speed contradiction for graph diffusion / SSM layers.
+
 ## [0.10.0-beta] — 2026-06-27
 
 Five-feature wave (issues #11, #12, #13, #14 + A1 stiff fix): generic symmetric

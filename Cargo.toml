@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
 
 [workspace.package]
-version = "0.10.0-beta"
+version = "0.10.1-beta"
 edition = "2021"
 rust-version = "1.78"
 license = "MIT OR Apache-2.0"
