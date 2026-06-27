@@ -12,6 +12,67 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Issue campaign #11/#12/#13/#14 + A1 stiff fix — DONE (ADRs 0185–0189, commit 9e5f557)
+
+Five additive features merged at master commit `4df0693` (2026-06-27). No breaking
+changes to the 0.9.1-beta public surface. Version bumped to **0.10.0-beta**.
+
+**A1/A2 — Depth-independent graph Krylov action + Fréchet gradient (ADR-0185,
+math §54):** `GraphKrylovChernoff` computes `e^{−tL_G}·v` with matvec count flat
+in `t` at fixed `ε` — Chebyshev (O(1) working vectors) or Lanczos (O(m·N) basis).
+`graph_expmv_frechet` closes the edge-weight gradient ceiling left by #10 via one
+augmented solve. PyO3: `GraphKrylov` pyclass + `graph_expmv_frechet` pyfunction.
+Gates: `G_GRAPH_EXPMV_DENSE` ≤ 1e-10; `G_GRAPH_FRECHET_FD` ≤ 1e-7;
+`G_GRAPH_EXPMV_DEPTH_FLAT` (structural).
+Honest limits: symmetric `L_G` only; time-varying `L(t)` out of scope.
+
+**#13 — Generic symmetric-operator entry point (ADR-0186, math §55):**
+`SymmetricOperator::from_csr` accepts any symmetric PSD sparse operator (not just
+graph Laplacians). `MassKOperator` handles `e^{−τM⁻¹K}·v` for consistent mass
+without forming `M⁻¹K`. `EntrySensitivity` provides per-entry Fréchet for
+`SymmetricOperator`. `mass_lumped_evolve` covers the diagonal-mass case.
+Gates: `G_SYMOP_DENSE`, `G_MASSK_LUMPED`, `G_MASSK_CONSISTENT` (all ≤ 1e-10);
+`G_SYMOP_ENTRY_FRECHET` ≤ 1e-7.
+Honest limits: PSD required; consistent-mass differentiability deferred.
+
+**#11 — Conservative divergence-form diffusion (ADR-0187, math §56):**
+`ConservativeDiffusionChernoff` + `assemble_conservative_csr_1d` with harmonic-mean
+faces. Correct across sharp k-jumps (100:1 to 3025:1) where the non-conservative
+expansion fails. Optional contact resistance `R_c`; separable N-D assembler.
+Bridges to §55 `SymmetricOperator` for stiff stacks (exact unconditional action).
+Gates: `G_CONS_SERIES`, `G_CONS_NONCONS_FAILS` (teeth), `G_CONS_SYMOP`,
+`G_CONS_ORDER` slope ≤ −1.95, `G_CONS_CONTACT`.
+Honest limits: `k > 0`; full-tensor non-separable out of scope.
+
+**#14 — Stiff multilayer conduction (ADR-0188, math §57):**
+`MultilayerStack::from_layers` + `multilayer_evolve` via `mass_lumped_evolve` with
+`masses = ρc_node`. One depth-flat Krylov action for any integration span —
+~28000× fewer operator applications than explicit CFL on the Shuttle TPS stack.
+Optional `MassWeightedConservativeChernoff` (A-stable CN Thomas, O(1) memory).
+Gates: `G_TPS_MASS_WEIGHT` ≤ 1e-10; `G_TPS_UNITMASS_FAILS` (teeth, ≥50% miss);
+`G_TPS_STACK_ACCEPTANCE` ≤ 2e-2 on the real LI-900/SIP/RTV/Al-2024 stack;
+`G_TPS_STIFF_STEPCOUNT` X/Y ≥ 100 (measured ~28000).
+Honest limits: 1-D first; one global `dx`; lumped mass.
+
+**#12 — ETD φ-functions + ETDRK4 semilinear integrator (ADR-0189, math §58):**
+`phi_action_batched` computes φ₀…φ_p simultaneously via one augmented Taylor action
+(Al-Mohy & Higham 2011 §4). `Etdrk4` (Cox–Matthews 2002 / Kassam–Trefethen 2005)
+integrates `∂ₜu = Lu + N(u)` at order 4 without splitting `L`. Declarative
+`Nonlinearity` trait — opcode interpreter natively; fixed enum menu at the PyO3
+surface; no per-step callback (ADR-0179 wall preserved). `NonlinearityDiff` enables
+end-to-end adjoint. One augmented path serves 1-D and symmetric-graph operators.
+Gates: `G_PHI_AUG_DENSE` ≤ 1e-10 (z ∈ [0.5,5]); `G_ETDRK4_ORDER` ∈ [3.7,4.3]
+(two-sided, Allen–Cahn); `G_ETD_ADJOINT_FD` ≤ 1e-6.
+Honest limits: non-symmetric graphs, 2-D/3-D tensor ETD, exponential Rosenbrock,
+and per-step Python `N` are all deferred.
+
+**A1 stiff NaN fix (commit `9e5f557`):** Chebyshev path in `GraphKrylovChernoff`
+silently returned garbage for stiff operators (`λ_max ≳ 1400`). Fix: substep
+`s = ⌈z/Z_SAFE⌉` + fail-loud finiteness guard. Normalized graph Laplacians never
+affected; conservative high-contrast diffusion was.
+
+---
+
 ## Post-0.9.0-beta feature wave — DONE (ADRs 0175–0181)
 
 Seven issues closed against the 0.9.0-beta audit, plus the rough-Heston pricer

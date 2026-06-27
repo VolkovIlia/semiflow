@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
-> **Status: `0.9.0-beta`** — first public beta. The API is stabilizing toward
+> **Status: `0.10.0-beta`** — active beta. The API is stabilizing toward
 > `1.0`; minor versions may make breaking changes. Bug reports and feedback welcome.
 
 **SemiFlow is a `no_std` Rust library for solving evolution equations and PDEs
@@ -42,8 +42,10 @@ Python, and WebAssembly bindings with near-full engine parity.
 
 ## Why SemiFlow
 
-- **60+ evolution-equation engines** — heat, Schrödinger, diffusion, graph
-  Laplacians, manifold PDEs, hypoelliptic operators, and more (see [catalogue](#engine-catalogue)).
+- **65+ evolution-equation engines** — heat, Schrödinger, diffusion, conservative
+  variable-coefficient diffusion (harmonic-mean faces), graph Laplacians,
+  manifold PDEs, hypoelliptic operators, semilinear ETD, and more (see
+  [catalogue](#engine-catalogue)).
 - **`no_std` + only 3 runtime deps** — num-traits, libm, num-complex; suitable
   for embedded, WASM, and HPC environments.
 - **Up to 8th-order spatial accuracy** via the ζ-ladder (Richardson extrapolation
@@ -63,6 +65,26 @@ Python, and WebAssembly bindings with near-full engine parity.
 - **Gridless variance / MSE diagnostic** — `MeasureState` now exposes
   `first_moment`, `variance`, and `variance_per_axis` for particle-ensemble
   convergence diagnostics (math §38.12).
+- **Depth-independent graph-semigroup action and Fréchet gradient** —
+  `GraphKrylovChernoff` computes `e^{−tL}·v` with matvec count set by `ε` and
+  `t‖L‖`, flat in the depth `t`; `graph_expmv_frechet` returns `∂J/∂w` for all
+  edge weights in one augmented solve — both forward and backward are
+  depth-independent (ADR-0185).
+- **Generic symmetric-operator entry point** — `SymmetricOperator::from_csr`
+  accepts any externally-assembled symmetric PSD sparse matrix (FEM stiffness,
+  anisotropic conductivity); `MassKOperator` handles the generalized `(M,K)`
+  eigenproblem without forming `M⁻¹K` (ADR-0186).
+- **Conservative divergence-form diffusion** — `ConservativeDiffusionChernoff`
+  with harmonic-mean face conductivities handles sharp material interfaces
+  (k-contrast up to 3025:1) where the non-conservative pointwise expansion fails;
+  optional contact resistance `R_c`; separable N-D assembler (ADR-0187).
+- **Stiff multilayer conduction** — `multilayer_evolve` propagates the full
+  re-entry heat-transfer problem in one depth-flat Krylov action (~28000× fewer
+  operator applications than explicit CFL on the Shuttle TPS stack; ADR-0188).
+- **Semilinear ETD** — `phi_action` / `Etdrk4` integrates `∂ₜu = Lu + N(u)` at
+  order 4 without splitting or re-discretizing `L`; `N(u)` is a declarative
+  `Nonlinearity` trait (Allen–Cahn, Burgers, Gray–Scott, KS menus at the PyO3
+  surface; ADR-0189).
 - **Four language surfaces** — Rust core, C ABI (FFI / `cdylib`), Python
   (PyO3 / maturin wheels, abi3-py310), and WebAssembly (wasm-bindgen / npm),
   with a lite default WASM bundle and opt-in `full` feature for heavy-grid engines.
@@ -90,7 +112,7 @@ cargo add semiflow
 `no_std` users: disable default features:
 
 ```toml
-semiflow = { version = "0.9.0-beta", default-features = false }
+semiflow = { version = "0.10.0-beta", default-features = false }
 ```
 
 The `simd` (AVX2 / NEON) and `parallel` features require `std`.
@@ -140,7 +162,11 @@ A runnable version with the error check lives in
 | Matrix-valued systems | `MatrixDiffusionChernoff`, `MatrixDiffusionChernoff2D/3D` | Coupled M-component operators |
 | Riemannian manifolds | `ManifoldChernoff` + `Sphere2`, `Hyperbolic2`, `Torus`, `FubiniStudyCp1` | R/12 curvature-corrected |
 | Hypoelliptic / sub-Riemannian | `HypoellipticChernoff` (Kolmogorov, Heisenberg, Engel) | Strang–Hörmander, step-2/3 Carnot |
-| Graph and quantum-graph Laplacians | `GraphHeatChernoff`, `QuantumGraphHeatChernoff`, `QuantumSchrödingerChernoff` | Kirchhoff vertex conditions |
+| Conservative (divergence-form) diffusion | `ConservativeDiffusionChernoff`, `assemble_conservative_csr_1d`, `assemble_conservative_csr_nd` | Harmonic-mean faces; sharp k-jumps; optional contact resistance; separable N-D |
+| Stiff multilayer conduction | `MultilayerStack`, `multilayer_evolve`, `MassWeightedConservativeChernoff` | Per-layer `(k, ρc)` stack; mass-weighted Krylov; ~28000× fewer matvecs than explicit CFL |
+| Semilinear ETD | `phi_action`, `phi_action_batched`, `Etdrk4`, `Nonlinearity` | `∂ₜu = Lu + N(u)`; order-4 Cox–Matthews; φ-functions via augmented matvec |
+| Generic symmetric-operator entry | `SymmetricOperator`, `MassKOperator`, `EntrySensitivity`, `mass_lumped_evolve` | Externally-assembled PSD CSR; `(M,K)` eigenproblem; entry-wise Fréchet gradient |
+| Graph and quantum-graph Laplacians | `GraphHeatChernoff`, `GraphKrylovChernoff`, `QuantumGraphHeatChernoff`, `QuantumSchrödingerChernoff` | Kirchhoff vertex conditions; depth-independent Krylov + Fréchet gradient |
 | Boundary conditions | `KillingChernoff`, `ReflectedHeatChernoff`, `DirichletHeat2ndChernoff`, `ObstacleChernoff`, `BoundaryPolicy` | Dirichlet (order-2) / Neumann / Robin / obstacle |
 | Resolvent and nonautonomous | `LaplaceChernoffResolvent`, `HowlandLift` | `(λI−A)⁻¹g`; Howland augmented generator |
 | High-dimensional / sparse-grid | `AnisotropicShiftChernoffND`, `SmolyakGridND` | Gauss-Hermite / Smolyak, d ≥ 5 |
@@ -171,10 +197,15 @@ zoo, including the S³ carriers (`TtState`, `TtEvolver`, `TtCoupledEvolver`,
 Variable coefficients cross the binding boundary as pre-sampled arrays, not live
 closures. The binding surface is a curated mirror of the user-facing operator zoo,
 not a 1:1 map of internal composition types (e.g. `AxisLift`, `StrangSplit` are
-not directly exposed). The one remaining PyO3-only deferral is `GraphAdjoint`'s
-time-dependent Laplacian constructor accepting a live callback — the pre-sampled
-path (`GraphAdjointPresampled` / `smf_graph_adjoint_new_presampled`) covers the
-common case and is available in all three surfaces.
+not directly exposed). v0.10.0-beta adds `GraphKrylov` (PyO3 pyclass) and `graph_expmv_frechet`
+(PyO3 pyfunction) for depth-independent graph-semigroup actions and edge-weight
+Fréchet gradients; `sym_op_evolve`, `mass_k_evolve`, and `sym_op_entry_grad`
+functions for generic symmetric operators (ADR-0185/0186). Deferred (bindings label):
+conservative diffusion, multilayer, and ETD PyO3 surfaces; C-ABI for new types.
+The one remaining PyO3-only deferral is `GraphAdjoint`'s time-dependent Laplacian
+constructor accepting a live callback — the pre-sampled path
+(`GraphAdjointPresampled` / `smf_graph_adjoint_new_presampled`) covers the common
+case and is available in all three surfaces.
 
 For build instructions and cross-language examples see [docs/BINDINGS.md](docs/BINDINGS.md).
 
@@ -249,7 +280,7 @@ repo) which reads [`CITATION.cff`](CITATION.cff), or use this BibTeX entry:
   author    = {Volkov, Ilia},
   title     = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year      = {2026},
-  version   = {0.9.0-beta.2},
+  version   = {0.10.0-beta},
   doi       = {10.5281/zenodo.20837851},
   url       = {https://doi.org/10.5281/zenodo.20837851}
 }

@@ -4,6 +4,127 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0-beta] — 2026-06-27
+
+Five-feature wave (issues #11, #12, #13, #14 + A1 stiff fix): generic symmetric
+operators, conservative divergence-form diffusion, stiff multilayer conduction,
+ETD/φ semilinear integrator, and depth-independent Krylov + Fréchet for graph
+semigroups. All additive; no breaking changes to the 0.9.1-beta public surface.
+
+### Added
+
+- **A1/A2 — Depth-independent graph-semigroup Krylov action + edge-weight Fréchet
+  gradient** (`GraphKrylovChernoff`, `graph_expmv_frechet`; ADR-0185, math §54):
+  `graph_expmv(L, v, t, ε)` computes `e^{−tL_G}·v` without stepping through each
+  time unit — Chebyshev default (O(1) working vectors, Bessel-coefficient degree
+  set by `t‖L‖` and `ε`) or Lanczos adaptive (O(m·N) basis, m ≈ 20–40, flat in `t`).
+  `graph_expmv_frechet` returns `∂J/∂w` for all edge weights via one augmented
+  Krylov solve (Al-Mohy & Higham 2009), closing the forward and backward speed
+  ceilings exposed by v0.9.1-beta (#10). PyO3: `GraphKrylov` pyclass +
+  `graph_expmv_frechet` pyfunction in one GIL-releasing call.
+  Gates: `G_GRAPH_EXPMV_DENSE` ≤ 1e-10 vs dense `mat_exp_pade13`;
+  `G_GRAPH_FRECHET_FD` rel-err ≤ 1e-7 (§43.6 FD oracle);
+  `G_GRAPH_EXPMV_DEPTH_FLAT` matvec count flat in `t` at fixed `ε`.
+  Honest limits: symmetric `L_G` only (Arnoldi for directed graphs deferred);
+  time-varying `L(t)` is out of scope (use Magnus/Howland).
+
+- **#13 — Generic externally-assembled symmetric-operator entry point**
+  (`SymmetricOperator`, `MassKOperator`, `EntrySensitivity`; ADR-0186, math §55):
+  `SymmetricOperator::from_csr` accepts any externally-assembled symmetric PSD
+  sparse operator (FEM stiffness with Robin BC, anisotropic conductivity — not
+  just zero-row-sum graph Laplacians). `MassKOperator` propagates
+  `e^{−τM⁻¹K}·v` for the generalized eigenproblem `(M,K)` via the congruence
+  chain `Â = R^{−T}KR^{−1}` (Cholesky factor `M = RᵀR`) — never forms `M⁻¹K`
+  explicitly, stays sparse. `EntrySensitivity` provides per-entry Fréchet gradient
+  for any `SymmetricOperator`. The lumped `(M,K)` path
+  (`mass_lumped_evolve(K, diag(m), …)`) is a 3-liner.
+  Gates: `G_SYMOP_DENSE`, `G_MASSK_LUMPED`, `G_MASSK_CONSISTENT` (all ≤ 1e-10
+  vs `mat_exp_pade13`); `G_SYMOP_ENTRY_FRECHET` rel-err ≤ 1e-7.
+  Honest limits: symmetric PSD required; large consistent-mass sparse Cholesky is
+  caller-supplied (in-crate dense Cholesky for moderate `n`); consistent-mass
+  differentiability deferred.
+
+- **#11 — Conservative (divergence-form) variable-coefficient diffusion**
+  (`ConservativeDiffusionChernoff`, `assemble_conservative_csr_1d`; ADR-0187,
+  math §56): harmonic-mean face conductivities `k_{i+½} = 2k_ik_{i+1}/(k_i+k_{i+1})`
+  (Patankar 1980) reproduce the series-resistance network at machine precision
+  across sharp material interfaces (k-contrast 100:1 to 3025:1) where the
+  non-conservative pointwise expansion gives ≥50% error.
+  `assemble_conservative_csr_1d` builds `A = −L_k` (symmetric PSD CSR) directly
+  consumable by §55 `SymmetricOperator::from_csr`; the Krylov action then gives
+  an exact, unconditionally-stable propagator. Optional per-face contact resistance
+  `R_c`. Separable N-D assembler (`assemble_conservative_csr_nd`, 5-pt/7-pt CSR).
+  `ConservativeDiffusionChernoff` wraps a single-step Crank–Nicolson (`order()=2`,
+  `Growth::contraction()`, one O(n) Thomas solve; A-stable, no CFL). Bridges to
+  §54/§55 via `to_symmetric_operator()` for stiff stacks.
+  Gates: `G_CONS_SERIES` per-layer ΔT ≤ 1e-2 AND face-flux ≤ 1e-2;
+  `G_CONS_NONCONS_FAILS` (teeth — old kernel fails same test by ≥50%);
+  `G_CONS_SYMOP` ≤ 1e-10; `G_CONS_ORDER` slope ≤ −1.95; `G_CONS_CONTACT` ≤ 1e-2.
+  Honest limits: `k > 0`; symmetric NSD by construction; full-tensor non-separable
+  `∂_x(k∂_y)` is out of scope.
+
+- **#14 — Stiff multilayer conduction via mass-weighted Krylov**
+  (`MultilayerStack`, `multilayer_evolve`, `MassWeightedConservativeChernoff`;
+  ADR-0188, math §57): `MultilayerStack::from_layers` maps physical
+  `[(thickness, k, ρc)]` → node arrays on a single uniform grid.
+  `multilayer_evolve` propagates `e^{−τdiag(ρc)⁻¹A}·u₀` in **one** depth-flat
+  Krylov action (via §55 `mass_lumped_evolve`) for any integration span —
+  beats explicit CFL by ~28000× on the Shuttle LI-900/SIP/RTV/Al-2024 TPS stack
+  (k-contrast ≈ 3025×, ρc-contrast ≈ 27×, λ_max(M⁻¹A) ≈ 794 s⁻¹,
+  explicit needs ~1.98 M steps, Lanczos needs ~1409 matvecs).
+  `MassWeightedConservativeChernoff` provides an optional A-stable CN convenience
+  (O(n) Thomas, one step at a time) for O(1)-vector memory.
+  Gates: `G_TPS_MASS_WEIGHT` ≤ 1e-10; `G_TPS_UNITMASS_FAILS` (teeth, ≥50% miss);
+  `G_TPS_STACK_ACCEPTANCE` per-probe ≤ 2e-2 on the real TPS stack at
+  t ∈ {500, 1500, 2500} s; `G_TPS_STIFF_STEPCOUNT` X/Y ≥ 100 (measured ~28000).
+  Honest limits: 1-D first; one global `dx`; node-centered lumped mass only.
+
+- **#12 — ETD φ-functions and ETDRK4 semilinear integrator**
+  (`phi_action`, `phi_action_batched`, `Etdrk4`, `Nonlinearity`; ADR-0189,
+  math §58): `phi_action_batched` computes φ₀…φ_p(τA)·v simultaneously via ONE
+  augmented block-triangular matvec-only Taylor action (Al-Mohy & Higham 2011 §4,
+  Sidje 1998) — no Padé on φ, no contour integrals, no new coefficient math;
+  reuses the `expmv` `THETA_M` substepping table and `select_s_m`.
+  `Etdrk4` (Cox–Matthews 2002 / Kassam–Trefethen 2005) integrates
+  `∂ₜu = Lu + N(u)` at order 4 without re-discretizing or splitting `L`.
+  `N(u)` is a declarative `Nonlinearity` trait (native opcode interpreter or a
+  fixed enum menu `AllenCahn` / `Burgers` / `GrayScott` / `KuramotoSivashinsky`
+  at the PyO3 surface — never a per-step Python callback; ADR-0179 wall
+  preserved). `NonlinearityDiff` enables end-to-end adjoint `∂J/∂param` through
+  one step. One unified augmented path serves 1-D and graph operators.
+  Gates: `G_PHI_AUG_DENSE` ≤ 1e-10 (z ∈ [0.5, 5] non-trivial band);
+  `G_ETDRK4_ORDER` slope ∈ [3.7, 4.3] (two-sided, Allen–Cahn 1-D);
+  `G_ETD_ADJOINT_FD` ≤ 1e-6 (N-flowing param, §43.6 discipline).
+  Honest limits: `L` 1-D divergence-form or symmetric graph only; non-symmetric
+  graphs, 2-D/3-D tensor ETD, exponential Rosenbrock, and arbitrary per-step
+  Python `N` are deferred.
+
+### Fixed
+
+- **A1 stiff operator NaN bug** (commit `9e5f557`):
+  `GraphKrylovChernoff`'s Chebyshev path silently returned garbage or false-zero
+  for stiff operators (`λ_max ≳ 1400`) because `z = τλ_max/2` exceeded the f64
+  range, causing the pattern `0·∞ = NaN` absorbed by `f64::max` — no error
+  surfaced. Fix: substep `s = ⌈z/Z_SAFE⌉` (Z_SAFE = 200), mirroring the
+  Lanczos path's scaling, so each substep's `z` stays representable; plus a
+  fail-loud finiteness guard returning `SemiflowError::DomainViolation`. Normalized
+  graph Laplacians (`λ_max ≲ 2`) were never affected; conservative high-contrast
+  diffusion (`λ_max ∼ 10⁴`) was. New test `cheb_stiff_regime` (z ≈ 6400) was red
+  before, green after (sup_error 1.0e-11).
+
+### Honest limitations (campaign-wide)
+
+- Chebyshev stiff-substepping matvec count grows as `O(τλ_max)` when substepping
+  kicks in; Lanczos is recommended for operators with large `τλ_max` (stiff stacks).
+- `(M, K)` consistent-mass differentiability via `MassKOperator` is deferred; the
+  entry-Fréchet covers the direct `SymmetricOperator` path only.
+- ETD arbitrary per-step Python/JS `N(u)` is an explicit non-goal (ADR-0179
+  wall; per-step GIL crossing reintroduces the 200× / GIL-defeat hazards).
+- Non-symmetric / directed graphs, 2-D/3-D tensor ETD, and exponential Rosenbrock
+  are all deferred to later issues.
+
+---
+
 ## [0.9.1-beta] — 2026-06-26
 
 First 0.9.1 series beta — adds the batched multi-channel graph evolve API (#10) and ships the Python wheel with SIMD+parallel.
