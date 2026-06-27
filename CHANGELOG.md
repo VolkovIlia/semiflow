@@ -4,6 +4,40 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0-beta] — 2026-06-27
+
+Python binding surface for the 0.10.0-beta feature wave (#11–#14 + A1).
+Issues #11, #12, #13, #14, and the graph Krylov additions from the 0.10.x patch
+series are now usable from Python via the `semiflow-pde` wheel. No breaking
+changes to the existing Python surface or the Rust public API.
+
+### Added (Python bindings, #15)
+
+- **`SymmetricOperator.from_csr` / `SymmetricOperator.evolve_batched`** —
+  externally-assembled symmetric PSD sparse operators (FEM stiffness, Robin BC)
+  accepted as CSR arrays; batched time-stepping across multiple right-hand sides.
+- **`symmetric_op_expmv_frechet`** — combined matrix-exponential action +
+  per-entry Fréchet gradient in one call. `EntrySensitivity` is not exposed as a
+  separate Python class; the gradient is returned directly from this function.
+- **`MassKOperator` / `mass_lumped_evolve`** — generalized-eigenproblem `(M, K)`
+  propagation via the congruence chain `Â = R⁻ᵀKR⁻¹`; lumped-mass 3-liner path.
+- **`ConservativeDiffusionChernoff` / `assemble_conservative_csr_1d`** —
+  conservative divergence-form diffusion with harmonic-mean face conductivities;
+  `to_symmetric_operator()` bridge to the Krylov engine.
+- **`phi_action` / `phi_action_batched` / `Etdrk4`** — ETD φ-functions and the
+  Cox–Matthews ETDRK4 semilinear integrator. Nonlinearity is menu-based
+  (`AllenCahn`, `Burgers`, `GrayScott`, `KuramotoSivashinsky`); arbitrary
+  per-step Python callbacks are deferred (ADR-0179 / ADR-0189 wall preserved).
+- **`Laplacian.from_csr`** — direct CSR-based Laplacian construction path.
+- PEP 561 stubs updated to cover all new symbols; 16/16 smoke tests green.
+
+### Changed
+
+- Registry metadata: `Changelog` and `Release Notes` links now appear on the
+  PyPI sidebar (`semiflow-pde` `[project.urls]`), the crates.io `semiflow` page
+  (README `## Changelog` section), and the npm `@semiflow/wasm` page
+  (README `## Changelog / Release notes` section).
+
 ## [0.10.2-beta] — 2026-06-27
 
 ### Fixed

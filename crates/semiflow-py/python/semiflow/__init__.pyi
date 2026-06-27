@@ -1922,6 +1922,30 @@ class Laplacian:
         """CSR values array (copy), length ``n_directed_edges``, dtype float64."""
         ...
 
+    @staticmethod
+    def from_csr(
+        indptr: NDArray[np.int64],
+        indices: NDArray[np.int32],
+        data: NDArray[np.float64],
+        n: int,
+    ) -> "Laplacian":
+        """Build a Laplacian from external CSR arrays.
+
+        Parameters
+        ----------
+        indptr : NDArray[int64], shape (n+1,)
+        indices : NDArray[int32], shape (nnz,)
+        data : NDArray[float64], shape (nnz,)
+        n : int
+            Matrix dimension.
+
+        Raises
+        ------
+        SemiflowError
+            If arrays are not contiguous or data is invalid.
+        """
+        ...
+
 
 @final
 class GraphHeat4th:
@@ -6033,3 +6057,238 @@ def graph_expmv_frechet(
         shapes differ, any edge index out of range, or ``params`` is a string.
     """
     ...
+
+# ---------------------------------------------------------------------------
+# Issue #13: SymmetricOperator + symmetric_op_expmv_frechet
+# ---------------------------------------------------------------------------
+
+@final
+class SymmetricOperator:
+    """Externally-assembled symmetric positive-semidefinite sparse operator (§55).
+
+    Built from CSR arrays.  Feeds into :meth:`evolve_batched` (Krylov expmv)
+    and :func:`symmetric_op_expmv_frechet` (entry-gradient VJP).
+    """
+
+    @staticmethod
+    def from_csr(
+        indptr: NDArray[np.int64],
+        indices: NDArray[np.int32],
+        data: NDArray[np.float64],
+        n: int,
+        sym_tol: float = 1e-10,
+    ) -> "SymmetricOperator":
+        """Build from CSR arrays.  Validates finiteness, diagonal ≥ 0, symmetry."""
+        ...
+
+    def evolve_batched(
+        self,
+        t: float,
+        v_nc: NDArray[np.float64],
+        path: str = "chebyshev",
+        tol: float = 1e-10,
+        m_max: int = 18,
+    ) -> NDArray[np.float64]:
+        """Apply ``e^{-t A}`` to batched input ``v_nc`` (shape ``[N, C]``).
+
+        Returns ndarray of shape ``(N, C)``.
+        """
+        ...
+
+    def n(self) -> int:
+        """Operator dimension."""
+        ...
+
+    def lambda_max_bound(self) -> float:
+        """Gershgorin spectral-radius upper bound."""
+        ...
+
+
+def symmetric_op_expmv_frechet(
+    op: SymmetricOperator,
+    u0: NDArray[np.float64],
+    dj: NDArray[np.float64],
+    *,
+    t: float,
+    entries: list[tuple[int, int]],
+) -> NDArray[np.float64]:
+    """Entry-sensitivity VJP ``∂J/∂A_{ij}`` via Fréchet–Duhamel (§55.5).
+
+    Returns ndarray of length ``len(entries)``.
+    """
+    ...
+
+
+# ---------------------------------------------------------------------------
+# Issue #11: ConservativeDiffusionChernoff + assemble_conservative_csr_1d
+# ---------------------------------------------------------------------------
+
+@final
+class ConservativeDiffusionChernoff:
+    """Order-2 conservative (FV divergence-form) variable-coefficient diffusion (§56).
+
+    Generator: ``L_k u = ∂_x(k(x) ∂_x u)`` with harmonic-mean face conductivities.
+    """
+
+    @staticmethod
+    def from_k_array(
+        n: int,
+        x_lo: float,
+        x_hi: float,
+        k_nodes: NDArray[np.float64],
+        r_contact: NDArray[np.float64] | None = None,
+        boundary: str = "neumann",
+    ) -> "ConservativeDiffusionChernoff":
+        """Build from node-sampled conductivities ``k_nodes[i] = k(x_i) > 0``."""
+        ...
+
+    def to_symmetric_operator(self) -> SymmetricOperator:
+        """Assemble ``A = −L_k`` as a :class:`SymmetricOperator` (Krylov bridge)."""
+        ...
+
+    def n(self) -> int:
+        """Number of grid nodes."""
+        ...
+
+    def dx(self) -> float:
+        """Grid step size ``Δx``."""
+        ...
+
+
+def assemble_conservative_csr_1d(
+    n: int,
+    x_lo: float,
+    x_hi: float,
+    k_nodes: NDArray[np.float64],
+    r_contact: NDArray[np.float64] | None = None,
+) -> SymmetricOperator:
+    """Directly assemble ``A = −L_k`` as :class:`SymmetricOperator` (§56.1–56.2)."""
+    ...
+
+
+# ---------------------------------------------------------------------------
+# Issue #14: MassKOperator + mass_lumped_evolve
+# ---------------------------------------------------------------------------
+
+@final
+class MassKOperator:
+    """Consistent-mass operator ``Â = R⁻ᵀ K R⁻¹`` where ``M = Rᵀ R`` (§55.4)."""
+
+    @staticmethod
+    def from_k_and_mass(
+        k_op: SymmetricOperator,
+        m_dense: NDArray[np.float64],
+    ) -> "MassKOperator":
+        """Build from stiffness operator ``K`` and dense mass matrix ``M`` (row-major)."""
+        ...
+
+    def evolve(
+        self,
+        t: float,
+        v: NDArray[np.float64],
+        path: str = "chebyshev",
+        tol: float = 1e-10,
+        m_max: int = 18,
+    ) -> NDArray[np.float64]:
+        """Apply ``e^{-t M⁻¹ K}`` to vector ``v`` (shape ``(n,)``).
+
+        Returns ndarray of shape ``(n,)``.
+        """
+        ...
+
+    def n(self) -> int:
+        """Operator dimension."""
+        ...
+
+
+def mass_lumped_evolve(
+    k_op: SymmetricOperator,
+    m_diag: NDArray[np.float64],
+    t: float,
+    v_nc: NDArray[np.float64],
+    path: str = "chebyshev",
+    tol: float = 1e-10,
+    m_max: int = 18,
+) -> NDArray[np.float64]:
+    """Evolve ``e^{-t M⁻¹ K} V`` for diagonal mass matrix ``M = diag(m_diag)`` (§55.3).
+
+    Returns ndarray of shape ``(N, C)``.
+    """
+    ...
+
+
+# ---------------------------------------------------------------------------
+# Issue #12: phi_action, phi_action_batched, Etdrk4
+# ---------------------------------------------------------------------------
+
+def phi_action(
+    op: SymmetricOperator,
+    k: int,
+    tau: float,
+    v: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Compute ``φ_k(−τA) v`` via augmented-matrix construction (§58.2, ADR-0189).
+
+    ``k = 0`` gives the matrix exponential ``e^{−τA} v``.
+
+    Returns ndarray of shape ``(n,)``.
+    """
+    ...
+
+
+def phi_action_batched(
+    op: SymmetricOperator,
+    p: int,
+    tau: float,
+    v: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Compute all ``φ_0, …, φ_p`` actions in one shot (§58.2).
+
+    Returns ndarray of shape ``(p+1, n)``.
+    """
+    ...
+
+
+@final
+class Etdrk4:
+    """Cox-Matthews ETDRK4 driver for semilinear problems ``u' = -Au + N(u)`` (§58.3).
+
+    Concrete nonlinearity selected by the ``nonlinearity`` parameter (menu-based;
+    arbitrary Python callbacks are NOT supported — see ADR-0189).
+    """
+
+    @staticmethod
+    def from_symmetric_op(
+        op: SymmetricOperator,
+        nonlinearity: str = "allen_cahn",
+        h: float = 0.01,
+    ) -> "Etdrk4":
+        """Build ETDRK4 driver from operator and step size.
+
+        Parameters
+        ----------
+        op : SymmetricOperator
+        nonlinearity : str
+            ``"allen_cahn"`` (default) — ``N(u) = u − u³``.
+        h : float
+            Time step.
+        """
+        ...
+
+    def step(self, u: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Advance ``u`` by one step ``h``.
+
+        Returns ndarray of shape ``(n,)``.
+        """
+        ...
+
+    def integrate(
+        self,
+        u0: NDArray[np.float64],
+        n_steps: int,
+    ) -> NDArray[np.float64]:
+        """Integrate for ``n_steps`` steps from initial condition ``u0``.
+
+        Returns ndarray of shape ``(n,)``.
+        """
+        ...

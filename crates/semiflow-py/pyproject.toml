@@ -31,6 +31,8 @@ Homepage = "https://github.com/VolkovIlia/semiflow"
 Repository = "https://github.com/VolkovIlia/semiflow"
 Documentation = "https://github.com/VolkovIlia/semiflow#readme"
 Issues = "https://github.com/VolkovIlia/semiflow/issues"
+Changelog = "https://github.com/VolkovIlia/semiflow/blob/master/CHANGELOG.md"
+"Release Notes" = "https://github.com/VolkovIlia/semiflow/releases"
 
 [tool.maturin]
 # Use the shared binding-crate profile (panic = "unwind" required).

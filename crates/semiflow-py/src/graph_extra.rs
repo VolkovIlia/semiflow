@@ -25,11 +25,13 @@
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
+    clippy::needless_pass_by_value,
     clippy::type_complexity
 )]
 
 use std::sync::Arc;
 
+use numpy::PyReadonlyArray1;
 use pyo3::prelude::*;
 use semiflow::{Graph, Laplacian, LaplacianKind};
 
@@ -189,6 +191,60 @@ impl PyLaplacian {
         PyLaplacian {
             inner: Arc::new(Laplacian::assemble_normalized(&graph.inner)),
         }
+    }
+
+    /// Build a :class:`Laplacian` directly from symmetric CSR arrays (issue #13 convenience).
+    ///
+    /// This is a lower-level constructor than :meth:`combinatorial` or :meth:`normalized`.
+    /// The matrix is stored as ``LaplacianKind::GeneralSymmetric``; Gershgorin bound
+    /// is computed automatically.
+    ///
+    /// Parameters
+    /// ----------
+    /// indptr : ndarray[int64, shape (n+1,)]
+    ///     CSR row-pointer array.
+    /// indices : ndarray[int32, shape (nnz,)]
+    ///     CSR column-index array (``0 ≤ col < n``).
+    /// data : ndarray[float64, shape (nnz,)]
+    ///     Non-zero values.
+    /// n : int
+    ///     Number of nodes.
+    ///
+    /// Raises ``SemiflowError`` on shape or range violations.
+    #[staticmethod]
+    fn from_csr(
+        indptr: PyReadonlyArray1<'_, i64>,
+        indices: PyReadonlyArray1<'_, i32>,
+        data: PyReadonlyArray1<'_, f64>,
+        n: usize,
+    ) -> PyResult<Self> {
+        catch_panic_py!({
+            let row_ptr: Vec<usize> = indptr
+                .as_slice()
+                .map_err(|_| new_pyerr("GridMismatch", "indptr must be contiguous"))?
+                .iter()
+                .map(|&v| v as usize)
+                .collect();
+            let col_idx: Vec<u32> = indices
+                .as_slice()
+                .map_err(|_| new_pyerr("GridMismatch", "indices must be contiguous"))?
+                .iter()
+                .map(|&v| v as u32)
+                .collect();
+            let vals: Vec<f64> = data
+                .as_slice()
+                .map_err(|_| new_pyerr("GridMismatch", "data must be contiguous"))?
+                .to_vec();
+            let inner = Laplacian::from_csr_parts(
+                n,
+                row_ptr,
+                col_idx,
+                vals,
+                LaplacianKind::GeneralSymmetric,
+            )
+            .map_err(|e| from_core(&e))?;
+            Ok(PyLaplacian { inner: Arc::new(inner) })
+        })
     }
 
     /// Number of nodes.

@@ -222,6 +222,11 @@ All errors are thrown as JavaScript `Error` objects with a `.kind` string proper
 `GridMismatch`, `NanInf`, `OutOfDomain`, `BoundaryFailure`, `CflViolated`,
 `ConvergenceFailed`, `Unsupported`, `Panic`.
 
+## Changelog / Release notes
+
+- [CHANGELOG.md](https://github.com/VolkovIlia/semiflow/blob/master/CHANGELOG.md) — full version history
+- [GitHub Releases](https://github.com/VolkovIlia/semiflow/releases) — tagged release notes and npm tarballs
+
 ## Mathematical reference
 
 I. D. Remizov, *Vladikavkaz Math. J.* **27**(4) (2025) 124–135.
