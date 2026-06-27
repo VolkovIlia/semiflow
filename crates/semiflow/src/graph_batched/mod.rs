@@ -23,6 +23,9 @@
 //! All typed helpers use `t_start = 0`, matching `ChernoffFunction::apply_into`,
 //! so hoisting Laplacian samples (identical every step) preserves bit patterns.
 
+#[cfg(feature = "parallel")]
+mod parallel;
+
 mod helpers;
 use helpers::{
     accumulate_grad_channel, evolve_channel, evolve_magnus6_channel, evolve_magnus_channel,
@@ -56,8 +59,13 @@ use crate::{
 /// match `src_cols` (i.e. `graph.n_nodes() == src_cols.len() / n_cols`).
 /// `n_steps` == 0 → copy src to dst unchanged.
 ///
+/// When compiled with `parallel` feature and `n_cols >= 2`, channels are
+/// distributed across threads via `std::thread::scope` (ADR-0184 D3).
+/// Results are bit-identical to serial (0-ULP, ADR-0184 D5).
+///
 /// # Errors
 /// `DomainViolation` if layout is inconsistent.
+#[cfg(not(feature = "parallel"))]
 #[allow(clippy::cast_precision_loss)]
 pub fn evolve_batched<C, F>(
     func: &C,
@@ -87,18 +95,51 @@ where
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_channel(
-            func,
-            tau,
-            n_steps,
-            src_c,
-            dst_c,
-            &mut buf_a,
-            &mut buf_b,
-            &mut scratch,
-        )?;
+        evolve_channel(func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch)?;
     }
     Ok(())
+}
+
+/// Evolve `n_cols` channels (parallel build — `C: Sync` required, ADR-0184 D3).
+///
+/// `n_steps` == 0 → copy src to dst unchanged.
+///
+/// # Errors
+/// `DomainViolation` if layout is inconsistent.
+#[cfg(feature = "parallel")]
+#[allow(clippy::cast_precision_loss)]
+pub fn evolve_batched<C, F>(
+    func: &C,
+    graph: &Arc<Graph<F>>,
+    t_final: F,
+    n_steps: usize,
+    src_cols: &[F],
+    dst_cols: &mut [F],
+) -> Result<(), SemiflowError>
+where
+    C: ChernoffFunction<F, S = GraphSignal<F>> + Sync,
+    F: SemiflowFloat,
+{
+    let n = graph.n_nodes();
+    let n_cols = validate_batched_layout::<F>(src_cols, dst_cols, n)?;
+    if n_cols == 0 {
+        return Ok(());
+    }
+    if n_steps == 0 {
+        dst_cols.copy_from_slice(src_cols);
+        return Ok(());
+    }
+    let tau = t_final / from_f64::<F>(n_steps as f64);
+    if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
+        return parallel::par_evolve_batched(func, graph, tau, n_steps, src_cols, dst_cols, n);
+    }
+    // Serial fallback for single-channel calls.
+    let mut scratch = ScratchPool::<F>::new();
+    let mut buf_a = GraphSignal::zeros(Arc::clone(graph));
+    let mut buf_b = GraphSignal::zeros(Arc::clone(graph));
+    let src_c = &src_cols[0..n];
+    let dst_c = &mut dst_cols[0..n];
+    evolve_channel(func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch)
 }
 
 // ---------------------------------------------------------------------------
@@ -140,23 +181,20 @@ pub fn evolve_batched_magnus<F: SemiflowFloat>(
     let c2 = from_f64::<F>(GL4_C2_F64);
     let l1 = mc.laplacian_at(c1 * tau);
     let l2 = mc.laplacian_at(c2 * tau);
+    // Parallel dispatch (ADR-0184 D3): Laplacians are shared read-only; no
+    // extra Sync bound needed (Laplacian<F>: Sync by structure).
+    #[cfg(feature = "parallel")]
+    if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
+        parallel::par_evolve_magnus(&l1, &l2, tau, n_steps, src_cols, dst_cols, n, &mc.graph);
+        return Ok(());
+    }
     let mut scratch = ScratchPool::<F>::new();
     let mut buf_a = GraphSignal::zeros(Arc::clone(&mc.graph));
     let mut buf_b = GraphSignal::zeros(Arc::clone(&mc.graph));
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_magnus_channel(
-            &l1,
-            &l2,
-            tau,
-            n_steps,
-            src_c,
-            dst_c,
-            &mut buf_a,
-            &mut buf_b,
-            &mut scratch,
-        );
+        evolve_magnus_channel(&l1, &l2, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch);
     }
     Ok(())
 }
@@ -199,24 +237,19 @@ pub fn evolve_batched_magnus6(
     let l2 = mc.laplacian_at(GL6_C2 * tau);
     let l3 = mc.laplacian_at(GL6_C3 * tau);
     let graph_arc = Arc::new(Graph::<f64>::path(n));
+    // Parallel dispatch (ADR-0184 D3): pre-hoisted Laplacians shared read-only.
+    #[cfg(feature = "parallel")]
+    if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
+        parallel::par_evolve_magnus6(&l1, &l2, &l3, tau, n_steps, src_cols, dst_cols, n, &graph_arc);
+        return Ok(());
+    }
     let mut scratch = ScratchPool::<f64>::new();
     let mut buf_a = GraphSignal::zeros(Arc::clone(&graph_arc));
     let mut buf_b = GraphSignal::zeros(Arc::clone(&graph_arc));
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_magnus6_channel(
-            &l1,
-            &l2,
-            &l3,
-            tau,
-            n_steps,
-            src_c,
-            dst_c,
-            &mut buf_a,
-            &mut buf_b,
-            &mut scratch,
-        );
+        evolve_magnus6_channel(&l1, &l2, &l3, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch);
     }
     Ok(())
 }
@@ -256,8 +289,17 @@ pub fn evolve_batched_varcoef_magnus<F: SemiflowFloat>(
     }
     // Hoist GL₄ + a samples once (t_start = 0 every step → identical each step).
     let samples = hoist_vc_gl4_samples(mc, tau, n)?;
-    // Build ping-pong buffers using dummy path graph (n_nodes only matters).
+    // Dummy graph (only n_nodes matters for GraphSignal allocation).
     let dummy_g = Arc::new(Graph::<F>::path(n));
+    // Parallel dispatch (ADR-0184 D3): hoisted Laplacians + a-slices shared read-only.
+    #[cfg(feature = "parallel")]
+    if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
+        parallel::par_evolve_vc(
+            &samples.l1, &samples.sqrt_a1, &samples.l2, &samples.sqrt_a2,
+            tau, n_steps, src_cols, dst_cols, n, &dummy_g,
+        );
+        return Ok(());
+    }
     let mut buf_a = GraphSignal::zeros(Arc::clone(&dummy_g));
     let mut buf_b = GraphSignal::zeros(Arc::clone(&dummy_g));
     let mut scratch = ScratchPool::<F>::new();
@@ -265,17 +307,8 @@ pub fn evolve_batched_varcoef_magnus<F: SemiflowFloat>(
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
         evolve_vc_channel(
-            &samples.l1,
-            &samples.sqrt_a1,
-            &samples.l2,
-            &samples.sqrt_a2,
-            tau,
-            n_steps,
-            src_c,
-            dst_c,
-            &mut buf_a,
-            &mut buf_b,
-            &mut scratch,
+            &samples.l1, &samples.sqrt_a1, &samples.l2, &samples.sqrt_a2,
+            tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch,
         );
     }
     Ok(())
@@ -377,12 +410,15 @@ impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
 ///
 /// 0-ULP identical to calling [`crate::adjoint_state_gradient`] C times in ascending
 /// channel order: each channel's gradient is computed via `accumulate_grad_channel`
-/// into a zeroed temp (`adjoint_state_gradient` zeros its output buffer on entry),
-/// then added into `grad_theta`. Fixed accumulation order `c = 0..n_cols` preserves
-/// bit patterns.
+/// into a zeroed temp, then added into `grad_theta`.
+///
+/// In the parallel build (`P: Sync`), per-channel gradients are computed on
+/// separate threads, then reduced in ascending channel order on the calling thread
+/// (ADR-0184 D4) — preserving the same bit pattern as the serial sum.
 ///
 /// # Errors
 /// `DomainViolation` if layout inconsistent or `grad_theta.len() != n_params`.
+#[cfg(not(feature = "parallel"))]
 #[allow(clippy::too_many_arguments)]
 pub fn adjoint_state_gradient_batched<F, P>(
     mc: &MagnusGraphHeatChernoff<F>,
@@ -399,14 +435,7 @@ where
     P: GeneratorSensitivity<F>,
 {
     let n = mc.graph.n_nodes();
-    let n_cols = validate_adj_grad_layout(
-        u0_cols,
-        dj_cols,
-        n,
-        grad_theta.len(),
-        param_deriv.n_params(),
-    )?;
-    // Zero ONCE — accumulated in ascending channel index for 0-ULP identity.
+    let n_cols = validate_adj_grad_layout(u0_cols, dj_cols, n, grad_theta.len(), param_deriv.n_params())?;
     grad_theta.fill(F::zero());
     if n_steps == 0 || n_cols == 0 {
         return Ok(());
@@ -416,18 +445,48 @@ where
     for c in 0..n_cols {
         let u0_c = &u0_cols[c * n..(c + 1) * n];
         let dj_c = &dj_cols[c * n..(c + 1) * n];
-        accumulate_grad_channel(
-            mc,
-            u0_c,
-            dj_c,
-            &graph_arc,
-            n_steps,
-            tau,
-            param_deriv,
-            n_params,
-            grad_theta,
-            scratch,
-        )?;
+        accumulate_grad_channel(mc, u0_c, dj_c, &graph_arc, n_steps, tau, param_deriv, n_params, grad_theta, scratch)?;
     }
     Ok(())
+}
+
+/// Summed adjoint-state gradient (parallel build, `P: Sync` required, ADR-0184 D3/D4).
+///
+/// The `scratch` parameter is accepted for API compatibility with the serial version
+/// but is unused in the parallel path (each worker creates its own `ScratchPool`).
+///
+/// # Errors
+/// `DomainViolation` if layout inconsistent or `grad_theta.len() != n_params`.
+#[cfg(feature = "parallel")]
+#[allow(clippy::too_many_arguments)]
+pub fn adjoint_state_gradient_batched<F, P>(
+    mc: &MagnusGraphHeatChernoff<F>,
+    u0_cols: &[F],
+    dj_cols: &[F],
+    n_steps: usize,
+    tau: F,
+    param_deriv: &P,
+    grad_theta: &mut [F],
+    _scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError>
+where
+    F: SemiflowFloat,
+    P: GeneratorSensitivity<F> + Sync,
+{
+    let n = mc.graph.n_nodes();
+    let n_cols = validate_adj_grad_layout(u0_cols, dj_cols, n, grad_theta.len(), param_deriv.n_params())?;
+    grad_theta.fill(F::zero());
+    if n_steps == 0 || n_cols == 0 {
+        return Ok(());
+    }
+    if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
+        return parallel::par_grad_batched(mc, u0_cols, dj_cols, n_steps, tau, param_deriv, grad_theta, n_cols, n);
+    }
+    // Serial fallback for single-channel gradient.
+    let graph_arc = Arc::clone(&mc.graph);
+    let n_params = param_deriv.n_params();
+    let mut scr = ScratchPool::<F>::new();
+    let u0_c = &u0_cols[0..n];
+    let dj_c = &dj_cols[0..n];
+    accumulate_grad_channel(mc, u0_c, dj_c, &graph_arc, n_steps, tau, param_deriv, n_params, grad_theta, &mut scr)
 }
