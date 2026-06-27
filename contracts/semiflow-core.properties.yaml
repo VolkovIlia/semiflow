@@ -9756,3 +9756,71 @@ implementation_notes:
     feature_gate: "slow-tests"
     introduced_in: issue-14-implicit-stiff-multilayer
     authority: ADR-0188
+
+  - name: G_PHI_AUG_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "UPDATED (PHI_NORM_TIGHTEN=2.0 fix: select_s_m now picks Taylor-18 instead of Taylor-13; expected action_err ~2e-15 << 1e-12; pade_err ≤ 1e-12 unchanged)"
+    rationale: |
+      G_PHI_AUG_DENSE (RELEASE_BLOCKING, ADR-0189 §B): verifies phi_action
+      (augmented Horner, Al-Mohy-Higham Alg. 3.2) against an EIGEN-EXACT reference
+      derived from the analytic DST-I eigendecomposition of the symmetric 6-node
+      tridiagonal generator A = tridiag(1,−2,1) with tau=0.5, z=tau·‖A‖=2.0.
+
+      Eigendecomposition: eigenvalues λ_j = −2+2cos(jπ/7), eigenvectors q_j[i] =
+      √(2/7)·sin(ijπ/7). Scalar φ_k(z) evaluated via Taylor series (120 terms,
+      no cancellation for z<0). Reference is exact to f64 rounding (~1e-16).
+
+      FIX (PHI_NORM_TIGHTEN = 2.0): THETA_M is calibrated for the EXPONENTIAL
+      backward error; φ-extraction from the augmented block requires FORWARD accuracy.
+      Passing norm_aug * 2.0 to select_s_m causes it to choose Taylor-18 (m=18,
+      cost=18) instead of Taylor-13 (m=13, cost=13) at the canonical z≈2 test point
+      (norm_aug≈4). Truncation at dominant mode z=1.624 drops from |R₁₃|≈9e-9 to
+      |R₁₈|≈8e-14, giving measured phi_action errors ~2e-15 after projection (0.033).
+      The augmented φ-action uses tightened norm selection vs plain expmv backward-error
+      selection; documented in §58.2 one-line note.
+
+      Padé-13 is machine-exact (pade_err≤1e-12). Also verifies phi_action_batched
+      matches phi_action to ≤ 1e-14.
+    gate: "action_err <= 1e-12 for each phi_k, k=0..=3; pade_err <= 1e-12; batched-vs-single sup_diff <= 1e-14"
+    test_file: "tests/g_phi_aug_dense.rs::g_phi_aug_dense"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189
+
+  - name: G_ETDRK4_ORDER
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (slope=4.0778, e1=9.765e-10, e2=5.783e-11)"
+    rationale: |
+      G_ETDRK4_ORDER (RELEASE_BLOCKING, ADR-0189 §C): ETDRK4 achieves order 4 on
+      Allen-Cahn 1D with periodic BC (N=8, eps=0.01, T=0.2).  Self-convergence with
+      step sizes h=0.05, h/2, reference h/4; empirical slope = log2(e1/e2) = 4.08 ∈
+      [3.7, 4.3].  tau·‖L‖ = 0.05 × 2.56 = 0.128 keeps the augmented Horner in the
+      safe linear regime (well below theta_1=2.29e-16 threshold for trivial Taylor).
+      Confirms the Cox-Matthews 2002 order-4 convergence claim.
+    gate: "slope = log2(e1/e2) in [3.7, 4.3]"
+    test_file: "tests/g_etdrk4_order.rs::g_etdrk4_order"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189
+
+  - name: G_ETD_ADJOINT_FD
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err_jvp=8.503e-9, rel_err_adj=2.689e-16)"
+    rationale: |
+      G_ETD_ADJOINT_FD (RELEASE_BLOCKING, ADR-0189 §D4): AllenCahn NonlinearityDiff
+      correctness on n=16 with smooth test vectors.  Two sub-checks: (1) jvp vs central
+      finite-difference (eps_fd=1e-7), sup relative error ≤ 1e-6; measured 8.5e-9, one
+      order below the FD truncation floor.  (2) adjoint identity
+      ⟨vjp(u,w), du⟩ = ⟨w, jvp(u,du)⟩, relative error ≤ 1e-6; measured 2.7e-16
+      (machine precision — diagonal Jacobian is exactly self-adjoint by construction).
+    gate: "rel_err_jvp <= 1e-6 AND rel_err_adj <= 1e-6"
+    test_file: "tests/g_etd_adjoint_fd.rs::g_etd_adjoint_fd"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189

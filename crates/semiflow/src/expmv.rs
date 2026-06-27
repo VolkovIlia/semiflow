@@ -63,7 +63,9 @@ use crate::{
 ///
 /// Only the double-precision subset used by Algorithm 3.2 is included.
 /// Degree is capped at 18 (`M_MAX`); higher degrees exceed the safe Horner arg.
-const THETA_M: &[(u32, f64)] = &[
+///
+/// Re-used by [`crate::phi_action`] for the augmented-matrix φ-action.
+pub(crate) const THETA_M: &[(u32, f64)] = &[
     (1, 2.29e-16),
     (2, 2.58e-8),
     (4, 3.40e-3),
@@ -75,7 +77,7 @@ const THETA_M: &[(u32, f64)] = &[
 ];
 
 /// Maximum Taylor degree (Code Fragment 3.1 cap; above this arg ≈ 9 loses precision).
-const M_MAX: u32 = 18;
+pub(crate) const M_MAX: u32 = 18;
 
 // ---------------------------------------------------------------------------
 // (s, m) selector — Al-Mohy & Higham Algorithm 3.2 (conservative norm bound).
@@ -85,8 +87,10 @@ const M_MAX: u32 = 18;
 ///
 /// `norm_a` is an upper bound on `‖A‖`. Returns the cheapest valid pair.
 /// Falls back to `(s_min, M_MAX)` if no entry in the table suffices at cost 1.
+///
+/// Re-used by [`crate::phi_action`] for the augmented operator norm.
 #[allow(clippy::many_single_char_names)] // s, m are standard Al-Mohy–Higham notation
-fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
+pub(crate) fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
     let arg = tau * norm_a;
     // Store (s, m, cost) so the comparison uses the actual cost, not m.
     let mut best: Option<(u32, u32, u64)> = None;

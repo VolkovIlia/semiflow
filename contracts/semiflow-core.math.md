@@ -13136,3 +13136,146 @@ Crank–Nicolson reference — **no new sympy**.
   (`mat_exp_pade13` dense oracle).
 - ADR-0188 (contract authority), ADR-0187 (#11 assembler), ADR-0186 (#13 lumped
   `(M,K)`), ADR-0185 (#A1 Krylov).
+
+## §58 — ETD φ-function actions and the ETDRK4 semilinear driver (ADR-0189, Issue #12, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** The one identity-compatible semilinear extension `∂ₜu = Lu + N(u)`.
+> `L` stays the EXACT linear core (§45 1-D `expmv`, §54 graph Krylov, §55 generic
+> symmetric op); only the nonlinear Duhamel term is quadratured via φ-functions.
+> Supported operators: 1-D divergence-form carrier and symmetric graph /
+> `SymmetricOperator`. Differentiability requires a differentiable `N`.
+
+### §58.1 — Setting and the φ-functions
+
+The exact variation-of-constants (Duhamel) solution of `∂ₜu = Lu + N(u)` over a
+step `h` is
+
+```text
+u(t+h) = e^{hL} u(t) + ∫₀^h e^{(h−s)L} N(u(t+s)) ds.
+```
+
+The exponential-integrator weights are the **φ-functions**, defined by the
+entire-function series and the equivalent integral representation
+
+```text
+φ₀(z) = e^z,
+φ_k(z) = Σ_{n≥0} zⁿ / (n+k)!  =  (1/(k−1)!) ∫₀¹ e^{(1−s)z} s^{k−1} ds   (k ≥ 1),
+```
+
+explicitly `φ₁=(e^z−1)/z`, `φ₂=(e^z−1−z)/z²`, `φ₃=(e^z−1−z−z²/2)/z³`, with
+`φ_k(0)=1/k!` and the recurrence `φ_k(z) = z·φ_{k+1}(z) + 1/k!`. The library
+requires `k = 0…3` (`PHI_MAX = 3`).
+
+### §58.2 — Augmented-matrix construction (NORMATIVE; one action ⇒ all φ_k·v)
+
+Let `A` be the linear generator (`A = −L` for the contraction semigroup; the
+divergence-form operator for 1-D). For `v ∈ Rⁿ` and `p ≥ 1` define the
+**block-upper-triangular augmented operator**
+
+```text
+Ã = [[ τA,  V ],   ∈ R^{(n+p)×(n+p)},
+     [  0,  J ]]
+
+V = v·e₁ᵀ ∈ R^{n×p}   (v in the FIRST column, zeros elsewhere),
+J ∈ R^{p×p}, Jₖ,ₖ₊₁ = 1 else 0   (unit super-diagonal, nilpotent: Jᵖ = 0).
+```
+
+**Theorem (Sidje 1998; Al-Mohy–Higham 2011 §4).** With `eˢᴶ` upper-triangular
+(`[eˢᴶ]_{ij}=s^{j−i}/(j−i)!`) and the block formula
+`exp(Ã)_{12}=∫₀¹ e^{(1−s)τA} V eˢᴶ ds`, the top-right columns are
+
+```text
+exp(Ã)[1:n, 1:n]   = e^{τA} = φ₀(τA)                  (top-left block)
+exp(Ã)[1:n, n+j]   = φⱼ(τA)·v ,    j = 1 … p          (NO τ-power; τ is inside A).
+```
+
+Hence **a single action of `exp(Ã)` on the augmented basis yields
+`φ₀(τA)v, …, φ_p(τA)v` simultaneously.** (Verified to rel-err 5e-16 for p=3
+against the spectral series, ADR-0189 throwaway probe.)
+
+**Spectral property (resolves the symmetry obstruction, NORMATIVE).** `Ã` is
+non-symmetric but block-triangular with **equal diagonal blocks**, so
+`σ(Ã) = σ(τA)` — entirely real for the symmetric/contraction operators. The
+action is therefore computed by the **§45 matvec-only truncated-Taylor (Horner)
+path**, which requires only a matvec and a real spectral interval — NOT
+symmetry — and already runs on the non-symmetric variable-`a(x)` 1-D generator.
+`Ã`'s matvec is one `A`-matvec plus the cheap `J`-shift; `‖Ã‖ ≤ ‖A‖ + ‖v‖ + 1`.
+`THETA_M` is calibrated for the exponential BACKWARD error; the φ-extraction from
+the augmented block requires FORWARD accuracy, so `phi_action` passes `2·‖Ã‖` to
+`select_s_m` — at the canonical z≈2 test point this promotes the Taylor degree from
+13 to 18 (m=18, s=1), dropping truncation at z=1.624 from ~9e-9 to ~8e-14.
+One code path serves 1-D and graph. (A symmetric-only optimisation — Chebyshev coefficients of `φ_k`
+in place of the Bessel `e^{−z}I_k(z)` coefficients of `exp`, keeping the §54.3
+O(1)-vector symmetric kernel — is a deferred ADR-0189 §"deferred" item.)
+
+### §58.3 — ETDRK4 step (Cox–Matthews 2002 / Kassam–Trefethen 2005, NORMATIVE)
+
+With `e^{hL/2}`, `e^{hL}`, and φ acting on the **exact** `L`:
+
+```text
+a       = e^{hL/2} u_n + (h/2) φ₁(hL/2) N(u_n)
+b       = e^{hL/2} u_n + (h/2) φ₁(hL/2) N(a)
+c       = e^{hL/2} a   + (h/2) φ₁(hL/2) (2 N(b) − N(u_n))
+u_{n+1} = e^{hL} u_n
+        + h(φ₁ − 3φ₂ + 4φ₃)(hL) · N(u_n)
+        + h(2φ₂ − 4φ₃)(hL)      · (N(a) + N(b))
+        + h(4φ₃ − φ₂)(hL)       · N(c).
+```
+
+`(h/2)φ₁(hL/2)` is the identity-compatible form of `L⁻¹(e^{hL/2}−I)` — exact,
+free of the cancellation the Kassam–Trefethen contour integral was designed to
+avoid (the augmented action computes `φ₁` directly). **Order claim: 4** (Cox–
+Matthews; observed 3.99/4.01/4.23 on Allen–Cahn 1-D, ADR-0189 probe). `L` is
+never re-discretised, inverted, or split; only `φ₀,φ₁(hL/2)` and `φ₀…φ₃(hL)`
+augmented actions on the cached `L` are needed per step.
+
+### §58.4 — Semilinear adjoint (NORMATIVE)
+
+Each `φ_k(τL)·v` is **linear in `v`**, with transpose-action `φ_k(τLᵀ)` (for
+symmetric graph `L`, `Lᵀ=L`). An ETDRK4 step is the composition of these linear
+φ-actions with `N`. Given a **differentiable** `N` (Jacobian-action `J_N(u)` and
+its transpose `J_N(u)ᵀ`), the step is differentiable by the chain rule and
+`∂J/∂param` propagates end-to-end through one step. The φ-actions never break the
+adjoint; only `N` introduces nonlinearity, and its derivative is supplied by the
+caller (`NonlinearityDiff` JVP/VJP). No new oracle: the gradient is gated against
+central finite differences (§43.6 discipline).
+
+### §58.5 — Honest boundaries (NORMATIVE)
+
+- `Ã` is **non-normal** (rank-`p` nilpotent coupling) ⇒ Taylor-action bounds use
+  the field-of-values; accuracy is verified directly (§58.6 `G_PHI_AUG_DENSE`),
+  `p ≤ 3`.
+- **ETDRK4 order reduction** occurs for very stiff / non-smooth regimes; the
+  order gate fixes a smooth, order-4-dominant regime and uses a **two-sided**
+  band.
+- **Stiff `N`** is outside ETDRK4's range → exponential Rosenbrock (deferred).
+- **Adjoint requires differentiable `N`**; a black-box `N` gets the forward step
+  only.
+
+### §58.6 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle / teeth |
+|------|-----------|-----------|----------------|
+| `G_PHI_AUG_DENSE` | each `k ∈ {0,1,2,3}`: `phi_action(op,k,τ,v)` vs **eigen-exact** DST-I reference on 6-node symmetric tridiagonal (`offdiag=1`, `τ=0.5`, `z=2.0`); also Padé-13 oracle vs eigen-exact | `action_err ≤ 1e-12`; `pade_err ≤ 1e-12`; `‖φ_k(τA)v‖_∞ ≥ 0.01` (non-vacuity) | Analytic DST-I eigendecomposition (λ_j=−2+2cos(jπ/(n+1)), q_j[i]=√(2/(n+1))·sin(ijπ/(n+1))); scalar φ_k via Taylor series (exact). TEETH: `PHI_NORM_TIGHTEN=2` promotes Taylor-18 at z≈2 — truncation at dominant mode z=1.624 drops from ~9e-9 (Taylor-13) to ~8e-14 (Taylor-18); measured errors ~2e-15 after projection; Padé oracle machine-exact (≤5e-16). |
+| `G_ETDRK4_ORDER` | Allen–Cahn 1-D (`∂ₜu=ε u_xx+u−u³`, periodic) self-convergence vs fine reference; log-log slope over ≥4 step sizes | slope ∈ **`[3.7, 4.3]`** (TWO-SIDED) | fine-reference / Richardson. TEETH: two-sided band rejects order-reduction (<3.7) AND roundoff plateau (→0) |
+| `G_ETD_ADJOINT_FD` | `∂J/∂param` through ONE `Etdrk4::step` (analytic adjoint) vs central FD, non-trivial `N` (`u−u³`, `J_N=1−3u²`), `param` flowing through `N` | rel-err `≤ 1e-6` | central FD (REUSE §43.6; no new oracle). TEETH: `param` enters the nonlinear term ⇒ `J_N` contribution exercised |
+
+All three RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the
+shipping release.  `G_PHI_AUG_DENSE` uses the analytic DST-I eigendecomposition
+as its primary oracle (exact to f64 rounding); Padé-13 is retained as a secondary
+oracle sanity-check.  `G_ETDRK4_ORDER` and `G_ETD_ADJOINT_FD` require no sympy.
+
+### §58.7 — References
+
+- S. M. Cox, P. C. Matthews (2002), *Exponential time differencing for stiff
+  systems*, J. Comput. Phys. 176(2):430–455, DOI 10.1006/jcph.2002.6995.
+- A.-K. Kassam, L. N. Trefethen (2005), *Fourth-order time-stepping for stiff
+  PDEs*, SIAM J. Sci. Comput. 26(4):1214–1233, DOI 10.1137/S1064827502410633.
+- M. Hochbruck, A. Ostermann (2010), *Exponential integrators*, Acta Numerica
+  19:209–286, DOI 10.1017/S0962492910000048.
+- A. H. Al-Mohy, N. J. Higham (2011), SIAM J. Sci. Comput. 33(2):488–511,
+  DOI 10.1137/100788860 (augmented φ construction §4; `THETA_M`).
+- R. B. Sidje (1998), *Expokit*, ACM TOMS 24(1):130–156 (augmented `phiv`).
+- §45 (`expmv` + `mat_exp_pade13` oracle), §54 (graph Krylov action + §54.5
+  augmented Fréchet identity), §55 (`SymmetricLinearOp`), §43.6 (FD adjoint
+  oracle); ADR-0189 (contract authority).

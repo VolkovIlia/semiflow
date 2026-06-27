@@ -176,10 +176,10 @@ pub(crate) mod diffusion_zeta_common;
 pub mod drift_reaction;
 pub mod drift_reaction_zeta4;
 pub mod dual;
-pub mod error;
+pub mod error; pub mod etdrk4; pub(crate) mod etdrk4_helpers;
 pub mod expmv;
 pub mod float;
-pub(crate) mod gen_quadrature;
+pub(crate) mod gen_quadrature; pub mod generator_action;
 pub mod graph;
 pub mod graph_adjoint_presampled;
 pub mod graph_batched;
@@ -236,10 +236,9 @@ pub(crate) mod matrix_strang;
 pub mod matrix_system;
 pub mod matrix_system_complex;
 pub mod multilayer;
-pub mod nonseparable2d;
-pub mod nonseparable2d_aniso;
-pub mod nonseparable_mixed;
-pub mod nonseparable_mixed_closure;
+pub mod nonlinearity;
+pub mod nonseparable2d; pub mod nonseparable2d_aniso;
+pub mod nonseparable_mixed; pub mod nonseparable_mixed_closure;
 pub mod obstacle;
 pub mod obstacle_gamma;
 pub mod obstacle_nd;
@@ -253,7 +252,7 @@ pub(crate) mod parallel1d;
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]
 pub mod parallel_pool;
-pub(crate) mod pencil;
+pub(crate) mod pencil; pub mod phi_action; pub(crate) mod phi_action_helpers;
 pub mod point_eval;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
@@ -365,7 +364,7 @@ pub use crate::{
     drift_reaction::DriftReactionChernoff,
     drift_reaction_zeta4::DriftReactionZeta4Chernoff,
     dual::Dual,
-    error::SemiflowError,
+    error::SemiflowError, etdrk4::Etdrk4,
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
     graph::{Graph, Laplacian, LaplacianKind},
@@ -388,7 +387,7 @@ pub use crate::{
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
     grid_nd::{GridFnND, GridND},
-    gridless::{GridlessChernoff, ParticleReduction},
+    generator_action::{DivFormGenerator, GeneratorAction, NegLaplacianGenerator}, gridless::{GridlessChernoff, ParticleReduction},
     hdr::HdrSnapshot,
     heisenberg_kernel::heisenberg_heat_kernel,
     hormander::{
@@ -411,12 +410,13 @@ pub use crate::{
     },
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     matrix_system_complex::{MatrixDiffusionChernoffComplex, MatrixGridFnComplex1D},
+    nonlinearity::{AllenCahn, Nonlinearity, NonlinearityDiff},
     nonseparable2d::NonSeparable2DChernoff,
     nonseparable2d_aniso::NonSeparable2DAnisotropicChernoff,
     nonseparable_mixed::NonSeparableMixedChernoff,
     obstacle::{ClosureObstacle, ConstantObstacle, Obstacle, ObstacleChernoff},
     obstacle_nd::ObstacleChernoffND,
-    point_eval::{sample_gridfn2d, PointEval},
+    phi_action::{dense_phi_aug_ref, phi_action, phi_action_batched, PHI_MAX}, point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff, ReflectingRegion},
