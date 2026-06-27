@@ -13,32 +13,37 @@ fn expmv_chebyshev<F: SemiflowFloat, Op: SymmetricLinearOp<F>>(
     out: &mut [F],
     tol: F,
     scratch: &mut ScratchPool<F>,
-) {
-    let n = op.n();
+) -> Result<(), SemiflowError> {
+    let n          = op.n();
     let lambda_max = op.lambda_max_bound();
-    let z = tau * lambda_max / F::from(2.0_f64).unwrap();
-    let m = chebyshev_degree(z, tol);
-    let em_z = (-z).exp();
-    let scale = F::from(2.0_f64).unwrap() / lambda_max;
-    let two = F::from(2.0_f64).unwrap();
-
-    let mut t_prev = scratch.take_vec(n);
-    let mut t_curr = scratch.take_vec(n);
-    let mut spmv   = scratch.take_vec(n);
-    let mut result = scratch.take_vec(n);
-
-    t_curr.copy_from_slice(v);
-    let c0 = em_z * bessel_i_k(0, z);
-    for i in 0..n { result[i] = c0 * v[i]; }
-    if m >= 1 {
-        chebyshev_accumulate(op, v, &mut t_prev, &mut t_curr, &mut spmv, &mut result, n, m, scale, two, z, em_z);
+    let z_total    = tau * lambda_max / F::from(2.0_f64).unwrap();
+    let s          = cheb_substep_count(z_total);
+    let step_tau   = tau / F::from(f64::from(s)).unwrap(); // f64::from(u32) exact
+    let z_sub      = step_tau * lambda_max / F::from(2.0_f64).unwrap();
+    let m          = chebyshev_degree(z_sub, tol);
+    let em_z       = (-z_sub).exp();
+    let scale      = F::from(2.0_f64).unwrap() / lambda_max;
+    let two        = F::from(2.0_f64).unwrap();
+    let mut t_prev  = scratch.take_vec(n);
+    let mut t_curr  = scratch.take_vec(n);
+    let mut spmv    = scratch.take_vec(n);
+    let mut result  = scratch.take_vec(n);
+    let mut current = scratch.take_vec(n);
+    current.copy_from_slice(v);
+    for _ in 0..s {
+        chebyshev_step(
+            op, &current, &mut t_prev, &mut t_curr, &mut spmv, &mut result,
+            n, m, scale, two, z_sub, em_z, z_total,
+        )?;
+        core::mem::swap(&mut current, &mut result);
     }
-    out[..n].copy_from_slice(&result);
-
+    out[..n].copy_from_slice(&current);
     scratch.return_vec(t_prev);
     scratch.return_vec(t_curr);
     scratch.return_vec(spmv);
     scratch.return_vec(result);
+    scratch.return_vec(current);
+    Ok(())
 }
 
 // ── Lanczos branch ────────────────────────────────────────────────────────────
@@ -102,7 +107,7 @@ where
     validate_tau(tau)?;
     match path {
         KrylovPath::Chebyshev => {
-            expmv_chebyshev(op, tau, v, out, tol, scratch);
+            expmv_chebyshev(op, tau, v, out, tol, scratch)?;
         }
         KrylovPath::Lanczos { m_max } => {
             expmv_lanczos(op, tau, v, out, m_max, scratch)?;

@@ -1,7 +1,67 @@
 // Private helpers for `graph_krylov.rs` — included via `include!` at module scope.
 //
-// Both functions live in the `graph_krylov` module (not a child module), so
+// All functions live in the `graph_krylov` module (not a child module), so
 // all items visible in `graph_krylov.rs` are directly in scope here.
+
+// ── Chebyshev substep infrastructure ─────────────────────────────────────────
+
+/// Number of Chebyshev substeps so every substep's `z_sub ≤ Z_SAFE`.
+///
+/// Returns 1 for non-stiff operators.  For stiff ones returns `⌈z_total / Z_SAFE⌉`.
+fn cheb_substep_count<F: SemiflowFloat>(z_total: F) -> u32 {
+    let z_f64 = z_total.to_f64().unwrap_or(0.0);
+    if !z_f64.is_finite() || z_f64 <= Z_SAFE {
+        return 1;
+    }
+    let s_f64 = (z_f64 / Z_SAFE).ceil();
+    if s_f64 > f64::from(u32::MAX) {
+        return u32::MAX;
+    }
+    // s_f64 ∈ [2, u32::MAX] after the guards above — cast is exact.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    { s_f64 as u32 }
+}
+
+/// One Chebyshev substep: writes `e^{-step_tau·op} · current` into `result`.
+///
+/// Errors with [`SemiflowError::DomainViolation`] if the output is non-finite.
+/// Under normal operation (`z_sub ≤ Z_SAFE`) this guard never fires.
+#[allow(clippy::too_many_arguments)]
+fn chebyshev_step<F: SemiflowFloat>(
+    op: &impl SymmetricLinearOp<F>,
+    current: &[F],
+    t_prev: &mut Vec<F>,
+    t_curr: &mut Vec<F>,
+    spmv: &mut [F],
+    result: &mut [F],
+    n: usize,
+    m: usize,
+    scale: F,
+    two: F,
+    z_sub: F,
+    em_z: F,
+    z_total: F,
+) -> Result<(), SemiflowError> {
+    t_curr.copy_from_slice(current);
+    let c0 = em_z * bessel_i_k(0, z_sub);
+    for i in 0..n { result[i] = c0 * current[i]; }
+    if m >= 1 {
+        chebyshev_accumulate(
+            op, current, t_prev, t_curr, spmv, result,
+            n, m, scale, two, z_sub, em_z,
+        );
+    }
+    if result.iter().any(|v| !v.is_finite()) {
+        return Err(SemiflowError::DomainViolation {
+            what: "Chebyshev step: non-finite output (NaN/Inf) — \
+                   this is a semiflow bug; please report with z_total",
+            value: z_total.to_f64().unwrap_or(f64::NAN),
+        });
+    }
+    Ok(())
+}
+
+// ── Chebyshev term accumulation ───────────────────────────────────────────────
 
 /// Accumulate Chebyshev terms `T_k` for k=1..=m into `result` (called only when m ≥ 1).
 ///

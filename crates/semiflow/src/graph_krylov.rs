@@ -31,6 +31,10 @@ const MIN_CHEB_DEGREE: usize = 3;
 const MAX_CHEB_DEGREE: usize = 200;
 /// Maximum graph size for `dense_graph_expmv_ref` (gate test helper).
 pub const MAX_DENSE_N: usize = 12;
+/// Maximum `z = τ·λ_max/2` per Chebyshev substep such that all Bessel coefficients
+/// `c_k = e^{-z}·I_k(z)` are finite in f64 (e^{-200} ≈ 1.4e-87, representable).
+/// Stiff operators (`z_total > Z_SAFE`) use `s = ⌈z_total / Z_SAFE⌉` substeps.
+const Z_SAFE: f64 = 200.0;
 
 /// Al-Mohy–Higham 2011 Table 3.1 (`m`, `θ_m`).  Mirror of `expmv.rs::THETA_M`.
 const THETA_M: &[(u32, f64)] = &[
@@ -155,11 +159,10 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
 
 // ── Public instrumentation (depth-flat gate) ──────────────────────────────────
 
-/// Returns the `(s, m)` pair and total `SpMV` count for given parameters.
+/// Returns `(s, m)` where `s` = substep count and `m` = degree/Krylov dimension.
 ///
-/// Chebyshev: always `(1, chebyshev_degree(τ·λ_max/2, tol))`.
-/// Lanczos: `(s, m)` from the `THETA_M` selection, `m` capped at `m_max`.
-///
+/// Chebyshev: `s = ⌈z_total / Z_SAFE⌉` (1 for non-stiff), `m = chebyshev_degree(z_sub, tol)`.
+/// Lanczos: `(s, m)` from `THETA_M`, `m` capped at `m_max`.
 /// Total `SpMVs` = `s × m`. Used by `G_GRAPH_EXPMV_DEPTH_FLAT`.
 ///
 /// # Panics
@@ -172,11 +175,14 @@ pub fn graph_expmv_matvec_count<F: SemiflowFloat>(
 ) -> (u32, u32) {
     match path {
         KrylovPath::Chebyshev => {
-            let z = tau * lambda_max / F::from(2.0_f64).unwrap();
+            let z_total = tau * lambda_max / F::from(2.0_f64).unwrap();
+            let s = cheb_substep_count(z_total);
+            let step_tau = tau / F::from(f64::from(s)).unwrap();
+            let z_sub = step_tau * lambda_max / F::from(2.0_f64).unwrap();
             // chebyshev_degree is bounded by MAX_CHEB_DEGREE = 200 — fits u32.
             #[allow(clippy::cast_possible_truncation)]
-            let m = chebyshev_degree(z, tol) as u32;
-            (1, m)
+            let m = chebyshev_degree(z_sub, tol) as u32;
+            (s, m)
         }
         KrylovPath::Lanczos { m_max } => {
             let (s, m) = lanczos_select_s_m(lambda_max, tau);
@@ -304,10 +310,8 @@ fn chebyshev_degree<F: SemiflowFloat>(z: F, tol: F) -> usize {
 // Private Chebyshev and Lanczos helpers — include! keeps them in module scope.
 include!("graph_krylov_helpers.rs");
 
-// 7 args by necessity — 4 LaplacianAction state vars + tau/lambda_max/tol/scratch. No good grouping.
+// 7 args by necessity — 4 op-state vars + tau/lambda_max/tol/scratch.
 #[allow(clippy::too_many_arguments)]
-// Must return Result<> to satisfy the `apply_into` dispatch call-site. Body is always Ok(()).
-#[allow(clippy::unnecessary_wraps)]
 fn chebyshev_action<F: SemiflowFloat>(
     op: &impl SymmetricLinearOp<F>,
     src: &GraphSignal<F>,
@@ -318,35 +322,34 @@ fn chebyshev_action<F: SemiflowFloat>(
     scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError> {
     let n = src.len();
-    let z = tau * lambda_max / F::from(2.0_f64).unwrap();
-    let m = chebyshev_degree(z, tol);
-    let em_z = (-z).exp();
-    let scale = F::from(2.0_f64).unwrap() / lambda_max;
-    let two = F::from(2.0_f64).unwrap();
-
-    let mut t_prev = scratch.take_vec(n);  // T_{k-1}(B)v
-    let mut t_curr = scratch.take_vec(n);  // T_k(B)v
-    let mut spmv   = scratch.take_vec(n);  // L_G · T_k(B)v
-    let mut result = scratch.take_vec(n);  // accumulated output
-
-    let src_v = src.values();
-
-    // k=0: T_0(B)v = v;  result = c_0 · v
-    t_curr.copy_from_slice(src_v);
-    let c0 = em_z * bessel_i_k(0, z);
-    for i in 0..n { result[i] = c0 * src_v[i]; }
-
-    if m >= 1 {
-        chebyshev_accumulate(op, src_v, &mut t_prev, &mut t_curr, &mut spmv, &mut result, n, m, scale, two, z, em_z);
+    let z_total  = tau * lambda_max / F::from(2.0_f64).unwrap();
+    let s        = cheb_substep_count(z_total);
+    let step_tau = tau / F::from(f64::from(s)).unwrap(); // f64::from(u32) exact
+    let z_sub    = step_tau * lambda_max / F::from(2.0_f64).unwrap();
+    let m        = chebyshev_degree(z_sub, tol);
+    let em_z     = (-z_sub).exp();
+    let scale    = F::from(2.0_f64).unwrap() / lambda_max;
+    let two      = F::from(2.0_f64).unwrap();
+    let mut t_prev  = scratch.take_vec(n);
+    let mut t_curr  = scratch.take_vec(n);
+    let mut spmv    = scratch.take_vec(n);
+    let mut result  = scratch.take_vec(n);
+    let mut current = scratch.take_vec(n);
+    current.copy_from_slice(src.values());
+    for _ in 0..s {
+        chebyshev_step(
+            op, &current, &mut t_prev, &mut t_curr, &mut spmv, &mut result,
+            n, m, scale, two, z_sub, em_z, z_total,
+        )?;
+        core::mem::swap(&mut current, &mut result);
     }
-
     dst.zero_into();
-    dst.axpy_into_slice(F::one(), &result);
-
+    dst.axpy_into_slice(F::one(), &current);
     scratch.return_vec(t_prev);
     scratch.return_vec(t_curr);
     scratch.return_vec(spmv);
     scratch.return_vec(result);
+    scratch.return_vec(current);
     Ok(())
 }
 
