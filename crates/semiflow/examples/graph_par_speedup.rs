@@ -50,6 +50,8 @@ fn main() {
         evolve_batched_magnus(&mc, T_FINAL, N_STEPS, &src, &mut dst).unwrap();
         total_ns += t0.elapsed().as_nanos();
     }
+    // Timing display only — precision loss on nanos/count→f64 is irrelevant here.
+    #[allow(clippy::cast_precision_loss)]
     let avg_ms = total_ns as f64 / REPS as f64 / 1_000_000.0;
 
     let feature = if cfg!(feature = "parallel") { "parallel" } else { "serial" };
