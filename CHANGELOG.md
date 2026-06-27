@@ -4,6 +4,16 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2-beta] — 2026-06-27
+
+### Fixed
+- **Lanczos OOB panic at t≥4** (graph_krylov): off-by-one wrote past
+  MAX_LANCZOS_DIM=18 when the Krylov dimension maxed out at large t·λ_max
+  (present since A1/ADR-0185, only triggered at deep t). Lanczos now matches
+  Chebyshev/dense expm at t∈{4,8,16} (max|Δ|≤1e-9, no panic). Gate
+  lanczos_large_t_no_oob. The `--no-lanczos` workaround is no longer needed.
+- Clippy `cast_precision_loss` in the graph_par_speedup example (`--all-targets`).
+
 ## [0.10.1-beta] — 2026-06-27
 
 ### Performance
