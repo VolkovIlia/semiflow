@@ -126,7 +126,11 @@ fn lanczos_iterate<F: SemiflowFloat>(
         let bk1 = z_buf.iter().map(|&x| x * x).fold(F::zero(), |s, x| s + x).sqrt();
         m_actual = k + 1;
         if bk1 < F::from(1e-14_f64).unwrap() { break; }
-        beta[k + 1] = bk1;
+        // k+1 == beta.len() on the final iteration (k = MAX_LANCZOS_DIM-1): skip the
+        // write — this slot is only ever read in the *next* iteration which does not
+        // exist when k == m-1.  Skipping is safe and correct; it fixes the OOB panic
+        // reported in fix/lanczos-stiff-oob.
+        if k + 1 < beta.len() { beta[k + 1] = bk1; }
         let inv_b = F::one() / bk1;
         for z in z_buf.iter_mut() { *z *= inv_b; }
         if k + 1 < m { q_basis[(k + 1) * n..(k + 2) * n].copy_from_slice(z_buf); }
