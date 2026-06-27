@@ -112,6 +112,19 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     # feat/graph-krylov-frechet-a1a2 — A1 Krylov action + A2 Fréchet VJP (ADR-0185)
     GraphKrylov,
     graph_expmv_frechet,
+    # issue #11 — conservative diffusion (FV divergence-form)
+    ConservativeDiffusionChernoff,
+    assemble_conservative_csr_1d,
+    # issue #13 — externally-assembled symmetric PSD operator + entry-sensitivity VJP
+    SymmetricOperator,
+    symmetric_op_expmv_frechet,
+    # issue #14 — mass-operator Krylov evolution
+    MassKOperator,
+    mass_lumped_evolve,
+    # issue #12 — φ-function actions + ETDRK4 driver
+    phi_action,
+    phi_action_batched,
+    Etdrk4,
 )
 
 __all__ = [
@@ -225,4 +238,17 @@ __all__ = [
     # feat/graph-krylov-frechet-a1a2 — A1 Krylov action + A2 Fréchet VJP (ADR-0185)
     "GraphKrylov",
     "graph_expmv_frechet",
+    # issue #11
+    "ConservativeDiffusionChernoff",
+    "assemble_conservative_csr_1d",
+    # issue #13
+    "SymmetricOperator",
+    "symmetric_op_expmv_frechet",
+    # issue #14
+    "MassKOperator",
+    "mass_lumped_evolve",
+    # issue #12
+    "phi_action",
+    "phi_action_batched",
+    "Etdrk4",
 ]

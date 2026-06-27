@@ -137,6 +137,10 @@ mod tt_varcoef_py;
 mod v3;
 mod wentzell_helpers;
 mod wentzell_py;
+mod conservative_py;
+mod mass_op_py;
+mod phi_etdrk4_py;
+mod symmetric_op_py;
 mod zeta4_py;
 mod zeta6_py;
 
@@ -235,7 +239,12 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
     tt_varcoef_py::register(py, m)?;
     // A1/A2 Krylov graph action + Fréchet VJP (feat/graph-krylov-frechet-a1a2, ADR-0185)
-    graph_krylov_py::register(py, m)
+    graph_krylov_py::register(py, m)?;
+    // Issue #11–#14: conservative diffusion, mass operators, φ-actions, ETDRK4
+    conservative_py::register(py, m)?;
+    mass_op_py::register(py, m)?;
+    phi_etdrk4_py::register(py, m)?;
+    symmetric_op_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------
