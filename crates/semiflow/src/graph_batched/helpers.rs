@@ -54,7 +54,7 @@ pub(super) fn validate_batched_layout<F: SemiflowFloat>(
 
 /// Evolve a single channel in `buf_a`/`buf_b` via ping-pong, write result to `dst`.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn evolve_channel<C, F>(
+pub(in crate::graph_batched) fn evolve_channel<C, F>(
     func: &C,
     tau: F,
     n_steps: usize,
@@ -88,7 +88,7 @@ where
 
 /// Ping-pong one channel with hoisted Magnus K=4 Laplacians.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn evolve_magnus_channel<F: SemiflowFloat>(
+pub(in crate::graph_batched) fn evolve_magnus_channel<F: SemiflowFloat>(
     l1: &Laplacian<F>,
     l2: &Laplacian<F>,
     tau: F,
@@ -116,7 +116,7 @@ pub(super) fn evolve_magnus_channel<F: SemiflowFloat>(
 
 /// Ping-pong one channel with hoisted Magnus K=6 Laplacians.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn evolve_magnus6_channel(
+pub(in crate::graph_batched) fn evolve_magnus6_channel(
     l1: &Laplacian<f64>,
     l2: &Laplacian<f64>,
     l3: &Laplacian<f64>,
@@ -145,7 +145,7 @@ pub(super) fn evolve_magnus6_channel(
 
 /// Ping-pong one channel with hoisted `VarCoef` Magnus K=4 samples.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn evolve_vc_channel<F: SemiflowFloat>(
+pub(in crate::graph_batched) fn evolve_vc_channel<F: SemiflowFloat>(
     l1: &Laplacian<F>,
     sqrt_a1: &[F],
     l2: &Laplacian<F>,
@@ -349,7 +349,7 @@ pub(super) fn validate_adj_grad_layout<F: SemiflowFloat>(
 /// routes through a temporary then adds, preserving the 0-ULP identity vs
 /// calling the single-channel function C times in ascending order.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn accumulate_grad_channel<F, P>(
+pub(in crate::graph_batched) fn accumulate_grad_channel<F, P>(
     mc: &MagnusGraphHeatChernoff<F>,
     u0_c: &[F],
     dj_c: &[F],
