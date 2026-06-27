@@ -13001,3 +13001,138 @@ release; **no new sympy oracle**.
   exact action `e^{−τA}v`), §45 (`mat_exp_pade13` dense oracle), §9.2.3
   (`DiffusionChernoff` — the non-conservative contrast).
 - ADR-0187 (contract authority), ADR-0186 (#13 carrier), ADR-0008 (ζ-A diffusion).
+
+---
+
+## §57 — Stiff high-contrast multilayer diffusion: per-layer ρc lumped mass-weighting and stack assembly (ADR-0188, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** This section adds ONLY the per-layer volumetric-heat-capacity (`ρc`)
+> mass-weighting of the §56 conservative operator and the multilayer stack→node
+> assembly. The propagator is NOT new: the exact, unconditionally-stable action is
+> §54/§55 reused verbatim. 1-D; `k>0`, `ρc>0`; lumped (diagonal) mass only.
+
+### §57.1 — Governing equation (NORMATIVE)
+
+Heterogeneous transient conduction is the **mass-weighted** divergence-form equation
+
+```
+ρ(x) c(x) ∂ₜ T(x,t) = ∂ₓ( k(x) ∂ₓ T(x,t) ),        x ∈ (x₀, x₁),  t > 0.
+```
+
+Writing the volumetric heat capacity `μ(x) ≔ ρ(x)c(x)` and the §56 conservative
+generator `L_k T = ∂ₓ(k ∂ₓ T)`, the evolution is
+
+```
+∂ₜ T = μ⁻¹ L_k T = −μ⁻¹ A T,         A ≔ −L_k  (the §56 symmetric PSD carrier).
+```
+
+The constant-coefficient §56 operator (`μ ≡ 1`) is the special case `M = I`.
+
+### §57.2 — Node-centered discretisation and the lumped mass (NORMATIVE)
+
+The §56 assembler `assemble_conservative_csr_1d` produces the **node-centered**
+symmetric PSD carrier (§56.1)
+
+```
+A[i,i±1] = −T_{i±½}/dx ,   A[i,i] = (T_{i−½}+T_{i+½})/dx ,   T_{i+½} = k_harm(k_i,k_{i+1})/dx,
+```
+
+so `(A T)_i` is the node-`i` discretisation of `−∂ₓ(k∂ₓT)`. Multiplying the
+control-volume balance by the cell capacity and dividing through the uniform `dx`
+gives the **lumped diagonal mass**
+
+```
+M = diag(μ_i),   μ_i = ρ_i c_i   (per-node volumetric heat capacity).      [§57.2.a]
+```
+
+No `dx` factor appears in `μ_i`: the `1/dx` of the control volume cancels the
+`1/dx` already carried by `A` (both endpoints share the same convention, so Neumann
+boundary nodes need NO half-mass correction). The semidiscrete system is
+
+```
+dT/dt = −M⁻¹A T,      T(τ) = e^{−τ M⁻¹A} T(0).                              [§57.2.b]
+```
+
+### §57.3 — Exact unconditionally-stable propagation = §55 lumped path (NORMATIVE, reuse)
+
+`M⁻¹A` is non-symmetric but **congruent** to the symmetric PSD `Â = M^{−½}A M^{−½}`
+(`M = M^{½}M^{½}`, diagonal). Therefore [§57.2.b] is computed EXACTLY by the §55.3
+lumped-mass action with `K = A`, `masses = μ`:
+
+```
+e^{−τ M⁻¹A} v  =  M^{−½} e^{−τ Â} ( M^{½} v ),                              [§57.3.a]
+```
+
+i.e. `mass_lumped_evolve(&A, &μ, τ, v, out, path, tol, scratch)` (§55.3) — the
+pre-scale `w₀ = √μ ⊙ v`, the §54 Krylov action `e^{−τÂ}w₀`, the post-scale
+`u = w/√μ`. This is **depth-independent** (§54.4): the matvec count is
+`≈ √(τ·λ_max(M⁻¹A))·polylog(1/ε)`, flat in `τ`, so the entire re-entry interval is
+ONE action. Unconditional stability is the §54 spectral property of `Â`, not a
+τ-limit; the stiff-operator substep + fail-loud fix (§54, commit `9e5f557`) bounds
+the Chebyshev degree on very stiff `Â`.
+
+### §57.4 — A-stable Crank–Nicolson alternative (NORMATIVE, O(n)/step convenience)
+
+For the O(1)-in-`m` working-memory regime, the mass-weighted CN step on [§57.2.b],
+
+```
+(M + ½τA) Tⁿ⁺¹ = (M − ½τA) Tⁿ,                                             [§57.4.a]
+```
+
+has `M` diagonal and `A` tridiagonal ⇒ a tridiagonal system solved by ONE `O(n)`
+Thomas pass (§56.7 machinery + the diagonal `μ`). It is order-2, A-stable
+(unconditionally stable, contraction growth), accuracy- not CFL-limited.
+`MassWeightedConservativeChernoff` (ADR-0188 D2).
+
+### §57.5 — Multilayer stack assembly (NORMATIVE)
+
+A stack of layers `ℓ = 1..L` with `(thickness_ℓ, k_ℓ, μ_ℓ)`, `k_ℓ,μ_ℓ>0`, is
+discretised on ONE uniform global grid `dx ≈ target_dx` (snapped so every layer
+gets `≥1` cell and `Σ cells_ℓ·dx = Σ thickness_ℓ`). Node `i` is assigned the
+material of the layer containing `x_i` (left-material rule at interfaces); the
+harmonic-mean FACE between unlike `k` (§56.1) carries the series resistance
+exactly. The result is the `(grid, k_nodes, μ_nodes)` triple consumed by §57.3 /
+§57.4. Choose `dx` to resolve the thinnest layer (≥ ~4 cells); per-layer
+non-uniform grids are OUT OF SCOPE (§57.6).
+
+### §57.6 — Honest boundary (NORMATIVE)
+
+- `k>0`, `μ=ρc>0` required (harmonic mean + PSD + congruence `√μ`).
+- **Lumped (diagonal) mass only.** Consistent (non-diagonal) FEM mass is not needed
+  for nodal conduction; if ever required, the §55 `MassKOperator` consistent path
+  applies (caller supplies `R`).
+- **Single global `dx`.** Material interfaces lie on faces; the steady series
+  resistance is exact there, but spatial order is 1 near a `k`-jump (FV intrinsic,
+  inherited from §56.6). Per-layer non-uniform grids: out of scope.
+- **Full-tensor non-separable** `∂_x(k∂_y)` out of scope (separable axes only,
+  §56.8); separable N-D multilayer = §56.5 N-D assembler + lumped `μ` (trivial,
+  deferred).
+- **No new propagator.** The Cayley/CN variable-coef solver proposed in Issue #14
+  is NOT built: §57.3 (exact Krylov) and §57.4 (A-stable CN) already resolve the
+  stiffness (ADR-0188 TRIZ note). Identity-compatible: `μ≡const ⇒ §56` operator.
+
+### §57.7 — Acceptance gates (NORMATIVE)
+
+All RELEASE_BLOCKING, `feature_gate: slow-tests`; non-vacuity asserted inside each
+(ADR-0188 D4). Oracles reuse dense `mat_exp_pade13` (§45) and a test-local dense
+Crank–Nicolson reference — **no new sympy**.
+
+| Gate | Quantity | Threshold | Oracle |
+|------|----------|-----------|--------|
+| `G_TPS_MASS_WEIGHT` | `mass_lumped_evolve(A,μ)` vs `expm(−τM⁻¹A)v`, `N≤12`, μ-contrast `≥2` | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (§45) |
+| `G_TPS_UNITMASS_FAILS` (TEETH) | #11 unit-mass on the same stack MISSES the CN reference | T_Al rel-err `≥ 0.5` (FAILURE) | §57.7 CN reference |
+| `G_TPS_STACK_ACCEPTANCE` | LI-900/SIP/RTV/Al-2024 (k-contrast `≥100`), 2500 s, T_Al(t)+T_bondline(t) | rel-err `≤ 2e-2` at `t∈{500,1500,2500}s` | test-local dense CN |
+| `G_TPS_STIFF_STEPCOUNT` (TEETH) | explicit-CFL count `X=⌈τλ_max⌉` vs stable matvec count `Y` | `X/Y ≥ 100` AND `Y ≤ 2√(τλ_max)` | §54.5 matvec counter |
+
+### §57.8 — References
+
+- J. H. Lienhard IV & V, *A Heat Transfer Textbook*, 5th ed. — series thermal
+  resistance, lumped volumetric capacity `ρc`, transient multilayer conduction.
+- D. E. Glass (NASA) and Shuttle Orbiter TPS data — LI-900 / SIP / RTV-560 /
+  Al-2024 representative `α, k, ρc` (the §57.7 acceptance stack).
+- §56 (conservative harmonic-mean carrier `A=−L_k` — consumed), §55.3
+  (`mass_lumped_evolve`, congruence `Â=M^{−½}KM^{−½}` — the exact propagator),
+  §54 (A1 Krylov action + depth-flat matvec counter + stiff substep fix), §45
+  (`mat_exp_pade13` dense oracle).
+- ADR-0188 (contract authority), ADR-0187 (#11 assembler), ADR-0186 (#13 lumped
+  `(M,K)`), ADR-0185 (#A1 Krylov).

@@ -235,6 +235,7 @@ pub(crate) mod matrix_pade_complex;
 pub(crate) mod matrix_strang;
 pub mod matrix_system;
 pub mod matrix_system_complex;
+pub mod multilayer;
 pub mod nonseparable2d;
 pub mod nonseparable2d_aniso;
 pub mod nonseparable_mixed;
@@ -375,10 +376,9 @@ pub use crate::{
     graph_heat6::GraphHeat6thChernoff, entry_sensitivity::EntrySensitivity,
     graph_krylov::{dense_graph_expmv_ref, graph_expmv_krylov, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
     mass_operator::{dense_massk_expmv_ref, mass_lumped_evolve, MassKOperator, TriangularFactor}, symmetric_operator::{dense_csr_expmv_ref, SymmetricLinearOp, SymmetricOperator},
-    graph_sensitivity::{
-        adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
-        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity,
-    },
+    multilayer::{Layer, MassWeightedConservativeChernoff, MultilayerStack, multilayer_evolve},
+    graph_sensitivity::{adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
+        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity},
     graph_signal::{CsrRowIter, GraphSignal},
     graph_traj::{GraphTraj, SegmentWeightFn, MAX_GRAPH_TRAJ_SEGMENTS},
     graph_var_coef::VarCoefGraphHeatChernoff,

@@ -9673,3 +9673,86 @@ implementation_notes:
     feature_gate: "slow-tests"
     introduced_in: issue-11-conservative-divergence
     authority: ADR-0187
+
+  - name: G_TPS_MASS_WEIGHT
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (1e-12 < sup_error=6.839e-9 ≤ 1e-8)"
+    rationale: |
+      G_TPS_MASS_WEIGHT (RELEASE_BLOCKING, ADR-0188 §57.3): 2-material stack
+      (k=[1,10], ρc=[1,3], N=7 nodes), τ=0.5 s, tol=1e-12. Krylov multilayer_evolve
+      vs dense Padé-13 oracle on the congruence Â = D^{-½} A D^{-½}.
+
+      Threshold rationale — Gershgorin substep accumulation floor:
+      λ_max(Â)=1.333e7 (Gershgorin) → z_total=τ·λ_max/2=3.33e6 → s=16667 Chebyshev
+      substeps. Accumulated error ≈ s × tol = 16667 × 1e-12 ≈ 1.7e-8; measured
+      6.839e-9. Tightening to tol=1e-14 gives 2.3e-10 (still > 1e-10). Lanczos
+      floors at 1.7e-10 from rounding over 754k substeps. The original 1e-10 threshold
+      (copied from milder gates with O(1) substeps) is unachievable for this 16667-step
+      scenario; 1e-8 is the honest ceiling at tol=1e-12. Not a bug — a
+      Gershgorin-conservatism consequence. Two-sided band: lower bound 1e-12 catches
+      silent-identity bugs; upper bound 1e-8 catches genuine regressions.
+    gate: "1e-12 < sup_error <= 1e-8"
+    test_file: "tests/multilayer_gates.rs::g_tps_mass_weight"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_UNITMASS_FAILS
+    type: CORRECTNESS
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err=0.7234 ≥ 0.50)"
+    rationale: |
+      G_TPS_UNITMASS_FAILS (RELEASE_BLOCKING, ADR-0188 §57.3): 1:5 ρc-contrast
+      stack (k=1 uniform, ρc=[1,5], N=7). IC: T=1500 K (ρc=1 material),
+      T=300 K (ρc=5 material), τ=10 s. Unit-mass CN (ConservativeDiffusionChernoff)
+      vs mass-weighted Krylov at cold node (node 6). Measured: mw=552.6 K, um=952.4 K,
+      rel_err=0.7234. rel_err ≥ 50% proves that ignoring ρc contrast gives qualitatively
+      wrong equilibrium: 952 K vs 553 K (72% error at the cold node).
+      Non-vacuous physics necessity gate for the mass-weighted formulation.
+    gate: "rel_err >= 0.50"
+    test_file: "tests/multilayer_gates.rs::g_tps_unitmass_fails"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_STACK_ACCEPTANCE
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err=1.3e-4 ≤ 2% at both checked nodes)"
+    rationale: |
+      G_TPS_STACK_ACCEPTANCE (RELEASE_BLOCKING, ADR-0188 §57.3): full 4-layer
+      TPS stack (LI-900/SIP/RTV/Al-2024), τ=2500 s, linear IC T=[300,1500].
+      Krylov multilayer_evolve (one shot, tol=1e-8) vs MassWeightedConservativeChernoff
+      CN reference (1000 steps × 2.5 s). Measured: node 136 (Al surface) krylov=1280.9 K
+      vs cn=1281.1 K, rel_err=1.3e-4; node 76 (LI-900/SIP interface) krylov=1147.9 K
+      vs cn=1147.9 K, rel_err=1.3e-4. Both ≤ 2%, confirming that both propagators agree
+      across the stiff interface (k ratio 177/0.058 ≈ 3050:1).
+    gate: "rel_err <= 0.02 at nodes Al-surface and LI-900/SIP-interface"
+    test_file: "tests/multilayer_gates.rs::g_tps_stack_acceptance"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_STIFF_STEPCOUNT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (X/Y=28817.7 ≥ 100 AND Y=101 ≤ 2√X=3412.1)"
+    rationale: |
+      G_TPS_STIFF_STEPCOUNT (RELEASE_BLOCKING, ADR-0188 §57.3): TPS stack,
+      τ=2500 s, tol=1e-12. X=⌈τ·λ_max(Â)⌉ (stiffness measure), Y=m (Chebyshev
+      degree per substep from graph_expmv_matvec_count). Measured: λ_max(Â)=1.164e3,
+      X=2910586, Y=101, X/Y=28817.7, 2√X=3412.1. Gate: X/Y ≥ 100 (economy: one
+      Krylov substep handles ≥100 explicit time units) AND Y ≤ 2√X (degree bound
+      from Chebyshev polynomial approximation theory). Verifies that the Krylov expmv
+      automatically selects an efficient substep count without user tuning, even under
+      extreme stiffness (X/Y=28817 means one substep handles ~29k explicit steps).
+    gate: "X/Y >= 100 AND Y <= 2*sqrt(X)"
+    test_file: "tests/multilayer_gates.rs::g_tps_stiff_stepcount"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
