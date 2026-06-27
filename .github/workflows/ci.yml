@@ -2,7 +2,8 @@ name: CI
 # Toolchain note: all jobs use stable. rustfmt.toml was cleaned of nightly-only
 # options (imports_granularity/group_imports removed in ADR-0182) so fmt now
 # runs on stable. MSRV documented in Cargo.toml rust-version = "1.78" is for
-# downstream users; CI tracks stable to avoid transitive dep edition2024 breakage.
+# downstream users; CI pins stable (≥1.85) to keep clap_lex/edition2024 deps
+# building correctly — edition 2024 was stabilised in 1.85 (rustc 1.96 on Artix).
 on:
   push:
     branches: [main, master]

@@ -15,6 +15,8 @@ pub enum LaplacianKind {
     Combinatorial,
     /// Symmetric normalized: `L_sym = I − D^{−½} W D^{−½}`.
     SymNormalized,
+    /// Externally-assembled symmetric operator; CSR supplied directly by caller (ADR-0186).
+    GeneralSymmetric,
 }
 
 /// Frozen sparse weighted graph in symmetric CSR layout. See ADR-0048.
@@ -374,6 +376,7 @@ fn fill_laplacian_rows<F: SemiflowFloat>(
                 }
             }
         }
+        LaplacianKind::GeneralSymmetric => unreachable!("GeneralSymmetric bypasses assembly"),
     }
     for row in &mut rows {
         row.sort_unstable_by_key(|(c, _)| *c);
@@ -398,6 +401,7 @@ fn append_diagonal_entries<F: SemiflowFloat>(
                     F::zero()
                 }
             }
+            LaplacianKind::GeneralSymmetric => unreachable!("GeneralSymmetric bypasses assembly"),
         };
         #[allow(clippy::cast_possible_truncation)]
         row.push((i as u32, diag));
@@ -490,9 +494,7 @@ fn compute_gershgorin_bound<F: SemiflowFloat>(rows: &[Vec<(u32, F)>]) -> F {
             let av = if v < F::zero() { F::zero() - v } else { v };
             acc + av
         });
-        if row_sum > max_sum {
-            max_sum = row_sum;
-        }
+        if row_sum > max_sum { max_sum = row_sum; }
     }
     max_sum
 }

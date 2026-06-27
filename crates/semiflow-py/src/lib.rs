@@ -97,6 +97,7 @@ mod graph_extra;
 mod graph_extra_heat;
 mod graph_heat_f32;
 mod graph_py;
+mod graph_krylov_py;
 mod graph_sensitivity_py;
 mod graph_v2_4;
 mod greeks_py;
@@ -232,7 +233,9 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     tt_coupled_py::register(py, m)?;
     gridless_py::register(py, m)?;
     // VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver
-    tt_varcoef_py::register(py, m)
+    tt_varcoef_py::register(py, m)?;
+    // A1/A2 Krylov graph action + Fréchet VJP (feat/graph-krylov-frechet-a1a2, ADR-0185)
+    graph_krylov_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------

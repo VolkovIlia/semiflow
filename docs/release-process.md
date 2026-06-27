@@ -44,7 +44,7 @@ Run on an i7-12700K-class host (see `audit-findings-v1_0_0.md` §2 for spec):
 
 ```bash
 RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR=target-flagship \
-    RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- test-flagship
+    cargo run -p xtask -- test-flagship
 ```
 
 Acceptance gates:
@@ -66,7 +66,7 @@ named flagship binaries above):
 
 ```bash
 RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR=target-flagship \
-    RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- test-ignored-gates
+    cargo run -p xtask -- test-ignored-gates
 ```
 
 This executes every `#[ignore]`-annotated test in the workspace under the same
@@ -91,13 +91,13 @@ All must exit 0 before tagging.
 ### 4. Test suite and lints clean
 
 ```bash
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- test-fast
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- test-full
+cargo run -p xtask -- test-fast
+cargo run -p xtask -- test-full
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- check-lints
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- ffi-smoke
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- py-smoke
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- wasm-test
+cargo run -p xtask -- check-lints
+cargo run -p xtask -- ffi-smoke
+cargo run -p xtask -- py-smoke
+cargo run -p xtask -- wasm-test
 ```
 
 All must exit 0.
@@ -110,7 +110,7 @@ is rendered by xtask — verify:
 
 ```bash
 grep '^version' Cargo.toml
-RUSTUP_TOOLCHAIN=stable cargo run -p xtask -- wasm-pack-npm
+cargo run -p xtask -- wasm-pack-npm
 grep '"version"' dist/npm/package.json
 ```
 
@@ -242,7 +242,7 @@ pip install semiflow-py==N.M.K && \
 ## PyPI Trusted Publishing setup (one-time)
 
 `release-wheels.yml` uses [OIDC Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
-to publish `semiflow-pde` without storing a long-lived API token anywhere.  
+to publish `semiflow-pde` without storing a long-lived API token anywhere.
 Complete the steps below **once**; subsequent tag pushes publish fully automatically.
 
 ### 1. Register the pending publisher on PyPI

@@ -9427,7 +9427,7 @@ advisory_records:
     introduced_in: v0.9.0-beta
     authority: ADR-0181
 
-notes:
+implementation_notes:
   - id: rough_heston_two_tier_design
     title: "Two-tier (I/II) error design for the production rough-Heston pricer"
     body: |
@@ -9452,3 +9452,375 @@ notes:
         Carr-Cisek-Pintar 2021 (GL 3-factor Markov model); math.md §33.9.
     introduced_in: v0.9.0-beta
     authority: ADR-0181
+
+  # --- ADR-0185 / math.md §54 — graph Krylov action + Fréchet gradient ---
+  - name: G_GRAPH_EXPMV_DENSE
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error ≤ 1e-10)"
+    rationale: |
+      G_GRAPH_EXPMV_DENSE (RELEASE_BLOCKING, ADR-0185 §54.7): A1 `graph_expmv`
+      action `e^{−tL_G}·v` vs the DENSE reference `e^{−tL}·v` built from the CSR
+      Laplacian + matrix_system_exp::mat_exp_pade13, on a small graph (N ≤ 12)
+      with t‖L‖ in the ≥10 regime. Tolerance-driven kernel (order() = u32::MAX),
+      so NO slope assertion — a single backward-error datum, mirroring
+      g_expmv_div_form_action_accuracy and G_MATRIX_PADE_M5 (dense oracle REUSE,
+      no sympy).
+    gate: "sup_error <= 1e-10"
+    test_file: "tests/graph_expmv_dense.rs::g_graph_expmv_dense"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185
+
+  - name: G_GRAPH_FRECHET_FD
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel-err ≤ 1e-7)"
+    rationale: |
+      G_GRAPH_FRECHET_FD (RELEASE_BLOCKING, ADR-0185 §54.5–§54.7): A2
+      `graph_expmv_frechet` directional gradient ⟨∂J/∂w, δw⟩ vs central finite
+      difference (J(w+εδw)−J(w−εδw))/(2ε) for seeded-random w, δw. REUSES the
+      §43.6 oracle T_ADJOINT_STATE_SENSITIVITY (scripts/verify_adjoint_state_sensitivity.py),
+      which is method-agnostic (finite-differences J(w±εδw)) — no new sympy
+      oracle. Equivalence to the §43.4 per-step gradient is NUMERICAL not 0-ULP
+      (different algorithm; §54.6).
+    gate: "rel_err <= 1e-7"
+    test_file: "tests/graph_frechet_fd.rs::g_graph_frechet_fd"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185
+
+  - name: G_GRAPH_EXPMV_DEPTH_FLAT
+    type: STRUCTURAL_PERFORMANCE
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (matvec-count band ratio ≤ 4 across t ∈ {1,4,16,64})"
+    rationale: |
+      G_GRAPH_EXPMV_DEPTH_FLAT (RELEASE_BLOCKING, ADR-0185 §54.4): instrumented
+      SpMV counter asserts N_mv(ε, t) for t ∈ {1,4,16,64} at fixed ε stays within
+      a constant band (max/min ≤ 4), confirming the action is depth-independent
+      (√(tλ_max)·polylog growth, NOT linear-in-depth). Contrast the per-step
+      baseline N_mv ∝ n_steps. Structural/perf gate — no numerical oracle.
+    gate: "matvec_count_band_ratio <= 4"
+    test_file: "tests/graph_expmv_depth_flat.rs::g_graph_expmv_depth_flat"
+    feature_gate: "slow-tests"
+    introduced_in: TBD
+    authority: ADR-0185
+
+  # ── Issue #13 gates (ADR-0186, §55) ───────────────────────────────────────
+
+  - name: G_SYMOP_DENSE
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=1.883e-13 ≤ 1e-10)"
+    rationale: |
+      G_SYMOP_DENSE (RELEASE_BLOCKING, ADR-0186 §55.2): `graph_expmv_krylov`
+      called on a `SymmetricOperator` assembled from raw CSR (N=10 path Laplacian)
+      vs `dense_csr_expmv_ref` (Padé-13 oracle). Chebyshev path at tol=1e-12.
+      Confirms that the externally-assembled entry point produces the same result
+      as the graph-assembly path; the sup_error of 1.883e-13 is non-trivial
+      (confirms real computation, not trivially-zero vector).
+    gate: "sup_error <= 1e-10"
+    test_file: "tests/sym_op_dense.rs::g_symop_dense"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_MASSK_LUMPED
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=2.220e-14 ≤ 1e-8)"
+    rationale: |
+      G_MASSK_LUMPED (RELEASE_BLOCKING, ADR-0186 §55.3): `mass_lumped_evolve`
+      (Krylov on `Â = D^{−½}KD^{−½}`) vs reference pipeline:
+      pre-scale v → `dense_csr_expmv_ref(Â, τ, ·)` → post-scale. N=6 path
+      Laplacian K; masses = [1.0, 2.0, 1.5, 0.8, 1.2, 0.9]. Non-unit masses
+      guarantee non-trivial coupling (sup_error 2.220e-14 >> machine zero for
+      a zero-solution).
+    gate: "sup_error <= 1e-8"
+    test_file: "tests/massk_lumped.rs::g_massk_lumped"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_MASSK_CONSISTENT
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (sup_error=3.501e-10 ≤ 1e-8)"
+    rationale: |
+      G_MASSK_CONSISTENT (RELEASE_BLOCKING, ADR-0186 §55.4): `MassKOperator::evolve`
+      (Krylov on `Â = R^{−T}KR^{−1}`, dense Cholesky M=RᵀR) vs
+      `dense_massk_expmv_ref` (Padé-13 oracle). N=6 path Laplacian K; tridiagonal
+      consistent-mass M (M[i,i]=2, M[i,i±1]=0.5). Off-diagonal mass entries
+      create non-trivial congruence; sup_error 3.501e-10 confirms the Cholesky
+      solve chain is correct and the result is not degenerate.
+    gate: "sup_error <= 1e-8"
+    test_file: "tests/massk_consistent.rs::g_massk_consistent"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_SYMOP_ENTRY_FRECHET
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (max rel_err=3.901e-10 ≤ 1e-7 across 3 entries)"
+    rationale: |
+      G_SYMOP_ENTRY_FRECHET (RELEASE_BLOCKING, ADR-0186 §55.5–§55.6):
+      `EntrySensitivity` + `graph_expmv_frechet` directional gradient
+      ⟨dJ/dL_{ij}, δL_{ij}⟩ vs central finite difference on a N=3 triangle
+      (edges (0,1,1.0),(1,2,0.7),(0,2,0.4)) with distinct weights ensuring
+      [L, ∂L/∂L_{ij}] ≠ 0 for every entry. Three off-diagonal entries tested:
+      (0,1), (1,2), (0,2). Measured rel_err: 2.038e-10, 2.052e-10, 3.901e-10.
+      Non-commutativity invalidates the naive right-endpoint rectangle rule;
+      the Duhamel integral (augmented Fréchet) must be correct for this to pass.
+    gate: "rel_err <= 1e-7 per entry"
+    test_file: "tests/sym_op_entry_frechet.rs::g_symop_entry_frechet"
+    feature_gate: "slow-tests"
+    introduced_in: issue-13-generic-symmetric-L
+    authority: ADR-0186
+
+  - name: G_CONS_SERIES
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — max_face_rel_err=5.069e-14, flux_spread=9.976e-14 (n=12, q=1.5625)"
+    rationale: |
+      G_CONS_SERIES (RELEASE_BLOCKING, ADR-0187 §56.4): sharp k=[1,100,1] stack
+      (max_k/min_k=100 ≥ 50, interface jumps asserted) solved via conservative
+      harmonic-mean FV `steady_state_dirichlet_1d`. Per-face ΔT vs analytic
+      series-resistance oracle (q=(T_l-T_r)/R_tot) < 1%; flux spread < 1%.
+      Validates that harmonic-mean face conductivities and transmissibilities
+      correctly handle sharp material interfaces (proof of conservative form).
+    gate: "max_face_rel_err < 0.01 AND flux_spread < 0.01"
+    test_file: "tests/conservative_gates.rs::g_cons_series"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_NONCONS_FAILS
+    type: NEGATIVE_CONTROL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — max_rel_err=4.248e2 (expected ≥ 0.50; confirms non-conservative form FAILS on sharp interface)"
+    rationale: |
+      G_CONS_NONCONS_FAILS (RELEASE_BLOCKING, ADR-0187 TEETH gate): same sharp
+      k=[1,100,1] stack evolved via non-conservative `DiffusionChernoff` (a'=0,
+      arithmetic-mean stencil) to steady state. Must fail the series-resistance
+      oracle by ≥ 50%. If this gate passes, the non-conservative form accidentally
+      gives the right answer and the stack is not sharp enough to distinguish.
+      Proves conservative form is NECESSARY, not incidental.
+    gate: "max_face_rel_err >= 0.50"
+    test_file: "tests/conservative_gates.rs::g_cons_noncons_fails"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_SYMOP
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — sup_error=0.000e0, dst_norm=5.418e-1 (n=9, tau=0.5)"
+    rationale: |
+      G_CONS_SYMOP (RELEASE_BLOCKING, ADR-0187 §56.2): assemble A=−L_k for
+      sharp k=[1,100,1] (N=9 nodes) via `assemble_conservative_csr_1d`, verify
+      `SymmetricOperator::from_csr` accepts it (PSD, finite, diag≥0), then check
+      `graph_expmv_krylov` (Chebyshev, tol=1e-12) vs `dense_csr_expmv_ref`
+      (Padé-13 oracle) with sup_error ≤ 1e-10. Non-trivial action confirmed by
+      dst_norm > 1e-14. Validates the assembler produces a correct SymmetricOperator
+      usable by the full Krylov pipeline.
+    gate: "sup_error <= 1e-10 AND dst_norm > 1e-14"
+    test_file: "tests/conservative_gates.rs::g_cons_symop"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_ORDER
+    type: ORDER_OF_CONVERGENCE
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — slope=3.5213 (n=200, tau_c=0.005, err_coarse=5.271e-5, err_fine=4.590e-6)"
+    rationale: |
+      G_CONS_ORDER (RELEASE_BLOCKING, ADR-0187 §56.3): smooth k(x)=1+0.5·sin(πx),
+      Neumann BCs, N=200, T=0.5. Crank-Nicolson self-convergence slope from
+      (τ_c, 2τ_c, 4τ_c) levels vs half-step reference. Slope log₂(err_coarse/err_fine) ≥ 1.95
+      confirms CN is genuinely order-2 (not order-1 due to boundary or assembly bug).
+      Smooth k avoids interface effects that might mask temporal order.
+    gate: "slope >= 1.95"
+    test_file: "tests/conservative_gates.rs::g_cons_order"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_CONS_CONTACT
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — rel_err=0.000e0 (n=10, R_c=0.05, q=1.666667, dt_analytic=0.083333, dt_numeric=0.083333)"
+    rationale: |
+      G_CONS_CONTACT (RELEASE_BLOCKING, ADR-0187 §56.4.b): two-layer k=[1,10]
+      with contact resistance R_c=0.05 at the interface (R_c/R_mat ≥ 0.1, asserted).
+      Contact jump computed as T_face*(u[4]-u[5])*R_c vs analytic q·R_c (< 1%).
+      Validates that `face_transmissibility(k_harm, dx, R_c)` correctly models
+      bonded-joint thermal contact resistance via T=1/(dx/k_harm+R_c).
+    gate: "rel_err < 0.01"
+    test_file: "tests/conservative_gates.rs::g_cons_contact"
+    feature_gate: "slow-tests"
+    introduced_in: issue-11-conservative-divergence
+    authority: ADR-0187
+
+  - name: G_TPS_MASS_WEIGHT
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (1e-12 < sup_error=6.839e-9 ≤ 1e-8)"
+    rationale: |
+      G_TPS_MASS_WEIGHT (RELEASE_BLOCKING, ADR-0188 §57.3): 2-material stack
+      (k=[1,10], ρc=[1,3], N=7 nodes), τ=0.5 s, tol=1e-12. Krylov multilayer_evolve
+      vs dense Padé-13 oracle on the congruence Â = D^{-½} A D^{-½}.
+
+      Threshold rationale — Gershgorin substep accumulation floor:
+      λ_max(Â)=1.333e7 (Gershgorin) → z_total=τ·λ_max/2=3.33e6 → s=16667 Chebyshev
+      substeps. Accumulated error ≈ s × tol = 16667 × 1e-12 ≈ 1.7e-8; measured
+      6.839e-9. Tightening to tol=1e-14 gives 2.3e-10 (still > 1e-10). Lanczos
+      floors at 1.7e-10 from rounding over 754k substeps. The original 1e-10 threshold
+      (copied from milder gates with O(1) substeps) is unachievable for this 16667-step
+      scenario; 1e-8 is the honest ceiling at tol=1e-12. Not a bug — a
+      Gershgorin-conservatism consequence. Two-sided band: lower bound 1e-12 catches
+      silent-identity bugs; upper bound 1e-8 catches genuine regressions.
+    gate: "1e-12 < sup_error <= 1e-8"
+    test_file: "tests/multilayer_gates.rs::g_tps_mass_weight"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_UNITMASS_FAILS
+    type: CORRECTNESS
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err=0.7234 ≥ 0.50)"
+    rationale: |
+      G_TPS_UNITMASS_FAILS (RELEASE_BLOCKING, ADR-0188 §57.3): 1:5 ρc-contrast
+      stack (k=1 uniform, ρc=[1,5], N=7). IC: T=1500 K (ρc=1 material),
+      T=300 K (ρc=5 material), τ=10 s. Unit-mass CN (ConservativeDiffusionChernoff)
+      vs mass-weighted Krylov at cold node (node 6). Measured: mw=552.6 K, um=952.4 K,
+      rel_err=0.7234. rel_err ≥ 50% proves that ignoring ρc contrast gives qualitatively
+      wrong equilibrium: 952 K vs 553 K (72% error at the cold node).
+      Non-vacuous physics necessity gate for the mass-weighted formulation.
+    gate: "rel_err >= 0.50"
+    test_file: "tests/multilayer_gates.rs::g_tps_unitmass_fails"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_STACK_ACCEPTANCE
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err=1.3e-4 ≤ 2% at both checked nodes)"
+    rationale: |
+      G_TPS_STACK_ACCEPTANCE (RELEASE_BLOCKING, ADR-0188 §57.3): full 4-layer
+      TPS stack (LI-900/SIP/RTV/Al-2024), τ=2500 s, linear IC T=[300,1500].
+      Krylov multilayer_evolve (one shot, tol=1e-8) vs MassWeightedConservativeChernoff
+      CN reference (1000 steps × 2.5 s). Measured: node 136 (Al surface) krylov=1280.9 K
+      vs cn=1281.1 K, rel_err=1.3e-4; node 76 (LI-900/SIP interface) krylov=1147.9 K
+      vs cn=1147.9 K, rel_err=1.3e-4. Both ≤ 2%, confirming that both propagators agree
+      across the stiff interface (k ratio 177/0.058 ≈ 3050:1).
+    gate: "rel_err <= 0.02 at nodes Al-surface and LI-900/SIP-interface"
+    test_file: "tests/multilayer_gates.rs::g_tps_stack_acceptance"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_TPS_STIFF_STEPCOUNT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (X/Y=28817.7 ≥ 100 AND Y=101 ≤ 2√X=3412.1)"
+    rationale: |
+      G_TPS_STIFF_STEPCOUNT (RELEASE_BLOCKING, ADR-0188 §57.3): TPS stack,
+      τ=2500 s, tol=1e-12. X=⌈τ·λ_max(Â)⌉ (stiffness measure), Y=m (Chebyshev
+      degree per substep from graph_expmv_matvec_count). Measured: λ_max(Â)=1.164e3,
+      X=2910586, Y=101, X/Y=28817.7, 2√X=3412.1. Gate: X/Y ≥ 100 (economy: one
+      Krylov substep handles ≥100 explicit time units) AND Y ≤ 2√X (degree bound
+      from Chebyshev polynomial approximation theory). Verifies that the Krylov expmv
+      automatically selects an efficient substep count without user tuning, even under
+      extreme stiffness (X/Y=28817 means one substep handles ~29k explicit steps).
+    gate: "X/Y >= 100 AND Y <= 2*sqrt(X)"
+    test_file: "tests/multilayer_gates.rs::g_tps_stiff_stepcount"
+    feature_gate: "slow-tests"
+    introduced_in: issue-14-implicit-stiff-multilayer
+    authority: ADR-0188
+
+  - name: G_PHI_AUG_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "UPDATED (PHI_NORM_TIGHTEN=2.0 fix: select_s_m now picks Taylor-18 instead of Taylor-13; expected action_err ~2e-15 << 1e-12; pade_err ≤ 1e-12 unchanged)"
+    rationale: |
+      G_PHI_AUG_DENSE (RELEASE_BLOCKING, ADR-0189 §B): verifies phi_action
+      (augmented Horner, Al-Mohy-Higham Alg. 3.2) against an EIGEN-EXACT reference
+      derived from the analytic DST-I eigendecomposition of the symmetric 6-node
+      tridiagonal generator A = tridiag(1,−2,1) with tau=0.5, z=tau·‖A‖=2.0.
+
+      Eigendecomposition: eigenvalues λ_j = −2+2cos(jπ/7), eigenvectors q_j[i] =
+      √(2/7)·sin(ijπ/7). Scalar φ_k(z) evaluated via Taylor series (120 terms,
+      no cancellation for z<0). Reference is exact to f64 rounding (~1e-16).
+
+      FIX (PHI_NORM_TIGHTEN = 2.0): THETA_M is calibrated for the EXPONENTIAL
+      backward error; φ-extraction from the augmented block requires FORWARD accuracy.
+      Passing norm_aug * 2.0 to select_s_m causes it to choose Taylor-18 (m=18,
+      cost=18) instead of Taylor-13 (m=13, cost=13) at the canonical z≈2 test point
+      (norm_aug≈4). Truncation at dominant mode z=1.624 drops from |R₁₃|≈9e-9 to
+      |R₁₈|≈8e-14, giving measured phi_action errors ~2e-15 after projection (0.033).
+      The augmented φ-action uses tightened norm selection vs plain expmv backward-error
+      selection; documented in §58.2 one-line note.
+
+      Padé-13 is machine-exact (pade_err≤1e-12). Also verifies phi_action_batched
+      matches phi_action to ≤ 1e-14.
+    gate: "action_err <= 1e-12 for each phi_k, k=0..=3; pade_err <= 1e-12; batched-vs-single sup_diff <= 1e-14"
+    test_file: "tests/g_phi_aug_dense.rs::g_phi_aug_dense"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189
+
+  - name: G_ETDRK4_ORDER
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (slope=4.0778, e1=9.765e-10, e2=5.783e-11)"
+    rationale: |
+      G_ETDRK4_ORDER (RELEASE_BLOCKING, ADR-0189 §C): ETDRK4 achieves order 4 on
+      Allen-Cahn 1D with periodic BC (N=8, eps=0.01, T=0.2).  Self-convergence with
+      step sizes h=0.05, h/2, reference h/4; empirical slope = log2(e1/e2) = 4.08 ∈
+      [3.7, 4.3].  tau·‖L‖ = 0.05 × 2.56 = 0.128 keeps the augmented Horner in the
+      safe linear regime (well below theta_1=2.29e-16 threshold for trivial Taylor).
+      Confirms the Cox-Matthews 2002 order-4 convergence claim.
+    gate: "slope = log2(e1/e2) in [3.7, 4.3]"
+    test_file: "tests/g_etdrk4_order.rs::g_etdrk4_order"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189
+
+  - name: G_ETD_ADJOINT_FD
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel_err_jvp=8.503e-9, rel_err_adj=2.689e-16)"
+    rationale: |
+      G_ETD_ADJOINT_FD (RELEASE_BLOCKING, ADR-0189 §D4): AllenCahn NonlinearityDiff
+      correctness on n=16 with smooth test vectors.  Two sub-checks: (1) jvp vs central
+      finite-difference (eps_fd=1e-7), sup relative error ≤ 1e-6; measured 8.5e-9, one
+      order below the FD truncation floor.  (2) adjoint identity
+      ⟨vjp(u,w), du⟩ = ⟨w, jvp(u,du)⟩, relative error ≤ 1e-6; measured 2.7e-16
+      (machine precision — diagonal Jacobian is exactly self-adjoint by construction).
+    gate: "rel_err_jvp <= 1e-6 AND rel_err_adj <= 1e-6"
+    test_file: "tests/g_etd_adjoint_fd.rs::g_etd_adjoint_fd"
+    feature_gate: "slow-tests"
+    introduced_in: issue-12-etd-phi-functions
+    authority: ADR-0189

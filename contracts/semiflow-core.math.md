@@ -12441,3 +12441,841 @@ Mathematical basis: §53 ADR-0168 (Cole-Hopf exact transform, Strang-split RD).
 
 **RELEASE-BLOCKING gate**: `g_s3_nonlinear` — Cole-Hopf sub-gate error ≤ 1e-9;
 Strang sub-gate slope ≤ −1.9.
+
+---
+
+## §54 — Depth-independent graph-semigroup action and edge-weight Fréchet gradient via Krylov (ADR-0185, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for the two new graph primitives `graph_expmv` (A1) and
+> `graph_expmv_frechet` (A2). Closes #10 speed ceilings (c) per-step stepping and
+> (d) `O(edges·n_steps)` edge-weight gradient. ML-framework plumbing stays in
+> `revssm` (ADR-0115). Symmetric `L_G` only (see §54.6 boundary).
+
+### §54.1 — Setting
+
+Let `L_G = Σ_{(i,j)∈E} w_{ij}(e_i−e_j)(e_i−e_j)ᵀ` be the combinatorial graph
+Laplacian: symmetric positive-semidefinite with spectrum `σ(L_G) ⊂ [0, λ_max]`,
+`λ_max ≤ 2·max_i d_i` (Gershgorin on the CSR row sums; `Laplacian::spectral_radius_bound`
+supplies an upper bound). The action `u(t) = e^{−tL_G} v` is the exact graph-heat
+semigroup at depth `t`. The per-step Chernoff kernels (§12) approximate it by
+`(S(t/n))^n`, costing `Θ(n)` SpMVs. §54.2–§54.3 give a depth-independent action
+whose SpMV count is set by `(ε, t λ_max)` and is **flat in `t`** (§54.4).
+
+### §54.2 — Lanczos action (NORMATIVE, adaptive / tolerance-driven path)
+
+Because `L_G` is symmetric, the Krylov subspace `K_m(L_G, v) = span{v, L_G v, …,
+L_G^{m-1} v}` admits the symmetric Lanczos 3-term recurrence
+
+```text
+β_0 q_0 = 0,  q_1 = v/‖v‖,
+for k = 1..m:
+    z      = L_G q_k − β_{k-1} q_{k-1}
+    α_k    = ⟨q_k, z⟩
+    z      = z − α_k q_k
+    β_k    = ‖z‖,   q_{k+1} = z/β_k
+```
+
+yielding `Q_m = [q_1 … q_m]` and the tridiagonal `T_m = Q_mᵀ L_G Q_m`
+(`diag = α`, off-diag = `β`). The Lanczos approximation to the action is
+
+```text
+e^{−tL_G} v ≈ ‖v‖ · Q_m · exp(−t T_m) · e_1        (NORMATIVE).
+```
+
+`exp(−t T_m)` is a DENSE `m×m` exponential (`m ≤ 30`) computed by the existing
+`matrix_system_exp::mat_exp_pade13` backend (Padé[13/13], Higham 2005, ADR-0125)
+— no new dense-exp code. Step-scaling `(s, m)` selection mirrors §45 / `expmv.rs`
+`select_s_m` on the bound `‖L_G‖ ≤ λ_max`: choose the cheapest `(s, m)` with
+`(t/s)·λ_max ≤ θ_m` and `m ≤ m_max`. The Krylov dimension `m` is
+**depth-independent**: by Saad (1992) Theorem 4.7 the error obeys
+
+```text
+‖e^{−tL_G}v − (Lanczos_m)‖ ≤ C · (e·tλ_max / (4m))^m   for m ≥ tλ_max/2,
+```
+
+so `m ≈ √(tλ_max)·polylog(1/ε)` suffices; once `s` caps `(t/s)λ_max ≤ θ_m`, `m`
+is bounded by a constant `≈ 20–40` regardless of `t`. Memory: `m` basis vectors
+(`O(m·N)`), depth-INDEPENDENT.
+
+### §54.3 — Chebyshev action (NORMATIVE, default O(1)-vector path)
+
+Map `σ(L_G) ⊂ [0, λ_max]` to `[−1, 1]` by `x = 2λ/λ_max − 1`. The semigroup
+symbol `e^{−tλ}` has the Chebyshev expansion (NORMATIVE)
+
+```text
+e^{−tL_G} v = Σ_{k=0}^{m} c_k(t, λ_max) · T_k(B) v,
+B = (2 L_G − λ_max I)/λ_max,
+c_k = (2 − δ_{k0}) · e^{−tλ_max/2} · I_k(−tλ_max/2),
+```
+
+`I_k` the modified Bessel function, `T_k` the Chebyshev polynomial applied to the
+SHIFTED Laplacian `B` by the 3-term recurrence
+`T_{k+1}(B)v = 2 B T_k(B)v − T_{k-1}(B)v`. This uses **two persistent work
+vectors** (`T_{k-1}v`, `T_k v`) plus the accumulator — **no Krylov basis is
+stored**. The degree `m` is set by the exponential decay of `|c_k|` (Bessel tail):
+`m(ε, tλ_max) = min{ m : Σ_{k>m}|c_k| ≤ ε }`, again `≈ √(tλ_max)·polylog(1/ε)`,
+flat in `t` at fixed `ε`. `λ_max` is computed ONCE per graph (Gershgorin or a
+fixed-seed power iteration to relative tolerance `1e-3`; over-estimation only
+raises `m` slightly, never breaks correctness — same conservative-bound rationale
+as §45 / ADR-0121).
+
+**Stiff-regime substep scaling (NORMATIVE, Issue #11).** When `z = τ·λ_max/2` exceeds
+`Z_SAFE = 200`, the coefficient `c_k = e^{-z}·I_k(z)` would overflow/underflow in
+f64 arithmetic (`e^{-z} → 0`, `I_k(z) → ∞`, product `0·∞ = NaN`).  The
+implementation avoids NaN by splitting: choose `s = ⌈z / 200⌉` substeps and apply
+the expansion with step `τ_sub = τ/s` so every substep's `z_sub = τ_sub·λ_max/2 ≤ 200`.
+The semigroup property `e^{-τA} = (e^{-(τ/s)A})^s` is EXACT; the s-fold composition
+introduces no approximation error beyond the per-substep Chebyshev truncation.
+For `z ≤ 200` (all normalised graphs, most practical cases), `s = 1` and this path is
+identical to the single-step Chebyshev above.  The implementation additionally asserts
+(fail-loud) that the output of every substep is finite; a non-finite result returns
+`SemiflowError::DomainViolation` rather than silently propagating NaN.
+
+`graph_expmv` exposes Chebyshev as the DEFAULT (lowest memory) and Lanczos as the
+adaptive path when the spectral bound is loose or a strict per-call tolerance is
+requested. `order()` is `u32::MAX` (tolerance-driven; §45 / ADR-0121 contract) —
+slope gates (§27/§40) are INAPPLICABLE.
+
+### §54.4 — Depth-independence statement (NORMATIVE, scope-qualified)
+
+Fix `ε`. For the Lanczos path (§54.2), the SpMV count is `N_mv(ε, t) = s·m` with
+`m ≈ √((t/s)λ_max)·polylog(1/ε)` and `s = ⌈tλ_max/(θ_m)⌉`, hence
+`N_mv = Θ(√(tλ_max)·polylog(1/ε))` — sub-linear in `t` and, after step-scaling,
+**bounded by a constant band across the depths `t ∈ {1,4,16,64}` at fixed `ε`**,
+versus the per-step baseline `N_mv^{step} = Θ(n_steps)` which grows linearly with
+the requested depth resolution. This is the formal content of gate
+`G_GRAPH_EXPMV_DEPTH_FLAT` (§54.5).
+
+**Scope qualification for the Chebyshev path (Issue #11, NORMATIVE).**  The
+depth-flat property above holds for the Chebyshev path (§54.3) only when
+`z = t·λ_max/2 ≤ Z_SAFE = 200` for all queried depths, i.e. for **normalised
+graphs** (`λ_max ≲ 2`) where `z_max ≤ t_max ≈ 64` at the maximum gate depth.
+In that regime the stiff-regime substep count `s = ⌈z / Z_SAFE⌉ = 1` throughout
+and the `Θ(√(tλ_max))` cost formula is unchanged.
+
+For **stiff operators** (large `λ_max`), the Chebyshev substep count grows as
+`s ≈ t·λ_max / (2·Z_SAFE)` and the total SpMV count becomes
+`N_mv = s · m ≈ (t·λ_max / 400) · √(z_sub)·polylog(1/ε)` — linear in `t·λ_max`,
+matching the Lanczos depth-linear regime.  Gate `G_CONS_SYMOP` (§54.x, Issue #11)
+tests the Chebyshev path on the conservative k=[1,100,1] operator (λ_max≈25600,
+z≈6400) and lies outside the depth-flat scope.
+
+### §54.5 — Augmented Fréchet gradient (NORMATIVE, A2)
+
+For a scalar `J(u)`, `u = e^{−tL(w)} v`, the gradient w.r.t. the edge-weight
+vector `w` is assembled from the Fréchet derivative of the matrix exponential.
+With the augmented `2N×2N` block-upper-triangular operator (Al-Mohy–Higham 2009)
+
+```text
+Â(E) = [[ −tL_G,  −tE ],
+        [   0,   −tL_G ]],     exp(Â(E)) = [[ e^{−tL_G},  D(E) ],
+                                            [    0,       e^{−tL_G} ]],
+```
+
+the top-right block `D(E) = L_exp(−tL_G, −tE)` is the directional Fréchet
+derivative of `e^{−tL_G}` in direction `−tE`. Acting on the stacked seed
+`[0; v]` gives `[D(E)v; e^{−tL_G}v]`, so the JVP in one edge direction
+`E = ∂L_G/∂w_{ij} = (e_i−e_j)(e_i−e_j)ᵀ` (§43.2, rank-1, 4 nonzeros) is ONE
+augmented action — computed by the SAME §54.2/§54.3 path applied to the
+block operator `Â` (its diagonal action reuses `graph_expmv`; only the
+off-diagonal `−tE` coupling is seed-specific).
+
+**Full edge-weight gradient by VJP (NORMATIVE; one solve for all edges).** For
+`g = ∂J/∂u` the upstream cotangent, the adjoint of the augmented action evaluated
+on the stacked seed `[g; 0]` yields, by the block transpose structure and the
+trace identity `⟨g, D(E)v⟩ = ⟨ (L_exp)^⋆(g) , E v ⟩`, the costate from which every
+edge partial reads off as
+
+```text
+∂J/∂w_{ij} = ⟨ p_i − p_j , v_i − v_j ⟩,      (p := the augmented costate vector)
+```
+
+i.e. ALL `n_params` edge partials are extracted from ONE augmented adjoint solve
+plus a contraction against the rank-1 stencils of `GeneratorSensitivity::apply_param_deriv`
+(§43.2) — `O(n_params)` cheap reads, NOT `O(n_params)` solves and NOT the
+`O(edges·n_steps)` per-step sweep of §43.4. The augmented operator shares the
+symmetric diagonal `−tL_G`, so its action is depth-independent (§54.4).
+
+### §54.6 — Equivalence and 0-ULP scope (NORMATIVE boundary)
+
+`graph_expmv_frechet` returns the SAME mathematical quantity `∂J/∂w` (length
+`n_params`), the SAME `[C, N]` batched shape, and the SAME ascending-channel-index
+accumulation (ADR-0184 D4) as `adjoint_state_gradient_batched` (§43.4). It is a
+DIFFERENT algorithm (augmented Krylov of the continuous action) from the per-step
+Magnus discrete adjoint, hence:
+
+- **0-ULP bit-equality (ADR-0184 D5) applies to the channel-batching axis ONLY**:
+  batched-Krylov == per-channel-Krylov loop (same kernel `C` times). That axis
+  needs NO new oracle.
+- **Equivalence to the §43.4 per-step gradient is NUMERICAL**, not bit-exact: the
+  two agree as `n_steps → ∞` / at matched accuracy. It is gated by the §43.6
+  finite-difference oracle `T_ADJOINT_STATE_SENSITIVITY`
+  (`scripts/verify_adjoint_state_sensitivity.py`), which finite-differences
+  `J(w±εδw)` and is method-agnostic — it covers A2 UNCHANGED. No new sympy oracle.
+
+### §54.7 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_GRAPH_EXPMV_DENSE` | `graph_expmv(L,v,t)` vs dense `e^{−tL}v` (dense `L` from CSR + `mat_exp_pade13`), small graph (`N ≤ 12`), `t‖L‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE; no sympy, cf. `G_MATRIX_PADE_M5`) |
+| `G_GRAPH_FRECHET_FD` | `⟨∂J/∂w, δw⟩` (A2) vs central FD `(J(w+εδw)−J(w−εδw))/(2ε)`, seeded-random `w, δw` | rel-err `≤ 1e-7` | `T_ADJOINT_STATE_SENSITIVITY` §43.6 (REUSE; no new oracle) |
+| `G_GRAPH_EXPMV_DEPTH_FLAT` | instrumented SpMV count `N_mv(ε,t)` for `t ∈ {1,4,16,64}` at fixed `ε` stays within a constant band; per-step baseline grows ∝ depth | band ratio `max/min ≤ 4` (vs per-step linear) | instrumentation counter (structural; no oracle) |
+
+All three RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the
+shipping release. A1 gates (`_DENSE`, `_DEPTH_FLAT`) ship with A1; the Fréchet
+gate ships with A2.
+
+### §54.8 — References
+
+- A. H. Al-Mohy, N. J. Higham (2011), *Computing the action of the matrix
+  exponential*, SIAM J. Sci. Comput. 33(2):488–511, DOI 10.1137/100788860.
+- A. H. Al-Mohy, N. J. Higham (2009), *Computing the Fréchet derivative of the
+  matrix exponential…*, SIAM J. Matrix Anal. Appl. 30(4):1639–1657,
+  DOI 10.1137/080716426.
+- Y. Saad (1992), *Analysis of some Krylov subspace approximations to the matrix
+  exponential operator*, SIAM J. Numer. Anal. 29(1):209–228 — §54.2 error bound.
+- §42 (transpose-exact state adjoint), §43 (adjoint-state sensitivity + §43.6 FD
+  oracle), §45 (1-D `expmv`); ADR-0185 (contract authority), ADR-0121, ADR-0184.
+
+## §55 — Generic externally-assembled symmetric-operator action and `(M, K)` generalized path (ADR-0186, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for Issue #13. Generalises §54 (A1/A2) from the zero-row-sum
+> graph Laplacian to ANY externally-assembled symmetric positive-semidefinite sparse
+> operator `L` (CSR), adds the generalized `(M, K)` mass path `e^{−τ M⁻¹K}`, and the
+> generic single-entry Fréchet adjoint. Reuses §54.2/§54.3 (Krylov action), §54.5
+> (Duhamel Fréchet), §43.6 (FD oracle), §45 (`mat_exp_pade13`). Symmetric `L` only;
+> PSD is a precondition (see §55.6 boundary). ML plumbing stays in `revssm` (ADR-0115).
+
+### §55.1 — Generic symmetric action: dropping zero-row-sum is FREE (NORMATIVE)
+
+Let `L ∈ ℝ^{N×N}` be symmetric (`L = Lᵀ`) and positive-semidefinite, stored in CSR,
+with NO structural constraint on row sums (`Σ_j L[i,j] ≠ 0` is allowed — e.g. a FEM
+stiffness `K` with Robin/convective boundary terms, or spatially-varying anisotropic
+conductivity). Its spectrum satisfies `σ(L) ⊂ [0, λ_max]` with the Gershgorin bound
+`λ_max ≤ max_i Σ_j |L[i,j]|` (`gershgorin_bound_csr`, exact upper bound for any CSR).
+
+The §54.2 Lanczos recurrence and the §54.3 Chebyshev expansion are functions of `L`
+**only through the matvec `x ↦ L x` and the scalar bound `λ_max`** — neither uses the
+combinatorial structure `L = Σ w_{ij}(e_i−e_j)(e_i−e_j)ᵀ`, the zero row sums, nor the
+diagonal-last CSR invariant. Hence (NORMATIVE):
+
+```text
+u(τ) = e^{−τL} v ,   L symmetric PSD CSR (arbitrary row sums),
+```
+
+is computed by the **unchanged** §54.2/§54.3 action. Formally: the §54 helpers depend
+on `L` through the interface `SymmetricLinearOp = { n(), λ_max bound, apply(x)→Lx }`;
+the graph Laplacian and a generic symmetric CSR are two instances of it. Symmetry is
+the ONLY requirement (it makes the Krylov projection `T_m = Q_mᵀ L Q_m` tridiagonal
+via the 3-term recurrence; the Chebyshev real-coefficient expansion requires real
+spectrum, i.e. symmetry). Correctness, the depth-independence statement (§54.4), and
+`order() = u32::MAX` carry over verbatim.
+
+**Validation (NORMATIVE).** A generic CSR is admitted iff: (i) CSR shape/range valid
+(ADR-0180 `from_csr_parts`); (ii) finite entries; (iii) **symmetric**
+`|L[i,j] − L[j,i]| ≤ sym_tol` for all stored `(i,j)` — checked in `O(nnz·log d)` by
+per-row binary search on the sorted column indices (no_std, no hashmap); (iv) PSD
+*necessary* check `L[i,i] ≥ 0` (a symmetric PSD matrix has non-negative diagonal;
+full PSD is NOT verified and remains the caller's precondition — see §55.6).
+
+### §55.2 — Generalized `(M, K)`: similarity to a symmetric operator (NORMATIVE)
+
+For a symmetric PSD stiffness `K` and a symmetric positive-DEFINITE mass `M`, the
+consistent-mass semigroup is `u(τ) = e^{−τ M⁻¹K} v`. The generator `M⁻¹K` is
+NON-symmetric in the standard inner product, but is **self-adjoint in the `M`-inner
+product** and therefore *similar* to a symmetric matrix. With the Cholesky factor
+`M = RᵀR` (`R` upper-triangular, SPD ⇒ exists, unique with positive diagonal):
+
+```text
+Â := R^{−T} K R^{−1}   is symmetric PSD,           (congruence of K)
+M⁻¹K = R^{−1}R^{−T}K = R^{−1} Â R,                 (similarity)
+∴  e^{−τ M⁻¹K} = R^{−1} e^{−τÂ} R          (NORMATIVE).
+```
+
+Hence the generalized action is (NORMATIVE):
+
+```text
+w0 = R v ;   w = e^{−τÂ} w0   (via §54 Krylov on Â) ;   u = R^{−1} w .
+```
+
+`σ(Â) = σ(M⁻¹K) ⊂ [0, λ_max(M⁻¹K)]` (similar matrices share the spectrum), so `Â` is
+a legitimate symmetric PSD operator for §54. The bound used for substep selection is
+`λ_max(Â) ≤ λ_max(K) / λ_min(M)`, with `λ_max(K)` from Gershgorin and `λ_min(M)` from
+the Gershgorin lower bound `min_i(M[i,i] − Σ_{j≠i}|M[i,j]|)` when positive, else a
+short fixed-iteration inverse power estimate using `R`-solves (over-estimation only
+raises the substep count `s`; never breaks correctness — §54.3 rationale). The
+**Lanczos path is the default** for `(M,K)` (it adapts to `σ(Â)` and needs only a
+loose `λ_max`).
+
+**Â is never materialised (NORMATIVE).** Forming `Â = R^{−T}KR^{−1}` densifies (the
+inverse factor fills in). Instead its matvec is the **3-stage chain**
+
+```text
+Â x  =  R^{−T} ( K ( R^{−1} x ) ) :
+        y = R^{−1} x   (back-substitution,  O(N²) dense R / O(nnz_R) sparse R)
+        z = K y        (CSR SpMV,            O(nnz_K))
+        Âx = R^{−T} z  (forward-substitution)
+```
+
+so `K` stays sparse and only triangular solves are added. This is the `MassKOperator`
+instance of `SymmetricLinearOp`. The Cholesky factor `R` is supplied by the caller
+(binding: `scipy`/`sksparse`) or built by a small in-crate **dense** Cholesky for
+moderate `N`; large sparse consistent mass with fill-reducing reordering is OUT OF
+SCOPE (§55.6) — supply `R`, or use the lumped path §55.3.
+
+### §55.3 — Lumped-mass fast path: diagonal congruence stays sparse (NORMATIVE)
+
+When `M = D = diag(m_1,…,m_N)` is diagonal with `m_i > 0` (mass lumping), `R = D^{1/2}`
+is diagonal and the congruence keeps `K` sparse entrywise:
+
+```text
+Â = D^{−1/2} K D^{−1/2},   Â[i,j] = K[i,j] / √(m_i m_j)   (CSR entry scaling),
+e^{−τ M⁻¹K} = D^{−1/2} e^{−τÂ} D^{1/2},
+∴  w0 = √m ⊙ v ;  w = e^{−τÂ} w0  (§54 Krylov on the SPARSE Â) ;  u = w ⊘ √m .
+```
+
+This is the production fast path: `Â` is assembled as a genuine `SymmetricOperator`
+(CSR), the action reuses §54 unchanged, and there is no factorisation and no triangular
+solve. Use it whenever the mass matrix is (or is approximated by) a diagonal.
+
+### §55.4 — Generic single-entry Fréchet adjoint (NORMATIVE)
+
+A2's Duhamel gradient (§54.5) for `J = Σ_c ⟨dj_c, e^{−tL} u0_c⟩`,
+
+```text
+∂J/∂θ_k = t ∫₀¹ ⟨ e^{−(1−s)tL} dj_c , (∂A/∂θ_k) e^{−stL} u0_c ⟩ ds   (GL8, exact),
+A = −L,
+```
+
+is **agnostic to the parameterisation** `θ`: it depends on `θ` only through the
+provider `(∂A/∂θ_k)·v` (`GeneratorSensitivity::apply_param_deriv`). For a generic
+symmetric operator the natural parameters are the **independent symmetric entries**
+`L_{ij}` (`i ≤ j`). Treating `L_{ij} = L_{ji}` as ONE symmetric degree of freedom,
+
+```text
+(∂L/∂L_{ij}) = e_i e_jᵀ + e_j e_iᵀ   (i ≠ j),      (∂L/∂L_{ii}) = e_i e_iᵀ ,
+⇒ (∂L/∂L_{ij}) v :  out[i] += v[j], out[j] += v[i]   (i ≠ j);   out[i] += v[i]  (i = j),
+(∂A/∂L_{ij}) = −(∂L/∂L_{ij})        (generator sign).
+```
+
+This single-entry stencil (`EntrySensitivity`) is the generic analogue of the §43.2
+rank-1 edge stencil. Substituting it into the **unchanged** `graph_expmv_frechet`
+yields `∂J/∂L_{ij}` exactly (including non-commuting `[L, ∂L/∂L_{ij}] ≠ 0`), for the
+direct symmetric-`L` path. **Convention (NORMATIVE):** the reported derivative is
+w.r.t. the *symmetric* entry (perturbing `L_{ij}` and `L_{ji}` together by the same
+amount). A caller perturbing only one triangle differs by the obvious factor; the FD
+gate §55.5 perturbs the symmetric pair to match. Differentiability of the
+consistent-`(M,K)` congruence (through `R`) is OUT OF SCOPE for #13.
+
+### §55.5 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_SYMOP_DENSE` | `SymmetricOperator::krylov` action `e^{−τL}v` vs dense `mat_exp_pade13(−τL)`, **non-zero-row-sum** Robin-BC 1-D stiffness `L` (`N ≤ 12`), `τ‖L‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE §45/§54.7; no sympy) |
+| `G_MASSK_LUMPED` | `mass_lumped_evolve` vs dense `e^{−τ D⁻¹K}v`, diagonal `M = D` (seeded random `m_i ∈ [0.5,2]`) + Robin `K` (`N ≤ 12`) | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` of `−τ D⁻¹K` (REUSE) |
+| `G_MASSK_CONSISTENT` | `MassKOperator::evolve` vs dense `e^{−τ M⁻¹K}v`, **non-diagonal** consistent FEM mass `M = (h/6)·tridiag(1,4,1)` + Robin `K` (`N ≤ 12`) | `sup_error ≤ 1e-9` | dense `mat_exp_pade13` of `−τ M⁻¹K`, `M⁻¹K` via in-crate dense Cholesky solve (REUSE) |
+| `G_SYMOP_ENTRY_FRECHET` | `⟨∂J/∂entries, δ⟩` (A2 + `EntrySensitivity`) vs central FD `(J(L+εδ)−J(L−εδ))/(2ε)`, tracked set incl. ≥1 **off-diagonal** entry on a **non-zero-row-sum** `L` | rel-err `≤ 1e-7` | §43.6 FD pattern (`T_ADJOINT_STATE_SENSITIVITY`; REUSE, no new oracle) |
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).** `G_SYMOP_DENSE` and
+`G_SYMOP_ENTRY_FRECHET` assert `∃ i : Σ_j L[i,j] ≠ 0` (the Robin rows), so a
+zero-row-sum (combinatorial-Laplacian) shortcut cannot satisfy them.
+`G_MASSK_CONSISTENT` asserts `∃ i : M[i,i+1] ≠ 0` (genuinely non-diagonal `M`), so a
+lumped-diagonal shortcut fails the `1e-9` tolerance. All four RELEASE_BLOCKING,
+`feature_gate: slow-tests`, `introduced_in` the shipping release; no new sympy oracle.
+
+### §55.6 — Boundary and PSD precondition (NORMATIVE)
+
+- **Symmetric only.** Non-symmetric `L` (directed/advective without symmetrisation)
+  breaks the Lanczos tridiagonalisation and the real Chebyshev expansion ⇒ requires
+  Arnoldi/GMRES-type methods, explicitly OUT OF SCOPE (would be a separate ADR).
+- **PSD is a precondition.** `Growth::contraction()` and the depth-independent bound
+  rest on `σ(L) ⊂ [0, ∞)`. Only the necessary check `L[i,i] ≥ 0` is enforced; a
+  symmetric but indefinite `L` still *runs* (the action is still `e^{−τL}v`), but the
+  contraction/“flat in depth” guarantees no longer hold and accuracy near negative
+  eigenvalues degrades — caller's responsibility.
+- **Consistent-mass scale.** The in-crate Cholesky is dense `O(N³)` (moderate `N`);
+  large sparse consistent mass requires a caller-supplied factor `R` (binding path)
+  or the lumped path §55.3. Consistent-`(M,K)` differentiability is out of scope.
+
+### §55.7 — References
+
+- G. Strang, G. J. Fix, *An Analysis of the Finite Element Method*, Prentice-Hall
+  1973 — consistent vs lumped mass; generalized eigenproblem congruence.
+- B. N. Parlett, *The Symmetric Eigenvalue Problem*, SIAM 1998 — `R^{−T}KR^{−1}`
+  reduction of `Kx = λMx` to standard symmetric form.
+- §54 (A1 Krylov action + A2 Duhamel Fréchet — the reused mechanism), §45
+  (`mat_exp_pade13` oracle), §43.2/§43.6 (`GeneratorSensitivity` + FD oracle).
+- ADR-0186 (contract authority), ADR-0185, ADR-0180, ADR-0115, ADR-0125.
+
+## §56 — Conservative (divergence-form) variable-coefficient diffusion with harmonic-mean faces and symmetric carrier (ADR-0187, NORMATIVE library; CITATION mathematics)
+
+> Scope: NORMATIVE basis for Issue #11. Adds the CONSERVATIVE / flux-continuous
+> discretisation of `∂_t u = ∂_x(k(x) ∂_x u)` (and its separable 2-D/3-D analogue),
+> using harmonic-mean face conductivities — the standard scheme for **discontinuous**
+> `k` (sharp material interfaces). Contrasts with the existing NON-conservative
+> pointwise-expanded form `a·f'' + a'·f'` of §9.2.3 (`DiffusionChernoff`), which
+> requires `a ∈ C³` and breaks heat-flux continuity at a jump. The assembled operator
+> is symmetric negative-semidefinite, so `A = −L_k` is a symmetric PSD CSR consumable
+> by §55 `SymmetricOperator::from_csr` and the §54 Krylov exact action — this is the
+> **Issue #11 → #13 → #14 bridge** (#11 assembles flux-continuously; #13 propagates
+> exactly and unconditionally-stably; #14 is the stiff multilayer application).
+> Linear / structure-preserving / identity-compatible. `k > 0` required.
+
+### §56.1 — Conservative discretisation (NORMATIVE)
+
+Let `k(x) > 0` be sampled at the `n` grid nodes `x_i` (uniform spacing `dx`), with
+node values `k_i`. Each interior **face** `i+½` (between nodes `i` and `i+1`) carries
+the **harmonic-mean** face conductivity (NORMATIVE; standard for discontinuous `k`,
+Patankar 1980 §4.2-4 — it is the conductivity of two half-cell resistances in series):
+
+```text
+k_{i+½} = 2·k_i·k_{i+1} / (k_i + k_{i+1}) .                          (56.1.a)
+```
+
+The **face transmissibility** (optionally including a thin contact resistance `R_c`,
+§56.3) is
+
+```text
+T_{i+½} = 1 / ( dx / k_{i+½}  +  R_c^{i+½} ) ,   R_c^{i+½} ≥ 0 (default 0).  (56.1.b)
+```
+
+With `R_c = 0` this collapses to `T_{i+½} = k_{i+½}/dx`. The **conservative stencil**
+(flux-difference form; `F_{i+½} := T_{i+½}(u_{i+1} − u_i)` is the discrete face flux):
+
+```text
+(L_k u)_i = [ F_{i+½} − F_{i−½} ] / dx
+          = [ T_{i+½}(u_{i+1}−u_i) − T_{i−½}(u_i−u_{i−1}) ] / dx .       (56.1.c)
+```
+
+For `R_c = 0` this is exactly the issue's `off-diag = k_{i±½}/dx²`,
+`diag = −(k_{i−½}+k_{i+½})/dx²`. Because the SAME face flux `F_{i+½}` enters row `i`
+(with `+`) and row `i+1` (with `−`), the scheme is **discretely conservative**:
+flux leaving cell `i` equals flux entering cell `i+1` at every face, at machine
+precision, independent of any jump in `k`.
+
+### §56.2 — Symmetric PSD carrier property (NORMATIVE — the #13 bridge)
+
+The matrix `L_k` of (56.1.c) is **symmetric**: the off-diagonal entries
+`L_k[i,i+1] = T_{i+½}/dx = L_k[i+1,i]` are shared. It is **negative semidefinite**:
+the Dirichlet energy is `⟨u, L_k u⟩ = −Σ_faces T_{i+½}(u_{i+1}−u_i)² ≤ 0` (all
+`T_{i+½} > 0`). Hence
+
+```text
+A := −L_k    is symmetric positive-semidefinite,  diag(A)_i ≥ 0,        (56.2.a)
+```
+
+and the heat semigroup is `u(τ) = e^{τ L_k} v = e^{−τ A} v`. Therefore (NORMATIVE)
+`A` assembled in CSR is admitted by §55 `SymmetricOperator::from_csr` (which validates
+finiteness, `diag ≥ 0`, and symmetry), and the §54 Krylov action computes `e^{−τA}v`
+**exactly and unconditionally stably** (no CFL / no τ-stability limit — the relevant
+property for a stiff 100:1 stack). Row/column indices of the 1-D operator per row are
+`{i−1, i, i+1}`, already sorted ⇒ they satisfy the §55.1 sorted-CSR invariant (I3)
+by construction. This is the resolution of the stiffness contradiction: #11 contributes
+ONLY the symmetric flux-continuous **assembly**; the exact stable propagation reuses
+the §55/§54 machinery already in the topology (ADR-0187 design-tension paragraph).
+
+### §56.3 — Contact resistance (thin bonded-joint interface) (NORMATIVE)
+
+A thin imperfect interface (bonded joint, thermal contact) is modelled by a **lumped
+thermal contact resistance** `R_c ≥ 0` (units `K·m²·W⁻¹`, i.e. length/conductivity)
+in **series** with the two half-cell conductive resistances — exactly the
+`+ R_c^{i+½}` term of (56.1.b). The series conductance identity is
+
+```text
+1 / T_{i+½} = dx/k_{i+½} + R_c^{i+½}      ( = R_left½ + R_right½ + R_contact ). (56.3.a)
+```
+
+`R_c` is supplied per-face (length `n−1`); absent ⇒ all-zero (perfect contact). The
+model is purely resistive (no interfacial heat capacitance); this boundary is stated
+in §56.8 and the ADR.
+
+### §56.4 — Steady-state series-resistance oracle (NORMATIVE — gate basis, no sympy)
+
+At steady state `∂_x(k ∂_x u) = 0` ⇒ the flux `q = −k u_x` is **constant in `x`**.
+Across a slab `i` of thickness `t_i` and conductivity `k_i` the temperature drop is
+
+```text
+ΔT_i = q · R_i ,   R_i = t_i / k_i ;   across a contact joint:  ΔT_c = q · R_c.  (56.4.a)
+```
+
+For a stack with total drop `ΔT_tot` between fixed end temperatures,
+
+```text
+q = ΔT_tot / R_tot ,   R_tot = Σ_i (t_i/k_i) + Σ (contact) R_c .       (56.4.b)
+```
+
+This is a closed-form **analytic oracle** (no sympy). **Exactness claim (NORMATIVE):**
+when each material interface lies on a **face** (between two nodes, each node carrying
+its own material `k`), the conservative discrete steady solution of (56.1.c) reproduces
+(56.4.a)-(56.4.b) — per-layer `ΔT_i` and the single constant interface flux `q` — to
+machine precision (the harmonic mean is the *exact* series combination of the two
+half-cell resistances). **Necessity / teeth (NORMATIVE):** the NON-conservative
+pointwise form `a·f'' + a'·f'` (§9.2.3) with piecewise-constant `a = k` (`a' ≡ 0`) has
+steady solution `a·u_xx = 0 ⇒ u_xx = 0` GLOBALLY ⇒ a single straight line ⇒ **equal**
+`ΔT` per equal-thickness layer, independent of `k_i`, and a **discontinuous** interface
+flux. It therefore violates (56.4.a) by an `O(k_max/k_min)` factor on a sharp stack —
+this is asserted as a failing baseline in gate `G_CONS_NONCONS_FAILS`.
+
+### §56.5 — Separable 2-D / 3-D analogue (NORMATIVE)
+
+For the separable operator `L_k = Σ_d ∂_{x_d}(k_d(x_d) ∂_{x_d})` (per-axis
+conductivities `k_d`), each axis is discretised by the 1-D harmonic-mean stencil
+(56.1.c). Two equivalent NORMATIVE realisations:
+
+- **Semigroup path:** Strang splitting of the per-axis 1-D
+  `ConservativeDiffusionChernoff` via `AxisLift` (mirrors the §-Strang2D/Strang3D
+  tensor pattern); global consistency order 2.
+- **Carrier path:** the full 5-point (2-D) / 7-point (3-D) CSR with per-axis
+  harmonic-mean faces, emitted with **sorted** columns (§55.1 I3) ⇒
+  `SymmetricOperator` ⇒ §54 Krylov exact action `e^{−τA}v`.
+
+The full-tensor non-separable cross term `∂_x(k ∂_y u)` is **OUT OF SCOPE** (§56.8).
+
+### §56.6 — Order (NORMATIVE)
+
+`ConservativeDiffusionChernoff` declares consistency **order 2** (`order() = 2`,
+`Growth::contraction()`), matching the §9.2.3 `DiffusionChernoff` convention and the
+recommended A-stable trapezoidal/Crank–Nicolson single step
+`S(τ) = (I − ½τ L_k)^{-1}(I + ½τ L_k)` (one `O(n)` tridiagonal solve, no CFL). For
+SMOOTH `k` the spatial discretisation is order 2 (harmonic and arithmetic means agree
+to `O(dx²)`). For DISCONTINUOUS `k` the pointwise spatial order near the jump reduces
+to 1 (intrinsic to finite-volume on a non-smooth coefficient) **while the steady
+series-resistance network of §56.4 is reproduced exactly on aligned faces** — these are
+not in conflict (the acceptance metric is the steady network, not the pointwise
+near-jump truncation), and the distinction is documented.
+
+### §56.7 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_CONS_SERIES` | Conservative steady **Dirichlet** solve on a SHARP 3-layer stack `k = [1, 100, 1]` (equal thickness, NO smoothing): per-layer `ΔT_i` and the single constant interface flux `q` vs the analytic series-resistance network (56.4) | per-layer `ΔT` rel-err `≤ 1e-2` (1%) AND face-flux spread `max_i|q_i−q̄|/q̄ ≤ 1e-2` | analytic series-resistance closed form (56.4); steady solve via test-local Thomas / `matrix_inv` (REUSE; **no sympy**) |
+| `G_CONS_NONCONS_FAILS` (**TEETH**) | The SAME sharp stack + SAME oracle, solved with the NON-conservative `DiffusionChernoff` node operator (`a = k` piecewise-const, `a' ≡ 0`, §9.2.3): assert it MISSES the series-resistance profile | per-layer `ΔT` rel-err **`≥ 0.5` (≥50%)** — assertion of **FAILURE** | same analytic oracle (56.4) |
+| `G_CONS_SYMOP` | Assemble `A = −L_k` (sharp stack, `N ≤ 12`) → `SymmetricOperator::from_csr` (must ACCEPT: symmetry + `diag ≥ 0` pass); Krylov action `e^{−τA}v` vs dense `mat_exp_pade13(−τA)`, `τ‖A‖` in the ≥10 regime | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (REUSE §45/§55.5; **no sympy**) |
+| `G_CONS_ORDER` | `ConservativeDiffusionChernoff` temporal **order 2** on a SMOOTH `k(x)=1+½·sin(x)`: self-convergence slope (probe vs `2N−1` refinement, Richardson) | slope `≤ −1.95` | self-convergence (REUSE §-Richardson pattern; **no sympy**) |
+| `G_CONS_CONTACT` | Steady solve with a contact joint `R_c > 0` on a 2-layer bonded stack: interface jump `ΔT_c` vs `q·R_c` (56.3)-(56.4) | rel-err `≤ 1e-2` | analytic series + contact (56.4); test-local Thomas (REUSE; **no sympy**) |
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).**
+`G_CONS_SERIES`/`G_CONS_SYMOP`/`G_CONS_NONCONS_FAILS` assert the operand has a REAL
+jump: `max_i k_i / min_i k_i ≥ 50` AND at the interface face `k_i ≠ k_{i+1}` (so the
+harmonic mean `k_{i+½}` is strictly between them and differs from the arithmetic mean
+— a smoothed coefficient cannot satisfy the assertion). `G_CONS_NONCONS_FAILS` is the
+**teeth**: by asserting the non-conservative form FAILS the SAME `<1%` test by `≥50%`,
+the passing of `G_CONS_SERIES` proves the conservative scheme is **necessary**, not
+incidental. `G_CONS_SYMOP` additionally asserts `from_csr` accepted a non-trivial `A`
+(`diag > 0`, at least one off-diagonal `< 0`, ≥1 face with `k_L ≠ k_R`).
+`G_CONS_ORDER` asserts a genuine multi-`τ` refinement (a slope, not a single point).
+All five RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the shipping
+release; **no new sympy oracle**.
+
+### §56.8 — Boundary and honest scope (NORMATIVE)
+
+- **`k > 0` required** — the harmonic mean (56.1.a) and PSD property assume strictly
+  positive conductivity; non-positive or non-finite `k_i` ⇒ `DomainViolation`.
+- **Symmetric NSD by construction** — `A = −L_k` is PSD with `diag ≥ 0`; consumable by
+  §55 and the §54 Krylov contraction. No indefinite/advective term is added.
+- **Interface-on-face invariant** — material interfaces MUST lie on faces (between
+  nodes); each node carries its own material `k_i`. This makes the harmonic mean the
+  exact series of two half-cell resistances and (56.4) exact. A node sitting exactly on
+  a discontinuity is ill-posed (ambiguous `k_i`) and is the caller's responsibility.
+- **Boundary conditions** — Neumann (zero-flux, insulated) is natural: the boundary
+  node keeps only its interior face ⇒ zero row sum ⇒ singular constant-nullspace
+  operator (the physically-correct insulated semigroup). Dirichlet (fixed end
+  temperatures) is imposed by interior reduction (boundary contributions moved to the
+  RHS) for the steady solve, reusing `BoundaryPolicy`.
+- **Discontinuous-`k` spatial order is 1 near the jump** (FV intrinsic), but the steady
+  series network (56.4) is exact on aligned faces — documented, not hidden (§56.6).
+- **Contact resistance is purely resistive** (no interfacial capacitance).
+- **Full-tensor non-separable** `∂_x(k ∂_y u)` is OUT OF SCOPE (separable axes only).
+- **Bit-stable** — deterministic f64 assembly + tridiagonal Thomas / Krylov (no
+  parallel-reduction reordering); identity-compatible (`k ≡ const`, `R_c ≡ 0` recovers
+  the constant-coefficient heat operator exactly).
+
+### §56.9 — References
+
+- S. V. Patankar, *Numerical Heat Transfer and Fluid Flow*, Hemisphere 1980, §4.2-4 —
+  harmonic-mean interface conductivity for discontinuous/conjugate conductivity.
+- H. K. Versteeg, W. Malalasekera, *An Introduction to Computational Fluid Dynamics:
+  The Finite Volume Method*, 2nd ed., Pearson 2007 — conservative FV discretisation,
+  face fluxes, series-resistance interface treatment.
+- §55 (`SymmetricOperator::from_csr` carrier — the consumed bridge), §54 (A1 Krylov
+  exact action `e^{−τA}v`), §45 (`mat_exp_pade13` dense oracle), §9.2.3
+  (`DiffusionChernoff` — the non-conservative contrast).
+- ADR-0187 (contract authority), ADR-0186 (#13 carrier), ADR-0008 (ζ-A diffusion).
+
+---
+
+## §57 — Stiff high-contrast multilayer diffusion: per-layer ρc lumped mass-weighting and stack assembly (ADR-0188, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** This section adds ONLY the per-layer volumetric-heat-capacity (`ρc`)
+> mass-weighting of the §56 conservative operator and the multilayer stack→node
+> assembly. The propagator is NOT new: the exact, unconditionally-stable action is
+> §54/§55 reused verbatim. 1-D; `k>0`, `ρc>0`; lumped (diagonal) mass only.
+
+### §57.1 — Governing equation (NORMATIVE)
+
+Heterogeneous transient conduction is the **mass-weighted** divergence-form equation
+
+```
+ρ(x) c(x) ∂ₜ T(x,t) = ∂ₓ( k(x) ∂ₓ T(x,t) ),        x ∈ (x₀, x₁),  t > 0.
+```
+
+Writing the volumetric heat capacity `μ(x) ≔ ρ(x)c(x)` and the §56 conservative
+generator `L_k T = ∂ₓ(k ∂ₓ T)`, the evolution is
+
+```
+∂ₜ T = μ⁻¹ L_k T = −μ⁻¹ A T,         A ≔ −L_k  (the §56 symmetric PSD carrier).
+```
+
+The constant-coefficient §56 operator (`μ ≡ 1`) is the special case `M = I`.
+
+### §57.2 — Node-centered discretisation and the lumped mass (NORMATIVE)
+
+The §56 assembler `assemble_conservative_csr_1d` produces the **node-centered**
+symmetric PSD carrier (§56.1)
+
+```
+A[i,i±1] = −T_{i±½}/dx ,   A[i,i] = (T_{i−½}+T_{i+½})/dx ,   T_{i+½} = k_harm(k_i,k_{i+1})/dx,
+```
+
+so `(A T)_i` is the node-`i` discretisation of `−∂ₓ(k∂ₓT)`. Multiplying the
+control-volume balance by the cell capacity and dividing through the uniform `dx`
+gives the **lumped diagonal mass**
+
+```
+M = diag(μ_i),   μ_i = ρ_i c_i   (per-node volumetric heat capacity).      [§57.2.a]
+```
+
+No `dx` factor appears in `μ_i`: the `1/dx` of the control volume cancels the
+`1/dx` already carried by `A` (both endpoints share the same convention, so Neumann
+boundary nodes need NO half-mass correction). The semidiscrete system is
+
+```
+dT/dt = −M⁻¹A T,      T(τ) = e^{−τ M⁻¹A} T(0).                              [§57.2.b]
+```
+
+### §57.3 — Exact unconditionally-stable propagation = §55 lumped path (NORMATIVE, reuse)
+
+`M⁻¹A` is non-symmetric but **congruent** to the symmetric PSD `Â = M^{−½}A M^{−½}`
+(`M = M^{½}M^{½}`, diagonal). Therefore [§57.2.b] is computed EXACTLY by the §55.3
+lumped-mass action with `K = A`, `masses = μ`:
+
+```
+e^{−τ M⁻¹A} v  =  M^{−½} e^{−τ Â} ( M^{½} v ),                              [§57.3.a]
+```
+
+i.e. `mass_lumped_evolve(&A, &μ, τ, v, out, path, tol, scratch)` (§55.3) — the
+pre-scale `w₀ = √μ ⊙ v`, the §54 Krylov action `e^{−τÂ}w₀`, the post-scale
+`u = w/√μ`. This is **depth-independent** (§54.4): the matvec count is
+`≈ √(τ·λ_max(M⁻¹A))·polylog(1/ε)`, flat in `τ`, so the entire re-entry interval is
+ONE action. Unconditional stability is the §54 spectral property of `Â`, not a
+τ-limit; the stiff-operator substep + fail-loud fix (§54, commit `9e5f557`) bounds
+the Chebyshev degree on very stiff `Â`.
+
+### §57.4 — A-stable Crank–Nicolson alternative (NORMATIVE, O(n)/step convenience)
+
+For the O(1)-in-`m` working-memory regime, the mass-weighted CN step on [§57.2.b],
+
+```
+(M + ½τA) Tⁿ⁺¹ = (M − ½τA) Tⁿ,                                             [§57.4.a]
+```
+
+has `M` diagonal and `A` tridiagonal ⇒ a tridiagonal system solved by ONE `O(n)`
+Thomas pass (§56.7 machinery + the diagonal `μ`). It is order-2, A-stable
+(unconditionally stable, contraction growth), accuracy- not CFL-limited.
+`MassWeightedConservativeChernoff` (ADR-0188 D2).
+
+### §57.5 — Multilayer stack assembly (NORMATIVE)
+
+A stack of layers `ℓ = 1..L` with `(thickness_ℓ, k_ℓ, μ_ℓ)`, `k_ℓ,μ_ℓ>0`, is
+discretised on ONE uniform global grid `dx ≈ target_dx` (snapped so every layer
+gets `≥1` cell and `Σ cells_ℓ·dx = Σ thickness_ℓ`). Node `i` is assigned the
+material of the layer containing `x_i` (left-material rule at interfaces); the
+harmonic-mean FACE between unlike `k` (§56.1) carries the series resistance
+exactly. The result is the `(grid, k_nodes, μ_nodes)` triple consumed by §57.3 /
+§57.4. Choose `dx` to resolve the thinnest layer (≥ ~4 cells); per-layer
+non-uniform grids are OUT OF SCOPE (§57.6).
+
+### §57.6 — Honest boundary (NORMATIVE)
+
+- `k>0`, `μ=ρc>0` required (harmonic mean + PSD + congruence `√μ`).
+- **Lumped (diagonal) mass only.** Consistent (non-diagonal) FEM mass is not needed
+  for nodal conduction; if ever required, the §55 `MassKOperator` consistent path
+  applies (caller supplies `R`).
+- **Single global `dx`.** Material interfaces lie on faces; the steady series
+  resistance is exact there, but spatial order is 1 near a `k`-jump (FV intrinsic,
+  inherited from §56.6). Per-layer non-uniform grids: out of scope.
+- **Full-tensor non-separable** `∂_x(k∂_y)` out of scope (separable axes only,
+  §56.8); separable N-D multilayer = §56.5 N-D assembler + lumped `μ` (trivial,
+  deferred).
+- **No new propagator.** The Cayley/CN variable-coef solver proposed in Issue #14
+  is NOT built: §57.3 (exact Krylov) and §57.4 (A-stable CN) already resolve the
+  stiffness (ADR-0188 TRIZ note). Identity-compatible: `μ≡const ⇒ §56` operator.
+
+### §57.7 — Acceptance gates (NORMATIVE)
+
+All RELEASE_BLOCKING, `feature_gate: slow-tests`; non-vacuity asserted inside each
+(ADR-0188 D4). Oracles reuse dense `mat_exp_pade13` (§45) and a test-local dense
+Crank–Nicolson reference — **no new sympy**.
+
+| Gate | Quantity | Threshold | Oracle |
+|------|----------|-----------|--------|
+| `G_TPS_MASS_WEIGHT` | `mass_lumped_evolve(A,μ)` vs `expm(−τM⁻¹A)v`, `N≤12`, μ-contrast `≥2` | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (§45) |
+| `G_TPS_UNITMASS_FAILS` (TEETH) | #11 unit-mass on the same stack MISSES the CN reference | T_Al rel-err `≥ 0.5` (FAILURE) | §57.7 CN reference |
+| `G_TPS_STACK_ACCEPTANCE` | LI-900/SIP/RTV/Al-2024 (k-contrast `≥100`), 2500 s, T_Al(t)+T_bondline(t) | rel-err `≤ 2e-2` at `t∈{500,1500,2500}s` | test-local dense CN |
+| `G_TPS_STIFF_STEPCOUNT` (TEETH) | explicit-CFL count `X=⌈τλ_max⌉` vs stable matvec count `Y` | `X/Y ≥ 100` AND `Y ≤ 2√(τλ_max)` | §54.5 matvec counter |
+
+### §57.8 — References
+
+- J. H. Lienhard IV & V, *A Heat Transfer Textbook*, 5th ed. — series thermal
+  resistance, lumped volumetric capacity `ρc`, transient multilayer conduction.
+- D. E. Glass (NASA) and Shuttle Orbiter TPS data — LI-900 / SIP / RTV-560 /
+  Al-2024 representative `α, k, ρc` (the §57.7 acceptance stack).
+- §56 (conservative harmonic-mean carrier `A=−L_k` — consumed), §55.3
+  (`mass_lumped_evolve`, congruence `Â=M^{−½}KM^{−½}` — the exact propagator),
+  §54 (A1 Krylov action + depth-flat matvec counter + stiff substep fix), §45
+  (`mat_exp_pade13` dense oracle).
+- ADR-0188 (contract authority), ADR-0187 (#11 assembler), ADR-0186 (#13 lumped
+  `(M,K)`), ADR-0185 (#A1 Krylov).
+
+## §58 — ETD φ-function actions and the ETDRK4 semilinear driver (ADR-0189, Issue #12, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** The one identity-compatible semilinear extension `∂ₜu = Lu + N(u)`.
+> `L` stays the EXACT linear core (§45 1-D `expmv`, §54 graph Krylov, §55 generic
+> symmetric op); only the nonlinear Duhamel term is quadratured via φ-functions.
+> Supported operators: 1-D divergence-form carrier and symmetric graph /
+> `SymmetricOperator`. Differentiability requires a differentiable `N`.
+
+### §58.1 — Setting and the φ-functions
+
+The exact variation-of-constants (Duhamel) solution of `∂ₜu = Lu + N(u)` over a
+step `h` is
+
+```text
+u(t+h) = e^{hL} u(t) + ∫₀^h e^{(h−s)L} N(u(t+s)) ds.
+```
+
+The exponential-integrator weights are the **φ-functions**, defined by the
+entire-function series and the equivalent integral representation
+
+```text
+φ₀(z) = e^z,
+φ_k(z) = Σ_{n≥0} zⁿ / (n+k)!  =  (1/(k−1)!) ∫₀¹ e^{(1−s)z} s^{k−1} ds   (k ≥ 1),
+```
+
+explicitly `φ₁=(e^z−1)/z`, `φ₂=(e^z−1−z)/z²`, `φ₃=(e^z−1−z−z²/2)/z³`, with
+`φ_k(0)=1/k!` and the recurrence `φ_k(z) = z·φ_{k+1}(z) + 1/k!`. The library
+requires `k = 0…3` (`PHI_MAX = 3`).
+
+### §58.2 — Augmented-matrix construction (NORMATIVE; one action ⇒ all φ_k·v)
+
+Let `A` be the linear generator (`A = −L` for the contraction semigroup; the
+divergence-form operator for 1-D). For `v ∈ Rⁿ` and `p ≥ 1` define the
+**block-upper-triangular augmented operator**
+
+```text
+Ã = [[ τA,  V ],   ∈ R^{(n+p)×(n+p)},
+     [  0,  J ]]
+
+V = v·e₁ᵀ ∈ R^{n×p}   (v in the FIRST column, zeros elsewhere),
+J ∈ R^{p×p}, Jₖ,ₖ₊₁ = 1 else 0   (unit super-diagonal, nilpotent: Jᵖ = 0).
+```
+
+**Theorem (Sidje 1998; Al-Mohy–Higham 2011 §4).** With `eˢᴶ` upper-triangular
+(`[eˢᴶ]_{ij}=s^{j−i}/(j−i)!`) and the block formula
+`exp(Ã)_{12}=∫₀¹ e^{(1−s)τA} V eˢᴶ ds`, the top-right columns are
+
+```text
+exp(Ã)[1:n, 1:n]   = e^{τA} = φ₀(τA)                  (top-left block)
+exp(Ã)[1:n, n+j]   = φⱼ(τA)·v ,    j = 1 … p          (NO τ-power; τ is inside A).
+```
+
+Hence **a single action of `exp(Ã)` on the augmented basis yields
+`φ₀(τA)v, …, φ_p(τA)v` simultaneously.** (Verified to rel-err 5e-16 for p=3
+against the spectral series, ADR-0189 throwaway probe.)
+
+**Spectral property (resolves the symmetry obstruction, NORMATIVE).** `Ã` is
+non-symmetric but block-triangular with **equal diagonal blocks**, so
+`σ(Ã) = σ(τA)` — entirely real for the symmetric/contraction operators. The
+action is therefore computed by the **§45 matvec-only truncated-Taylor (Horner)
+path**, which requires only a matvec and a real spectral interval — NOT
+symmetry — and already runs on the non-symmetric variable-`a(x)` 1-D generator.
+`Ã`'s matvec is one `A`-matvec plus the cheap `J`-shift; `‖Ã‖ ≤ ‖A‖ + ‖v‖ + 1`.
+`THETA_M` is calibrated for the exponential BACKWARD error; the φ-extraction from
+the augmented block requires FORWARD accuracy, so `phi_action` passes `2·‖Ã‖` to
+`select_s_m` — at the canonical z≈2 test point this promotes the Taylor degree from
+13 to 18 (m=18, s=1), dropping truncation at z=1.624 from ~9e-9 to ~8e-14.
+One code path serves 1-D and graph. (A symmetric-only optimisation — Chebyshev coefficients of `φ_k`
+in place of the Bessel `e^{−z}I_k(z)` coefficients of `exp`, keeping the §54.3
+O(1)-vector symmetric kernel — is a deferred ADR-0189 §"deferred" item.)
+
+### §58.3 — ETDRK4 step (Cox–Matthews 2002 / Kassam–Trefethen 2005, NORMATIVE)
+
+With `e^{hL/2}`, `e^{hL}`, and φ acting on the **exact** `L`:
+
+```text
+a       = e^{hL/2} u_n + (h/2) φ₁(hL/2) N(u_n)
+b       = e^{hL/2} u_n + (h/2) φ₁(hL/2) N(a)
+c       = e^{hL/2} a   + (h/2) φ₁(hL/2) (2 N(b) − N(u_n))
+u_{n+1} = e^{hL} u_n
+        + h(φ₁ − 3φ₂ + 4φ₃)(hL) · N(u_n)
+        + h(2φ₂ − 4φ₃)(hL)      · (N(a) + N(b))
+        + h(4φ₃ − φ₂)(hL)       · N(c).
+```
+
+`(h/2)φ₁(hL/2)` is the identity-compatible form of `L⁻¹(e^{hL/2}−I)` — exact,
+free of the cancellation the Kassam–Trefethen contour integral was designed to
+avoid (the augmented action computes `φ₁` directly). **Order claim: 4** (Cox–
+Matthews; observed 3.99/4.01/4.23 on Allen–Cahn 1-D, ADR-0189 probe). `L` is
+never re-discretised, inverted, or split; only `φ₀,φ₁(hL/2)` and `φ₀…φ₃(hL)`
+augmented actions on the cached `L` are needed per step.
+
+### §58.4 — Semilinear adjoint (NORMATIVE)
+
+Each `φ_k(τL)·v` is **linear in `v`**, with transpose-action `φ_k(τLᵀ)` (for
+symmetric graph `L`, `Lᵀ=L`). An ETDRK4 step is the composition of these linear
+φ-actions with `N`. Given a **differentiable** `N` (Jacobian-action `J_N(u)` and
+its transpose `J_N(u)ᵀ`), the step is differentiable by the chain rule and
+`∂J/∂param` propagates end-to-end through one step. The φ-actions never break the
+adjoint; only `N` introduces nonlinearity, and its derivative is supplied by the
+caller (`NonlinearityDiff` JVP/VJP). No new oracle: the gradient is gated against
+central finite differences (§43.6 discipline).
+
+### §58.5 — Honest boundaries (NORMATIVE)
+
+- `Ã` is **non-normal** (rank-`p` nilpotent coupling) ⇒ Taylor-action bounds use
+  the field-of-values; accuracy is verified directly (§58.6 `G_PHI_AUG_DENSE`),
+  `p ≤ 3`.
+- **ETDRK4 order reduction** occurs for very stiff / non-smooth regimes; the
+  order gate fixes a smooth, order-4-dominant regime and uses a **two-sided**
+  band.
+- **Stiff `N`** is outside ETDRK4's range → exponential Rosenbrock (deferred).
+- **Adjoint requires differentiable `N`**; a black-box `N` gets the forward step
+  only.
+
+### §58.6 — Acceptance gates (NORMATIVE)
+
+| Gate | Definition | Threshold | Oracle / teeth |
+|------|-----------|-----------|----------------|
+| `G_PHI_AUG_DENSE` | each `k ∈ {0,1,2,3}`: `phi_action(op,k,τ,v)` vs **eigen-exact** DST-I reference on 6-node symmetric tridiagonal (`offdiag=1`, `τ=0.5`, `z=2.0`); also Padé-13 oracle vs eigen-exact | `action_err ≤ 1e-12`; `pade_err ≤ 1e-12`; `‖φ_k(τA)v‖_∞ ≥ 0.01` (non-vacuity) | Analytic DST-I eigendecomposition (λ_j=−2+2cos(jπ/(n+1)), q_j[i]=√(2/(n+1))·sin(ijπ/(n+1))); scalar φ_k via Taylor series (exact). TEETH: `PHI_NORM_TIGHTEN=2` promotes Taylor-18 at z≈2 — truncation at dominant mode z=1.624 drops from ~9e-9 (Taylor-13) to ~8e-14 (Taylor-18); measured errors ~2e-15 after projection; Padé oracle machine-exact (≤5e-16). |
+| `G_ETDRK4_ORDER` | Allen–Cahn 1-D (`∂ₜu=ε u_xx+u−u³`, periodic) self-convergence vs fine reference; log-log slope over ≥4 step sizes | slope ∈ **`[3.7, 4.3]`** (TWO-SIDED) | fine-reference / Richardson. TEETH: two-sided band rejects order-reduction (<3.7) AND roundoff plateau (→0) |
+| `G_ETD_ADJOINT_FD` | `∂J/∂param` through ONE `Etdrk4::step` (analytic adjoint) vs central FD, non-trivial `N` (`u−u³`, `J_N=1−3u²`), `param` flowing through `N` | rel-err `≤ 1e-6` | central FD (REUSE §43.6; no new oracle). TEETH: `param` enters the nonlinear term ⇒ `J_N` contribution exercised |
+
+All three RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the
+shipping release.  `G_PHI_AUG_DENSE` uses the analytic DST-I eigendecomposition
+as its primary oracle (exact to f64 rounding); Padé-13 is retained as a secondary
+oracle sanity-check.  `G_ETDRK4_ORDER` and `G_ETD_ADJOINT_FD` require no sympy.
+
+### §58.7 — References
+
+- S. M. Cox, P. C. Matthews (2002), *Exponential time differencing for stiff
+  systems*, J. Comput. Phys. 176(2):430–455, DOI 10.1006/jcph.2002.6995.
+- A.-K. Kassam, L. N. Trefethen (2005), *Fourth-order time-stepping for stiff
+  PDEs*, SIAM J. Sci. Comput. 26(4):1214–1233, DOI 10.1137/S1064827502410633.
+- M. Hochbruck, A. Ostermann (2010), *Exponential integrators*, Acta Numerica
+  19:209–286, DOI 10.1017/S0962492910000048.
+- A. H. Al-Mohy, N. J. Higham (2011), SIAM J. Sci. Comput. 33(2):488–511,
+  DOI 10.1137/100788860 (augmented φ construction §4; `THETA_M`).
+- R. B. Sidje (1998), *Expokit*, ACM TOMS 24(1):130–156 (augmented `phiv`).
+- §45 (`expmv` + `mat_exp_pade13` oracle), §54 (graph Krylov action + §54.5
+  augmented Fréchet identity), §55 (`SymmetricLinearOp`), §43.6 (FD adjoint
+  oracle); ADR-0189 (contract authority).

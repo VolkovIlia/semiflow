@@ -292,3 +292,89 @@ After the D6 quick win (`features = ["std", "simd"]`) lands: rebuild the wheel,
 re-run 4b, and confirm the per-channel SpMV SIMD speedup is present (the batched
 hoist + SIMD compound). Verify manylinux_2_28 portability (runtime SIMD feature
 detection, no illegal-instruction on baseline x86-64).
+
+---
+
+## 5. Krylov action + Fréchet gradient delta (ADR-0185, math.md §54)
+
+- **ADR**: `docs/adr/0185-graph-krylov-frechet.md`
+- **Status**: Proposed (design only — Phase 1; no implementation in this branch).
+- **Scope**: ADDITIVE. New `graph_expmv` (A1) and `graph_expmv_frechet` (A2)
+  dispatch targets; the existing `evolve_batched` / `adjoint_state_gradient_batched`
+  signatures (§1–§2) are **byte-unchanged**. New core files
+  `crates/semiflow/src/graph_krylov.rs` (A1) and `graph_frechet.rs` (A2),
+  `include!`-split if either approaches 500 lines; functions ≤ 50 lines; NO new dep.
+- **Boundary**: symmetric `L_G` only (§54.6). Non-symmetric / time-varying ⇒
+  `SemiflowError::Unsupported` (fail-loud), DEFERRED (Arnoldi / Magnus).
+
+### 5a. A1 forward — `graph_expmv` (Lanczos default-Chebyshev, [C, N] batched)
+
+Sibling evolver to `graph_heat.rs`; `ChernoffFunction<F, S = GraphSignal<F>>` so
+it flows through the EXISTING `evolve_batched` (§1a) — one FFI call, one
+`py.detach`, `[C, N]` layout all preserved. `order()` ⇒ `u32::MAX` (tolerance-
+driven, §45/ADR-0121 contract).
+
+```rust
+/// Depth-independent action `e^{−t L_G}·v` (math.md §54.2–§54.3).
+/// `path`: Chebyshev (default, O(1) work vectors) or Lanczos (adaptive).
+/// `order()` == u32::MAX (tolerance-driven; NOT a slope-gated kernel).
+pub struct GraphKrylovChernoff<F: SemiflowFloat = f64> {
+    laplacian: alloc::sync::Arc<crate::graph::Laplacian<F>>,
+    lambda_max: F,        // computed ONCE (Gershgorin / power-iter), §54.3
+    path: KrylovPath,     // Chebyshev { } (default) | Lanczos { m_max }
+    tol: F,               // target action accuracy ε
+}
+
+impl<F: SemiflowFloat> crate::chernoff::ChernoffFunction<F> for GraphKrylovChernoff<F> {
+    type S = crate::graph_signal::GraphSignal<F>;
+    // apply_into computes e^{−tau L_G}·src via §54.2/§54.3, reusing
+    // Laplacian::apply_into_slice (SpMV) + ScratchPool; Lanczos T_m exp via
+    // matrix_system_exp::mat_exp_pade13. Two work vectors (Chebyshev) or
+    // m basis vectors (Lanczos); NO per-step loop.
+}
+```
+
+Batched use is the UNCHANGED `evolve_batched(&gk, &graph, t_final, n_steps, src_cols, dst_cols)`;
+`n_steps` is interpreted as the Chernoff outer resolution but A1's cost is
+flat in depth (§54.4) — pass `n_steps = 1` for a single depth-`t` action.
+
+### 5b. A2 backward — `graph_expmv_frechet` (one augmented VJP, summed `∂J/∂w`)
+
+```rust
+/// Full edge-weight gradient ∂J/∂w of `J(e^{−t L(w)}·v)` via the augmented
+/// Fréchet identity (math.md §54.5), ONE augmented Krylov/Chebyshev solve.
+///
+/// `u0_cols` / `dj_cols` are `[C, N]` (channel-major); `grad_w` (length
+/// `param_deriv.n_params()`) is **zeroed once** then accumulated in ASCENDING
+/// channel index (ADR-0184 D4 0-ULP-within-method invariant). Returns the SAME
+/// summed `∂J/∂w` as `adjoint_state_gradient_batched` — NUMERICALLY (≤ §43.6 FD
+/// oracle, not 0-ULP across algorithms; §54.6).
+///
+/// Reuses `GeneratorSensitivity::apply_param_deriv` (§43.2 rank-1 edge stencil).
+#[allow(clippy::too_many_arguments)]
+pub fn graph_expmv_frechet<F, P>(
+    gk: &GraphKrylovChernoff<F>,
+    u0_cols: &[F],
+    dj_cols: &[F],
+    n_cols: usize,
+    t_final: F,
+    param_deriv: &P,        // EdgeWeightSensitivity (§43.2)
+    grad_w: &mut [F],       // SUMMED over channels, len = n_params
+    scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError>
+where F: SemiflowFloat, P: GeneratorSensitivity<F>;
+```
+
+### 5c. PyO3 — additive methods (unchanged [N, C] ↔ [C, N] boundary, ADR-0184 §3)
+
+`GraphKrylov.evolve_batched([N,C]) -> [N,C]` (same wrapper pattern as §3a) and
+`graph_expmv_frechet([N,C] u0, [N,C] dj, …) -> [n_params]` (same as §3c). One
+GIL release per call.
+
+### 5d. Gates (math.md §54.7, properties.yaml)
+
+`G_GRAPH_EXPMV_DENSE` (≤1e-10 vs dense `mat_exp_pade13`),
+`G_GRAPH_FRECHET_FD` (rel-err ≤1e-7 vs §43.6 FD oracle, REUSE),
+`G_GRAPH_EXPMV_DEPTH_FLAT` (matvec-count flat in `t`). 0-ULP channel-batch axis
+reuses ADR-0184 D5 (no new oracle). A1 ships first (DENSE + DEPTH_FLAT), then A2
+(FRECHET_FD).

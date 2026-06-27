@@ -162,6 +162,7 @@ pub mod carnot_stepk;
 pub(crate) mod carnot_stepk_helpers;
 pub mod chernoff;
 pub mod complex;
+pub mod conservative; pub mod conservative_assemble;
 pub mod controller;
 pub mod diffusion;
 pub mod diffusion4;
@@ -175,10 +176,10 @@ pub(crate) mod diffusion_zeta_common;
 pub mod drift_reaction;
 pub mod drift_reaction_zeta4;
 pub mod dual;
-pub mod error;
+pub mod error; pub mod etdrk4; pub(crate) mod etdrk4_helpers;
 pub mod expmv;
 pub mod float;
-pub(crate) mod gen_quadrature;
+pub(crate) mod gen_quadrature; pub mod generator_action;
 pub mod graph;
 pub mod graph_adjoint_presampled;
 pub mod graph_batched;
@@ -186,8 +187,8 @@ mod graph_batched_tests;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
-pub mod graph_sensitivity;
-pub(crate) mod graph_sensitivity_helpers;
+pub mod entry_sensitivity; pub mod graph_frechet; pub mod graph_krylov; pub mod mass_operator; pub mod symmetric_operator;
+pub mod graph_sensitivity; pub(crate) mod graph_sensitivity_helpers;
 mod graph_sensitivity_tests;
 pub mod graph_signal;
 pub mod graph_traj;
@@ -234,10 +235,10 @@ pub(crate) mod matrix_pade_complex;
 pub(crate) mod matrix_strang;
 pub mod matrix_system;
 pub mod matrix_system_complex;
-pub mod nonseparable2d;
-pub mod nonseparable2d_aniso;
-pub mod nonseparable_mixed;
-pub mod nonseparable_mixed_closure;
+pub mod multilayer;
+pub mod nonlinearity;
+pub mod nonseparable2d; pub mod nonseparable2d_aniso;
+pub mod nonseparable_mixed; pub mod nonseparable_mixed_closure;
 pub mod obstacle;
 pub mod obstacle_gamma;
 pub mod obstacle_nd;
@@ -251,7 +252,7 @@ pub(crate) mod parallel1d;
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]
 pub mod parallel_pool;
-pub(crate) mod pencil;
+pub(crate) mod pencil; pub mod phi_action; pub(crate) mod phi_action_helpers;
 pub mod point_eval;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
@@ -353,9 +354,8 @@ pub use crate::{
     carnot_complex::{ComplexTripleJump, CplxGridFn5, GAMMA_STAR},
     carnot_stepk::{Filiform5X1, Filiform5X2},
     chernoff::{ApplyChernoffExt, ChernoffFunction, ChernoffSemigroup, Evolver, Growth},
-    complex::SemiflowComplex,
-    controller::{ClassicalPI, H211bFilter, StepController},
-    diffusion::DiffusionChernoff,
+    complex::SemiflowComplex, conservative::{ConservativeDiffusionChernoff, steady_state_dirichlet_1d}, conservative_assemble::{assemble_conservative_csr_1d, assemble_conservative_csr_nd},
+    controller::{ClassicalPI, H211bFilter, StepController}, diffusion::DiffusionChernoff,
     diffusion4::Diffusion4thChernoff,
     diffusion4_zeta4::Diffusion4thZeta4Chernoff,
     diffusion6::Diffusion6thChernoff,
@@ -364,31 +364,30 @@ pub use crate::{
     drift_reaction::DriftReactionChernoff,
     drift_reaction_zeta4::DriftReactionZeta4Chernoff,
     dual::Dual,
-    error::SemiflowError,
+    error::SemiflowError, etdrk4::Etdrk4,
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
     graph::{Graph, Laplacian, LaplacianKind},
-    graph_adjoint_presampled::{
-        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
-    },
+    graph_adjoint_presampled::{fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj},
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
-    graph_heat6::GraphHeat6thChernoff,
-    graph_sensitivity::{
-        adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
-        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity,
-    },
+    graph_frechet::graph_expmv_frechet,
+    graph_heat6::GraphHeat6thChernoff, entry_sensitivity::EntrySensitivity,
+    graph_krylov::{dense_graph_expmv_ref, graph_expmv_krylov, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
+    mass_operator::{dense_massk_expmv_ref, mass_lumped_evolve, MassKOperator, TriangularFactor}, symmetric_operator::{dense_csr_expmv_ref, SymmetricLinearOp, SymmetricOperator},
+    multilayer::{Layer, MassWeightedConservativeChernoff, MultilayerStack, multilayer_evolve},
+    graph_sensitivity::{adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
+        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity},
     graph_signal::{CsrRowIter, GraphSignal},
     graph_traj::{GraphTraj, SegmentWeightFn, MAX_GRAPH_TRAJ_SEGMENTS},
     graph_var_coef::VarCoefGraphHeatChernoff,
     grid::{BoundaryPolicy, Grid1D, InterpKind, OobPolicy},
-    grid2d::Grid2D,
-    grid3d::Grid3D,
+    grid2d::Grid2D, grid3d::Grid3D,
     grid_fn::GridFn1D,
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
     grid_nd::{GridFnND, GridND},
-    gridless::{GridlessChernoff, ParticleReduction},
+    generator_action::{DivFormGenerator, GeneratorAction, NegLaplacianGenerator}, gridless::{GridlessChernoff, ParticleReduction},
     hdr::HdrSnapshot,
     heisenberg_kernel::heisenberg_heat_kernel,
     hormander::{
@@ -411,12 +410,13 @@ pub use crate::{
     },
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     matrix_system_complex::{MatrixDiffusionChernoffComplex, MatrixGridFnComplex1D},
+    nonlinearity::{AllenCahn, Nonlinearity, NonlinearityDiff},
     nonseparable2d::NonSeparable2DChernoff,
     nonseparable2d_aniso::NonSeparable2DAnisotropicChernoff,
     nonseparable_mixed::NonSeparableMixedChernoff,
     obstacle::{ClosureObstacle, ConstantObstacle, Obstacle, ObstacleChernoff},
     obstacle_nd::ObstacleChernoffND,
-    point_eval::{sample_gridfn2d, PointEval},
+    phi_action::{dense_phi_aug_ref, phi_action, phi_action_batched, PHI_MAX}, point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff, ReflectingRegion},
