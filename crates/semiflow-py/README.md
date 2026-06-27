@@ -356,6 +356,11 @@ to `extraPaths` so local development also resolves the stubs correctly
 I. D. Remizov, *Vladikavkaz Math. J.* **27**(4) (2025) 124–135.
 DOI [10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q)
 
+## Changelog / Release notes
+
+- [CHANGELOG.md](https://github.com/VolkovIlia/semiflow/blob/master/CHANGELOG.md) — full version history
+- [GitHub Releases](https://github.com/VolkovIlia/semiflow/releases) — tagged release notes and wheel downloads
+
 ## License
 
 MIT OR Apache-2.0 — same as `semiflow`.

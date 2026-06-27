@@ -313,6 +313,11 @@ Dual MIT OR Apache-2.0. See [`LICENSE-MIT`](../../LICENSE-MIT) and
 
 Created and maintained by **Ilia Volkov** — ilia.volkov@outlook.com.
 
+## Changelog
+
+Full version history in [CHANGELOG.md](https://github.com/VolkovIlia/semiflow/blob/master/CHANGELOG.md).
+Tagged releases (with wheels and notes) on [GitHub Releases](https://github.com/VolkovIlia/semiflow/releases).
+
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/VolkovIlia/semiflow/blob/master/CONTRIBUTING.md)
