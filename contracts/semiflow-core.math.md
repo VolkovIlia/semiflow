@@ -13279,3 +13279,177 @@ oracle sanity-check.  `G_ETDRK4_ORDER` and `G_ETD_ADJOINT_FD` require no sympy.
 - §45 (`expmv` + `mat_exp_pade13` oracle), §54 (graph Krylov action + §54.5
   augmented Fréchet identity), §55 (`SymmetricLinearOp`), §43.6 (FD adjoint
   oracle); ADR-0189 (contract authority).
+
+## §59 — Implicit / shift-invert stiff action for the externally-assembled symmetric operator (ADR-0190, Issue #16, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** A NORMATIVE implicit propagator for the §55 `SymmetricOperator` /
+> lumped `(M,K)` path, for **stiff** symmetric PSD sparse operators where the
+> explicit §54 action (cost `O(λ_max·t)`; sub-steps `s=⌈τλ_max/Z_SAFE⌉`) times out.
+> It is the **general sparse-CSR** sibling of §57.4 (whose A-stable CN is
+> **tridiagonal-only**, one Thomas pass). The linear core stays symmetric PSD
+> exactly as §55; only the propagator changes from Krylov-exact to backward-Euler
+> shift-invert. **Dependency-free** (ADR-0190): no Cholesky/LU crate; the shifted
+> SPD system is solved by preconditioned CG reusing the §55 matvec. Symmetric `Â`
+> only; the non-symmetric `M⁻¹A` is handled by the UNCHANGED §55.3 √μ congruence.
+
+### §59.1 — Backward-Euler action (NORMATIVE)
+
+Let `Â` be the symmetric PSD operator of §55 (the generic `L`, or the lumped
+congruence `Â = D^{−½}KD^{−½}` of §55.3, or the consistent `Â = R^{−T}KR^{−1}` of
+§55.2). For a re-entry interval `τ` split into `n_steps` equal sub-steps
+`Δt = τ / n_steps`, the backward-Euler (implicit Euler) recurrence approximates the
+exact semigroup `e^{−τÂ}` by the rational propagator (NORMATIVE):
+
+```text
+S := I + Δt·Â                        (the SHIFTED system operator),
+S · u_{k+1} = u_k ,  k = 0..n_steps−1,   u_0 = w_0,
+e^{−τÂ} w_0  ≈  u_{n_steps} = S^{−n_steps} w_0 = (I + Δt·Â)^{−n_steps} w_0 .   [§59.1.a]
+```
+
+Each sub-step is ONE solve of `S x = b` with `S` symmetric positive-definite
+(§59.3). The lumped/consistent pre-scale `w_0 = √μ ⊙ v` (or `w_0 = R v`) and
+post-scale `u = w ⊘ √μ` (or `u = R^{−1} w`) are the UNCHANGED §55.2/§55.3 wrappers;
+the implicit propagator replaces ONLY the inner `w = e^{−τÂ} w_0` action.
+
+### §59.2 — Reuse-one-factorization scheme, across sub-steps AND channels (NORMATIVE)
+
+`S = I + Δt·Â` is **identical for every sub-step** `k` (fixed `Δt`) and **every
+channel** `c` (same operator). The solve is preconditioned CG (§59.4) whose only
+setup is a **preconditioner** `P ≈ S`. NORMATIVE reuse:
+
+```text
+build P once from (Â, Δt)        →   reused ∀ k ∈ 1..n_steps  AND  ∀ c ∈ 1..n_channels,
+per sub-step / per channel        →   CG loop only; NO per-solve setup.        [§59.2.a]
+```
+
+`P` is the single "factorization" the implicit path owns. Two NORMATIVE choices,
+selectable without API change:
+
+- **Jacobi (v1 default):** `P = diag(S) = I + Δt·diag(Â)`. Setup `O(N)`, apply `O(N)`.
+- **IC(0) (stronger, optional):** incomplete Cholesky with **zero fill-in** — `P = L̃L̃ᵀ`
+  where `L̃` has EXACTLY the lower-triangular sparsity pattern of `S` (no new
+  nonzeros). Setup `O(nnz)`, apply = two triangular sweeps `O(nnz)`. Zero fill-in is
+  the reason IC(0) does not blow up on 3-D FEM (unlike a full sparse Cholesky). If any
+  pivot `L̃[i,i]² ≤ 0` is encountered (non-M-matrix `S`), the build FAILS LOUD and the
+  path falls back to Jacobi (NORMATIVE fallback; never surfaces an error).
+
+For the direct-factor variant (out of scope for v1, recorded for completeness) the
+single reused object would instead be the exact Cholesky factor of `S`.
+
+### §59.3 — SPD / definiteness conditions (NORMATIVE — the enabling lemma)
+
+**Lemma (the shift lifts the spectrum).** If `Â = Âᵀ` is positive-semidefinite,
+`σ(Â) ⊂ [0, λ_max]`, then for every `Δt > 0`:
+
+```text
+S = I + Δt·Â   is symmetric positive-DEFINITE,   σ(S) ⊂ [1, 1 + Δt·λ_max] ⊂ (0, ∞).
+```
+
+*Proof.* `Â` and `S` share eigenvectors; the scalar map `μ ↦ 1 + Δt·μ` sends
+`[0, λ_max]` into `[1, 1+Δt·λ_max]`, strictly positive. ∎ **Consequence
+(NORMATIVE):** `S` is SPD **even when `A` is singular** (a PSD FEM stiffness with a
+constant null vector, `σ_min(Â) = 0`), so CG (§59.4) is well-defined, cannot break
+down, and converges. This is the property that makes the dependency-free path sound.
+
+Definiteness caveats mirror §55.6: only the necessary check `Â[i,i] ≥ 0` is enforced
+upstream (§55.1); a symmetric **indefinite** `Â` (`σ_min < 0`) makes `S` indefinite
+whenever `Δt > 1/|σ_min|` — CG may then break down. NORMATIVE guard: the implicit
+path requires the §55.1 PSD precondition; on a non-PSD `Â` the caller owns the risk
+(same contract as §55.6), and a CG breakdown is reported as `ConvergenceFailed`.
+
+### §59.4 — Preconditioned CG inner solve (NORMATIVE)
+
+`S x = b` is solved by standard preconditioned Conjugate Gradient reusing the §55
+matvec `x ↦ Âx` (`SymmetricLinearOp::apply_into_slice`); `S x = x + Δt·(Âx)` needs
+no assembled `S`. NORMATIVE stopping and limits:
+
+```text
+converged  ⇔  ‖r_j‖₂ ≤ tol_cg · ‖b‖₂ ,   tol_cg := max(tol, 1e−12),
+max_iter   := min(N, ceil(K · sqrt(1 + Δt·λ_max)) ) ,   K a small constant (≈ 4),
+warm start :  x_0 := b   (previous sub-step's u_k is a good initial guess).      [§59.4.a]
+```
+
+CG on an SPD system is exact in ≤ N steps and reaches `tol_cg` in
+`≈ ½·√κ(S)·ln(2/tol_cg)` iterations, `κ(S) = (1+Δt·λ_max)/(1+Δt·λ_min) ≤ 1+Δt·λ_max`.
+Preconditioning replaces `κ(S)` by `κ(P^{−1}S) ≪ κ(S)`. If `max_iter` is hit without
+convergence → `SemiflowError::ConvergenceFailed` (errors-as-values; no partial write).
+
+### §59.5 — Cost model and accuracy order (NORMATIVE)
+
+**Cost (NORMATIVE).** Total matvecs `≈ n_steps · ½√(κ(P^{−1}S)) · ln(2/tol_cg)`. With
+Jacobi, `κ ≤ 1+Δt·λ_max` so per-step iterations scale as `√(Δt·λ_max)` and total as
+`√(n_steps · τ · λ_max)`; with IC(0) on an M-matrix-like FEM `S` the spectrum
+clusters and iterations are near-constant in practice. **Contrast with the explicit
+§54 path** (`O(τ·λ_max)` matvecs): the `λ_max` dependence drops from **linear** to
+**square-root** (Jacobi) or **near-constant** (IC(0)) — the cost is governed by the
+low modes / the accuracy-chosen `n_steps`, not by `λ_max`. This is the depth-vs-λ_max
+distinction that makes the stiff M5-bolt case (`τλ_max ≈ 5.14e7`) tractable: explicit
+≈ `10^7–10^9` matvecs (timeout) → implicit ≈ `10^3–10^5` matvecs.
+
+**Accuracy (NORMATIVE).** Backward-Euler is **order O(Δt) = O(τ/n_steps)**,
+**L-stable**: its stability function `R(z) = 1/(1+z)` satisfies `|R(z)| → 0` as
+`z → ∞`, so the stiff `λ_max` modes are **damped** (this is why backward-Euler, not
+A-stable Crank–Nicolson `R(z)=(1−z/2)/(1+z/2) → −1`, is chosen — CN would leave
+undamped `±` oscillations on the `λ_max` modes). v1 ships O(Δt). **Optional order-2
+(NORMATIVE-optional, deferred to keep v1 minimal):** a single-γ L-stable SDIRK2
+(γ = 1 − √2/2), each stage solving `(I + γΔt·Â)x = b` with the SAME γ, so the SAME
+preconditioner `P` (built on `I+γΔt·Â`) is reused across the two stages, all
+sub-steps, and all channels — O(Δt²) accuracy with no change to the solver
+infrastructure. If specified later it becomes `KrylovPath::ImplicitSdirk2 { n_steps }`.
+
+### §59.6 — Mass-matrix cases (NORMATIVE)
+
+- **Diagonal / lumped `M = D` (production path).** Solve on the sparse symmetric
+  congruence `Â = D^{−½}KD^{−½}` (§55.3) with pre-scale `w_0 = √μ ⊙ v`, post-scale
+  `u = w ⊘ √μ`. The implicit solver sees only the symmetric `Â`; identical wrapper to
+  the explicit `mass_lumped_evolve`. This is the Issue #16 primary path.
+- **Consistent `(M,K)`.** Solve on `Â = R^{−T}KR^{−1}` (§55.2) via the 3-stage matvec
+  chain (`R^{−1}`, `K`, `R^{−T}`); the caller supplies `R`. `S = I+Δt·Â` is still SPD
+  (§59.3), so PCG applies unchanged. Scoped as a follow-on (same `SymmetricLinearOp`).
+- **Never solve the non-symmetric `M⁻¹A`.** All implicit solves are on the symmetric
+  `Â`; the mass-weighting is purely the §55 √μ / R wrappers.
+
+### §59.7 — Acceptance gates (NORMATIVE)
+
+All RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the shipping
+release; non-vacuity asserted inside each. Oracles REUSE dense `mat_exp_pade13` (§45)
+and a test-local analytic spectral (DST-I) reference — **no new sympy**.
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_SYMOP_IMPLICIT_DENSE` | `path="implicit"` action `e^{−τL}v` vs dense `mat_exp_pade13(−τL)`, non-zero-row-sum Robin-BC symmetric PSD `L` (`N ≤ 12`), moderate stiffness, `n_steps` swept `{50,100,200}` | (a) `sup_error ≤ 1e-6` at `n_steps=200`; **and** (b) order-1 decay `err(n)/err(2n) ∈ [1.7, 2.3]` | dense `mat_exp_pade13` (REUSE §45/§55.5) |
+| `G_SYMOP_IMPLICIT_STIFF` (TEETH — the #16 capability) | dependency-free repro: `N = 400` 1-D Laplacian scaled `×1e7`, `t = 1.0`, `path="implicit"` | (a) COMPLETES within a wall budget `≤ 5 s` (the explicit path times out); **and** (b) `sup_error ≤ 1e-6` vs DST-I analytic spectral reference; **and** (c) CG matvec count `≤ C·n_steps·√(1+Δt·λ_max)` with the count `≪ ⌈τ·λ_max⌉` (the explicit count) | analytic DST-I spectral solution `u = Σ_k e^{−tλ_k}⟨φ_k,v⟩φ_k` (closed form; no solver) |
+| `G_SYMOP_IMPLICIT_PCG_SPD` (TEETH — the shift lemma) | PCG solves `S x = b` for a seeded PSD `Â` **including a singular case** (zero eigenvalue, constant null vector), `Δt > 0` | residual `‖Sx−b‖₂ ≤ tol_cg·‖b‖₂` reached in `≤ N` iters (proves the shift makes `S` SPD/solvable even when `A` is singular) | direct: assert `‖Sx−b‖` post-hoc |
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).** `G_SYMOP_IMPLICIT_DENSE`
+asserts `∃ i : Σ_j L[i,j] ≠ 0` (Robin rows); `G_SYMOP_IMPLICIT_STIFF` asserts the
+explicit-path count `⌈τλ_max⌉ ≥ 10^7` (genuinely stiff) AND that the explicit path
+would exceed the budget; `G_SYMOP_IMPLICIT_PCG_SPD` asserts `σ_min(Â) = 0` (a genuine
+singular `A`, so the guarantee is the shift's, not `A`'s).
+
+### §59.8 — Boundary and honest scope (NORMATIVE)
+
+- **√κ, not strictly constant.** PCG cost is `O(√κ_eff)` per step, NOT the O(1)/step
+  of a true direct factorization. IC(0) approximates λ_max-independence in practice but
+  does not guarantee it in theory; strict λ_max-independence (a reused exact Cholesky
+  or an external sparse-direct crate) is a SEPARATE future ADR with the maintainer
+  governance sign-off recorded there (ADR-0190 §"Dependency decision").
+- **Symmetric PSD only** (§55.6 inherited). Indefinite `Â` with `Δt > 1/|σ_min|` makes
+  `S` indefinite → CG may break down → `ConvergenceFailed`.
+- **O(Δt) v1.** Order-2 SDIRK2 (§59.5) is NORMATIVE-optional and deferred.
+- **No new error kind.** CG non-convergence → `ConvergenceFailed`; IC(0) pivot failure
+  → silent Jacobi fallback. Reuses the existing §55 / `SemiflowError` taxonomy.
+
+### §59.9 — References
+
+- Y. Saad, *Iterative Methods for Sparse Linear Systems*, 2nd ed., SIAM 2003 —
+  CG, preconditioning, IC(0) zero-fill incomplete Cholesky.
+- G. H. Golub & C. F. Van Loan, *Matrix Computations*, 4th ed. — SPD CG convergence
+  `≈ ½√κ ln(2/ε)`; shifted-system conditioning.
+- E. Hairer & G. Wanner, *Solving Ordinary Differential Equations II: Stiff and
+  Differential-Algebraic Problems*, Springer 1996 — backward-Euler / SDIRK
+  L-stability; the `R(z)→0` stiff-mode damping argument.
+- §55 (`SymmetricOperator`, `SymmetricLinearOp`, √μ / R congruence — reused verbatim),
+  §57.4 (tridiagonal-only CN — the boundary this section extends), §45
+  (`mat_exp_pade13` dense oracle), §54 (the explicit action, left untouched).
+- ADR-0190 (contract authority), ADR-0186 (§55), ADR-0188 (§57), ADR-0185 (§54).
