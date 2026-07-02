@@ -34,6 +34,11 @@ Issues = "https://github.com/VolkovIlia/semiflow/issues"
 Changelog = "https://github.com/VolkovIlia/semiflow/blob/master/CHANGELOG.md"
 "Release Notes" = "https://github.com/VolkovIlia/semiflow/releases"
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
 [tool.maturin]
 # Use the shared binding-crate profile (panic = "unwind" required).
 profile = "release-ffi"
