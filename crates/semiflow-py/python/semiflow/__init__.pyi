@@ -6088,8 +6088,14 @@ class SymmetricOperator:
         path: str = "chebyshev",
         tol: float = 1e-10,
         m_max: int = 18,
+        n_steps: int = 100,
     ) -> NDArray[np.float64]:
         """Apply ``e^{-t A}`` to batched input ``v_nc`` (shape ``[N, C]``).
+
+        Parameters
+        ----------
+        n_steps : int, optional
+            Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
         Returns ndarray of shape ``(N, C)``.
         """
@@ -6189,8 +6195,14 @@ class MassKOperator:
         path: str = "chebyshev",
         tol: float = 1e-10,
         m_max: int = 18,
+        n_steps: int = 100,
     ) -> NDArray[np.float64]:
         """Apply ``e^{-t M⁻¹ K}`` to vector ``v`` (shape ``(n,)``).
+
+        Parameters
+        ----------
+        n_steps : int, optional
+            Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
         Returns ndarray of shape ``(n,)``.
         """
@@ -6209,8 +6221,14 @@ def mass_lumped_evolve(
     path: str = "chebyshev",
     tol: float = 1e-10,
     m_max: int = 18,
+    n_steps: int = 100,
 ) -> NDArray[np.float64]:
     """Evolve ``e^{-t M⁻¹ K} V`` for diagonal mass matrix ``M = diag(m_diag)`` (§55.3).
+
+    Parameters
+    ----------
+    n_steps : int, optional
+        Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
     Returns ndarray of shape ``(N, C)``.
     """

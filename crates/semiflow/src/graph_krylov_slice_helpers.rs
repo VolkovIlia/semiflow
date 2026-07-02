@@ -112,6 +112,10 @@ where
         KrylovPath::Lanczos { m_max } => {
             expmv_lanczos(op, tau, v, out, m_max, scratch)?;
         }
+        KrylovPath::ImplicitEuler { n_steps } => {
+            implicit_euler_action(op as &dyn SymmetricLinearOp<F>, v, out,
+                                  tau, n_steps, tol, scratch)?;
+        }
     }
     Ok(())
 }

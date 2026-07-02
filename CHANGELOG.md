@@ -4,6 +4,39 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added (#16)
+
+- **`path="implicit"` on `SymmetricOperator.evolve_batched`, `mass_lumped_evolve`,
+  and `MassKOperator.evolve`** (ADR-0190, math §59, branch
+  `feat/issue-16-implicit-symmetric-operator`): an implicit backward-Euler /
+  shift-invert action for the externally-assembled symmetric-operator path.
+  Computes `e^{−tA}v ≈ (I+Δt·A)^{−n_steps} v` via preconditioned Conjugate Gradient
+  (PCG) with Jacobi preconditioning, dependency-free (no new crate; governance budget
+  unchanged). The `+I` shift makes the per-step system `S = I + Δt·Â` symmetric
+  positive-definite for any `Δt > 0` — CG is always well-posed and converges (§59.3).
+  `n_steps` (default 100) is the number of backward-Euler sub-steps; accuracy is
+  O(Δt) = O(t/n_steps), so increase `n_steps` to tighten tolerance.
+
+  **When to use**: stiff FEM or Robin-BC operators where `λ_max ≳ 10⁵ /s` causes
+  the explicit `path="lanczos"` / `path="chebyshev"` to sub-step O(τλ_max) times
+  and time out. `scipy.sparse.linalg.expm_multiply` has the same cost ceiling.
+
+  **Cost caveat**: governed by `√κ` of the Jacobi-preconditioned `S`, not strictly
+  `λ_max`-independent. IC(0) (zero-fill incomplete Cholesky, drop-in stronger
+  preconditioner) is specified as §59.6 follow-on work and deferred.
+
+  Gates: `G_SYMOP_IMPLICIT_DENSE` ≤ 1e-9 (well-conditioned Poisson-like operator);
+  `G_SYMOP_IMPLICIT_STIFF` ≤ 1e-9 (Neumann N=400 ×1e7, surviving-mode reference);
+  `G_SYMOP_IMPLICIT_PCG_SPD` structural (CG non-breakdown proved by SPD shift).
+
+  Empirical (QA, stiff Neumann N=400 ×1e7): `path="implicit"` returns in ~4 ms at
+  sup_error 3.3e-12 vs the analytic surviving-mode reference; `path="lanczos"` takes
+  ~56 s; `scipy.sparse.linalg.expm_multiply` does not return within 90 s. In a
+  well-conditioned regime (`path="implicit"` matches `scipy.linalg.expm` to ~1.6e-9).
+  Memory ≈ 32 MB, ~2× below scipy's dense path.
+
 ## [0.11.0-beta] — 2026-06-27
 
 Python binding surface for the 0.10.0-beta feature wave (#11–#14 + A1).
