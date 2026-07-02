@@ -4,7 +4,7 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0-beta] - 2026-07-02
 
 ### Added (#16)
 
@@ -36,6 +36,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ~56 s; `scipy.sparse.linalg.expm_multiply` does not return within 90 s. In a
   well-conditioned regime (`path="implicit"` matches `scipy.linalg.expm` to ~1.6e-9).
   Memory ≈ 32 MB, ~2× below scipy's dense path.
+
+### Fixed (CI hardening)
+
+- **Flagship Gates**: Resolvent argument parsing and bounded `L_RESOLVENT` tick budget
+  enforcement turned green on main. Nightly miri scalar path (`src/scalar/`) validated.
+- **Nightly CI**: Bench-regression detection scoped to core benchmark families +
+  baseline guard to prevent false positives from external library version drift.
 
 ## [0.11.0-beta] — 2026-06-27
 
