@@ -203,6 +203,34 @@ jobs:
           cargo --version
       - run: cargo run -p xtask -- py-smoke
 
+  # Run the 825-test fast Python suite on every push/PR to catch regressions
+  # early.  The full cibuildwheel gate only fires at release time, which lets
+  # stale-assertion bugs slip through.  This job mirrors the xtask py-smoke
+  # setup (venv → maturin develop → pytest) but adds `-m "not slow"` to skip
+  # the two slow integration tests and keeps the gate under ~3 min.
+  py-test-fast:
+    needs: py-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Create venv and install deps (mirrors xtask py-smoke)
+        run: |
+          python -m venv target/py-fast-venv
+          target/py-fast-venv/bin/pip install maturin numpy pytest
+      - name: Build and install extension module (maturin develop)
+        run: |
+          VIRTUAL_ENV=$PWD/target/py-fast-venv \
+          target/py-fast-venv/bin/maturin develop --profile release-ffi \
+            -m crates/semiflow-py/Cargo.toml
+      - name: Run fast Python suite (825 tests, 2 slow deselected)
+        run: |
+          target/py-fast-venv/bin/pytest crates/semiflow-py/tests \
+            -m "not slow" -q
+
   wasm-build:
     runs-on: ${{ matrix.os }}
     strategy:
