@@ -26,14 +26,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::{
-    error::SemiflowError,
-    expmv::select_s_m,
-    float::SemiflowFloat,
-    generator_action::GeneratorAction,
-    graph_krylov::MAX_DENSE_N,
-    matrix_pade::mat_exp_pade13,
-    phi_action_helpers::aug_horner_outer,
-    scratch::ScratchPool,
+    error::SemiflowError, expmv::select_s_m, float::SemiflowFloat,
+    generator_action::GeneratorAction, graph_krylov::MAX_DENSE_N, matrix_pade::mat_exp_pade13,
+    phi_action_helpers::aug_horner_outer, scratch::ScratchPool,
 };
 
 /// Maximum supported φ index.
@@ -55,7 +50,8 @@ const PHI_NORM_TIGHTEN: f64 = 2.0;
 /// `‖Ã‖` bound: `τ·‖A‖ + ‖v‖_∞ + 1`.
 fn aug_norm_bound<F: SemiflowFloat>(op_norm: f64, tau: F, v: &[F]) -> f64 {
     let tau_f64 = tau.to_f64().unwrap_or(0.0);
-    let v_inf = v.iter()
+    let v_inf = v
+        .iter()
         .map(|x| x.abs().to_f64().unwrap_or(0.0))
         .fold(0.0_f64, f64::max);
     tau_f64 * op_norm + v_inf + 1.0
@@ -220,11 +216,17 @@ fn fill_aug_dense_mat(
     for j in 0..n {
         e_j[j] = 1.0;
         gen.apply_generator(&e_j, &mut col_j);
-        for i in 0..n { mat[i][j] = tau * col_j[i]; }
+        for i in 0..n {
+            mat[i][j] = tau * col_j[i];
+        }
         e_j[j] = 0.0;
     }
-    for i in 0..n { mat[i][n] = v[i]; }
-    for i in n..n + PHI_MAX - 1 { mat[i][i + 1] = 1.0; }
+    for i in 0..n {
+        mat[i][n] = v[i];
+    }
+    for i in n..n + PHI_MAX - 1 {
+        mat[i][i + 1] = 1.0;
+    }
     mat
 }
 
@@ -255,9 +257,15 @@ pub fn dense_phi_aug_ref(
     let exp_mat = mat_exp_pade13::<f64, MAX_DENSE_N>(&mat)?;
     let mut out = Vec::with_capacity(PHI_MAX + 1);
     // φ_0: exp_mat[0:n, 0:n] · v.
-    out.push((0..n).map(|i| (0..n).map(|j| exp_mat[i][j] * v[j]).sum()).collect());
+    out.push(
+        (0..n)
+            .map(|i| (0..n).map(|j| exp_mat[i][j] * v[j]).sum())
+            .collect(),
+    );
     // φ_k (k = 1 … PHI_MAX): column n+(k−1) of exp_mat, top n rows.
-    for k in 1..=PHI_MAX { out.push((0..n).map(|i| exp_mat[i][n + k - 1]).collect()); }
+    for k in 1..=PHI_MAX {
+        out.push((0..n).map(|i| exp_mat[i][n + k - 1]).collect());
+    }
     Ok(out)
 }
 

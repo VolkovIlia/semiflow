@@ -15,9 +15,8 @@
 //! assertion that silently catches regression to the zero-sum case.
 
 use semiflow::{
-    graph_expmv_krylov,
-    graph_frechet::graph_expmv_frechet,
-    scratch::ScratchPool, EntrySensitivity, KrylovPath, SymmetricOperator,
+    graph_expmv_krylov, graph_frechet::graph_expmv_frechet, scratch::ScratchPool, EntrySensitivity,
+    KrylovPath, SymmetricOperator,
 };
 
 /// Build triangle Laplacian as `SymmetricOperator` from flat 9-element CSR vals.
@@ -35,8 +34,16 @@ fn j_triangle(vals: [f64; 9], tau: f64, u0: &[f64; 3], dj: &[f64; 3]) -> f64 {
     let op = triangle_op(vals);
     let mut out = [0.0_f64; 3];
     let mut scratch = ScratchPool::new();
-    graph_expmv_krylov(&op, tau, u0.as_slice(), out.as_mut_slice(), KrylovPath::Chebyshev, 1e-12, &mut scratch)
-        .expect("j_triangle: krylov failed");
+    graph_expmv_krylov(
+        &op,
+        tau,
+        u0.as_slice(),
+        out.as_mut_slice(),
+        KrylovPath::Chebyshev,
+        1e-12,
+        &mut scratch,
+    )
+    .expect("j_triangle: krylov failed");
     out.iter().zip(dj.iter()).map(|(a, b)| a * b).sum::<f64>()
 }
 
@@ -55,9 +62,9 @@ fn g_symop_entry_frechet() {
     // L[0,0]=1.9, L[1,1]=2.2, L[2,2]=1.6 (off-diagonals −1.0/−0.7/−0.4 unchanged).
     // Row sums: each row = 0.5 ≠ 0 (generic non-zero-row-sum case, issue #13).
     let nom: [f64; 9] = [
-        1.9, -1.0, -0.4,   // row 0: sum = 0.5
-        -1.0, 2.2, -0.7,   // row 1: sum = 0.5
-        -0.4, -0.7, 1.6,   // row 2: sum = 0.5
+        1.9, -1.0, -0.4, // row 0: sum = 0.5
+        -1.0, 2.2, -0.7, // row 1: sum = 0.5
+        -0.4, -0.7, 1.6, // row 2: sum = 0.5
     ];
 
     // Non-vacuity: assert at least one row sum is non-zero (gates #13 headline capability).
@@ -80,8 +87,17 @@ fn g_symop_entry_frechet() {
     };
     let mut grad = [0.0_f64; 3];
     let mut scratch = ScratchPool::new();
-    graph_expmv_frechet(&krylov, &u0, &dj, 1, tau, &sens, grad.as_mut_slice(), &mut scratch)
-        .expect("graph_expmv_frechet");
+    graph_expmv_frechet(
+        &krylov,
+        &u0,
+        &dj,
+        1,
+        tau,
+        &sens,
+        grad.as_mut_slice(),
+        &mut scratch,
+    )
+    .expect("graph_expmv_frechet");
 
     // CSR position pairs for symmetric perturbation of each entry:
     //   entry (0,1): vals[1] = L[0,1], vals[3] = L[1,0]

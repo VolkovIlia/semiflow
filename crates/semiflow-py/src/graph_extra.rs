@@ -243,7 +243,9 @@ impl PyLaplacian {
                 LaplacianKind::GeneralSymmetric,
             )
             .map_err(|e| from_core(&e))?;
-            Ok(PyLaplacian { inner: Arc::new(inner) })
+            Ok(PyLaplacian {
+                inner: Arc::new(inner),
+            })
         })
     }
 

@@ -16,12 +16,14 @@
     clippy::cast_sign_loss,
     clippy::doc_markdown,
     clippy::needless_pass_by_value,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
+use numpy::{
+    PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray,
+};
 use pyo3::prelude::*;
 use semiflow::{
     graph_batched, graph_expmv_frechet, EntrySensitivity, Graph, KrylovPath, ScratchPool,
@@ -197,10 +199,22 @@ pub fn symmetric_op_expmv_frechet_py<'py>(
         let op_c = Arc::clone(&op.op);
         let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(move || {
             let gk = op_c.krylov(KrylovPath::Chebyshev, 1e-12)?;
-            let sens = EntrySensitivity { entries, n_nodes: n };
+            let sens = EntrySensitivity {
+                entries,
+                n_nodes: n,
+            };
             let mut grad = vec![0.0_f64; n_params];
             let mut scratch = ScratchPool::new();
-            graph_expmv_frechet(&gk, &u0_cn, &dj_cn, n_cols, t, &sens, &mut grad, &mut scratch)?;
+            graph_expmv_frechet(
+                &gk,
+                &u0_cn,
+                &dj_cn,
+                n_cols,
+                t,
+                &sens,
+                &mut grad,
+                &mut scratch,
+            )?;
             Ok(grad)
         });
         let out = result.map_err(|e| from_core(&e))?;
@@ -213,13 +227,15 @@ pub fn symmetric_op_expmv_frechet_py<'py>(
 // ---------------------------------------------------------------------------
 
 pub(crate) fn csr_row_ptr(arr: &PyReadonlyArray1<'_, i64>) -> PyResult<Vec<usize>> {
-    let sl = arr.as_slice()
+    let sl = arr
+        .as_slice()
         .map_err(|_| new_pyerr("GridMismatch", "indptr must be contiguous"))?;
     Ok(sl.iter().map(|&v| v as usize).collect())
 }
 
 pub(crate) fn csr_col_idx(arr: &PyReadonlyArray1<'_, i32>) -> PyResult<Vec<u32>> {
-    let sl = arr.as_slice()
+    let sl = arr
+        .as_slice()
         .map_err(|_| new_pyerr("GridMismatch", "indices must be contiguous"))?;
     Ok(sl.iter().map(|&v| v as u32).collect())
 }
@@ -234,8 +250,10 @@ pub(crate) fn csr_vals(arr: &PyReadonlyArray1<'_, f64>) -> PyResult<Vec<f64>> {
 pub(crate) fn krylov_path(path: &str, m_max: u32, n_steps: usize) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
-        "lanczos"   => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
-        "implicit"  => Ok(KrylovPath::ImplicitEuler { n_steps }),
+        "lanczos" => Ok(KrylovPath::Lanczos {
+            m_max: m_max as usize,
+        }),
+        "implicit" => Ok(KrylovPath::ImplicitEuler { n_steps }),
         other => Err(new_pyerr(
             "Unsupported",
             &format!("path must be 'chebyshev', 'lanczos', or 'implicit', got '{other}'"),
@@ -257,8 +275,7 @@ fn check_entries(entries: &[(usize, usize)], n: usize) -> PyResult<()> {
 
 pub(crate) fn no_edge_graph(n: usize) -> Arc<Graph<f64>> {
     Arc::new(
-        Graph::<f64>::from_edges(n, core::iter::empty())
-            .expect("zero-edge graph is infallible"),
+        Graph::<f64>::from_edges(n, core::iter::empty()).expect("zero-edge graph is infallible"),
     )
 }
 

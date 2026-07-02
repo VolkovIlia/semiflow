@@ -23,18 +23,13 @@ use semiflow::{
 fn g_graph_expmv_dense() {
     let n = 10usize;
     let tau = 1.0_f64;
-    let tol = 1e-12_f64;  // tigher than gate threshold for extra margin
+    let tol = 1e-12_f64; // tigher than gate threshold for extra margin
 
     let g = Arc::new(Graph::<f64>::path(n));
     let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
 
     // Build Chebyshev solver.
-    let krylov = GraphKrylovChernoff::new(
-        Arc::clone(&lap),
-        KrylovPath::Chebyshev,
-        tol,
-    )
-    .unwrap();
+    let krylov = GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, tol).unwrap();
 
     // Gaussian-like signal centred on node 5.
     // i is u32 (from_fn index type) — f64::from(i) is exact and infallible.
@@ -50,8 +45,7 @@ fn g_graph_expmv_dense() {
 
     // Dense reference via mat_exp_pade13.
     let mut dst_dense = vec![0.0_f64; n];
-    dense_graph_expmv_ref(&lap, tau, src.values(), &mut dst_dense)
-        .expect("dense reference failed");
+    dense_graph_expmv_ref(&lap, tau, src.values(), &mut dst_dense).expect("dense reference failed");
 
     // Supremum error.
     let sup_error = dst_krylov

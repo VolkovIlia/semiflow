@@ -80,7 +80,9 @@ struct TriDiagGen {
 }
 
 impl GeneratorAction<f64> for TriDiagGen {
-    fn dim(&self) -> usize { self.n }
+    fn dim(&self) -> usize {
+        self.n
+    }
 
     fn apply_generator(&self, src: &[f64], dst: &mut [f64]) {
         let od = self.offdiag;
@@ -91,7 +93,9 @@ impl GeneratorAction<f64> for TriDiagGen {
         }
     }
 
-    fn norm_bound(&self) -> f64 { 4.0 * self.offdiag.abs() }
+    fn norm_bound(&self) -> f64 {
+        4.0 * self.offdiag.abs()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -161,14 +165,23 @@ fn check_phi_k_accuracy(
     pade_ref: &[Vec<f64>],
     scratch: &mut ScratchPool<f64>,
 ) {
-    eprintln!("  {:>5}  {:>18}  {:>18}", "k", "action_vs_exact", "pade_vs_exact");
+    eprintln!(
+        "  {:>5}  {:>18}  {:>18}",
+        "k", "action_vs_exact", "pade_vs_exact"
+    );
     for k in 0..=PHI_MAX {
         let mut phi_k_out = [0.0_f64; N];
         phi_action(gen, k, tau, v, &mut phi_k_out, scratch).expect("phi_action failed");
 
-        let action_err = phi_k_out.iter().zip(&eigen_refs[k]).map(|(a, b)| (a - b).abs())
+        let action_err = phi_k_out
+            .iter()
+            .zip(&eigen_refs[k])
+            .map(|(a, b)| (a - b).abs())
             .fold(0.0_f64, f64::max);
-        let pade_err = pade_ref[k].iter().zip(&eigen_refs[k]).map(|(a, b)| (a - b).abs())
+        let pade_err = pade_ref[k]
+            .iter()
+            .zip(&eigen_refs[k])
+            .map(|(a, b)| (a - b).abs())
             .fold(0.0_f64, f64::max);
         let out_sup = phi_k_out.iter().map(|x| x.abs()).fold(0.0_f64, f64::max);
 
@@ -184,8 +197,10 @@ fn check_phi_k_accuracy(
              (augmented φ-action tightened scaling; Padé oracle is {pade_err:.3e})"
         );
         // Non-vacuity: phi_k_out must not be the zero vector.
-        assert!(out_sup >= 0.01,
-            "G_PHI_AUG_DENSE phi_{k}: output sup-norm {out_sup:.3e} < 0.01 — vacuous");
+        assert!(
+            out_sup >= 0.01,
+            "G_PHI_AUG_DENSE phi_{k}: output sup-norm {out_sup:.3e} < 0.01 — vacuous"
+        );
         // Oracle sanity: Padé-13 must be machine-accurate vs eigen-exact.
         assert!(
             pade_err <= 1e-12,
@@ -200,12 +215,7 @@ fn check_phi_k_accuracy(
 // Batched consistency: phi_action_batched ≡ phi_action for all k.
 // ---------------------------------------------------------------------------
 
-fn check_batched_vs_single(
-    gen: &TriDiagGen,
-    tau: f64,
-    v: &[f64],
-    scratch: &mut ScratchPool<f64>,
-) {
+fn check_batched_vs_single(gen: &TriDiagGen, tau: f64, v: &[f64], scratch: &mut ScratchPool<f64>) {
     let mut batched_out = vec![0.0_f64; (PHI_MAX + 1) * N];
     phi_action_batched(gen, PHI_MAX, tau, v, &mut batched_out, scratch)
         .expect("phi_action_batched failed");
@@ -214,11 +224,16 @@ fn check_batched_vs_single(
         let mut single_out = [0.0_f64; N];
         phi_action(gen, k, tau, v, &mut single_out, scratch)
             .expect("phi_action single (recheck) failed");
-        let sup_diff = chunk.iter().zip(&single_out)
-            .map(|(a, b)| (a - b).abs()).fold(0.0_f64, f64::max);
+        let sup_diff = chunk
+            .iter()
+            .zip(&single_out)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f64, f64::max);
         eprintln!("  batched vs single phi_{k}: sup_diff = {sup_diff:.3e}");
-        assert!(sup_diff <= 1e-14,
-            "G_PHI_AUG_DENSE batched != single phi_{k}: sup_diff={sup_diff:.3e}");
+        assert!(
+            sup_diff <= 1e-14,
+            "G_PHI_AUG_DENSE batched != single phi_{k}: sup_diff={sup_diff:.3e}"
+        );
     }
 }
 
@@ -233,8 +248,10 @@ fn g_phi_aug_dense() {
     let tau = 0.5_f64;
 
     let z = tau * gen.norm_bound(); // z = tau * 4.0 = 2.0
-    assert!((0.5..=5.0).contains(&z),
-        "G_PHI_AUG_DENSE: z={z:.3} not in [0.5, 5]");
+    assert!(
+        (0.5..=5.0).contains(&z),
+        "G_PHI_AUG_DENSE: z={z:.3} not in [0.5, 5]"
+    );
     eprintln!("G_PHI_AUG_DENSE: n={N}  tau={tau}  z=tau*||A||={z:.4}");
 
     #[allow(clippy::cast_precision_loss)]

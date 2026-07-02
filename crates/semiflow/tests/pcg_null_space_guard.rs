@@ -20,11 +20,13 @@
 //! ## Gate (H7)
 //!
 //! - PRE-FIX : `graph_expmv_krylov` returns `Err(ConvergenceFailed)`.
-//! - POST-FIX: `graph_expmv_krylov` returns `Ok(())`, output ≈ c·1, sup_error ≤ 1e-10.
+//! - POST-FIX: `graph_expmv_krylov` returns `Ok(())`, output ≈ c·1, `sup_error` ≤ 1e-10.
 
 #![cfg(test)]
 
-use semiflow::{graph_expmv_krylov, scratch::ScratchPool, KrylovPath, SymmetricLinearOp, SymmetricOperator};
+use semiflow::{
+    graph_expmv_krylov, scratch::ScratchPool, KrylovPath, SymmetricLinearOp, SymmetricOperator,
+};
 
 /// 4-node Neumann Laplacian (1-D 2nd-order FD, zero-flux BCs).
 ///
@@ -35,6 +37,8 @@ use semiflow::{graph_expmv_krylov, scratch::ScratchPool, KrylovPath, SymmetricLi
 ///      [ 0,  0, -1,  1]]
 /// ```
 /// Row sums = 0 ⇒ constant vector [1,1,1,1] ∈ ker(A).
+// Triplet col indices are matrix positions for a 4-node graph — always < u32::MAX.
+#[allow(clippy::cast_possible_truncation)]
 fn build_neumann4_csr() -> (usize, Vec<usize>, Vec<u32>, Vec<f64>) {
     const N: usize = 4;
     #[rustfmt::skip]
@@ -46,13 +50,17 @@ fn build_neumann4_csr() -> (usize, Vec<usize>, Vec<u32>, Vec<f64>) {
     ];
     let mut row_ptr = vec![0usize; N + 1];
     let mut col_idx: Vec<u32> = Vec::new();
-    let mut vals: Vec<f64>    = Vec::new();
+    let mut vals: Vec<f64> = Vec::new();
     for &(i, j, v) in triplets {
         col_idx.push(j as u32);
         vals.push(v);
         row_ptr[i + 1] = col_idx.len();
     }
-    for k in 1..=N { if row_ptr[k] == 0 { row_ptr[k] = row_ptr[k - 1]; } }
+    for k in 1..=N {
+        if row_ptr[k] == 0 {
+            row_ptr[k] = row_ptr[k - 1];
+        }
+    }
     (N, row_ptr, col_idx, vals)
 }
 
@@ -83,7 +91,7 @@ fn pcg_null_space_guard() {
 
     // ── Evolve constant input via implicit Euler ───────────────────────────
     let c = 2.0_f64;
-    let v_in: Vec<f64>  = vec![c; n];
+    let v_in: Vec<f64> = vec![c; n];
     let mut v_out = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
 

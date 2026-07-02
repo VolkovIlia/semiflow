@@ -376,11 +376,7 @@ mod tests {
         }
 
         /// Per-channel reference for `GraphHeatChernoff` (serial, no Sync needed).
-        fn reference_heat(
-            g: &Arc<Graph<f64>>,
-            lap: &Arc<Laplacian<f64>>,
-            src: &[f64],
-        ) -> Vec<f64> {
+        fn reference_heat(g: &Arc<Graph<f64>>, lap: &Arc<Laplacian<f64>>, src: &[f64]) -> Vec<f64> {
             let mut out = vec![0.0_f64; N * N_COLS];
             for ch in 0..N_COLS {
                 let kernel = GraphHeatChernoff::new(Arc::clone(lap));
@@ -443,7 +439,10 @@ mod tests {
                 let r = if fwd { a.values() } else { b.values() };
                 expected[ch * N..(ch + 1) * N].copy_from_slice(r);
             }
-            assert_eq!(dst_par, expected, "par evolve_batched_magnus 0-ULP fail (test 10)");
+            assert_eq!(
+                dst_par, expected,
+                "par evolve_batched_magnus 0-ULP fail (test 10)"
+            );
         }
 
         // Test 11: adjoint_state_gradient_batched (edge-weight grad, N_COLS=8)
@@ -453,13 +452,23 @@ mod tests {
             let g = make_graph();
             let n_params = N - 1; // path-N has N-1 edges
             let edges: Vec<(usize, usize)> = (0..n_params).map(|i| (i, i + 1)).collect();
-            let sens = EdgeWeightSensitivity { params: edges, n_nodes: N };
+            let sens = EdgeWeightSensitivity {
+                params: edges,
+                n_nodes: N,
+            };
             let u0_cols = make_src();
             let dj_cols = make_dj();
             let mut grad_par = vec![0.0_f64; n_params];
             let mut scr = ScratchPool::new();
             adjoint_state_gradient_batched(
-                &mc, &u0_cols, &dj_cols, N_STEPS, TAU, &sens, &mut grad_par, &mut scr,
+                &mc,
+                &u0_cols,
+                &dj_cols,
+                N_STEPS,
+                TAU,
+                &sens,
+                &mut grad_par,
+                &mut scr,
             )
             .unwrap();
             // Per-channel serial reference.

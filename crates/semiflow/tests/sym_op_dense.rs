@@ -13,8 +13,7 @@
 //!    is doing real work (not a trivially-zero action).
 
 use semiflow::{
-    dense_csr_expmv_ref, graph_expmv_krylov, scratch::ScratchPool, KrylovPath,
-    SymmetricOperator,
+    dense_csr_expmv_ref, graph_expmv_krylov, scratch::ScratchPool, KrylovPath, SymmetricOperator,
 };
 
 /// N=10 path Laplacian + 0.5·I in CSR form (row-major, sorted columns).
@@ -29,28 +28,28 @@ fn path_n10_reaction_csr() -> (Vec<usize>, Vec<u32>, Vec<f64>) {
     // c = 0.5 added to each diagonal entry of the path Laplacian.
     let row_ptr = vec![0_usize, 2, 5, 8, 11, 14, 17, 20, 23, 26, 28];
     let col_idx = vec![
-        0u32, 1,       // row 0
-        0, 1, 2,       // row 1
-        1, 2, 3,       // row 2
-        2, 3, 4,       // row 3
-        3, 4, 5,       // row 4
-        4, 5, 6,       // row 5
-        5, 6, 7,       // row 6
-        6, 7, 8,       // row 7
-        7, 8, 9,       // row 8
-        8, 9,          // row 9
+        0u32, 1, // row 0
+        0, 1, 2, // row 1
+        1, 2, 3, // row 2
+        2, 3, 4, // row 3
+        3, 4, 5, // row 4
+        4, 5, 6, // row 5
+        5, 6, 7, // row 6
+        6, 7, 8, // row 7
+        7, 8, 9, // row 8
+        8, 9, // row 9
     ];
     let vals = vec![
-        1.5, -1.0,             // row 0: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 1: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 2: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 3: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 4: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 5: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 6: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 7: sum = 0.5
-        -1.0, 2.5, -1.0,      // row 8: sum = 0.5
-        -1.0, 1.5,             // row 9: sum = 0.5
+        1.5, -1.0, // row 0: sum = 0.5
+        -1.0, 2.5, -1.0, // row 1: sum = 0.5
+        -1.0, 2.5, -1.0, // row 2: sum = 0.5
+        -1.0, 2.5, -1.0, // row 3: sum = 0.5
+        -1.0, 2.5, -1.0, // row 4: sum = 0.5
+        -1.0, 2.5, -1.0, // row 5: sum = 0.5
+        -1.0, 2.5, -1.0, // row 6: sum = 0.5
+        -1.0, 2.5, -1.0, // row 7: sum = 0.5
+        -1.0, 2.5, -1.0, // row 8: sum = 0.5
+        -1.0, 1.5, // row 9: sum = 0.5
     ];
     (row_ptr, col_idx, vals)
 }
@@ -93,12 +92,17 @@ fn g_symop_dense() {
     let mut scratch = ScratchPool::new();
 
     graph_expmv_krylov(
-        &op, tau, &src, &mut dst_krylov, KrylovPath::Chebyshev, tol, &mut scratch,
+        &op,
+        tau,
+        &src,
+        &mut dst_krylov,
+        KrylovPath::Chebyshev,
+        tol,
+        &mut scratch,
     )
     .expect("G_SYMOP_DENSE: krylov failed");
 
-    dense_csr_expmv_ref(&op, tau, &src, &mut dst_dense)
-        .expect("G_SYMOP_DENSE: dense ref failed");
+    dense_csr_expmv_ref(&op, tau, &src, &mut dst_dense).expect("G_SYMOP_DENSE: dense ref failed");
 
     let sup_error = dst_krylov
         .iter()

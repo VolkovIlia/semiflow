@@ -71,8 +71,7 @@ impl GraphKrylov {
             let kpath = parse_krylov_path(path, m_max)?;
             let lap_arc = Arc::clone(&laplacian.inner);
             let n = lap_arc.n_nodes();
-            let gk =
-                GraphKrylovChernoff::new(lap_arc, kpath, tol).map_err(|e| from_core(&e))?;
+            let gk = GraphKrylovChernoff::new(lap_arc, kpath, tol).map_err(|e| from_core(&e))?;
             let dummy_graph = build_dummy_graph(n);
             Ok(GraphKrylov { gk, dummy_graph })
         })
@@ -145,6 +144,7 @@ impl GraphKrylov {
 #[pyfunction]
 #[pyo3(name = "graph_expmv_frechet", signature = (gk, u0, dj, *, t, params))]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub fn graph_expmv_frechet_py<'py>(
     py: Python<'py>,
     gk: &GraphKrylov,
@@ -175,10 +175,22 @@ pub fn graph_expmv_frechet_py<'py>(
         let dj_cn = gather_nc_to_cn(&dj.as_array(), n, c);
         let inner_gk = gk.gk.clone();
         let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(move || {
-            let sens = EdgeWeightSensitivity { params: edge_pairs, n_nodes };
+            let sens = EdgeWeightSensitivity {
+                params: edge_pairs,
+                n_nodes,
+            };
             let mut grad = vec![0.0_f64; n_params];
             let mut scratch = ScratchPool::new();
-            semiflow::graph_expmv_frechet(&inner_gk, &u0_cn, &dj_cn, c, t, &sens, &mut grad, &mut scratch)?;
+            semiflow::graph_expmv_frechet(
+                &inner_gk,
+                &u0_cn,
+                &dj_cn,
+                c,
+                t,
+                &sens,
+                &mut grad,
+                &mut scratch,
+            )?;
             Ok(grad)
         });
         let out = result.map_err(|e| from_core(&e))?;
@@ -197,7 +209,9 @@ pub fn graph_expmv_frechet_py<'py>(
 fn parse_krylov_path(path: &str, m_max: u32) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
-        "lanczos" => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
+        "lanczos" => Ok(KrylovPath::Lanczos {
+            m_max: m_max as usize,
+        }),
         "implicit" => Err(new_pyerr(
             "Unsupported",
             "path='implicit' is not available on GraphKrylov; \
@@ -230,7 +244,10 @@ fn extract_explicit_edge_pairs(
         ));
     }
     let pairs = params.extract::<Vec<(usize, usize)>>().map_err(|_| {
-        new_pyerr("OutOfDomain", "graph_expmv_frechet: params must be list[(int, int)]")
+        new_pyerr(
+            "OutOfDomain",
+            "graph_expmv_frechet: params must be list[(int, int)]",
+        )
     })?;
     for &(i, j) in &pairs {
         if i >= n_nodes || j >= n_nodes {

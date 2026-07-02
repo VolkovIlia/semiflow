@@ -19,8 +19,7 @@ use semiflow::{
     grid::Grid1D,
     grid_fn::GridFn1D,
     scratch::ScratchPool,
-    steady_state_dirichlet_1d,
-    ConservativeDiffusionChernoff, DiffusionChernoff, SymmetricOperator,
+    steady_state_dirichlet_1d, ConservativeDiffusionChernoff, DiffusionChernoff, SymmetricOperator,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,6 +48,7 @@ fn k_three_layer(n: usize, lo: usize, hi: usize, k_outer: f64, k_inner: f64) -> 
 #[test]
 #[ignore = "slow-test: run with --features slow-tests --release -- --ignored"]
 #[allow(clippy::cast_precision_loss)]
+#[allow(clippy::too_many_lines)]
 fn g_cons_series() {
     let n = 12_usize;
     let dx = 1.0_f64 / (n - 1) as f64;
@@ -107,8 +107,14 @@ fn g_cons_series() {
         "G_CONS_SERIES  n={n}  q={q:.6}  max_rel_err={max_rel_err:.3e}  \
          flux_spread={flux_spread:.3e}"
     );
-    assert!(max_rel_err < 0.01, "G_CONS_SERIES: max_rel_err={max_rel_err:.3e} ≥ 1%");
-    assert!(flux_spread < 0.01, "G_CONS_SERIES: flux_spread={flux_spread:.3e} ≥ 1%");
+    assert!(
+        max_rel_err < 0.01,
+        "G_CONS_SERIES: max_rel_err={max_rel_err:.3e} ≥ 1%"
+    );
+    assert!(
+        flux_spread < 0.01,
+        "G_CONS_SERIES: flux_spread={flux_spread:.3e} ≥ 1%"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,7 +139,10 @@ fn g_cons_noncons_fails() {
 
     let k_max = k_nodes.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let k_min = k_nodes.iter().copied().fold(f64::INFINITY, f64::min);
-    assert!(k_max / k_min >= 50.0, "G_CONS_NONCONS_FAILS: max_k/min_k < 50");
+    assert!(
+        k_max / k_min >= 50.0,
+        "G_CONS_NONCONS_FAILS: max_k/min_k < 50"
+    );
 
     // Non-conservative DiffusionChernoff with a'=0 (ignores interface jumps).
     let k_nc = k_nodes.clone();
@@ -246,11 +255,16 @@ fn g_cons_symop() {
     let mut scratch = ScratchPool::new();
 
     graph_expmv_krylov(
-        &op, tau, &src, &mut dst_krylov, KrylovPath::Chebyshev, 1e-12, &mut scratch,
+        &op,
+        tau,
+        &src,
+        &mut dst_krylov,
+        KrylovPath::Chebyshev,
+        1e-12,
+        &mut scratch,
     )
     .expect("G_CONS_SYMOP: krylov failed");
-    dense_csr_expmv_ref(&op, tau, &src, &mut dst_dense)
-        .expect("G_CONS_SYMOP: dense ref failed");
+    dense_csr_expmv_ref(&op, tau, &src, &mut dst_dense).expect("G_CONS_SYMOP: dense ref failed");
 
     // NaN guard: detect silently-broken Chebyshev (NaN from 0·∞ when em_z underflows).
     assert!(
@@ -269,17 +283,21 @@ fn g_cons_symop() {
         .fold(0.0_f64, f64::max);
     let dst_norm = dst_dense.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
 
-    eprintln!(
-        "G_CONS_SYMOP  n={n}  tau={tau}  dst_norm={dst_norm:.3e}  sup_error={sup_error:.3e}"
+    eprintln!("G_CONS_SYMOP  n={n}  tau={tau}  dst_norm={dst_norm:.3e}  sup_error={sup_error:.3e}");
+    assert!(
+        dst_norm > 1e-14,
+        "G_CONS_SYMOP: dst_norm={dst_norm:.3e} trivially zero"
     );
-    assert!(dst_norm > 1e-14, "G_CONS_SYMOP: dst_norm={dst_norm:.3e} trivially zero");
     // Lower bound: two genuinely independent algorithms cannot agree BIT-IDENTICALLY.
     // sup_error ≤ 1e-16 indicates shared code path or NaN-masking re-regression.
     assert!(
         sup_error > 1e-16,
         "G_CONS_SYMOP: sup_error={sup_error:.3e} ≤ 1e-16 — shared code path or NaN masking"
     );
-    assert!(sup_error <= 1e-10, "G_CONS_SYMOP: sup_error={sup_error:.3e} > 1e-10");
+    assert!(
+        sup_error <= 1e-10,
+        "G_CONS_SYMOP: sup_error={sup_error:.3e} > 1e-10"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -309,15 +327,19 @@ fn g_cons_symop() {
 /// and the reference level introduces log₂ bias from the ratio not being exactly 4.
 #[test]
 #[ignore = "slow-test: run with --features slow-tests --release -- --ignored"]
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::too_many_lines)]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::too_many_lines
+)]
 fn g_cons_order() {
     use core::f64::consts::PI;
 
     // n=12 (n_int=10 interior nodes ≤ MAX_DENSE_N=12). Const k=1, Dirichlet BC=0.
-    let n     = 12_usize;
+    let n = 12_usize;
     let n_int = n - 2; // 10 interior nodes
-    let grid  = Grid1D::new(0.0_f64, 1.0_f64, n).expect("G_CONS_ORDER: grid");
-    let dx    = grid.dx();
+    let grid = Grid1D::new(0.0_f64, 1.0_f64, n).expect("G_CONS_ORDER: grid");
+    let dx = grid.dx();
     // t_end=0.1 → exp(−π²·0.1) ≈ 0.37: actively decaying, not near-equilibrium.
     let t_end = 0.1_f64;
 
@@ -329,11 +351,11 @@ fn g_cons_order() {
     // ── Exact discrete reference: e^{-t_end · A_int} · u₀ via Padé-13 ──────
     // Interior Dirichlet system for const k=1: tridiag(−1/dx², 2/dx², −1/dx²).
     // A_int is the (n_int × n_int) interior block of the full Dirichlet operator.
-    let a_diag    =  2.0_f64 / (dx * dx); //  2/dx²
+    let a_diag = 2.0_f64 / (dx * dx); //  2/dx²
     let a_offdiag = -1.0_f64 / (dx * dx); // -1/dx²
     let mut row_ptr = vec![0_usize; n_int + 1];
-    let mut col_idx: Vec<u32>  = Vec::with_capacity(3 * n_int);
-    let mut vals:    Vec<f64>  = Vec::with_capacity(3 * n_int);
+    let mut col_idx: Vec<u32> = Vec::with_capacity(3 * n_int);
+    let mut vals: Vec<f64> = Vec::with_capacity(3 * n_int);
     for i in 0..n_int {
         if i > 0 {
             col_idx.push((i - 1) as u32);
@@ -355,7 +377,7 @@ fn g_cons_order() {
 
     // Non-vacuity: reference must be strictly smaller than initial (mode is decaying).
     let ref_norm = u_ref.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
-    let u0_norm  = u0_int.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
+    let u0_norm = u0_int.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
     assert!(
         ref_norm < u0_norm * 0.9,
         "G_CONS_ORDER: reference has not decayed (ref_norm={ref_norm:.3e}, u0_norm={u0_norm:.3e})"
@@ -385,21 +407,28 @@ fn g_cons_order() {
     };
 
     // Three τ-levels at ratio 2: τ₀ = t_end/20 = 0.005.
-    let n_base   = 20_usize;
+    let n_base = 20_usize;
     let tau_base = t_end / n_base as f64;
-    let u_c = cn_run(tau_base,       n_base    ); // 20 steps
+    let u_c = cn_run(tau_base, n_base); // 20 steps
     let u_f = cn_run(tau_base / 2.0, n_base * 2); // 40 steps
     let u_x = cn_run(tau_base / 4.0, n_base * 4); // 80 steps
 
     let sup_err = |a: &[f64], b: &[f64]| -> f64 {
-        a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| (x - y).abs())
+            .fold(0.0_f64, f64::max)
     };
     let err_c = sup_err(&u_c, &u_ref);
     let err_f = sup_err(&u_f, &u_ref);
     let err_x = sup_err(&u_x, &u_ref);
 
     let ratio2slope = |hi: f64, lo: f64| -> f64 {
-        if hi > 0.0 && lo > 0.0 { (hi / lo).log2() } else { 0.0_f64 }
+        if hi > 0.0 && lo > 0.0 {
+            (hi / lo).log2()
+        } else {
+            0.0_f64
+        }
     };
     let slope_cf = ratio2slope(err_c, err_f);
     let slope_fx = ratio2slope(err_f, err_x);
@@ -410,10 +439,14 @@ fn g_cons_order() {
          slope(c→f)={slope_cf:.4}  slope(f→x)={slope_fx:.4}"
     );
 
-    assert!(err_f < err_c,
-        "G_CONS_ORDER: err_fine={err_f:.3e} ≥ err_coarse={err_c:.3e} — wrong direction");
-    assert!(err_x < err_f,
-        "G_CONS_ORDER: err_xfine={err_x:.3e} ≥ err_fine={err_f:.3e} — wrong direction");
+    assert!(
+        err_f < err_c,
+        "G_CONS_ORDER: err_fine={err_f:.3e} ≥ err_coarse={err_c:.3e} — wrong direction"
+    );
+    assert!(
+        err_x < err_f,
+        "G_CONS_ORDER: err_xfine={err_x:.3e} ≥ err_fine={err_f:.3e} — wrong direction"
+    );
     // Two-sided gate [1.9, 2.3]: CN is order-2 → slope must be ≈ 2.
     assert!(
         (1.9_f64..=2.3_f64).contains(&slope_cf),
@@ -451,7 +484,9 @@ fn g_cons_order() {
 fn g_cons_contact() {
     let n = 10_usize;
     let dx = 1.0_f64 / (n - 1) as f64;
-    let k_nodes: Vec<f64> = (0..n).map(|i| if i < 5 { 1.0_f64 } else { 10.0_f64 }).collect();
+    let k_nodes: Vec<f64> = (0..n)
+        .map(|i| if i < 5 { 1.0_f64 } else { 10.0_f64 })
+        .collect();
     let r_c = 0.05_f64;
 
     // Contact resistance at face 4 (between nodes 4 and 5).
@@ -460,8 +495,8 @@ fn g_cons_contact() {
     r_contact[face_idx] = r_c;
 
     // Non-vacuity: R_c must be significant vs material face resistance.
-    let k_harm_face =
-        2.0 * k_nodes[face_idx] * k_nodes[face_idx + 1] / (k_nodes[face_idx] + k_nodes[face_idx + 1]);
+    let k_harm_face = 2.0 * k_nodes[face_idx] * k_nodes[face_idx + 1]
+        / (k_nodes[face_idx] + k_nodes[face_idx + 1]);
     let r_mat_face = dx / k_harm_face;
     let r_ratio = r_c / r_mat_face;
     assert!(
@@ -512,8 +547,8 @@ fn g_cons_contact() {
         .expect("G_CONS_CONTACT: no-contact solve failed");
 
     let jump_with_rc = u[face_idx] - u[face_idx + 1];
-    let jump_no_rc   = u_no_rc[face_idx] - u_no_rc[face_idx + 1];
-    let extra_jump   = jump_with_rc - jump_no_rc;
+    let jump_no_rc = u_no_rc[face_idx] - u_no_rc[face_idx + 1];
+    let extra_jump = jump_with_rc - jump_no_rc;
 
     // Exact analytic extra jump accounting for flux change: q_with*(R_mat+R_c) - q_without*R_mat.
     let total_r_no_rc: f64 = all_faces_r
@@ -521,9 +556,9 @@ fn g_cons_contact() {
         .enumerate()
         .map(|(i, &r)| if i == face_idx { r - r_c } else { r })
         .sum();
-    let q_no_rc_val  = (t_left - t_right) / total_r_no_rc;
+    let q_no_rc_val = (t_left - t_right) / total_r_no_rc;
     let expected_extra = q_analytic * (r_mat_face + r_c) - q_no_rc_val * r_mat_face;
-    let extra_rel_err  = ((extra_jump - expected_extra) / expected_extra).abs();
+    let extra_rel_err = ((extra_jump - expected_extra) / expected_extra).abs();
 
     eprintln!(
         "G_CONS_CONTACT  jump_with={jump_with_rc:.6}  jump_no={jump_no_rc:.6}  \

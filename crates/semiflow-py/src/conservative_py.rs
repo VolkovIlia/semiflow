@@ -15,11 +15,7 @@
 //!
 //! GIL policy: ADR-0031 three-phase (validate → `py.detach` → scatter).
 
-#![allow(
-    unsafe_code,
-    clippy::doc_markdown,
-    clippy::needless_pass_by_value,
-)]
+#![allow(unsafe_code, clippy::doc_markdown, clippy::needless_pass_by_value)]
 
 use std::sync::Arc;
 
@@ -48,16 +44,14 @@ fn parse_conservative_boundary(s: &str) -> PyResult<BoundaryPolicy<f64>> {
         return Ok(BoundaryPolicy::Neumann);
     }
     if let Some(val_str) = sl.strip_prefix("dirichlet:") {
-        let v = val_str.parse::<f64>().map_err(|_| {
-            new_pyerr("OutOfDomain", &format!("invalid Dirichlet value in '{s}'"))
-        })?;
+        let v = val_str
+            .parse::<f64>()
+            .map_err(|_| new_pyerr("OutOfDomain", &format!("invalid Dirichlet value in '{s}'")))?;
         return Ok(BoundaryPolicy::Dirichlet { value: v });
     }
     Err(new_pyerr(
         "OutOfDomain",
-        &format!(
-            "unknown conservative boundary '{s}'; valid: \"neumann\", \"dirichlet:<value>\""
-        ),
+        &format!("unknown conservative boundary '{s}'; valid: \"neumann\", \"dirichlet:<value>\""),
     ))
 }
 
@@ -138,14 +132,11 @@ impl PyConservativeDiffusionChernoff {
             let k = parse_k_nodes(&k_nodes)?;
             let rc = parse_r_contact(r_contact)?;
             let bc = parse_conservative_boundary(boundary)?;
-            let inner = ConservativeDiffusionChernoff::from_k_array(
-                grid,
-                &k,
-                rc.as_deref(),
-                bc,
-            )
-            .map_err(|e| from_core(&e))?;
-            Ok(Self { inner: Arc::new(inner) })
+            let inner = ConservativeDiffusionChernoff::from_k_array(grid, &k, rc.as_deref(), bc)
+                .map_err(|e| from_core(&e))?;
+            Ok(Self {
+                inner: Arc::new(inner),
+            })
         })
     }
 
@@ -156,7 +147,10 @@ impl PyConservativeDiffusionChernoff {
     /// Returns :class:`SymmetricOperator`.
     fn to_symmetric_operator(&self) -> PyResult<PySymmetricOperator> {
         catch_panic_py!({
-            let op = self.inner.to_symmetric_operator().map_err(|e| from_core(&e))?;
+            let op = self
+                .inner
+                .to_symmetric_operator()
+                .map_err(|e| from_core(&e))?;
             Ok(PySymmetricOperator { op: Arc::new(op) })
         })
     }

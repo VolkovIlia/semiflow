@@ -44,7 +44,10 @@ fn g_graph_expmv_depth_flat() {
 
     for &t in &t_values {
         let (_s, m) = graph_expmv_matvec_count(lambda_max, t, tol, &path);
-        eprintln!("  t={t:5.0}  z={:.4}  chebyshev_degree={m}", t * lambda_max / 2.0);
+        eprintln!(
+            "  t={t:5.0}  z={:.4}  chebyshev_degree={m}",
+            t * lambda_max / 2.0
+        );
         counts.push(m);
     }
 

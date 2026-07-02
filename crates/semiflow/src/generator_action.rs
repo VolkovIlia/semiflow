@@ -12,18 +12,15 @@ extern crate alloc;
 use alloc::vec;
 
 use crate::{
-    diffusion4::Diffusion4thChernoff,
-    diffusion4_zeta4::apply_div_form,
-    float::SemiflowFloat,
-    grid_fn::GridFn1D,
-    symmetric_operator::SymmetricLinearOp,
+    diffusion4::Diffusion4thChernoff, diffusion4_zeta4::apply_div_form, float::SemiflowFloat,
+    grid_fn::GridFn1D, symmetric_operator::SymmetricLinearOp,
 };
 
 // ---------------------------------------------------------------------------
 // Trait
 // ---------------------------------------------------------------------------
 
-/// Thin generator interface consumed by [`crate::phi_action`].
+/// Thin generator interface consumed by [`mod@crate::phi_action`].
 ///
 /// `apply_generator(src, dst)` computes `dst ← A·src` where `A` is the PDE
 /// linear generator.  Both slices must have length `self.dim()`.
@@ -74,8 +71,14 @@ impl GeneratorAction<f64> for DivFormGenerator {
     fn apply_generator(&self, src: &[f64], dst: &mut [f64]) {
         let n = self.inner.grid.n;
         // Wrap src as a temporary GridFn1D (one allocation, O(n) copy).
-        let src_gfn = GridFn1D { grid: self.inner.grid, values: src[..n].to_vec() };
-        let mut dst_gfn = GridFn1D { grid: self.inner.grid, values: vec![0.0_f64; n] };
+        let src_gfn = GridFn1D {
+            grid: self.inner.grid,
+            values: src[..n].to_vec(),
+        };
+        let mut dst_gfn = GridFn1D {
+            grid: self.inner.grid,
+            values: vec![0.0_f64; n],
+        };
         apply_div_form(&self.inner, &src_gfn, &mut dst_gfn)
             .expect("DivFormGenerator: apply_div_form");
         dst[..n].copy_from_slice(&dst_gfn.values);
@@ -105,7 +108,10 @@ impl<F: SemiflowFloat, Op: SymmetricLinearOp<F>> NegLaplacianGenerator<F, Op> {
     /// Wrap an operator.
     #[must_use]
     pub fn new(op: Op) -> Self {
-        Self { op, _marker: core::marker::PhantomData }
+        Self {
+            op,
+            _marker: core::marker::PhantomData,
+        }
     }
 }
 
