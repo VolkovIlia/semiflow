@@ -110,6 +110,20 @@ fn shifted_matvec<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, p: &[F
     }
 }
 
+/// Returns `Some(‖b‖²)` when ‖b‖ ≥ 1e-300; zeroes `x` and returns `None` otherwise.
+///
+/// Short-circuits `pcg_shifted` for a zero right-hand side.
+fn rhs_norm_sq_or_zero_out<F: SemiflowFloat>(b: &[F], x: &mut [F]) -> Option<F> {
+    let b_norm_sq = vec_norm_sq(b);
+    if b_norm_sq < F::from(1e-300_f64).unwrap() {
+        for xi in x.iter_mut() {
+            *xi = F::zero();
+        }
+        return None;
+    }
+    Some(b_norm_sq)
+}
+
 // ── PCG solver ────────────────────────────────────────────────────────────────
 
 /// Solve `(I + dt·op) x = b` by preconditioned CG (§59.4).
@@ -121,7 +135,6 @@ fn shifted_matvec<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, p: &[F
 /// Borrows four scratch vectors and releases them before returning — no allocation.
 // 8 args by necessity — op/dt/b/x/precond/tol/max_iter/scratch: no grouping possible.
 #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
-#[allow(clippy::too_many_lines)]
 pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     dt: F,
@@ -133,14 +146,9 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     scratch: &mut ScratchPool<F>,
 ) -> Result<usize, SemiflowError> {
     let n = op.n();
-    let b_norm_sq = vec_norm_sq(b);
-    let tiny = F::from(1e-300_f64).unwrap();
-    if b_norm_sq < tiny {
-        for xi in x.iter_mut() {
-            *xi = F::zero();
-        }
+    let Some(b_norm_sq) = rhs_norm_sq_or_zero_out(b, x) else {
         return Ok(0);
-    }
+    };
     let tol_abs_sq = tol_cg * tol_cg * b_norm_sq;
     let mut r = scratch.take_vec(n);
     let mut z = scratch.take_vec(n);
@@ -174,10 +182,20 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     result
 }
 
+/// Apply one CG update: `x += α·p`, `r -= α·(S·p)`, where `α = rz / psp`.
+fn cg_update_x_r<F: SemiflowFloat>(x: &mut [F], r: &mut [F], p: &[F], sp: &[F], rz: F, psp: F) {
+    let alpha = rz / psp;
+    for (xi, &pi) in x.iter_mut().zip(p.iter()) {
+        *xi += alpha * pi;
+    }
+    for (ri, &si) in r.iter_mut().zip(sp.iter()) {
+        *ri -= alpha * si;
+    }
+}
+
 /// Inner CG iterate loop (extracted to keep `pcg_shifted` ≤ 50 lines).
 // 11 args by necessity — 4 CG state slices + 4 scalar/op params: no grouping possible.
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_lines)]
 fn cg_loop<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     dt: F,
@@ -204,13 +222,7 @@ fn cg_loop<F: SemiflowFloat>(
             }
             break; // genuine breakdown (should not occur)
         }
-        let alpha = rz / psp;
-        for (xi, &pi) in x.iter_mut().zip(p.iter()) {
-            *xi += alpha * pi;
-        }
-        for (ri, &si) in r.iter_mut().zip(sp.iter()) {
-            *ri -= alpha * si;
-        }
+        cg_update_x_r(x, r, p, sp, rz, psp);
         last_r_sq = vec_norm_sq(r);
         if last_r_sq <= tol_abs_sq {
             return Ok(iter + 1);
