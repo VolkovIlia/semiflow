@@ -252,6 +252,7 @@ pub(crate) mod parallel1d;
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]
 pub mod parallel_pool;
+pub(crate) mod pcg;
 pub(crate) mod pencil; pub mod phi_action; pub(crate) mod phi_action_helpers;
 pub mod point_eval;
 pub mod quantum_graph;

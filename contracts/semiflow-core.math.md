@@ -13418,13 +13418,25 @@ and a test-local analytic spectral (DST-I) reference — **no new sympy**.
 | Gate | Definition | Threshold | Oracle |
 |------|-----------|-----------|--------|
 | `G_SYMOP_IMPLICIT_DENSE` | `path="implicit"` action `e^{−τL}v` vs dense `mat_exp_pade13(−τL)`, non-zero-row-sum Robin-BC symmetric PSD `L` (`N ≤ 12`), moderate stiffness, `n_steps` swept `{50,100,200}` | (a) `sup_error ≤ 1e-6` at `n_steps=200`; **and** (b) order-1 decay `err(n)/err(2n) ∈ [1.7, 2.3]` | dense `mat_exp_pade13` (REUSE §45/§55.5) |
-| `G_SYMOP_IMPLICIT_STIFF` (TEETH — the #16 capability) | dependency-free repro: `N = 400` 1-D Laplacian scaled `×1e7`, `t = 1.0`, `path="implicit"` | (a) COMPLETES within a wall budget `≤ 5 s` (the explicit path times out); **and** (b) `sup_error ≤ 1e-6` vs DST-I analytic spectral reference; **and** (c) CG matvec count `≤ C·n_steps·√(1+Δt·λ_max)` with the count `≪ ⌈τ·λ_max⌉` (the explicit count) | analytic DST-I spectral solution `u = Σ_k e^{−tλ_k}⟨φ_k,v⟩φ_k` (closed form; no solver) |
+| `G_SYMOP_IMPLICIT_STIFF` (TEETH — the #16 capability) | `N = 400`, **singular Neumann** 1-D Laplacian scaled ×1e7 (boundary diag=S, interior diag=2S, off-diag=−S; row sums=0 → constant **1** is exact null eigenvector); `t = 1.0`, `path="implicit"`. All non-zero eigenvalues λ_k ≥ 617 underflow; only the λ=0 constant mode survives. Initial condition `v = linspace(1/N, 1, N)` has mean ≈ 0.501, so the oracle is an O(1) vector (not ≈ 0). | (a) COMPLETES within ≤ 5 s; **and** (b) `sup_error ≤ 1e-6` vs the **non-trivial surviving-mode oracle** `e^{−tA}v → (⟨1,v⟩/N)·1` (null-mode projection; oracle_inf ≈ 0.501 at N=400); **and** (c) real total `apply_into_slice` count (measured via `CountedOp` wrapper, capturing Jacobi setup + all CG iterates) is < explicit_mv_budget/100 ≈ 4×10⁵, proving ≥ 100× actual cost saving over the explicit Chebyshev path (⌈τ·λ_max⌉ ≈ 4×10⁷) | analytic null-mode projection `(⟨1,v⟩/N)·1` (closed form — backward-Euler preserves the null space exactly because `(I + Δt·0)^{−n} = I`) |
 | `G_SYMOP_IMPLICIT_PCG_SPD` (TEETH — the shift lemma) | PCG solves `S x = b` for a seeded PSD `Â` **including a singular case** (zero eigenvalue, constant null vector), `Δt > 0` | residual `‖Sx−b‖₂ ≤ tol_cg·‖b‖₂` reached in `≤ N` iters (proves the shift makes `S` SPD/solvable even when `A` is singular) | direct: assert `‖Sx−b‖` post-hoc |
 
+**Design note — why Neumann (singular) not Dirichlet for G_SYMOP_IMPLICIT_STIFF.**
+A pure Dirichlet Laplacian ×1e7 sends ALL modes to underflow at t=1 (λ_min·t ≈ 617,
+e^{−617} ≈ 0); both the DST-I oracle and the implicit solver return ≈ 0.  The assertion
+`sup_error ≤ 1e-6` is then vacuous (tells 4.4e-86 ≈ 0, which any method achieves).
+The Neumann Laplacian lifts this by providing one non-decaying mode (λ=0) that backward-
+Euler preserves **exactly** — making assertion (b) a genuine accuracy check, not a
+stability-only check.  The all-underflow Dirichlet regime remains valid as a *separate*
+L-stability observation (implicit correctly damps stiff modes to ≈ 0), but it cannot
+serve as the primary accuracy assertion for the RELEASE_BLOCKING gate.
+
 **Non-vacuity (NORMATIVE, asserted inside the gate).** `G_SYMOP_IMPLICIT_DENSE`
-asserts `∃ i : Σ_j L[i,j] ≠ 0` (Robin rows); `G_SYMOP_IMPLICIT_STIFF` asserts the
-explicit-path count `⌈τλ_max⌉ ≥ 10^7` (genuinely stiff) AND that the explicit path
-would exceed the budget; `G_SYMOP_IMPLICIT_PCG_SPD` asserts `σ_min(Â) = 0` (a genuine
+asserts `∃ i : Σ_j L[i,j] ≠ 0` (Robin rows); `G_SYMOP_IMPLICIT_STIFF` asserts
+(i) `λ_max_bound ≥ 1e7` (still stiff, explicit times out), (ii) `λ_1_neumann > 100`
+(smallest non-zero mode underflows, so the surviving mode is the only signal), (iii) all
+row sums = 0 (null-space guarantee verified in-test), (iv) `oracle_inf > 0.1` (surviving
+mode is non-trivial); `G_SYMOP_IMPLICIT_PCG_SPD` asserts `σ_min(Â) = 0` (a genuine
 singular `A`, so the guarantee is the shift's, not `A`'s).
 
 ### §59.8 — Boundary and honest scope (NORMATIVE)

@@ -16,6 +16,7 @@ use crate::{
     graph::Laplacian,
     graph_signal::GraphSignal,
     matrix_pade::mat_exp_pade13,
+    pcg::implicit_euler_action,
     scratch::ScratchPool,
     state::State,
     symmetric_operator::SymmetricLinearOp,
@@ -60,6 +61,16 @@ pub enum KrylovPath {
     Lanczos {
         /// Maximum Krylov dimension per outer step. Must be ≤ `MAX_LANCZOS_DIM = 18`.
         m_max: usize,
+    },
+    /// Implicit backward-Euler shift-invert (§59, ADR-0190).
+    ///
+    /// Computes `e^{-τÂ}v ≈ (I + Δt·Â)^{-n_steps} v` where `Δt = τ/n_steps`.
+    /// Each sub-step solves `(I + Δt·Â) x = b` by preconditioned CG.
+    /// Cost is O(n_steps · √κ · N) vs O(λ_max · τ · N) for explicit paths.
+    /// L-stable — damps stiff modes unlike A-stable Crank–Nicolson.
+    ImplicitEuler {
+        /// Number of backward-Euler sub-steps. Must be ≥ 1.
+        n_steps: usize,
     },
 }
 
@@ -143,6 +154,9 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
             KrylovPath::Lanczos { m_max } => {
                 lanczos_action(&*self.laplacian, src, dst, tau, self.lambda_max, *m_max, scratch)
             }
+            KrylovPath::ImplicitEuler { n_steps } => {
+                implicit_euler_gk_action(&*self.laplacian, src, dst, tau, *n_steps, self.tol, scratch)
+            }
         }
     }
 
@@ -190,6 +204,11 @@ pub fn graph_expmv_matvec_count<F: SemiflowFloat>(
             #[allow(clippy::cast_possible_truncation)]
             let m_max_u32 = *m_max as u32;
             (s, m.min(m_max_u32))
+        }
+        KrylovPath::ImplicitEuler { n_steps } => {
+            // n_steps backward-Euler sub-steps; 0 = no Chebyshev/Lanczos degree (§59.4).
+            let s = (*n_steps).min(u32::MAX as usize) as u32;
+            (s, 0)
         }
     }
 }
@@ -473,6 +492,31 @@ fn lanczos_action<F: SemiflowFloat>(
 
     scratch.return_vec(current);
     scratch.return_vec(next);
+    Ok(())
+}
+
+// ── Implicit-Euler action bridging GraphSignal → slice → GraphSignal ─────────
+
+/// Bridge `implicit_euler_action` (slice API) to the `GraphSignal` domain.
+///
+/// Writes to `dst` via `zero_into` + `axpy_into_slice` — the same pattern used
+/// by `chebyshev_action` and `lanczos_action`, so no `values_mut` is needed.
+fn implicit_euler_gk_action<F: SemiflowFloat>(
+    op: &impl SymmetricLinearOp<F>,
+    src: &GraphSignal<F>,
+    dst: &mut GraphSignal<F>,
+    tau: F,
+    n_steps: usize,
+    tol: F,
+    scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError> {
+    let n = src.len();
+    let mut out = scratch.take_vec(n);
+    implicit_euler_action(op as &dyn SymmetricLinearOp<F>, src.values(), &mut out,
+                          tau, n_steps, tol, scratch)?;
+    dst.zero_into();
+    dst.axpy_into_slice(F::one(), &out);
+    scratch.return_vec(out);
     Ok(())
 }
 

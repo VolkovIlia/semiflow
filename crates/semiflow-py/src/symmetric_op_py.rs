@@ -97,14 +97,16 @@ impl PySymmetricOperator {
     /// v_nc : ndarray[float64, shape (N, C)]
     ///     Input vectors.
     /// path : str
-    ///     ``"chebyshev"`` (default) or ``"lanczos"``.
+    ///     ``"chebyshev"`` (default), ``"lanczos"``, or ``"implicit"`` (§59).
     /// tol : float
     ///     Krylov accuracy (default ``1e-10``).
     /// m_max : int
     ///     Max Krylov dimension (Lanczos only; default ``18``).
+    /// n_steps : int
+    ///     Backward-Euler sub-steps (implicit path only; default ``100``).
     ///
     /// Returns ndarray[float64, shape (N, C)].
-    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
+    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
     fn evolve_batched<'py>(
         &self,
         py: Python<'py>,
@@ -113,10 +115,11 @@ impl PySymmetricOperator {
         path: &str,
         tol: f64,
         m_max: u32,
+        n_steps: usize,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max)?;
+            let kpath = krylov_path(path, m_max, n_steps)?;
             let n = self.op.n();
             let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
             let src_cn = gather_nc_to_cn(&v_nc.as_array(), n_nodes, n_cols);
@@ -228,13 +231,14 @@ pub(crate) fn csr_vals(arr: &PyReadonlyArray1<'_, f64>) -> PyResult<Vec<f64>> {
         .to_vec())
 }
 
-pub(crate) fn krylov_path(path: &str, m_max: u32) -> PyResult<KrylovPath> {
+pub(crate) fn krylov_path(path: &str, m_max: u32, n_steps: usize) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
-        "lanczos" => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
+        "lanczos"   => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
+        "implicit"  => Ok(KrylovPath::ImplicitEuler { n_steps }),
         other => Err(new_pyerr(
-            "OutOfDomain",
-            &format!("path must be 'chebyshev' or 'lanczos', got '{other}'"),
+            "Unsupported",
+            &format!("path must be 'chebyshev', 'lanczos', or 'implicit', got '{other}'"),
         )),
     }
 }

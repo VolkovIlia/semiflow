@@ -66,7 +66,7 @@ use crate::{
 /// Returns ndarray[float64, shape (N, C)].
 #[pyfunction]
 #[pyo3(name = "mass_lumped_evolve",
-       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
+       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
 pub fn mass_lumped_evolve_py<'py>(
     py: Python<'py>,
     k_op: &PySymmetricOperator,
@@ -76,10 +76,11 @@ pub fn mass_lumped_evolve_py<'py>(
     path: &str,
     tol: f64,
     m_max: u32,
+    n_steps: usize,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     catch_panic_py!({
         validate_t_final(t)?;
-        let kpath = krylov_path(path, m_max)?;
+        let kpath = krylov_path(path, m_max, n_steps)?;
         let n = k_op.op.n();
         let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
         let masses = extract_masses(&m_diag, n)?;
@@ -216,7 +217,7 @@ impl PyMassKOperator {
     ///     Max Krylov dimension (Lanczos only; default ``18``).
     ///
     /// Returns ndarray[float64, shape (n,)].
-    #[pyo3(signature = (t, v, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
+    #[pyo3(signature = (t, v, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
     fn evolve<'py>(
         &self,
         py: Python<'py>,
@@ -225,10 +226,11 @@ impl PyMassKOperator {
         path: &str,
         tol: f64,
         m_max: u32,
+        n_steps: usize,
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max)?;
+            let kpath = krylov_path(path, m_max, n_steps)?;
             let n = SymmetricLinearOp::n(self.op.as_ref());
             let v_sl = v.as_slice()
                 .map_err(|_| new_pyerr("GridMismatch", "v must be contiguous"))?

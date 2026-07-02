@@ -190,10 +190,18 @@ pub fn graph_expmv_frechet_py<'py>(
 // ---------------------------------------------------------------------------
 
 /// Map ``"chebyshev"`` / ``"lanczos"`` string to [`KrylovPath`].
+///
+/// `"implicit"` is not supported on the graph-level API (use
+/// `SymmetricOperator.evolve_batched` instead) and returns `Unsupported`.
 fn parse_krylov_path(path: &str, m_max: u32) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
         "lanczos" => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
+        "implicit" => Err(new_pyerr(
+            "Unsupported",
+            "path='implicit' is not available on GraphKrylov; \
+             use SymmetricOperator.evolve_batched(path='implicit') instead",
+        )),
         other => Err(new_pyerr(
             "OutOfDomain",
             &format!("path must be 'chebyshev' or 'lanczos', got '{other}'"),
