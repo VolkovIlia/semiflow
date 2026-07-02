@@ -32,15 +32,43 @@ jobs:
       # -Zmiri-strict-provenance enforces strict pointer-provenance rules.
       # -Zmiri-disable-isolation allows proptest's getcwd()/filesystem access
       # for shrinking / replay; this is not a provenance bypass.
-      # The unsafe pointer / aliasing logic in the scalar apply path is fully
-      # exercised.  If Miri gains stable SIMD-intrinsic support in future,
-      # re-enable with `--features simd` and remove `libm/force-soft-floats`.
-      - name: Run Miri (scalar path — simd intrinsics not supported by Miri)
+      #
+      # Why scoped filters instead of the full test suite
+      # ---------------------------------------------------
+      # The crate root carries `#![deny(unsafe_code)]`; the only real `unsafe`
+      # lives in the `simd` module which is excluded here by
+      # `--no-default-features`.  Running all ~608 lib unit tests (including
+      # large proptest suites, 6th-order Chernoff sweeps, etc.) under Miri's
+      # 10-100× slowdown buys no additional UB coverage on pure-safe numerics
+      # and has caused the job to time out at 2 h+.
+      #
+      # Test filters (libtest ORs multiple positional args after `--`):
+      #
+      #   "scratch"         — 4 ScratchPool tests covering borrow/drop/return
+      #                       lifecycle and the ScratchVec RAII guard.  These
+      #                       exercise Vec::resize, core::mem::swap in Drop, and
+      #                       the free-list push/pop — the highest-density
+      #                       provenance surface in the scalar crate path.
+      #
+      #   "preserves_shape" — 3 tests (axis::apply_x_preserves_shape,
+      #                       axis::apply_y_preserves_shape, and
+      #                       strang2d::apply_preserves_shape) that drive
+      #                       apply_into_via_view.  That function calls
+      #                       ScratchPool::take_vec/return_vec and iterates
+      #                       disjoint 2D grid-row chunks — the main slice-
+      #                       aliasing exercise for the axis-lifting split-borrow
+      #                       code path.
+      #
+      # Verified locally: 7 tests pass, ~30 s wall-clock.
+      # If Miri gains stable SIMD-intrinsic support in future, re-enable with
+      # `--features simd` and remove `libm/force-soft-floats`.
+      - name: Run Miri — scalar path, scoped to memory-safety-relevant tests
         env:
           MIRIFLAGS: "-Zmiri-strict-provenance -Zmiri-disable-isolation"
         run: >-
           cargo +nightly miri test -p semiflow --lib
           --no-default-features --features "std,libm/force-soft-floats"
+          -- scratch preserves_shape
 
   bench-regression:
     name: Bench regression check (>5% fails)
