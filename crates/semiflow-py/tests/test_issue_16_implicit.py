@@ -2,16 +2,12 @@
 
 Test structure
 --------------
-Fast (default run):
+Tests:
   test_implicit_path_accepted           — path param wires through (no error)
   test_implicit_path_bad_string_raises  — path='bogus' raises SemiflowError (Unsupported)
   test_implicit_well_conditioned_cv     — agrees with chebyshev + scipy dense ≤ 5e-7
   test_implicit_stiff_neumann_accuracy  — stiff Neumann surviving mode ≤ 1e-6
   test_mass_lumped_implicit_accepted    — mass_lumped_evolve accepts path='implicit'
-
-Slow (marked with @pytest.mark.slow; run via -m slow):
-  test_implicit_stiff_explicit_timeout_neumann  — chebyshev times out
-  test_implicit_stiff_scipy_timeout_neumann     — scipy expm_multiply times out
 
 Fixed (§59.6):
   When the input vector lies in the null space of A (e.g. v = ones for a
@@ -21,10 +17,6 @@ Fixed (§59.6):
 """
 
 from __future__ import annotations
-
-import subprocess
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -51,9 +43,6 @@ import semiflow
 # ---------------------------------------------------------------------------
 # CSR helpers
 # ---------------------------------------------------------------------------
-
-BENCH_DIR = Path(__file__).parent.parent.parent.parent / "benchmarks" / "issue16"
-
 
 def _neumann_csr(n: int, scale: float = 1.0):
     """Singular Neumann Laplacian: row sums = 0, constant vector ∈ ker(A)."""
@@ -182,70 +171,3 @@ def test_mass_lumped_implicit_accepted():
     )
     assert out.shape == (n, 1)
     assert np.all(np.isfinite(out))
-
-
-# ---------------------------------------------------------------------------
-# Slow / subprocess timeout tests
-# ---------------------------------------------------------------------------
-
-
-def _worker_path() -> str:
-    return str(BENCH_DIR / "worker_semiflow.py")
-
-
-def _run_in_subprocess(args: list[str], timeout_s: float) -> tuple[bool, str]:
-    """Return (timed_out, stderr) for a subprocess call."""
-    try:
-        proc = subprocess.run(
-            [sys.executable] + args,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-        )
-        return False, proc.stderr
-    except subprocess.TimeoutExpired:
-        return True, ""
-
-
-@pytest.mark.slow
-def test_implicit_stiff_explicit_timeout_neumann():
-    """chebyshev times out on stiff Neumann (N=400, scale=1e7, t=1.0).
-
-    Confirms the capability claim: explicit path is intractable where
-    implicit succeeds.  Runs as a subprocess with a 10 s hard timeout;
-    on benchmarked hardware chebyshev takes ~14 s (3500× slower than
-    implicit).  The Rust gate g_symop_implicit_stiff provides
-    hardware-independent proof via matvec counts (12 924× fewer).
-    """
-    worker = _worker_path()
-    if not Path(worker).exists():
-        pytest.skip("worker_semiflow.py not found in benchmarks/issue16/")
-    timed_out, _ = _run_in_subprocess(
-        [worker, "neumann", "400", "1e7", "1.0", "chebyshev"], timeout_s=10
-    )
-    assert timed_out, (
-        "Expected chebyshev to TIME OUT within 10 s on stiff N=400×1e7 "
-        "(benchmarked at ~14 s on i7-12700K). "
-        "If hardware is ≥10× faster this gate needs re-calibration."
-    )
-
-
-@pytest.mark.slow
-@pytest.mark.skipif(not HAS_SCIPY, reason="scipy not installed")
-def test_implicit_stiff_scipy_timeout_neumann():
-    """scipy.sparse.linalg.expm_multiply times out on stiff Neumann.
-
-    Confirms that scipy is also intractable in this regime.
-    Uses a 90 s timeout — scipy did not return within 90 s on benchmarked
-    hardware.
-    """
-    worker = str(BENCH_DIR / "worker_scipy.py")
-    if not Path(worker).exists():
-        pytest.skip("worker_scipy.py not found in benchmarks/issue16/")
-    timed_out, _ = _run_in_subprocess(
-        [worker, "neumann", "400", "1e7", "1.0"], timeout_s=90
-    )
-    assert timed_out, (
-        "Expected scipy expm_multiply to TIME OUT within 90 s on stiff "
-        "N=400×1e7.  If scipy has improved significantly, re-evaluate."
-    )
