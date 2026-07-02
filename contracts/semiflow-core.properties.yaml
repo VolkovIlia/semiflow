@@ -7744,11 +7744,15 @@ latency_gates:
                                   # Supersedes the v2.6 placeholder stub (the v2.6 entry
                                   # reserved the schema slot per ADR-0068; v2.7 populates).
     severity: RELEASE_BLOCKING    # v2.7.0-rc.1: advisory:true (warn). v2.7.0 final: advisory:false on i7-12700K.
-    bench_target: "crates/semiflow-core/examples/resolvent_perf.rs"  # Wave D engineer ships
+    bench_target: "crates/semiflow/examples/resolvent_perf.rs"  # Wave D engineer ships
+    # bench_invocation uses a small tick budget (200 ticks, 10 warmup) because a resolvent
+    # solve is inherently ms-scale (~320 ms/call: 32 Gauss-Laguerre nodes × n=64 Chernoff
+    # powers × N=256 grid applies). 200 samples suffice for an advisory percentile smoke;
+    # the ns-scale L_CEV_PTICK budget of 100 000 ticks would make this gate run ~44 h.
     bench_invocation: |
       cargo run --release --example resolvent_perf -- \
         --n 64 --lambda 1.0 --quadrature gauss-laguerre-32 \
-        --grid-n 256 --n-ticks 100000 --warmup-ticks 100 \
+        --grid-n 256 --n-ticks 200 --warmup-ticks 10 \
         --out-json target/lgate/L_RESOLVENT_N64_P99-rep{rep}.jsonl --rep {rep}
     measurement: "Per-call latency of LaplaceChernoffResolvent::eval_at_point (math.md §22.6 — Gauss-Laguerre 32-pt × n=64 = 2048 inner Chernoff steps per call)."
     canonical_input:
@@ -7757,8 +7761,8 @@ latency_gates:
       sha256: "TBD-rc.1"           # filled in v2.7.0-rc.1 from first calibration run
     replication:
       n_reps: 5
-      n_per_rep: 100000           # 100k point-evals per rep
-      warmup: 100                 # discarded before measurement window
+      n_per_rep: 200              # ms-scale op: 200 samples/rep suffice for advisory smoke
+      warmup: 10                  # discarded before measurement window
     percentile_budgets_ns:
       "i7-12700K":
         # v2.7.0-rc.1 baseline expected ~10-50 μs per call (32 quadrature points ×

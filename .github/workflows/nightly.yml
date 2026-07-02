@@ -21,19 +21,26 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: miri }
       - uses: Swatinem/rust-cache@v2
-      # Miri approach: run WITHOUT the `simd` feature (scalar fallback).
-      # Rationale: Miri does not support target-specific SIMD intrinsics
-      # (e.g. AVX2 _mm256_* / NEON vld1q_f64); compiling with --features simd
-      # produces "unsupported operation: AVX intrinsics are not supported"
-      # at runtime.  The unsafe pointer / aliasing logic in simd/ is still
-      # compiled for the scalar path, so Miri exercises the memory-safety
-      # invariants (provenance, aliasing, alignment) without the ISA-specific
-      # intrinsic layer.  If Miri gains stable SIMD-intrinsic support in
-      # future, re-enable with `--features simd`.
+      # Miri approach: scalar path, std enabled, libm asm disabled.
+      # --no-default-features strips the `simd` default feature whose AVX2
+      # intrinsics (_mm256_*) are not supported by Miri at runtime.
+      # --features std re-enables std so the libtest harness can allocate.
+      # --features libm/force-soft-floats disables libm's x86 SSE2 inline-asm
+      # sqrt path (sqrtsd), replacing it with libm's pure-Rust fallback; without
+      # this flag libm-0.2.16 still emits "unsupported operation: inline assembly"
+      # even on the scalar path.
+      # -Zmiri-strict-provenance enforces strict pointer-provenance rules.
+      # -Zmiri-disable-isolation allows proptest's getcwd()/filesystem access
+      # for shrinking / replay; this is not a provenance bypass.
+      # The unsafe pointer / aliasing logic in the scalar apply path is fully
+      # exercised.  If Miri gains stable SIMD-intrinsic support in future,
+      # re-enable with `--features simd` and remove `libm/force-soft-floats`.
       - name: Run Miri (scalar path — simd intrinsics not supported by Miri)
         env:
-          MIRIFLAGS: "-Zmiri-strict-provenance"
-        run: cargo +nightly miri test -p semiflow --lib
+          MIRIFLAGS: "-Zmiri-strict-provenance -Zmiri-disable-isolation"
+        run: >-
+          cargo +nightly miri test -p semiflow --lib
+          --no-default-features --features "std,libm/force-soft-floats"
 
   bench-regression:
     name: Bench regression check (>5% fails)
@@ -50,16 +57,33 @@ jobs:
           key: bench-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: bench-${{ runner.os }}-
 
-      - name: Run criterion benchmarks (JSON output)
-        # criterion emits one line per sample to stderr; the machine-readable
-        # summary we need is the "criterion" message-format line on stdout.
-        # We run with --message-format=json and capture the output, then
-        # also save the human-readable criterion HTML via the default run.
-        # NOTE: Until baseline-v1_0_0.json is populated by the maintainer,
-        # all median_ns values are null and the comparison step is a no-op
-        # (the Python script skips null entries and exits 0).
+      - name: Run criterion benchmarks (flagship subset)
+        # Runs only the three bounded flagship targets to keep the job under
+        # 30 min wall-clock. `--warm-up-time 2 --measurement-time 3` reduces
+        # criterion's per-bench budget while preserving statistical validity.
+        #
+        # INCLUDED: heat_1d (1D heat, N=1000), heat_2d (2D Strang, 400×400),
+        #   graph_heat (Erdős–Rényi N=2000, three kernels).
+        #
+        # EXCLUDED (too heavy for nightly CI):
+        #   diffusion6_simd      — SIMD micro-benchmark
+        #   advdiff_2d           — large 2D advection-diffusion
+        #   strang2d_parallel    — 800²×[1..16] thread sweep
+        #   strang3d_parallel    — 120³=1.7 M nodes ×[1..16] thread sweep
+        #   ns2d_aniso_parallel  — anisotropic 2D parallel sweep
+        #   zeta_ladder          — heavy ζ-ladder sweep
+        #   new_kernels{,2,3,4}  — kernel micro-benchmark suite
+        #   cache_phase4         — cache-phase memory benchmark
+        #
+        # NOTE: Until baseline-v1_0_0.json benches{} is populated by the
+        # maintainer, all median_ns values are absent and the comparison step
+        # prints "baseline not populated — skipping regression check" and
+        # exits 0 without failing the job.
         run: |
-          cargo bench --workspace 2>&1 | tee bench-output.txt
+          cargo bench -p semiflow \
+            --bench heat_1d --bench heat_2d --bench graph_heat \
+            -- --warm-up-time 2 --measurement-time 3 --sample-size 10 \
+            2>&1 | tee bench-output.txt
         env:
           RUSTFLAGS: "-C target-cpu=native"
 
@@ -74,9 +98,13 @@ jobs:
           BENCH_OUTPUT_PATH = "bench-output.txt"
           THRESHOLD_DEFAULT = 5.0  # percent
 
-          # Load baseline
-          with open(BASELINE_PATH) as f:
-              baseline = json.load(f)
+          # Load baseline — skip gracefully if not yet populated.
+          try:
+              with open(BASELINE_PATH) as f:
+                  baseline = json.load(f)
+          except FileNotFoundError:
+              print("baseline not populated — skipping regression check")
+              sys.exit(0)
 
           threshold = baseline.get("regression_threshold_pct", THRESHOLD_DEFAULT)
 

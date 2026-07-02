@@ -115,7 +115,12 @@ fn parse_args(argv: Vec<String>) -> Args {
             "--gate-id" => {
                 a.gate_id = it.next().unwrap_or_else(|| DEFAULT_GATE_ID.into());
             }
-            "--quadrature" | "--format" | "--format=jsonl" => {
+            "--format=jsonl" => {
+                // Value is embedded; no following token to consume.
+                // Accept but ignore: only one mode in v2.7.
+            }
+            "--format" | "--quadrature" => {
+                // Space form: consume the following value token.
                 // Accept but ignore: only one mode in v2.7.
                 let _ = it.next();
             }
