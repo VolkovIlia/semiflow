@@ -55,6 +55,16 @@ jobs:
           CIBW_ENVIRONMENT_LINUX: PATH="$HOME/.cargo/bin:$PATH"
           # macOS: no extra setup needed; Rust installed above.
           # Windows: no extra setup needed; dtolnay/rust-toolchain handles it.
+          # Gate PyPI publish on the fast test suite passing per-platform.
+          # CIBW_TEST_COMMAND runs inside each freshly-built wheel's isolated env;
+          # a failure here prevents publish-pypi (which `needs: build-wheels`) from
+          # running — the "it compiles" smoke in ci.yml does not catch numerical regressions.
+          # scipy is excluded from CIBW_TEST_REQUIRES: fast tests need only numpy;
+          # the one fast test that calls scipy is @pytest.mark.skipif(not HAS_SCIPY)
+          # so it skips gracefully without scipy installed.
+          # Slow tests (90 s timeout, scipy expm_multiply) are excluded via -m "not slow".
+          CIBW_TEST_REQUIRES: "pytest numpy"
+          CIBW_TEST_COMMAND: 'pytest {package}/tests -m "not slow" -q'
 
       - name: Upload wheels to GitHub Release
         uses: softprops/action-gh-release@v2

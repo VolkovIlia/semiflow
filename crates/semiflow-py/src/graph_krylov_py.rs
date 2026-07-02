@@ -61,8 +61,9 @@ pub struct GraphKrylov {
 impl GraphKrylov {
     /// Construct from a symmetric ``Laplacian``.
     ///
-    /// Raises ``SemiflowError(OutOfDomain)`` if ``tol ≤ 0``, ``tol`` is not
-    /// finite, or ``path`` is neither ``"chebyshev"`` nor ``"lanczos"``.
+    /// Raises ``SemiflowError(OutOfDomain)`` if ``tol ≤ 0`` or ``tol`` is not finite.
+    /// Raises ``SemiflowError(Unsupported)`` if ``path`` is not ``"chebyshev"``
+    /// or ``"lanczos"`` (contract §3 — unknown path is `Unsupported`, not `OutOfDomain`).
     #[new]
     #[pyo3(signature = (laplacian, *, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
     fn new(laplacian: &PyLaplacian, path: &str, tol: f64, m_max: u32) -> PyResult<Self> {
