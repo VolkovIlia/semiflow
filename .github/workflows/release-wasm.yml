@@ -72,6 +72,14 @@ jobs:
           fi
           echo "OK — version $VER not yet published."
 
+      # Run the wasm test suite on Node before publish.
+      # Mirrors ci.yml wasm-test-node: `cargo run -p xtask -- wasm-test`.
+      # wasm-pack test crates/semiflow-wasm --node is invoked by xtask internally.
+      # A test failure aborts the job here, before the tarball is assembled or
+      # pushed to npm — the dry-install smoke only checks packaging, not behavior.
+      - name: Run wasm tests (Node)
+        run: cargo run -p xtask -- wasm-test
+
       # Pack + dry-install verification: build the tarball, install it in a
       # scratch directory, and confirm that require('@semiflow/wasm').Heat1D
       # resolves.  Catches missing files before the publish step.
