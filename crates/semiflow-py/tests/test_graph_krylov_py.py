@@ -75,7 +75,9 @@ def test_krylov_n_nodes(path_lap):
 
 
 def test_krylov_path_validation(path_lap):
-    with pytest.raises(semiflow.SemiflowError, match="OutOfDomain"):
+    # Unknown path → SemiflowError(Unsupported) per contract §3
+    # (aligned with symmetric_op_py sibling; message format is "[Unsupported] …")
+    with pytest.raises(semiflow.SemiflowError, match=r"\[Unsupported\]"):
         semiflow.GraphKrylov(path_lap, path="invalid_path")
 
 
