@@ -165,7 +165,7 @@ A runnable version with the error check lives in
 | Conservative (divergence-form) diffusion | `ConservativeDiffusionChernoff`, `assemble_conservative_csr_1d`, `assemble_conservative_csr_nd` | Harmonic-mean faces; sharp k-jumps; optional contact resistance; separable N-D |
 | Stiff multilayer conduction | `MultilayerStack`, `multilayer_evolve`, `MassWeightedConservativeChernoff` | Per-layer `(k, ρc)` stack; mass-weighted Krylov; ~28000× fewer matvecs than explicit CFL |
 | Semilinear ETD | `phi_action`, `phi_action_batched`, `Etdrk4`, `Nonlinearity` | `∂ₜu = Lu + N(u)`; order-4 Cox–Matthews; φ-functions via augmented matvec |
-| Generic symmetric-operator entry | `SymmetricOperator`, `MassKOperator`, `EntrySensitivity`, `mass_lumped_evolve` | Externally-assembled PSD CSR; `(M,K)` eigenproblem; entry-wise Fréchet gradient |
+| Generic symmetric-operator entry | `SymmetricOperator`, `MassKOperator`, `EntrySensitivity`, `mass_lumped_evolve` | Externally-assembled PSD CSR; `(M,K)` eigenproblem; entry-wise Fréchet gradient; `path="implicit"` (PCG backward-Euler) for stiff FEM operators (ADR-0190) |
 | Graph and quantum-graph Laplacians | `GraphHeatChernoff`, `GraphKrylovChernoff`, `QuantumGraphHeatChernoff`, `QuantumSchrödingerChernoff` | Kirchhoff vertex conditions; depth-independent Krylov + Fréchet gradient |
 | Boundary conditions | `KillingChernoff`, `ReflectedHeatChernoff`, `DirichletHeat2ndChernoff`, `ObstacleChernoff`, `BoundaryPolicy` | Dirichlet (order-2) / Neumann / Robin / obstacle |
 | Resolvent and nonautonomous | `LaplaceChernoffResolvent`, `HowlandLift` | `(λI−A)⁻¹g`; Howland augmented generator |
@@ -200,7 +200,39 @@ not a 1:1 map of internal composition types (e.g. `AxisLift`, `StrangSplit` are
 not directly exposed). v0.10.0-beta adds `GraphKrylov` (PyO3 pyclass) and `graph_expmv_frechet`
 (PyO3 pyfunction) for depth-independent graph-semigroup actions and edge-weight
 Fréchet gradients; `sym_op_evolve`, `mass_k_evolve`, and `sym_op_entry_grad`
-functions for generic symmetric operators (ADR-0185/0186). Deferred (bindings label):
+functions for generic symmetric operators (ADR-0185/0186). v0.11.0-beta adds
+`SymmetricOperator.from_csr` / `evolve_batched`, `mass_lumped_evolve`, and
+`MassKOperator.evolve` as the Python surface for the generic symmetric-operator path
+(issue #15). The `evolve_batched` and `mass_lumped_evolve` calls accept a `path=`
+keyword (`"lanczos"` / `"chebyshev"` explicit — default — or `"implicit"` for stiff
+operators; issue #16, ADR-0190):
+
+```python
+import numpy as np
+import scipy.sparse as sp
+from semiflow import SymmetricOperator
+
+# Stiff 1-D FEM stiffness, λ_max ≈ 1e7 (N=400 nodes)
+n = 400
+A_csr = sp.diags([-1, 2, -1], [-1, 0, 1], shape=(n, n), format='csr') * 1e7
+
+op = SymmetricOperator.from_csr(A_csr.indptr, A_csr.indices, A_csr.data, n)
+v0 = np.random.default_rng(0).standard_normal((n, 4))  # 4 right-hand sides
+
+# Explicit path sub-steps O(λ_max · t) times — times out at this stiffness:
+# u = op.evolve_batched(v0, t=1.0, path="lanczos")
+
+# Implicit backward-Euler PCG: O(Δt) accuracy, cost ~√κ per sub-step
+u = op.evolve_batched(v0, t=1.0, path="implicit", n_steps=100)
+# mass_lumped_evolve and MassKOperator.evolve accept the same path= kwarg
+```
+
+`n_steps` (default 100) controls the backward-Euler sub-step count; accuracy
+is O(t/n_steps). Cost is governed by `√κ` of the Jacobi-preconditioned
+`S = I + Δt·A`, not strictly `λ_max`-independent. IC(0) preconditioning is
+deferred to a follow-on release (§59.6).
+
+Deferred (bindings label):
 conservative diffusion, multilayer, and ETD PyO3 surfaces; C-ABI for new types.
 The one remaining PyO3-only deferral is `GraphAdjoint`'s time-dependent Laplacian
 constructor accepting a live callback — the pre-sampled path

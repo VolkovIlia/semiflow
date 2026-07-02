@@ -12,6 +12,33 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Issue #16 — Implicit / shift-invert stiff mode for `SymmetricOperator` (ADR-0190, math §59) — IN PROGRESS (branch `feat/issue-16-implicit-symmetric-operator`)
+
+Single-issue additive feature. No breaking changes to any existing kernel, gate,
+or PyO3 surface.
+
+**#16 — Dependency-free PCG backward-Euler action for stiff externally-assembled operators:**
+`SymmetricOperator.evolve_batched`, `mass_lumped_evolve`, and `MassKOperator.evolve`
+gain a new `path="implicit"` keyword that computes `e^{−tA}v ≈ (I+Δt·A)^{−n_steps} v`
+via preconditioned Conjugate Gradient (Jacobi preconditioner, built once per fixed
+`Δt` and reused across all sub-steps and channels). The `+I` shift lifts
+`σ(Â) ⊂ [0, λ_max]` to `σ(S) ⊂ (0, ∞)`, making `S` SPD for every `Δt > 0`
+regardless of whether `A` is singular — CG is always well-posed (§59.3). No new
+dependency; no governance amendment required (dep budget 3/3 saturated; constitution
+v7.0.0 override slots full; PCG needs none). Resolves the gap left by ADR-0188/§57.4
+(tridiagonal Thomas solve, 1-D only) for general-sparse-CSR FEM stiffness matrices.
+New `KrylovPath::ImplicitEuler { n_steps }` enum arm in `graph_krylov.rs`; all
+`match KrylovPath` sites fail to compile without the new arm (compile-time-enforced,
+≤4 sites).
+Gates: `G_SYMOP_IMPLICIT_DENSE` ≤ 1e-9; `G_SYMOP_IMPLICIT_STIFF` ≤ 1e-9;
+`G_SYMOP_IMPLICIT_PCG_SPD` structural.
+Honest limits: accuracy is O(Δt) = O(t/n_steps); cost governed by `√κ`
+(Jacobi) — NOT strictly `λ_max`-independent. IC(0) (zero-fill incomplete Cholesky,
+keeps `S` sparsity, near-constant cost for well-structured FEM) is §59.6
+deferred work. SDIRK2 (order-2 L-stable) reusing the same `P` is a further deferral.
+
+---
+
 ## Issue campaign #11/#12/#13/#14 + A1 stiff fix — DONE (ADRs 0185–0189, commit 9e5f557)
 
 Five additive features merged at master commit `4df0693` (2026-06-27). No breaking

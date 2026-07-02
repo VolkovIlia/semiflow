@@ -1,6 +1,6 @@
 # SemiFlow: Backend Role and Roadmap Narrative
 
-> Last updated: 2026-06-27 (v0.10.0-beta, issue campaign #11/#12/#13/#14 + A1 stiff fix)
+> Last updated: 2026-07-02 (issue #16 branch — `path="implicit"` for stiff SymmetricOperator; ADR-0190)
 
 ## The "BLAS/cuDNN for Semigroups" Positioning
 
@@ -46,8 +46,8 @@ The core of every primitive. `L` may be:
 | **Conservative (divergence-form)** | `ConservativeDiffusionChernoff`, `assemble_conservative_csr_1d` | Harmonic-mean faces; sharp k-jumps; contact resistance `R_c` |
 | Graph Laplacian (standard stepping) | `GraphHeatChernoff`, `MagnusGraphHeatChernoff`, `VarCoefGraphHeatChernoff` | Per-channel, batched, adjoint |
 | **Graph semigroup (depth-independent)** | `GraphKrylovChernoff` | Chebyshev O(1)-vector / Lanczos O(m·N); matvec count flat in `t` |
-| **Generic symmetric PSD** | `SymmetricOperator`, `SymmetricLinearOp` | FEM stiffness, anisotropic conductivity, any externally-assembled symmetric CSR |
-| **Generalized eigenproblem `(M,K)`** | `MassKOperator`, `mass_lumped_evolve` | Consistent mass via Cholesky congruence; lumped mass via pre-scaling |
+| **Generic symmetric PSD** | `SymmetricOperator`, `SymmetricLinearOp` | FEM stiffness, anisotropic conductivity, any externally-assembled symmetric CSR; `path="implicit"` (PCG backward-Euler) for stiff operators (ADR-0190) |
+| **Generalized eigenproblem `(M,K)`** | `MassKOperator`, `mass_lumped_evolve` | Consistent mass via Cholesky congruence; lumped mass via pre-scaling; `path="implicit"` available (ADR-0190) |
 | **Stiff multilayer conduction** | `MultilayerStack`, `multilayer_evolve` | Per-layer `(k, ρc)`; one depth-flat Krylov action for the whole interval |
 | High-dimensional (TT carrier) | `TtChernoff`, `VarCoefTt` | Curse-escape for diagonal-A Gaussian class |
 | Manifold / hypoelliptic / graph-quantum | `ManifoldChernoff`, `HypoellipticChernoff`, `QuantumGraphHeatChernoff` | See engine catalogue in README |
@@ -92,14 +92,19 @@ For semilinear `Etdrk4`, `NonlinearityDiff` delivers the adjoint through one ste
 
 ## Honest Scope and Limits
 
-The following are explicit non-goals or deferred items as of v0.10.0-beta:
+The following are explicit non-goals or deferred items as of v0.10.0-beta
+(updated for issue #16 branch):
 
 - **Non-symmetric / directed graphs:** Arnoldi required (stores full Hessenberg);
   deferred. Symmetric `L` only for Krylov/Chebyshev paths.
 - **Time-varying `L(t)` in Krylov:** not a semigroup — Magnus/Howland (already in
   core) cover the augmented-generator path; Krylov action is for fixed `L`.
-- **Chebyshev stiff-substep cost:** scales as `O(τλ_max)` when substepping is
-  active; use Lanczos path for stiff operators.
+- **Explicit path stiff-substep cost:** the `path="lanczos"` / `path="chebyshev"`
+  sub-step count scales as `O(τλ_max)`; for FEM operators with `λ_max ≳ 10⁵ /s`
+  this times out. **Use `path="implicit"` (issue #16, ADR-0190)**: PCG
+  backward-Euler `(I+Δt·A)^{−n_steps}`, dependency-free, always well-posed.
+  Cost is `~√κ` per sub-step (Jacobi preconditioner), not strictly
+  `λ_max`-independent. IC(0) zero-fill preconditioning is §59.6 deferred.
 - **`(M,K)` consistent-mass differentiability:** the entry-Fréchet covers
   `SymmetricOperator` only; `MassKOperator` gradient is deferred.
 - **2-D/3-D tensor ETD, exponential Rosenbrock, per-step Python N:** deferred.

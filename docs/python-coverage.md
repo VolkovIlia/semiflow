@@ -1,6 +1,6 @@
 ---
-version: 1.4.0
-last_updated: 2026-06-19
+version: 1.6.0
+last_updated: 2026-07-02
 freshness_score: 1.0
 dependencies:
   - crates/semiflow/src/lib.rs
@@ -16,12 +16,16 @@ dependencies:
   - docs/adr/0159-tt-chernoff.md
   - docs/adr/0162-tt-coupled-spectral.md
   - docs/adr/0169-s3-honest-scope-public-api-promotion.md
+  - docs/adr/0186-symmetric-operator.md
+  - docs/adr/0190-implicit-stiff-symmetric-operator.md
 changelog:
   - 1.0.0: Initial coverage matrix for v2.3.0 Python parity expansion (feat/python-parity-v2.3)
   - 1.1.0: v6.2.2 ADR-0115 additions — GraphAdjoint, edge_weight_grad, dtype kwarg, Laplacian accessors, from_edges fix
   - 1.2.0: v9.0.0 — ReverseHeat1D added to PyO3 + WASM; TtChernoff/TtState/GridlessChernoff/ParticleReduction Rust-only
   - 1.3.0: v9.1.0 — CoupledTtChernoff Rust-only (TT contraction interface design deferred)
   - 1.4.0: v9.2.0 — six S3* types (s3-poc feature) Rust-only; no new binding exposure
+  - 1.5.0: v0.11.0-beta — add section 9 (SymmetricOperator / MassKOperator / mass_lumped_evolve; issue #15, ADR-0186)
+  - 1.6.0: issue #16 branch — document path="implicit" kwarg on evolve_batched / mass_lumped_evolve / MassKOperator.evolve (ADR-0190)
 graph-unverified: false
 ---
 
@@ -274,6 +278,43 @@ Gradient parity: 0-ULP between PyO3 and WASM implementations
 | `S3VarCoefEvolver<F>`, `AxisCoef<F>` | S³ POC — binding design deferred |
 | `S3NonSepVarCoefEvolver<F>`, `CpTerm/CpCoef/CoefRole` | S³ POC — CP-coefficient interface complex to represent in Python safely; deferred |
 | `S3BurgersColeHopf<F>`, `S3ReactionDiffusion<F>`, `Reaction<F>` | S³ POC — binding design deferred |
+
+---
+
+## 9. Generic Symmetric Operator (v0.11.0-beta, issue #15; `path="implicit"` issue #16)
+
+| Rust type / function | PyO3 surface | Status | Notes |
+|----------------------|-------------|--------|-------|
+| `SymmetricOperator::from_csr` | `SymmetricOperator.from_csr(indptr, indices, data, n)` | ✅ stable | accepts CSR arrays (int32 or int64 indices) |
+| `SymmetricOperator::evolve_batched` | `SymmetricOperator.evolve_batched(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | `path=` kwarg selects Krylov mode |
+| `mass_lumped_evolve` | `mass_lumped_evolve(K_csr, mass_diag, v, t, *, path="lanczos", n_steps=100)` | ✅ stable | lumped-mass `(M,K)` 3-liner |
+| `MassKOperator::evolve` | `MassKOperator.evolve(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | consistent-mass `(M,K)` via Cholesky congruence |
+| `symmetric_op_expmv_frechet` | `symmetric_op_expmv_frechet(op, v, t, dj_du)` | ✅ stable | combined action + per-entry Fréchet gradient |
+| `EntrySensitivity` | returned by `symmetric_op_expmv_frechet`; not a separate Python class | ✅ stable | gradient returned directly |
+
+**`path=` values for `evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve`:**
+
+| `path=` | Method | When to use |
+|---------|--------|-------------|
+| `"lanczos"` (default) | Lanczos Krylov expmv | General-purpose; matvec count flat in `t` per sub-step |
+| `"chebyshev"` | Chebyshev polynomial expmv | O(1) working vectors; slightly cheaper per matvec than Lanczos for moderate stiffness |
+| `"implicit"` | PCG backward-Euler `(I+Δt·A)^{−n_steps}` (ADR-0190, issue #16) | Stiff operators with `λ_max ≳ 10⁵` where the explicit paths time out |
+
+**`n_steps` parameter** (default 100, only used with `path="implicit"`): number of
+backward-Euler sub-steps. Accuracy is O(t/n_steps); increase to tighten tolerance.
+Cost per sub-step is proportional to `√κ` of the Jacobi-preconditioned system,
+not strictly `λ_max`-independent (IC(0) is deferred, §59.6).
+
+**Notes**
+
+- GIL is released inside `evolve_batched` for all `path=` values.
+- `SymmetricOperator` accepts any externally-assembled symmetric PSD sparse matrix
+  (FEM stiffness with Robin BC, anisotropic conductivity, conservative diffusion via
+  `to_symmetric_operator()`). The operator must be PSD; a non-PSD matrix is a
+  domain error.
+- FFI and WASM do not expose the symmetric-operator surface (PyO3-only; ADR-0186).
+- `MassKOperator` gradient via `EntrySensitivity` covers `SymmetricOperator` only;
+  `MassKOperator` differentiability is deferred.
 
 ---
 
