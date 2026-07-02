@@ -17,7 +17,9 @@ struct PeriodLaplacian {
 }
 
 impl GeneratorAction<f64> for PeriodLaplacian {
-    fn dim(&self) -> usize { N }
+    fn dim(&self) -> usize {
+        N
+    }
     fn apply_generator(&self, src: &[f64], dst: &mut [f64]) {
         let c = self.eps_over_dxsq;
         for i in 0..N {
@@ -26,24 +28,33 @@ impl GeneratorAction<f64> for PeriodLaplacian {
             dst[i] = c * (src[im] - 2.0 * src[i] + src[ip]);
         }
     }
-    fn norm_bound(&self) -> f64 { 4.0 * self.eps_over_dxsq }
+    fn norm_bound(&self) -> f64 {
+        4.0 * self.eps_over_dxsq
+    }
 }
 
 #[allow(clippy::cast_precision_loss)]
 fn make_op() -> PeriodLaplacian {
     let dx = 1.0 / N as f64;
-    PeriodLaplacian { eps_over_dxsq: EPS / (dx * dx) }
+    PeriodLaplacian {
+        eps_over_dxsq: EPS / (dx * dx),
+    }
 }
 
 fn integrate_ac(h: f64, n_steps: usize, u0: &[f64]) -> Vec<f64> {
     let driver = Etdrk4::new(make_op(), AllenCahn::<f64>::new(), h).unwrap();
     let mut out = u0.to_vec();
-    driver.integrate(u0, n_steps, &mut out, &mut ScratchPool::new()).unwrap();
+    driver
+        .integrate(u0, n_steps, &mut out, &mut ScratchPool::new())
+        .unwrap();
     out
 }
 
 fn sup_diff(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0_f64, f64::max)
 }
 
 #[test]
@@ -58,11 +69,11 @@ fn g_etdrk4_order() {
     let n_base = 4_usize;
     let h = 0.2_f64 / n_base as f64; // h = 0.05; tau*||L|| ≈ 0.128
 
-    let u_h   = integrate_ac(h,       n_base,     &u0);
-    let u_h2  = integrate_ac(h / 2.0, n_base * 2, &u0);
+    let u_h = integrate_ac(h, n_base, &u0);
+    let u_h2 = integrate_ac(h / 2.0, n_base * 2, &u0);
     let u_ref = integrate_ac(h / 4.0, n_base * 4, &u0);
 
-    let e1 = sup_diff(&u_h,  &u_ref);
+    let e1 = sup_diff(&u_h, &u_ref);
     let e2 = sup_diff(&u_h2, &u_ref);
 
     let slope = (e1 / e2).log2();

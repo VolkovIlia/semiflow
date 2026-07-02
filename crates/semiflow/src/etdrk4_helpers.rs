@@ -24,7 +24,7 @@
 
 use crate::{
     error::SemiflowError,
-    float::{from_f64, half, SemiflowFloat, two},
+    float::{from_f64, half, two, SemiflowFloat},
     generator_action::GeneratorAction,
     nonlinearity::Nonlinearity,
     phi_action::phi_action,
@@ -143,12 +143,16 @@ where
     phi_action(op, 0, hh, a, &mut e_half_a, scratch)?;
 
     let mut combo = scratch.take_vec(n);
-    for i in 0..n { combo[i] = tw * n_b[i] - n_u[i]; }
+    for i in 0..n {
+        combo[i] = tw * n_b[i] - n_u[i];
+    }
 
     let mut phi1_combo = scratch.take_vec(n);
     phi_action(op, 1, hh, &combo, &mut phi1_combo, scratch)?;
 
-    for i in 0..n { c[i] = e_half_a[i] + hh * phi1_combo[i]; }
+    for i in 0..n {
+        c[i] = e_half_a[i] + hh * phi1_combo[i];
+    }
 
     scratch.return_vec(phi1_combo);
     scratch.return_vec(combo);
@@ -163,8 +167,12 @@ where
 // combo2 = −3 N(u) + 2(N(a)+N(b)) − N(c)
 // combo3 =  4(N(u) + N(c)) − 4(N(a)+N(b))
 fn build_combos<F: SemiflowFloat>(
-    n_u: &[F], n_a: &[F], n_b: &[F], n_c: &[F],
-    combo2: &mut [F], combo3: &mut [F],
+    n_u: &[F],
+    n_a: &[F],
+    n_b: &[F],
+    n_c: &[F],
+    combo2: &mut [F],
+    combo3: &mut [F],
 ) {
     let tw = two::<F>();
     let three = from_f64::<F>(3.0);
@@ -219,9 +227,13 @@ where
         u_next[i] = e_un[i] + h * (phi1_nu[i] + phi2_c2[i] + phi3_c3[i]);
     }
 
-    scratch.return_vec(phi3_c3); scratch.return_vec(phi2_c2); scratch.return_vec(phi1_nu);
-    scratch.return_vec(combo3); scratch.return_vec(combo2);
-    scratch.return_vec(e_un); scratch.return_vec(n_c);
+    scratch.return_vec(phi3_c3);
+    scratch.return_vec(phi2_c2);
+    scratch.return_vec(phi1_nu);
+    scratch.return_vec(combo3);
+    scratch.return_vec(combo2);
+    scratch.return_vec(e_un);
+    scratch.return_vec(n_c);
     Ok(())
 }
 

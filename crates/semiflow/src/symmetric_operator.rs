@@ -79,7 +79,9 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
         )?;
         check_diag_nonneg(n, row_ptr, col_idx, vals)?;
         check_sym_matrix(n, row_ptr, col_idx, vals, sym_tol)?;
-        Ok(Self { inner: Arc::new(inner) })
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
     /// Operator dimension.
@@ -147,7 +149,9 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
         }
         let inner = Laplacian::from_csr_parts(n, rp, ci, nv, LaplacianKind::GeneralSymmetric)
             .expect("lumped_congruence: derived CSR is always valid (validated source)");
-        Ok(Self { inner: Arc::new(inner) })
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 }
 

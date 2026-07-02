@@ -15,9 +15,7 @@
 use alloc::vec::Vec;
 
 use crate::{
-    error::SemiflowError,
-    float::SemiflowFloat,
-    scratch::ScratchPool,
+    error::SemiflowError, float::SemiflowFloat, scratch::ScratchPool,
     symmetric_operator::SymmetricLinearOp,
 };
 
@@ -53,13 +51,13 @@ impl<F: SemiflowFloat> Jacobi<F> {
         let n = op.n();
         let tiny = F::from(1e-300_f64).unwrap();
         let mut unit = scratch.take_vec(n);
-        let mut col  = scratch.take_vec(n);
+        let mut col = scratch.take_vec(n);
         let mut inv_diag = Vec::with_capacity(n);
         for i in 0..n {
             unit[i] = F::one();
             op.apply_into_slice(&unit, &mut col); // col = A·e_i
             let s_ii = F::one() + dt * col[i];
-            let safe  = if s_ii > tiny { s_ii } else { F::one() };
+            let safe = if s_ii > tiny { s_ii } else { F::one() };
             inv_diag.push(F::one() / safe);
             unit[i] = F::zero();
         }
@@ -84,7 +82,9 @@ fn vec_norm_sq<F: SemiflowFloat>(v: &[F]) -> F {
 }
 
 fn vec_dot<F: SemiflowFloat>(a: &[F], b: &[F]) -> F {
-    a.iter().zip(b.iter()).fold(F::zero(), |s, (&ai, &bi)| s + ai * bi)
+    a.iter()
+        .zip(b.iter())
+        .fold(F::zero(), |s, (&ai, &bi)| s + ai * bi)
 }
 
 /// `r ← b − (x + dt · A·x)` = `b − S·x`, using `sp` as temporary for `A·x`.
@@ -96,22 +96,17 @@ fn compute_residual<F: SemiflowFloat>(
     sp: &mut [F],
     r: &mut [F],
 ) {
-    op.apply_into_slice(x, sp);                    // sp = A·x
+    op.apply_into_slice(x, sp); // sp = A·x
     for i in 0..x.len() {
-        r[i] = b[i] - x[i] - dt * sp[i];          // r = b - S·x
+        r[i] = b[i] - x[i] - dt * sp[i]; // r = b - S·x
     }
 }
 
 /// `sp ← p + dt · A·p` = `S·p` (one matvec).
-fn shifted_matvec<F: SemiflowFloat>(
-    op: &dyn SymmetricLinearOp<F>,
-    dt: F,
-    p: &[F],
-    sp: &mut [F],
-) {
-    op.apply_into_slice(p, sp);                    // sp = A·p
+fn shifted_matvec<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, p: &[F], sp: &mut [F]) {
+    op.apply_into_slice(p, sp); // sp = A·p
     for i in 0..p.len() {
-        sp[i] = p[i] + dt * sp[i];                // sp = S·p
+        sp[i] = p[i] + dt * sp[i]; // sp = S·p
     }
 }
 
@@ -124,6 +119,9 @@ fn shifted_matvec<F: SemiflowFloat>(
 ///
 /// Returns `Ok(iters)` on convergence; `Err(ConvergenceFailed)` otherwise.
 /// Borrows four scratch vectors and releases them before returning — no allocation.
+// 8 args by necessity — op/dt/b/x/precond/tol/max_iter/scratch: no grouping possible.
+#[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
+#[allow(clippy::too_many_lines)]
 pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     dt: F,
@@ -138,13 +136,15 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     let b_norm_sq = vec_norm_sq(b);
     let tiny = F::from(1e-300_f64).unwrap();
     if b_norm_sq < tiny {
-        for xi in x.iter_mut() { *xi = F::zero(); }
+        for xi in x.iter_mut() {
+            *xi = F::zero();
+        }
         return Ok(0);
     }
     let tol_abs_sq = tol_cg * tol_cg * b_norm_sq;
-    let mut r  = scratch.take_vec(n);
-    let mut z  = scratch.take_vec(n);
-    let mut p  = scratch.take_vec(n);
+    let mut r = scratch.take_vec(n);
+    let mut z = scratch.take_vec(n);
+    let mut p = scratch.take_vec(n);
     let mut sp = scratch.take_vec(n);
     compute_residual(op, dt, b, x, &mut sp, &mut r);
     // ── Pre-loop convergence guard (§59.6) ────────────────────────────────────
@@ -164,8 +164,9 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     precond.apply(&r, &mut z);
     p.copy_from_slice(&z);
     let rz = vec_dot(&r, &z);
-    let result = cg_loop(op, dt, x, tol_abs_sq, max_iter, precond,
-                         &mut r, &mut z, &mut p, &mut sp, rz);
+    let result = cg_loop(
+        op, dt, x, tol_abs_sq, max_iter, precond, &mut r, &mut z, &mut p, &mut sp, rz,
+    );
     scratch.return_vec(r);
     scratch.return_vec(z);
     scratch.return_vec(p);
@@ -174,6 +175,9 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
 }
 
 /// Inner CG iterate loop (extracted to keep `pcg_shifted` ≤ 50 lines).
+// 11 args by necessity — 4 CG state slices + 4 scalar/op params: no grouping possible.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 fn cg_loop<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     dt: F,
@@ -181,36 +185,52 @@ fn cg_loop<F: SemiflowFloat>(
     tol_abs_sq: F,
     max_iter: usize,
     precond: &dyn Preconditioner<F>,
-    r: &mut Vec<F>,
-    z: &mut Vec<F>,
-    p: &mut Vec<F>,
-    sp: &mut Vec<F>,
+    r: &mut [F],
+    z: &mut [F],
+    p: &mut [F],
+    sp: &mut [F],
     mut rz: F,
 ) -> Result<usize, SemiflowError> {
     let tiny = F::from(1e-300_f64).unwrap();
     let mut last_r_sq = F::from(f64::INFINITY).unwrap_or(F::zero());
     for iter in 0..max_iter {
-        shifted_matvec(op, dt, p, sp);             // sp = S·p
+        shifted_matvec(op, dt, p, sp); // sp = S·p
         let psp = vec_dot(p, sp);
-        if psp <= F::zero() {                       // p≈0 on SPD system ⇒ check convergence
+        if psp <= F::zero() {
+            // p≈0 on SPD system ⇒ check convergence
             last_r_sq = vec_norm_sq(r);
-            if last_r_sq <= tol_abs_sq { return Ok(iter); }
-            break;                                  // genuine breakdown (should not occur)
+            if last_r_sq <= tol_abs_sq {
+                return Ok(iter);
+            }
+            break; // genuine breakdown (should not occur)
         }
         let alpha = rz / psp;
-        for (xi, &pi)  in x.iter_mut().zip(p.iter()) { *xi += alpha * pi; }
-        for (ri, &si)  in r.iter_mut().zip(sp.iter()) { *ri -= alpha * si; }
+        for (xi, &pi) in x.iter_mut().zip(p.iter()) {
+            *xi += alpha * pi;
+        }
+        for (ri, &si) in r.iter_mut().zip(sp.iter()) {
+            *ri -= alpha * si;
+        }
         last_r_sq = vec_norm_sq(r);
-        if last_r_sq <= tol_abs_sq { return Ok(iter + 1); }
+        if last_r_sq <= tol_abs_sq {
+            return Ok(iter + 1);
+        }
         precond.apply(r, z);
         let rz_new = vec_dot(r, z);
-        if rz_new.abs() < tiny { return Ok(iter + 1); }   // stagnated
+        if rz_new.abs() < tiny {
+            return Ok(iter + 1);
+        } // stagnated
         let beta = rz_new / rz;
-        for (pi, &zi) in p.iter_mut().zip(z.iter()) { *pi = zi + beta * *pi; }
+        for (pi, &zi) in p.iter_mut().zip(z.iter()) {
+            *pi = zi + beta * *pi;
+        }
         rz = rz_new;
     }
     let last_residual = last_r_sq.sqrt().to_f64().unwrap_or(f64::NAN);
-    Err(SemiflowError::ConvergenceFailed { last_residual, max_iter })
+    Err(SemiflowError::ConvergenceFailed {
+        last_residual,
+        max_iter,
+    })
 }
 
 // ── Implicit-Euler action ─────────────────────────────────────────────────────
@@ -223,6 +243,8 @@ fn cg_loop<F: SemiflowFloat>(
 /// # Errors
 /// - [`SemiflowError::DomainViolation`] if `n_steps < 1`.
 /// - [`SemiflowError::ConvergenceFailed`] if CG stalls within `max_iter`.
+// 7 args by necessity — op/src/dst/tau/n_steps/tol/scratch: each essential.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     src: &[F],
@@ -238,8 +260,10 @@ pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
             value: 0.0,
         });
     }
-    let n      = op.n();
-    let dt     = tau / F::from(n_steps as f64).unwrap();
+    let n = op.n();
+    // n_steps is a loop counter — precision loss only for n_steps > 2^53 (impossible in practice).
+    #[allow(clippy::cast_precision_loss)]
+    let dt = tau / F::from(n_steps as f64).unwrap();
     let tol_cg = tol.max(F::from(1e-12_f64).unwrap());
     let max_it = compute_max_iter(op, dt, n);
     let precond = Jacobi::build(op, dt, scratch);
@@ -248,13 +272,17 @@ pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
 
 /// `max_iter = min(N, ceil(4·√(1 + Δt·λ_max)))` (§59.4, CG iteration budget).
 fn compute_max_iter<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, n: usize) -> usize {
-    let lam  = op.lambda_max_bound().to_f64().unwrap_or(1.0);
+    let lam = op.lambda_max_bound().to_f64().unwrap_or(1.0);
     let dt_f = dt.to_f64().unwrap_or(0.0);
-    let raw  = (4.0_f64 * (1.0 + dt_f * lam).sqrt()).ceil() as usize;
+    // ceil() ≥ 0 (argument ≥ 1 after sqrt); bounded by n < usize::MAX in any realistic problem.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let raw = (4.0_f64 * (1.0 + dt_f * lam).sqrt()).ceil() as usize;
     n.min(raw).max(1)
 }
 
 /// Loop `n_steps` backward-Euler sub-steps; each solves `S · u_{k+1} = u_k`.
+// 9 args by necessity — op/src/dst/dt/n_steps/tol/max_iter/precond/scratch.
+#[allow(clippy::too_many_arguments)]
 fn run_substeps<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     src: &[F],
@@ -267,14 +295,14 @@ fn run_substeps<F: SemiflowFloat>(
     scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError> {
     let n = op.n();
-    let mut u = scratch.take_vec(n);       // u_k — current iterate
+    let mut u = scratch.take_vec(n); // u_k — current iterate
     u.copy_from_slice(src);
     for _ in 0..n_steps {
         // x and u are independent scratch Vecs (separate pool allocations) — no aliasing.
         let mut x = scratch.take_vec(n);
-        x.copy_from_slice(&u);             // warm start x₀ = b = u_k
+        x.copy_from_slice(&u); // warm start x₀ = b = u_k
         pcg_shifted(op, dt, &u, &mut x, precond, tol_cg, max_iter, scratch)?;
-        core::mem::swap(&mut u, &mut x);   // u = solution; x = old u (returned to pool)
+        core::mem::swap(&mut u, &mut x); // u = solution; x = old u (returned to pool)
         scratch.return_vec(x);
     }
     dst.copy_from_slice(&u);

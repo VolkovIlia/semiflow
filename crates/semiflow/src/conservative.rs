@@ -69,7 +69,11 @@ impl<F: SemiflowFloat> ConservativeDiffusionChernoff<F> {
         }
         let dx = grid.dx();
         let faces_vec = build_faces(k_nodes, dx, r_contact)?;
-        Ok(Self { faces: faces_vec.into(), grid, boundary })
+        Ok(Self {
+            faces: faces_vec.into(),
+            grid,
+            boundary,
+        })
     }
 
     /// Sample `k(x)` at grid nodes and delegate to [`Self::from_k_array`].
@@ -160,10 +164,22 @@ fn cn_step<F: SemiflowFloat>(
     let mut sup_d: Vec<F> = vec![F::zero(); n];
 
     for i in 0..n {
-        let t_l = if i > 0 { cd.faces[i - 1] / dx } else { F::zero() };
-        let t_r = if i + 1 < n { cd.faces[i] / dx } else { F::zero() };
+        let t_l = if i > 0 {
+            cd.faces[i - 1] / dx
+        } else {
+            F::zero()
+        };
+        let t_r = if i + 1 < n {
+            cd.faces[i] / dx
+        } else {
+            F::zero()
+        };
         let src_l = if i > 0 { src.values[i - 1] } else { F::zero() };
-        let src_r = if i + 1 < n { src.values[i + 1] } else { F::zero() };
+        let src_r = if i + 1 < n {
+            src.values[i + 1]
+        } else {
+            F::zero()
+        };
         let lk_src = t_l * src_l - (t_l + t_r) * src.values[i] + t_r * src_r;
         rhs[i] = src.values[i] + half_tau * lk_src;
         sub_d[i] = -half_tau * t_l;

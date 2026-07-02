@@ -8,28 +8,27 @@
 //! computation (non-unit masses break trivial orbits).
 
 use semiflow::{
-    dense_csr_expmv_ref, mass_lumped_evolve, scratch::ScratchPool, KrylovPath,
-    SymmetricOperator,
+    dense_csr_expmv_ref, mass_lumped_evolve, scratch::ScratchPool, KrylovPath, SymmetricOperator,
 };
 
 /// N=6 path Laplacian in CSR form.
 fn path_n6_csr() -> (Vec<usize>, Vec<u32>, Vec<f64>) {
     let row_ptr = vec![0_usize, 2, 5, 8, 11, 14, 16];
     let col_idx = vec![
-        0u32, 1,       // row 0
-        0, 1, 2,       // row 1
-        1, 2, 3,       // row 2
-        2, 3, 4,       // row 3
-        3, 4, 5,       // row 4
-        4, 5,          // row 5
+        0u32, 1, // row 0
+        0, 1, 2, // row 1
+        1, 2, 3, // row 2
+        2, 3, 4, // row 3
+        3, 4, 5, // row 4
+        4, 5, // row 5
     ];
     let vals = vec![
-        1.0, -1.0,             // row 0
-        -1.0, 2.0, -1.0,      // row 1
-        -1.0, 2.0, -1.0,      // row 2
-        -1.0, 2.0, -1.0,      // row 3
-        -1.0, 2.0, -1.0,      // row 4
-        -1.0, 1.0,             // row 5
+        1.0, -1.0, // row 0
+        -1.0, 2.0, -1.0, // row 1
+        -1.0, 2.0, -1.0, // row 2
+        -1.0, 2.0, -1.0, // row 3
+        -1.0, 2.0, -1.0, // row 4
+        -1.0, 1.0, // row 5
     ];
     (row_ptr, col_idx, vals)
 }
@@ -56,16 +55,34 @@ fn g_massk_lumped() {
     let mut out_krylov = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
 
-    mass_lumped_evolve(&k, &masses, tau, &v, &mut out_krylov, KrylovPath::Chebyshev, tol, &mut scratch)
-        .expect("G_MASSK_LUMPED: lumped_evolve failed");
+    mass_lumped_evolve(
+        &k,
+        &masses,
+        tau,
+        &v,
+        &mut out_krylov,
+        KrylovPath::Chebyshev,
+        tol,
+        &mut scratch,
+    )
+    .expect("G_MASSK_LUMPED: lumped_evolve failed");
 
     // Reference: build Â = D^{−½} K D^{−½}, pre-scale, dense-evolve, post-scale.
-    let a_hat = k.lumped_congruence(&masses).expect("G_MASSK_LUMPED: congruence failed");
-    let w0: Vec<f64> = v.iter().zip(masses.iter()).map(|(&vi, &mi)| vi * mi.sqrt()).collect();
+    let a_hat = k
+        .lumped_congruence(&masses)
+        .expect("G_MASSK_LUMPED: congruence failed");
+    let w0: Vec<f64> = v
+        .iter()
+        .zip(masses.iter())
+        .map(|(&vi, &mi)| vi * mi.sqrt())
+        .collect();
     let mut w1 = vec![0.0_f64; n];
     dense_csr_expmv_ref(&a_hat, tau, &w0, &mut w1).expect("G_MASSK_LUMPED: dense ref failed");
-    let out_ref: Vec<f64> =
-        w1.iter().zip(masses.iter()).map(|(&wi, &mi)| wi / mi.sqrt()).collect();
+    let out_ref: Vec<f64> = w1
+        .iter()
+        .zip(masses.iter())
+        .map(|(&wi, &mi)| wi / mi.sqrt())
+        .collect();
 
     let sup_error = out_krylov
         .iter()

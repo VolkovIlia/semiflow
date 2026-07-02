@@ -23,7 +23,10 @@ fn fd_jvp(nl: AllenCahn<f64>, u: &[f64], du: &[f64], eps: f64) -> Vec<f64> {
     let mut n_m = vec![0.0; n];
     nl.eval(&u_p, &mut n_p).unwrap();
     nl.eval(&u_m, &mut n_m).unwrap();
-    n_p.iter().zip(&n_m).map(|(a, b)| (a - b) / (2.0 * eps)).collect()
+    n_p.iter()
+        .zip(&n_m)
+        .map(|(a, b)| (a - b) / (2.0 * eps))
+        .collect()
 }
 
 /// Supremum of `|a[i] − b[i]| / (|b[i]| + ε_floor)`.
@@ -48,9 +51,9 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 #[allow(clippy::cast_precision_loss)]
 fn g_etd_adjoint_fd() {
     let n = 16_usize;
-    let u:  Vec<f64> = (0..n).map(|i| 0.4 * (i as f64 / n as f64)).collect();
+    let u: Vec<f64> = (0..n).map(|i| 0.4 * (i as f64 / n as f64)).collect();
     let du: Vec<f64> = (0..n).map(|i| 0.1 * ((i as f64) * 0.7).cos()).collect();
-    let w:  Vec<f64> = (0..n).map(|i| 0.2 * ((i as f64) * 1.3).sin()).collect();
+    let w: Vec<f64> = (0..n).map(|i| 0.2 * ((i as f64) * 1.3).sin()).collect();
 
     let nl = AllenCahn::<f64>::new();
 

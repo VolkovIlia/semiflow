@@ -54,7 +54,11 @@ fn main() {
     #[allow(clippy::cast_precision_loss)]
     let avg_ms = total_ns as f64 / REPS as f64 / 1_000_000.0;
 
-    let feature = if cfg!(feature = "parallel") { "parallel" } else { "serial" };
+    let feature = if cfg!(feature = "parallel") {
+        "parallel"
+    } else {
+        "serial"
+    };
     println!(
         "graph_par_speedup: N={N} C={N_COLS} n_steps={N_STEPS} build={feature} avg={avg_ms:.2}ms over {REPS} reps"
     );

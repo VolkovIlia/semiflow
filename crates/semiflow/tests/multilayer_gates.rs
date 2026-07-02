@@ -37,10 +37,26 @@ const RC_AL: f64 = 2_432_500.0;
 // Build the 4-layer TPS stack: LI-900 (38 mm) | SIP (25 mm) | RTV (3 mm) | Al-2024 (2 mm).
 fn tps_stack() -> MultilayerStack<f64> {
     let layers = [
-        Layer { thickness: 0.038, k: K_LI900, rho_c: RC_LI900 },
-        Layer { thickness: 0.025, k: K_SIP,   rho_c: RC_SIP   },
-        Layer { thickness: 0.003, k: K_RTV,   rho_c: RC_RTV   },
-        Layer { thickness: 0.002, k: K_AL,    rho_c: RC_AL    },
+        Layer {
+            thickness: 0.038,
+            k: K_LI900,
+            rho_c: RC_LI900,
+        },
+        Layer {
+            thickness: 0.025,
+            k: K_SIP,
+            rho_c: RC_SIP,
+        },
+        Layer {
+            thickness: 0.003,
+            k: K_RTV,
+            rho_c: RC_RTV,
+        },
+        Layer {
+            thickness: 0.002,
+            k: K_AL,
+            rho_c: RC_AL,
+        },
     ];
     MultilayerStack::from_layers(&layers, 5e-4_f64).expect("tps_stack: from_layers failed")
 }
@@ -55,10 +71,17 @@ fn cn_evolve<D: ChernoffFunction<f64, S = GridFn1D<f64>>>(
     scratch: &mut ScratchPool<f64>,
 ) -> Vec<f64> {
     let n = v.len();
-    let mut cur = GridFn1D { values: v.to_vec(), grid };
-    let mut nxt = GridFn1D { values: vec![0.0_f64; n], grid };
+    let mut cur = GridFn1D {
+        values: v.to_vec(),
+        grid,
+    };
+    let mut nxt = GridFn1D {
+        values: vec![0.0_f64; n],
+        grid,
+    };
     for _ in 0..steps {
-        dc.apply_into(dt, &cur, &mut nxt, scratch).expect("cn_evolve: step failed");
+        dc.apply_into(dt, &cur, &mut nxt, scratch)
+            .expect("cn_evolve: step failed");
         core::mem::swap(&mut cur, &mut nxt);
     }
     cur.values
@@ -90,8 +113,16 @@ fn cn_evolve<D: ChernoffFunction<f64, S = GridFn1D<f64>>>(
 #[allow(clippy::too_many_lines)]
 fn g_tps_mass_weight() {
     let layers = [
-        Layer { thickness: 0.003, k: 1.0,  rho_c: 1.0 },
-        Layer { thickness: 0.003, k: 10.0, rho_c: 3.0 },
+        Layer {
+            thickness: 0.003,
+            k: 1.0,
+            rho_c: 1.0,
+        },
+        Layer {
+            thickness: 0.003,
+            k: 10.0,
+            rho_c: 3.0,
+        },
     ];
     let stack = MultilayerStack::from_layers(&layers, 0.001_f64)
         .expect("G_TPS_MASS_WEIGHT: from_layers failed");
@@ -106,8 +137,14 @@ fn g_tps_mass_weight() {
     let mut out_krylov = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
     multilayer_evolve(
-        &stack, BoundaryPolicy::Neumann, tau, &v,
-        &mut out_krylov, KrylovPath::Chebyshev, tol, &mut scratch,
+        &stack,
+        BoundaryPolicy::Neumann,
+        tau,
+        &v,
+        &mut out_krylov,
+        KrylovPath::Chebyshev,
+        tol,
+        &mut scratch,
     )
     .expect("G_TPS_MASS_WEIGHT: multilayer_evolve failed");
 
@@ -115,17 +152,27 @@ fn g_tps_mass_weight() {
     let (a, masses) = stack
         .to_stiffness_and_mass(BoundaryPolicy::Neumann)
         .expect("G_TPS_MASS_WEIGHT: to_stiffness_and_mass failed");
-    let a_hat = a.lumped_congruence(&masses)
+    let a_hat = a
+        .lumped_congruence(&masses)
         .expect("G_TPS_MASS_WEIGHT: lumped_congruence failed");
-    let w0: Vec<f64> = v.iter().zip(masses.iter()).map(|(&vi, &mi)| vi * mi.sqrt()).collect();
+    let w0: Vec<f64> = v
+        .iter()
+        .zip(masses.iter())
+        .map(|(&vi, &mi)| vi * mi.sqrt())
+        .collect();
     let mut w1 = vec![0.0_f64; n];
-    dense_csr_expmv_ref(&a_hat, tau, &w0, &mut w1)
-        .expect("G_TPS_MASS_WEIGHT: dense oracle failed");
-    let out_ref: Vec<f64> =
-        w1.iter().zip(masses.iter()).map(|(&wi, &mi)| wi / mi.sqrt()).collect();
+    dense_csr_expmv_ref(&a_hat, tau, &w0, &mut w1).expect("G_TPS_MASS_WEIGHT: dense oracle failed");
+    let out_ref: Vec<f64> = w1
+        .iter()
+        .zip(masses.iter())
+        .map(|(&wi, &mi)| wi / mi.sqrt())
+        .collect();
 
-    let sup_error = out_krylov.iter().zip(out_ref.iter())
-        .map(|(a, b)| (a - b).abs()).fold(0.0_f64, f64::max);
+    let sup_error = out_krylov
+        .iter()
+        .zip(out_ref.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f64, f64::max);
 
     eprintln!("G_TPS_MASS_WEIGHT  n={n}  tau={tau}  sup_error={sup_error:.3e}");
     // Two-sided band — see §57.3 threshold rationale in the doc comment above.
@@ -153,30 +200,49 @@ fn g_tps_mass_weight() {
 #[allow(clippy::too_many_lines)]
 fn g_tps_unitmass_fails() {
     let layers = [
-        Layer { thickness: 0.003, k: 1.0, rho_c: 1.0 },
-        Layer { thickness: 0.003, k: 1.0, rho_c: 5.0 },
+        Layer {
+            thickness: 0.003,
+            k: 1.0,
+            rho_c: 1.0,
+        },
+        Layer {
+            thickness: 0.003,
+            k: 1.0,
+            rho_c: 5.0,
+        },
     ];
     let stack = MultilayerStack::from_layers(&layers, 0.001_f64)
         .expect("G_TPS_UNITMASS_FAILS: from_layers failed");
     let n = stack.grid.n;
     assert_eq!(n, 7, "G_TPS_UNITMASS_FAILS: expected 7 nodes, got {n}");
 
-    let v: Vec<f64> = (0..n).map(|i| if i < 4 { 1500.0_f64 } else { 300.0_f64 }).collect();
+    let v: Vec<f64> = (0..n)
+        .map(|i| if i < 4 { 1500.0_f64 } else { 300.0_f64 })
+        .collect();
     let tau = 10.0_f64;
 
     // Correct physics: mass-weighted Krylov evolve.
     let mut out_mw = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
     multilayer_evolve(
-        &stack, BoundaryPolicy::Neumann, tau, &v,
-        &mut out_mw, KrylovPath::Chebyshev, 1e-12_f64, &mut scratch,
+        &stack,
+        BoundaryPolicy::Neumann,
+        tau,
+        &v,
+        &mut out_mw,
+        KrylovPath::Chebyshev,
+        1e-12_f64,
+        &mut scratch,
     )
     .expect("G_TPS_UNITMASS_FAILS: multilayer_evolve failed");
 
     // Wrong physics: unit-mass CN (ignores ρc contrast).
     let k_nodes: Vec<f64> = vec![1.0_f64; n];
     let dc_unit = ConservativeDiffusionChernoff::from_k_array(
-        stack.grid, &k_nodes, None, BoundaryPolicy::Neumann,
+        stack.grid,
+        &k_nodes,
+        None,
+        BoundaryPolicy::Neumann,
     )
     .expect("G_TPS_UNITMASS_FAILS: from_k_array failed");
     let out_um = cn_evolve(&dc_unit, stack.grid, &v, 0.01_f64, 1000, &mut scratch);
@@ -212,8 +278,14 @@ fn g_tps_stack_acceptance() {
     let mut out_krylov = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
     multilayer_evolve(
-        &stack, BoundaryPolicy::Neumann, tau, &v,
-        &mut out_krylov, KrylovPath::Chebyshev, 1e-8_f64, &mut scratch,
+        &stack,
+        BoundaryPolicy::Neumann,
+        tau,
+        &v,
+        &mut out_krylov,
+        KrylovPath::Chebyshev,
+        1e-8_f64,
+        &mut scratch,
     )
     .expect("G_TPS_STACK_ACCEPTANCE: multilayer_evolve failed");
 
@@ -258,7 +330,8 @@ fn g_tps_stiff_stepcount() {
     let (a, masses) = stack
         .to_stiffness_and_mass(BoundaryPolicy::Neumann)
         .expect("G_TPS_STIFF_STEPCOUNT: to_stiffness_and_mass failed");
-    let a_hat = a.lumped_congruence(&masses)
+    let a_hat = a
+        .lumped_congruence(&masses)
         .expect("G_TPS_STIFF_STEPCOUNT: lumped_congruence failed");
     let lambda_max = a_hat.lambda_max_bound();
 

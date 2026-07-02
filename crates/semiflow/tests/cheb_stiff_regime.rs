@@ -91,17 +91,26 @@ fn cheb_stiff_no_nan() {
 
     // Gaussian test vector centred on node 4.
     let src: Vec<f64> = (0..n)
-        .map(|i| { let x = i as f64 - 4.0; (-0.5 * x * x).exp() })
+        .map(|i| {
+            let x = i as f64 - 4.0;
+            (-0.5 * x * x).exp()
+        })
         .collect();
 
     let mut dst_krylov = vec![0.0_f64; n];
-    let mut dst_dense  = vec![0.0_f64; n];
+    let mut dst_dense = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
 
     // Use tol=1e-12 per substep so the accumulated error over s≈32 substeps
     // stays below 1e-10 total (worst-case: s × tol_per_step ≈ 32 × 1e-12 = 3.2e-11).
     graph_expmv_krylov(
-        &op, tau, &src, &mut dst_krylov, KrylovPath::Chebyshev, 1e-12, &mut scratch,
+        &op,
+        tau,
+        &src,
+        &mut dst_krylov,
+        KrylovPath::Chebyshev,
+        1e-12,
+        &mut scratch,
     )
     .expect("cheb_stiff_no_nan: krylov returned Err");
 
@@ -122,12 +131,13 @@ fn cheb_stiff_no_nan() {
         .fold(0.0_f64, f64::max);
     let dst_norm = dst_dense.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
 
-    eprintln!(
-        "cheb_stiff_no_nan  dst_norm={dst_norm:.3e}  sup_error={sup_error:.3e}"
-    );
+    eprintln!("cheb_stiff_no_nan  dst_norm={dst_norm:.3e}  sup_error={sup_error:.3e}");
 
     // Non-vacuity (3): non-trivial result.
-    assert!(dst_norm > 1e-14, "cheb_stiff_no_nan: dst_norm={dst_norm:.3e} trivially zero");
+    assert!(
+        dst_norm > 1e-14,
+        "cheb_stiff_no_nan: dst_norm={dst_norm:.3e} trivially zero"
+    );
 
     // Non-vacuity (4) + (5): two-sided accuracy band.
     assert!(

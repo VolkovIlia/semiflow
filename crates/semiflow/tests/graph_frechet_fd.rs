@@ -12,13 +12,13 @@
 use std::sync::Arc;
 
 use semiflow::{
+    chernoff::ChernoffFunction,
     graph::{Graph, Laplacian},
     graph_frechet::graph_expmv_frechet,
     graph_krylov::{GraphKrylovChernoff, KrylovPath},
     graph_sensitivity::EdgeWeightSensitivity,
     graph_signal::GraphSignal,
     scratch::ScratchPool,
-    chernoff::ChernoffFunction,
 };
 
 /// Compute J = ⟨dj, e^{−t L(w)} u0⟩ for a 2-node graph with edge weight `w`.
@@ -26,13 +26,19 @@ fn j_oracle(w: f64, t: f64, u0: &[f64; 2], dj: &[f64; 2]) -> f64 {
     let edges: Vec<(u32, u32, f64)> = vec![(0, 1, w)];
     let g = Arc::new(Graph::<f64>::from_edges(2, edges).expect("graph"));
     let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
-    let krylov = GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12)
-        .expect("krylov");
+    let krylov =
+        GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12).expect("krylov");
     let src = GraphSignal::from_fn(Arc::clone(&g), |i| u0[i as usize]);
     let mut dst = GraphSignal::zeros(Arc::clone(&g));
     let mut scratch = ScratchPool::new();
-    krylov.apply_into(t, &src, &mut dst, &mut scratch).expect("apply_into");
-    dst.values().iter().zip(dj.iter()).map(|(&v, &d)| v * d).sum()
+    krylov
+        .apply_into(t, &src, &mut dst, &mut scratch)
+        .expect("apply_into");
+    dst.values()
+        .iter()
+        .zip(dj.iter())
+        .map(|(&v, &d)| v * d)
+        .sum()
 }
 
 #[test]
@@ -48,11 +54,14 @@ fn g_graph_frechet_fd() {
     let edges: Vec<(u32, u32, f64)> = vec![(0, 1, w)];
     let g = Arc::new(Graph::<f64>::from_edges(2, edges).expect("graph"));
     let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
-    let krylov = GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12)
-        .expect("krylov");
+    let krylov =
+        GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12).expect("krylov");
 
     // A2 gradient via graph_expmv_frechet.
-    let param_deriv = EdgeWeightSensitivity { params: vec![(0, 1)], n_nodes: 2 };
+    let param_deriv = EdgeWeightSensitivity {
+        params: vec![(0, 1)],
+        n_nodes: 2,
+    };
     let mut grad_w = vec![0.0_f64];
     let mut scratch = ScratchPool::new();
     graph_expmv_frechet(
@@ -75,9 +84,7 @@ fn g_graph_frechet_fd() {
     let fd = (j_plus - j_minus) / (2.0 * eps);
 
     let rel_err = (a2 - fd).abs() / (fd.abs() + 1e-30);
-    eprintln!(
-        "G_GRAPH_FRECHET_FD  a2={a2:.10e}  fd={fd:.10e}  rel_err={rel_err:.3e}"
-    );
+    eprintln!("G_GRAPH_FRECHET_FD  a2={a2:.10e}  fd={fd:.10e}  rel_err={rel_err:.3e}");
     assert!(
         rel_err <= 1e-7,
         "G_GRAPH_FRECHET_FD: rel_err={rel_err:.3e} > 1e-7 (a2={a2:.10e}, fd={fd:.10e})"
@@ -97,13 +104,19 @@ fn j_oracle_tri(w01: f64, w12: f64, w02: f64, t: f64, u0: &[f64; 3], dj: &[f64; 
     let edges: Vec<(u32, u32, f64)> = vec![(0, 1, w01), (1, 2, w12), (0, 2, w02)];
     let g = Arc::new(Graph::<f64>::from_edges(3, edges).expect("graph"));
     let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
-    let krylov = GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12)
-        .expect("krylov");
+    let krylov =
+        GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12).expect("krylov");
     let src = GraphSignal::from_fn(Arc::clone(&g), |i| u0[i as usize]);
     let mut dst = GraphSignal::zeros(Arc::clone(&g));
     let mut scratch = ScratchPool::new();
-    krylov.apply_into(t, &src, &mut dst, &mut scratch).expect("apply_into");
-    dst.values().iter().zip(dj.iter()).map(|(&v, &d)| v * d).sum()
+    krylov
+        .apply_into(t, &src, &mut dst, &mut scratch)
+        .expect("apply_into");
+    dst.values()
+        .iter()
+        .zip(dj.iter())
+        .map(|(&v, &d)| v * d)
+        .sum()
 }
 
 #[test]
@@ -124,12 +137,23 @@ fn g_graph_frechet_fd_triangle() {
         GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12).expect("krylov");
 
     // A2 gradient for all 3 edges simultaneously.
-    let param_deriv =
-        EdgeWeightSensitivity { params: edge_pairs.to_vec(), n_nodes: 3 };
+    let param_deriv = EdgeWeightSensitivity {
+        params: edge_pairs.to_vec(),
+        n_nodes: 3,
+    };
     let mut grad_w = vec![0.0_f64; 3];
     let mut scratch = ScratchPool::new();
-    graph_expmv_frechet(&krylov, &u0, &dj, 1, t, &param_deriv, &mut grad_w, &mut scratch)
-        .expect("graph_expmv_frechet");
+    graph_expmv_frechet(
+        &krylov,
+        &u0,
+        &dj,
+        1,
+        t,
+        &param_deriv,
+        &mut grad_w,
+        &mut scratch,
+    )
+    .expect("graph_expmv_frechet");
 
     // Central FD oracle: perturb each edge weight independently.
     let eps = 1e-6_f64;

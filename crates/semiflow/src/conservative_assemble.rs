@@ -10,16 +10,15 @@
 use alloc::vec::Vec;
 
 use crate::{
-    boundary::BoundaryPolicy,
-    error::SemiflowError,
-    float::SemiflowFloat,
-    grid::Grid1D,
-    grid_nd::GridND,
-    symmetric_operator::SymmetricOperator,
+    boundary::BoundaryPolicy, error::SemiflowError, float::SemiflowFloat, grid::Grid1D,
+    grid_nd::GridND, symmetric_operator::SymmetricOperator,
 };
 
 // Helpers: harmonic_mean, face_transmissibility, build_faces (pub(crate)).
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/conservative_helpers.rs"));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/conservative_helpers.rs"
+));
 
 // ── 1-D assembler ─────────────────────────────────────────────────────────────
 
@@ -58,7 +57,13 @@ pub fn assemble_conservative_csr_1d<F: SemiflowFloat>(
     let dx = grid.dx();
     let faces = build_faces(k_nodes, dx, r_contact)?;
     let (row_ptr, col_idx, vals) = build_1d_csr(n, &faces, dx);
-    SymmetricOperator::from_csr(n, &row_ptr, &col_idx, &vals, F::from(1e-10_f64).unwrap_or(F::zero()))
+    SymmetricOperator::from_csr(
+        n,
+        &row_ptr,
+        &col_idx,
+        &vals,
+        F::from(1e-10_f64).unwrap_or(F::zero()),
+    )
 }
 
 /// Build the raw CSR triples for `A = −L_k` with Neumann BCs (sorted columns, symmetric).
@@ -66,11 +71,7 @@ pub fn assemble_conservative_csr_1d<F: SemiflowFloat>(
 /// Row 0:         [A[0,0]=T[0]/dx, A[0,1]=-T[0]/dx]
 /// Row i interior:[A[i,i-1]=-T[i-1]/dx, A[i,i]=(T[i-1]+T[i])/dx, A[i,i+1]=-T[i]/dx]
 /// Row n-1:       [A[n-1,n-2]=-T[n-2]/dx, A[n-1,n-1]=T[n-2]/dx]
-fn build_1d_csr<F: SemiflowFloat>(
-    n: usize,
-    faces: &[F],
-    dx: F,
-) -> (Vec<usize>, Vec<u32>, Vec<F>) {
+fn build_1d_csr<F: SemiflowFloat>(n: usize, faces: &[F], dx: F) -> (Vec<usize>, Vec<u32>, Vec<F>) {
     // NNZ: endpoints have 2 entries each, interior have 3 each.
     let nnz = if n == 2 { 4 } else { 4 + 3 * (n - 2) };
     let mut row_ptr = Vec::with_capacity(n + 1);
@@ -161,7 +162,18 @@ fn assemble_2d<F: SemiflowFloat, const D: usize>(
     row_ptr.push(0usize);
     for k1 in 0..n1 {
         for k0 in 0..n0 {
-            emit_2d_row(k0, k1, n0, n1, &faces0, &faces1, dx0, dx1, &mut col_idx, &mut vals);
+            emit_2d_row(
+                k0,
+                k1,
+                n0,
+                n1,
+                &faces0,
+                &faces1,
+                dx0,
+                dx1,
+                &mut col_idx,
+                &mut vals,
+            );
             row_ptr.push(col_idx.len());
         }
     }
@@ -244,10 +256,20 @@ fn assemble_3d<F: SemiflowFloat, const D: usize>(
         for k1 in 0..n1 {
             for k0 in 0..n0 {
                 emit_3d_row(
-                    k0, k1, k2, n0, n1, n2,
-                    &faces0, &faces1, &faces2,
-                    grid.axes[0].dx(), grid.axes[1].dx(), grid.axes[2].dx(),
-                    &mut col_idx, &mut vals,
+                    k0,
+                    k1,
+                    k2,
+                    n0,
+                    n1,
+                    n2,
+                    &faces0,
+                    &faces1,
+                    &faces2,
+                    grid.axes[0].dx(),
+                    grid.axes[1].dx(),
+                    grid.axes[2].dx(),
+                    &mut col_idx,
+                    &mut vals,
                 );
                 row_ptr.push(col_idx.len());
             }
@@ -264,11 +286,20 @@ fn assemble_3d<F: SemiflowFloat, const D: usize>(
 
 /// Emit the 7-pt stencil row for node `(k0, k1, k2)` in the 3-D operator.
 #[allow(clippy::too_many_arguments, clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
 fn emit_3d_row<F: SemiflowFloat>(
-    k0: usize, k1: usize, k2: usize,
-    n0: usize, n1: usize, n2: usize,
-    faces0: &[F], faces1: &[F], faces2: &[F],
-    dx0: F, dx1: F, dx2: F,
+    k0: usize,
+    k1: usize,
+    k2: usize,
+    n0: usize,
+    n1: usize,
+    n2: usize,
+    faces0: &[F],
+    faces1: &[F],
+    faces2: &[F],
+    dx0: F,
+    dx1: F,
+    dx2: F,
     col_idx: &mut Vec<u32>,
     vals: &mut Vec<F>,
 ) {
@@ -280,14 +311,32 @@ fn emit_3d_row<F: SemiflowFloat>(
     let t2l = if k2 > 0 { faces2[k2 - 1] } else { F::zero() };
     let t2r = if k2 + 1 < n2 { faces2[k2] } else { F::zero() };
     // Emit off-diagonal entries in CSR column order (sorted).
-    if k2 > 0 { col_idx.push((k - n1 * n0) as u32); vals.push(-t2l / dx2); }
-    if k1 > 0 { col_idx.push((k - n0) as u32);       vals.push(-t1l / dx1); }
-    if k0 > 0 { col_idx.push((k - 1) as u32);         vals.push(-t0l / dx0); }
+    if k2 > 0 {
+        col_idx.push((k - n1 * n0) as u32);
+        vals.push(-t2l / dx2);
+    }
+    if k1 > 0 {
+        col_idx.push((k - n0) as u32);
+        vals.push(-t1l / dx1);
+    }
+    if k0 > 0 {
+        col_idx.push((k - 1) as u32);
+        vals.push(-t0l / dx0);
+    }
     col_idx.push(k as u32);
     vals.push((t0l + t0r) / dx0 + (t1l + t1r) / dx1 + (t2l + t2r) / dx2);
-    if k0 + 1 < n0 { col_idx.push((k + 1) as u32);        vals.push(-t0r / dx0); }
-    if k1 + 1 < n1 { col_idx.push((k + n0) as u32);       vals.push(-t1r / dx1); }
-    if k2 + 1 < n2 { col_idx.push((k + n1 * n0) as u32);  vals.push(-t2r / dx2); }
+    if k0 + 1 < n0 {
+        col_idx.push((k + 1) as u32);
+        vals.push(-t0r / dx0);
+    }
+    if k1 + 1 < n1 {
+        col_idx.push((k + n0) as u32);
+        vals.push(-t1r / dx1);
+    }
+    if k2 + 1 < n2 {
+        col_idx.push((k + n1 * n0) as u32);
+        vals.push(-t2r / dx2);
+    }
 }
 
 /// Validate that `k_nodes_per_axis` matches the grid axis lengths.
