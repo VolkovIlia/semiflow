@@ -147,6 +147,20 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     let mut p  = scratch.take_vec(n);
     let mut sp = scratch.take_vec(n);
     compute_residual(op, dt, b, x, &mut sp, &mut r);
+    // ── Pre-loop convergence guard (§59.6) ────────────────────────────────────
+    // If ‖r‖² ≤ tol already, warm start x already solves S·x = b (e.g. null-space
+    // input on Neumann: Â·c·1 = 0 ⇒ S·c·1 = c·1 ⇒ r = 0).  Return Ok(0) immediately;
+    // x is unchanged and correct.  Without this guard, p=0 ⇒ psp=0 ⇒ loop breaks with
+    // last_r_sq = ∞ ⇒ ConvergenceFailed (false failure on an already-solved system).
+    let r_sq_init = vec_norm_sq(&r);
+    if r_sq_init <= tol_abs_sq {
+        scratch.return_vec(r);
+        scratch.return_vec(z);
+        scratch.return_vec(p);
+        scratch.return_vec(sp);
+        return Ok(0);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
     precond.apply(&r, &mut z);
     p.copy_from_slice(&z);
     let rz = vec_dot(&r, &z);
@@ -178,7 +192,11 @@ fn cg_loop<F: SemiflowFloat>(
     for iter in 0..max_iter {
         shifted_matvec(op, dt, p, sp);             // sp = S·p
         let psp = vec_dot(p, sp);
-        if psp <= F::zero() { break; }             // SPD breakdown (unexpected)
+        if psp <= F::zero() {                       // p≈0 on SPD system ⇒ check convergence
+            last_r_sq = vec_norm_sq(r);
+            if last_r_sq <= tol_abs_sq { return Ok(iter); }
+            break;                                  // genuine breakdown (should not occur)
+        }
         let alpha = rz / psp;
         for (xi, &pi)  in x.iter_mut().zip(p.iter()) { *xi += alpha * pi; }
         for (ri, &si)  in r.iter_mut().zip(sp.iter()) { *ri -= alpha * si; }

@@ -203,7 +203,7 @@ fn parse_krylov_path(path: &str, m_max: u32) -> PyResult<KrylovPath> {
              use SymmetricOperator.evolve_batched(path='implicit') instead",
         )),
         other => Err(new_pyerr(
-            "OutOfDomain",
+            "Unsupported",
             &format!("path must be 'chebyshev' or 'lanczos', got '{other}'"),
         )),
     }
