@@ -34,7 +34,7 @@ What the analogy captures is:
    `Etdrk4` step → gradient via `GeneratorSensitivity`) from verified pieces rather
    than writing bespoke numerical code per use case.
 
-## What Is Covered (as of v0.10.0-beta)
+## What Is Covered (as of v0.12.0-beta)
 
 ### Linear evolution: `∂ₜu = Lu`
 
@@ -92,7 +92,7 @@ For semilinear `Etdrk4`, `NonlinearityDiff` delivers the adjoint through one ste
 
 ## Honest Scope and Limits
 
-The following are explicit non-goals or deferred items as of v0.10.0-beta
+The following are explicit non-goals or deferred items as of v0.12.0-beta
 (updated for issue #16 branch):
 
 - **Non-symmetric / directed graphs:** Arnoldi required (stores full Hessenberg);
