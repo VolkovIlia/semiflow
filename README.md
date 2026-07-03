@@ -6,8 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
-> **Status: `0.12.0-beta`** — active beta. The API is stabilizing toward
-> `1.0`; minor versions may make breaking changes. Bug reports and feedback welcome.
+> **Status: active beta.** The API is stabilizing toward 1.0; minor versions may make breaking changes. Bug reports and feedback welcome.
 
 **SemiFlow is a `no_std` Rust library for solving evolution equations and PDEs
 (`∂ₜu = Lu`) by Chernoff approximation of operator semigroups — no matrix
