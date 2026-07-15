@@ -23,7 +23,9 @@
 //!    - 4b. README denies that a class is wired to WASM, but it IS exported (incident rule).
 //!          Exception: denial qualified by "FFI handle" scopes the deferral to the S³ handle,
 //!          not the class itself — this is a legit distinction, not gate-weakening.
-//!    - 4c. (WARN, not fail) Exported classes absent from README.
+//!    - 4c. (no-op) Per-export completeness warnings are intentionally suppressed — the
+//!          authoritative, exhaustive class list is the wasm-pack-generated `semiflow_wasm.d.ts`
+//!          (mirroring Check 3c / FFI policy; enumerating 50+ classes in prose is unmaintainable).
 //!
 //! ## Fragility ledger
 //!
@@ -878,23 +880,19 @@ fn check_4b(readme_src: &str, wasm: &HashSet<String>, violations: &mut Vec<Viola
     }
 }
 
-/// Check 4c (advisory): exported WASM classes absent from README class table.
+/// Check 4c — intentionally a no-op.
+///
+/// The authoritative, exhaustive list of exported JS classes is the wasm-pack-generated
+/// `semiflow_wasm.d.ts` shipped in the `@semiflow/wasm` npm package. Emitting a
+/// per-export advisory warning for every unlisted class (50+) is an unmaintainable
+/// maintenance trap — consistent with Check 3c (FFI) which also suppresses per-symbol
+/// completeness warnings and points to `include/semiflow.h` instead.
 fn check_4c(
-    wasm: &HashSet<String>,
-    readme: &HashSet<String>,
-    warnings: &mut Vec<String>,
+    _wasm: &HashSet<String>,
+    _readme: &HashSet<String>,
+    _warnings: &mut Vec<String>,
 ) {
-    let mut undoc: Vec<&str> = wasm.iter()
-        .filter(|n| !readme.contains(*n))
-        .map(|s| s.as_str())
-        .collect();
-    undoc.sort_unstable();
-    for name in undoc {
-        warnings.push(format!(
-            "{WASM_README}: class `{name}` is a #[wasm_bindgen] export but not listed \
-             in README class table (advisory)"
-        ));
-    }
+    // Intentional no-op — see doc comment above.
 }
 
 // ---------------------------------------------------------------------------
