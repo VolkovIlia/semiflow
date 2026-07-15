@@ -30,6 +30,8 @@
 //!   binary-size-check  — report sizes of built binding artefacts vs targets (D3, v0.13.0)
 //!   latency-gate       — run L-gate latency harness from contracts/semiflow-core.properties.yaml
 //!                        (ADR-0068 Track 2; advisory in v2.6, blocking in v2.7)
+//!   version-audit      — ONLINE advisory: compare workspace version vs PyPI/crates.io/npm
+//!                        exit 0 always (advisory); pass --strict to exit 2 on behind/ahead
 
 use std::{
     env,
@@ -46,6 +48,7 @@ mod latency_gate;
 mod py_tasks;
 mod size_check;
 mod unsafe_scope;
+mod version_audit;
 mod wasm_npm;
 mod wasm_tasks;
 
@@ -61,7 +64,7 @@ fn main() {
                  ffi-headers|ffi-smoke|ffi-graph-smoke|\
                  py-build|py-bench|py-smoke|py-graph-smoke|\
                  wasm-build [--size]|wasm-test|wasm-graph-smoke|wasm-pack-npm|\
-                 binary-size-check|latency-gate>"
+                 binary-size-check|latency-gate|version-audit>"
             );
             process::exit(1);
         }
@@ -101,6 +104,7 @@ fn main() {
         "wasm-pack-npm" => wasm_npm::wasm_pack_npm(),
         "binary-size-check" => size_check::binary_size_check(),
         "latency-gate" => latency_gate::run(&rest),
+        "version-audit" => version_audit::run(&rest),
         other => {
             eprintln!("Unknown subcommand: {other}");
             eprintln!(
@@ -110,7 +114,7 @@ fn main() {
                  ffi-headers, ffi-smoke, ffi-graph-smoke, \
                  py-build, py-bench, py-smoke, py-graph-smoke, \
                  wasm-build [--size], wasm-test, wasm-graph-smoke, wasm-pack-npm, \
-                 binary-size-check, latency-gate"
+                 binary-size-check, latency-gate, version-audit"
             );
             process::exit(1);
         }

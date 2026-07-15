@@ -1,0 +1,59 @@
+# version-audit.yml — weekly cross-registry version drift check (ADVISORY ONLY).
+#
+# This file is self-contained and trivially disable-able:
+#   - Comment the `schedule:` line to stop weekly runs (keep workflow_dispatch for on-demand).
+#   - Delete this file entirely to remove all cost — nothing else references it.
+#   - CI billing pauses? No problem: this workflow never gates a PR and never blocks a publish.
+#
+# Exit 0 is forced (no --strict flag): drift or unreachable registries produce UNKNOWN/BEHIND
+# rows in the job summary but never redden the run.
+
+name: version-audit
+
+on:
+  # Mondays 06:00 UTC — adjust or comment out if billing is paused.
+  schedule: [{ cron: "0 6 * * 1" }]
+  # Always keep workflow_dispatch so maintainers can run on demand.
+  workflow_dispatch:
+
+# Read-only access; no secrets needed for advisory queries.
+permissions:
+  contents: read
+  # STUB: uncomment + add `issues: write` here to enable the auto-issue step below.
+  # issues: write
+
+jobs:
+  audit:
+    name: Cross-registry version audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.78
+
+      - name: Run version-audit (advisory — exit 0 always)
+        # Pipe to tee so the output appears in the log AND in the job summary.
+        # The tool exits 0 on drift/unknown (advisory; no --strict flag here).
+        run: |
+          cargo run -q -p xtask -- version-audit | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # -----------------------------------------------------------------------
+      # OPTIONAL auto-issue stub (disabled — implement separately if needed).
+      # Needs `issues: write` added to `permissions:` above.
+      # -----------------------------------------------------------------------
+      # - name: Open GitHub issue on drift (DISABLED — enable manually)
+      #   # To enable: uncomment this step, add `issues: write` to permissions,
+      #   # and implement dedup/close-on-resolve logic before merging.
+      #   if: false   # change to: steps.audit.outputs.has_drift == 'true'
+      #   uses: actions/github-script@v7
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       await github.rest.issues.create({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         title: 'Version drift detected: registry behind/ahead of repo',
+      #         body: 'See the version-audit workflow run for details.',
+      #         labels: ['release'],
+      #       })
