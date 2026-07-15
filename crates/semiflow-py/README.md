@@ -349,6 +349,87 @@ Python boundary.
 | `EvolverHeat1DUnitV3(domain_lo, domain_hi, n_grid, u0, n_chernoff)` | Zero-alloc `apply_into` hot path; `.evolve_into(t, buf)` |
 | `GrowthV3` | Growth bound `(multiplier, omega)` returned by `.growth()` |
 
+### Greeks and hyper-dual AD
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `EvolverHeat1DGreeksV3` | `(domain_lo, domain_hi, n_grid, u0, n_chernoff, scale_theta=0.5)` | `.greeks(t) -> (value, delta, gamma)`, `.size()`, `.n_chernoff()` | Hyper-dual `Dual<Dual<f64>>` sweep; returns primal + ∂u/∂θ + ∂²u/∂θ² in one pass (ADR-0133 A3) |
+
+### Adjoint Fokker-Planck (particle pushforward)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `AdjointFokkerPlanckV8` | `(a, b, c)` — constant diffusion, drift, reaction coefficients | `.step(tau, positions, weights, n_steps=1) -> (positions, weights)`, `.total_variation(...)`, `.second_moment(...)` | Weak-* Fokker-Planck pushforward: each Dirac δ_x spawns 4 children per step (Lemma A.1, §38.3); D=1 constant-coefficient only |
+
+### Killing and absorbing boundary conditions
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `Killing2nd1D` | `(xmin, xmax, n, u0, *, kappa=0.0, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-2 soft-killing `∂_t u = ∂²u − κu`; palindromic Strang split `e^{−τκ/2} C(τ) e^{−τκ/2}` (ADR-0126, §21.8) |
+| `KilledDirichlet1D` | `(domain_lo, domain_hi, n_grid, u0, n_chernoff)` | `.apply(t) -> NDArray`, `.size()` | Crank-Nicolson Cayley map; absorbing Dirichlet u\|∂R=0; order 2 (ADR-0135 Amdt 2, §44.ter) |
+| `DirichletHeat2nd1D` | `(xmin, xmax, n, u0, *, origin=nan, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-2 Dirichlet via odd-image method; sibling of `Reflected1D` (Neumann); higher-order than `Killing1D` (ADR-0176, §21.9) |
+
+### Obstacle / variational-inequality family
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `ObstacleChernoff` | `(xmin, xmax, n, u0, *, a=1.0, b=0.0, c=0.0, level=nan, obstacle_array=None)` | `.evolve(t, n_steps=100) -> NDArray`, `.values()`, `.evolve_active_set_adjoint(w_fwd, lam, tau)`, `.order()`, `len()` | `V^{n+1} = Π_g(S(Δτ)Vⁿ)`; constant or array obstacle floor; order 1 globally (§44, Theorem 44.1) |
+| `ObstacleGammaV8` | `(domain_lo, domain_hi, n_grid, *, level=..., obstacle_array=None)` | `.inactive_gamma(v) -> (gamma, defined, count)`, `.size()` | Inactive-set Γ = V″ primitive; `defined[i]=False` means Γ **refused** (active set / contact); D=1 only (ADR-0153 §4.1) |
+| `ObstacleNDV8` | `(xmin, xmax, nx, ymin, ymax, ny, level)` | `.apply(tau, v) -> NDArray`, `.shape()` | D=2 projective-splitting obstacle `Π_g ∘ S(Δτ)`; input shape `(nx, ny)` accepted (raveled order='F' internally); output is a flat nx*ny float64 array — use `out.reshape((nx, ny), order='F')` to recover 2D layout (ADR-0153 §4.2) |
+
+### Resolvent time-jump family (TWS contour)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `ResolventJumpV8` | `(domain_lo, domain_hi, n_grid, m_nodes)` | `.jump(t, g) -> NDArray`, `.size()`, `.m_nodes()` | Evaluates `e^{tA}g` via TWS parabolic-contour ILT; large-t alternative to many Chernoff steps; `m_nodes >= 6` (ADR-0138, §47) |
+| `ResolventJump2DV8` | `(xmin, xmax, nx, ymin, ymax, ny, m_nodes)` | `.jump(t, g) -> NDArray`, `.shape()`, `.m_nodes()` | 2D TWS contour ILT; input/output shape `(nx, ny)` Fortran-order (ADR-0153, §47.8) |
+| `ResolventJump3DV8` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, m_nodes)` | `.jump(t, g) -> NDArray`, `.shape()`, `.m_nodes()` | 3D TWS contour ILT; input/output shape `(nx, ny, nz)` Fortran-order (ADR-0153, §47.8) |
+
+### Matrix diffusion (coupled 2-component)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `MatrixDiffusion2D` | `(xmin, xmax, nx, ymin, ymax, ny, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 2D diffusion `∂_t u = a∂²u + cu`; flat buffer length `2·nx·ny`; index `(j·nx+i)·2+component` (ADR-0124, §33.2) |
+| `MatrixDiffusion3D` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 3D; flat buffer length `2·nx·ny·nz`; index `(k·nx·ny+j·nx+i)·2+component` (ADR-0124, §33.3) |
+
+### Wentzell dynamic boundary conditions
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `GammaFamily` | Static factories: `.constant(c)`, `.linear(a, b)`, `.exponential(rate)` | — | Ergonomic γ-schedule builder for `WentzellV8`; expands to pre-sampled float64 array (ADR-0153) |
+| `WentzellV8` | `(domain_lo, domain_hi, n_grid, u0, n_steps, c_reaction, gamma_schedule)` or `.from_family(...)` | `.evolve(t, t_offset=0.0) -> NDArray`, `.size()`, `.n_steps()` | Dynamic Wentzell BC `∂_t u + γ(t)·∂_ν u + c·u = 0`; bulk-boundary Cayley Lie split; order 1; 1D half-line only (ADR-0151, §49) |
+
+### Additional 1D kernels
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `DiffusionExpmv1D` | `(xmin, xmax, n, u0, *, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Tolerance-driven expmv kernel (Al-Mohy & Higham 2011); `order()` returns `u32::MAX`; not a fixed convergence order (ADR-0121) |
+| `DriftReaction4th1D` | `(xmin, xmax, n, u0, *, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-4 `b(x)∂_x u + c(x)u` via palindromic `R_sym(τ/2) ∘ K5(τ) ∘ R_sym(τ/2)`; defaults `b=0.5, b'=0, c=0` (ADR-0127) |
+
+### Sparse-grid and high-dimensional kernels
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `SmolyakD6V8` | `(domain_lo, domain_hi, n_per_axis)` | `.apply(tau, u0, n_steps=1) -> NDArray`, `.n_nodes()`, `.level()`, `.size()` | D=6 Smolyak sparse-grid unit-diffusion; level ℓ=D+3=9 (533 nodes); input/output flat `n_per_axis^6` (ADR-0138, ADR-0123 Amdt 1) |
+| `ComplexTripleJumpV8` | `(domain_lo, domain_hi, n_per_axis)` | `.apply_real(tau, u0) -> NDArray`, `.verify_gamma_star() -> bool`, `.size()` | Order-4 complex triple-jump on filiform-N5 Carnot (D=5); returns real projection `Re(Ψ(τ)f)`; complex substeps are internal (ADR-0138, ADR-0136 Amdt 2) |
+
+### Graph adjoint and Krylov families
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `GraphAdjoint` | `(graph=None, laplacian=None, *, lap_at_t, rho_bar, a=None, kernel="magnus_graph", convergence_check=True)` | `.evolve_state_adjoint(lambda_n, t, n_steps=100) -> NDArray`, `.n_nodes()` | Backward costate sweep `λ_0 = S⋆_1⋯S⋆_n · λ_n` via transpose Magnus K=4 map; supports `"magnus_graph"` / `"varcoef_magnus_graph"` (ADR-0115, §42) |
+| `GraphAdjointPresampled` | `.from_presampled(graph, lap_at_t, rho_bar, n_steps, t_horizon, a=None, kernel="magnus_graph", convergence_check=True)` | `.evolve_state_adjoint(lambda_n, n_steps=None) -> NDArray`, `.evolve_state_adjoint_batched(lambda_cols, n_steps=None) -> NDArray`, `.n_nodes()`, `.n_steps()` | Pre-samples callbacks once at construction; adjoint sweep runs fully in `py.detach` with no per-step GIL re-entry (ADR-0180) |
+| `GraphKrylov` | `(laplacian, *, path="chebyshev", tol=1e-10, m_max=18)` | `.evolve_batched(t, features_nc) -> NDArray`, `.n_nodes()` | Depth-independent `e^{-tL_G}·V` via Krylov; accepts `[N, C]` feature matrix; single GIL release (ADR-0185, §54) |
+
+### Symmetric operator and FEM utilities
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55) |
+| `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
+| `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
+| `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
+
 ---
 
 ## Performance
