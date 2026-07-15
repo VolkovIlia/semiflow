@@ -8,7 +8,7 @@
 WebAssembly bindings for [`semiflow`](../../crates/semiflow) —
 Chernoff approximations of operator semigroups (Remizov 2025).
 
-**Status**: Experimental — API not stabilised until v1.0.0 <!-- doc-check: allow-vref -->
+**Status**: Experimental — API not stabilised until v1.0.0
 
 ## npm install
 
@@ -148,7 +148,7 @@ and hypoelliptic engines. Additions include:
 - **Other** — `Obstacle1D` (JS name), `ObstacleND2Wasm`, `ObstacleGammaV8Wasm`,
   `Adjoint1D`, `AdaptivePI1D`, `ComplexTripleJumpWasm`, `PointEvalWasm`
 
-**Documented deferrals (not yet wired to WASM):** `ObstacleND`, `GraphTraj`,
+**Documented deferrals (not yet wired to WASM):** `ObstacleND`,
 Laplacian introspection, `GraphAdjoint` dense read-back, S³ carrier handles
 (`TtEvolver`/`GridlessEvolver` FFI handles — deferred to a follow-up release).
 

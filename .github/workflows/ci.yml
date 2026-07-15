@@ -78,6 +78,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- doc-check
 
+  changelog-check:
+    # Advisory only on PRs/pushes: a version bump may happen before notes are written.
+    # The hard block is enforced by the release-* workflows (no continue-on-error there).
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p xtask -- changelog-check
+
   # C-C3 fix: unsafe-scope is fast (exit 0 since allowlist+token-aware fix) and
   # MUST run on every push/PR to catch new unsafe outside the ADR-0019 allowlist.
   unsafe-scope:

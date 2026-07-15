@@ -14,6 +14,7 @@
 //!   test-flagship      — same flags as test-full but runs only 3 named binaries
 //!   test-ignored-gates — same flags as test-full but passes `-- --ignored`
 //!                        (runs all heavy RELEASE_BLOCKING `#[ignore]` tests)
+//!   changelog-check    — assert CHANGELOG.md has a non-empty section for the workspace version
 //!   ffi-headers        — generate crates/semiflow-ffi/include/semiflow.h via cbindgen
 //!   ffi-smoke          — build cdylib, compile heat.c, run C smoke test
 //!   ffi-graph-smoke    — build cdylib, compile graph_heat.c, run Graph PDE smoke test
@@ -38,6 +39,7 @@ use std::{
 
 use anyhow::{bail, Result};
 
+mod changelog_check;
 mod doc_check;
 mod ffi_tasks;
 mod latency_gate;
@@ -54,8 +56,8 @@ fn main() {
         None => {
             eprintln!(
                 "Usage: cargo xtask \
-                 <check-lints|check-unsafe-scope|doc-check|gen-stubs|bench-baseline|\
-                 test-fast|test-full|test-flagship|test-ignored-gates|\
+                 <changelog-check|check-lints|check-unsafe-scope|doc-check|gen-stubs|\
+                 bench-baseline|test-fast|test-full|test-flagship|test-ignored-gates|\
                  ffi-headers|ffi-smoke|ffi-graph-smoke|\
                  py-build|py-bench|py-smoke|py-graph-smoke|\
                  wasm-build [--size]|wasm-test|wasm-graph-smoke|wasm-pack-npm|\
@@ -67,6 +69,7 @@ fn main() {
 
     let rest: Vec<String> = args.collect();
     let result = match cmd.as_str() {
+        "changelog-check" => changelog_check::run(),
         "check-lints" => {
             // Optional `--crate <name>` to scope to a single crate directory.
             let scope = rest
@@ -101,8 +104,8 @@ fn main() {
         other => {
             eprintln!("Unknown subcommand: {other}");
             eprintln!(
-                "Available: check-lints, check-unsafe-scope, doc-check, gen-stubs, \
-                 bench-baseline, bench-parallel, \
+                "Available: changelog-check, check-lints, check-unsafe-scope, doc-check, \
+                 gen-stubs, bench-baseline, bench-parallel, \
                  test-fast, test-full, test-flagship, test-ignored-gates, \
                  ffi-headers, ffi-smoke, ffi-graph-smoke, \
                  py-build, py-bench, py-smoke, py-graph-smoke, \

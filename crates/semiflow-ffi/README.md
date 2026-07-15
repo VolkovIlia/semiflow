@@ -37,7 +37,7 @@ header [`include/semiflow.h`](include/semiflow.h) (regenerated via
 `cargo run -p xtask -- ffi-headers`). Consult that file rather than any
 per-type enumeration in prose.
 
-**EXPERIMENTAL** — API may break before v1.0.0. Wave A (this crate) exposes <!-- doc-check: allow-vref -->
+**EXPERIMENTAL** — API may break before v1.0.0. Wave A (this crate) exposes
 1D heat with `a(x) = 1.0` only. Variable diffusion coefficients are deferred
 to v0.12.0. See [ADR-0028](../../docs/adr/0028-ffi-pyo3-wasm-v0_10.md).
 
@@ -235,7 +235,7 @@ cargo run -p xtask -- ffi-smoke
 - **future minor** — variable `a(x)` via FFI callback. Blocked on the `with_closure`
   core API design in `semiflow`; `DiffusionChernoff::new` currently only accepts
   non-capturing `fn(F) -> F` pointers (ADR-0028).
-- **v1.0.0** — ABI freeze. No variants removed or reordered after this point. <!-- doc-check: allow-vref -->
+- **v1.0.0** — ABI freeze. No variants removed or reordered after this point.
 
 ---
 

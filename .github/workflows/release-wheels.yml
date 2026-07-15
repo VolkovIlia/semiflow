@@ -28,6 +28,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- doc-check
 
+  changelog-check:
+    name: CHANGELOG gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p xtask -- changelog-check
+
   build-wheels:
     name: Build wheels — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -120,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run only on tag pushes; skip for workflow_dispatch without a tag.
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [doc-check, build-wheels, sdist]
+    needs: [doc-check, changelog-check, build-wheels, sdist]
     # OIDC Trusted Publishing requires id-token: write at the job level.
     permissions:
       id-token: write
