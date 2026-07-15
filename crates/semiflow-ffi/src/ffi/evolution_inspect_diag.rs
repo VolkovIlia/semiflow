@@ -308,7 +308,7 @@ pub extern "C" fn smf_status_str(s: SemiflowStatus) -> *const c_char {
 
 /// Return the crate version string as a static null-terminated C string.
 ///
-/// Example: `"0.10.0"`.  The returned pointer is valid for the lifetime of
+/// Example: `"0.12.1-beta"`.  The returned pointer is valid for the lifetime of
 /// the process; do not free.
 ///
 /// ## Return values

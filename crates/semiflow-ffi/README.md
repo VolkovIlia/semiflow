@@ -1,6 +1,6 @@
 ---
-version: 1.2.0
-last_updated: 2026-05-10
+version: 1.4.0
+last_updated: 2026-07-15
 freshness_score: 1.0
 dependencies:
   - crates/semiflow-ffi/src/ffi.rs
@@ -12,27 +12,32 @@ changelog:
   - 1.0.0: Initial documentation for Wave A (v0.10.0)
   - 1.1.0: v0.11.0 sync — defer variable-a to v0.12.0, heat.c link confirmed
   - 1.2.0: Promote build-profile safety warning to top-level ⚠ Safety section
+  - 1.3.0: De-stale — replace semiflow-core references with semiflow; drop internal-scheme versions; align to public 0.12.1-beta
+  - 1.4.0: Remove false "not yet bound via FFI" claim for Killing/Howland/Manifold/Reflected/Resolvent; redirect to include/semiflow.h as authoritative surface
 ---
 
 # semiflow-ffi
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/VolkovIlia/semiflow/actions)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/VolkovIlia/semiflow/releases)
+[![Version](https://img.shields.io/badge/version-0.12.1--beta-blue)](https://github.com/VolkovIlia/semiflow/releases)
 [![Docs](https://img.shields.io/badge/docs-README-blue)](https://github.com/VolkovIlia/semiflow/tree/master/crates/semiflow-ffi)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](../../LICENSE-MIT)
 
-C ABI bindings for [`semiflow-core`](../../crates/semiflow-core): Chernoff
+C ABI bindings for [`semiflow`](../../crates/semiflow): Chernoff
 approximations of operator semigroups. Exposes an opaque-handle C API backed
 by a `catch_unwind` panic boundary and a status-code enum for all error paths.
 
-**Aligned with `semiflow-core` v2.8.0.** The FFI surface itself did not change in
-v2.6.0–v2.8.0; the 1D heat + graph kernel entry points from v2.4.0 remain the
-current exposed surface. New v2.6–v2.8 Rust types (`KillingChernoff`,
-`LaplaceChernoffResolvent`, `HowlandLift`, `ManifoldChernoff`,
-`ReflectedHeatChernoff`) are **not yet bound via FFI** — deferred to v2.9+ per
-the roadmap.
+Built on the `semiflow` core crate (current public version: 0.12.1-beta). The
+initial 1D heat entry points shipped in 0.10.0-beta; the FFI surface has since
+expanded to a broad C surface across the kernel families: 1D/2D/3D diffusion,
+graph kernels, manifold, hypoelliptic, adjoint, resolvent, killing,
+reflected/Neumann, obstacle, Schrödinger, tensor-train, gridless, and more. The
+authoritative, complete list of exported `smf_*` functions is the generated
+header [`include/semiflow.h`](include/semiflow.h) (regenerated via
+`cargo run -p xtask -- ffi-headers`). Consult that file rather than any
+per-type enumeration in prose.
 
-**EXPERIMENTAL** — API may break before v1.0.0. Wave A (this crate) exposes
+**EXPERIMENTAL** — API may break before v1.0.0. Wave A (this crate) exposes <!-- doc-check: allow-vref -->
 1D heat with `a(x) = 1.0` only. Variable diffusion coefficients are deferred
 to v0.12.0. See [ADR-0028](../../docs/adr/0028-ffi-pyo3-wasm-v0_10.md).
 
@@ -134,7 +139,7 @@ cl.exe heat.c /I crates\semiflow-ffi\include \
 heat.exe
 ```
 
-Example output: `sup_error=1.460e-6  version=0.10.0`
+Example output: `sup_error=1.460e-6  version=0.12.1-beta`
 
 A fully-annotated smoke program lives in
 [`examples/heat.c`](examples/heat.c).
@@ -173,7 +178,7 @@ All functions return `SemiflowStatus` except `smf_state_free`,
 | `smf_state_values` | `(state, out_buf, out_buf_len) → Status` | Copy grid values into caller buffer. |
 | `smf_state_size` | `(state) → usize` | Number of grid nodes (0 if null). |
 | `smf_status_str` | `(status) → const char *` | Static string for status code. Do not free. |
-| `smf_version` | `() → const char *` | Crate version string, e.g. `"0.10.0"`. Do not free. |
+| `smf_version` | `() → const char *` | Crate version string, e.g. `"0.12.1-beta"`. Do not free. |
 
 Full signatures are in [`include/semiflow.h`](include/semiflow.h).
 
@@ -220,17 +225,17 @@ cargo run -p xtask -- ffi-smoke
 
 ## Roadmap
 
-- **Wave A (v0.10.0)** — 1D heat, `a(x) = 1.0`, 7 entry points. Released.
-- **v0.10.0 Wave B -- semiflow-py` (PyO3 + maturin wheels, Python 3.10–3.13). Released.
-- **v0.10.0 Wave C** — `semiflow-wasm` (wasm-bindgen, `wasm32-unknown-unknown`). Released.
-- **v2.4.0 Wave C** — graph kernel FFI entry points (`smf_ghc6_*`, `smf_vc_mghc_*`). Released.
-- **v2.6.0–v2.8.0** — core library advanced (BoundaryPolicy widening, KillingChernoff,
-  LaplaceChernoffResolvent, HowlandLift, ManifoldChernoff, ReflectedHeatChernoff). FFI
-  surface UNCHANGED; new types deferred to v2.9+ per roadmap.
-- **v0.12.0** — variable `a(x)` via FFI callback. Blocked on the `with_closure`
-  core API design in `semiflow-core`; `DiffusionChernoff::new` currently only
-  accepts non-capturing `fn(F) -> F` pointers (ADR-0028).
-- **v1.0.0** — ABI freeze. No variants removed or reordered after this point.
+- **0.10.0-beta Wave A** — 1D heat, `a(x) = 1.0`, 7 entry points. Released.
+- **0.10.0-beta Wave B** — `semiflow-py` (PyO3 + maturin wheels, Python 3.10–3.13). Released.
+- **0.10.0-beta Wave C** — `semiflow-wasm` (wasm-bindgen, `wasm32-unknown-unknown`). Released.
+- **subsequent minors** — FFI surface expanded across graph kernels, manifold,
+  hypoelliptic, adjoint, resolvent, killing, reflected/Neumann, obstacle, Schrödinger,
+  tensor-train, gridless, and more. For the exact exported surface at any given build,
+  see [`include/semiflow.h`](include/semiflow.h).
+- **future minor** — variable `a(x)` via FFI callback. Blocked on the `with_closure`
+  core API design in `semiflow`; `DiffusionChernoff::new` currently only accepts
+  non-capturing `fn(F) -> F` pointers (ADR-0028).
+- **v1.0.0** — ABI freeze. No variants removed or reordered after this point. <!-- doc-check: allow-vref -->
 
 ---
 
