@@ -1,7 +1,7 @@
 # semiflow-py
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/VolkovIlia/semiflow/actions)
-[![PyPI badge — pending
+[![PyPI](https://img.shields.io/pypi/v/semiflow-pde)](https://pypi.org/project/semiflow-pde/)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](../../LICENSE-MIT)
 
 PyO3 Python bindings for [`semiflow`](../../crates/semiflow) —
@@ -9,13 +9,15 @@ Chernoff approximations of operator semigroups (Remizov 2025, Theorem 6).
 
 **Built on the `semiflow` core crate** (ADR-0154, 2026-06-10). The Python
 surface has parity with all core kernel families via ADR-0111 Waves P1–P7
-plus the v9.0.0 addition of `ReverseHeat1D` (reverse-mode AD, math §51,
+plus the 0.9.0-beta addition of `ReverseHeat1D` (reverse-mode AD, math §51,
 ADR-0156): 26 binding classes + 1 free function. Pyright errors: 0. Complete
 `__init__.pyi` stubs; `py.typed` marker; GIL released in all `evolve` paths
 (ADR-0031).
 
-`TtChernoff` / `TtState` and `GridlessChernoff` / `ParticleReduction` are
-**Rust-only at v9.0.0** — not exposed via PyO3 (binding design deferred).
+Tensor-train and gridless carriers (`TtEvolver`, `TtState`, `TtCoupledEvolver`,
+`VarCoefTtEvolver`, `GridlessEvolver`, `MeasureState`) are **fully exposed via
+PyO3** as of 0.12.0-beta (Rust-only at 0.9.0-beta; bindings added in ADR-0171 /
+ADR-0178).
 
 ## Installation
 
@@ -23,10 +25,10 @@ ADR-0156): 26 binding classes + 1 free function. Pyright errors: 0. Complete
 pip install semiflow-pde
 ```
 
-> **Note**: as of v6.0 the package is not yet published to PyPI. Wheels are
-> distributed via [GitHub releases](https://github.com/VolkovIlia/semiflow/releases).
-> Download the `semiflow-*.whl` for your platform and install with
-> `pip install semiflow-*.whl`.
+> **Note**: `semiflow-pde` is published on [PyPI](https://pypi.org/project/semiflow-pde/).
+> Wheels for common platforms are also available via
+> [GitHub releases](https://github.com/VolkovIlia/semiflow/releases) if you need
+> a specific build: `pip install semiflow_pde-*.whl`.
 
 Or build from source (requires Rust toolchain + maturin):
 
@@ -268,7 +270,7 @@ Both support `.with_potential(v_array)` and `.norm_squared()`.
 | `Adjoint(xmin, xmax, n, u0, *, kernel="heat2", self_adjoint=False, boundary="reflect")` | Adjoint semigroup; `kernel` in `"heat2"`, `"heat4"`, `"heat6"`, `"drift"`, `"shift"` |
 | `AdaptivePI(xmin, xmax, n, u0, *, kernel="heat2", tol_abs=1e-6, tol_rel=1e-4, boundary="reflect")` | PI-controller adaptive step |
 
-### Reverse-mode AD (v9.0.0, ADR-0156)
+### Reverse-mode AD (0.9.0-beta, ADR-0156)
 
 | Class | Notes |
 |-------|-------|
@@ -313,8 +315,32 @@ Raises `SemiflowError` with `.kind` in `{'OutOfDomain', 'GridMismatch', 'NanInf'
 
 **NARROW scope (§51.5):** constant-a `DiffusionChernoff` only; θ is the
 uniform diffusivity. Variable-coefficient and nonlinear kernels are out of scope
-at v9.0.0. `TtChernoff` and `GridlessChernoff` are **not** exposed in PyO3
-(Rust-only at v9.0.0).
+for `ReverseHeat1D`.
+
+### Tensor-train carriers (ADR-0171 / ADR-0178)
+
+Curse-escaped O(d·n·r²) storage for separable diagonal-A diffusion on ℝᵈ.
+State and evolvers share the `TtState` carrier; `TtEvolver` / `TtCoupledEvolver`
+cover constant-coefficient cases, `VarCoefTtEvolver` covers variable-coefficient
+additive-separable operators (issue #2, ADR-0178).
+
+| Class | Constructor | Key method | Notes |
+|-------|-------------|------------|-------|
+| `TtState(slices)` | `slices: list[NDArray[np.float64]]` — per-axis 1-D arrays | `.ndim()`, `.n_j(j)`, `.peak_rank()`, `.storage_size()`, `.inner_separable(functionals)` | Shared carrier for all TT evolvers |
+| `TtEvolver(a, b, c, dom_min, dom_max, eps_round)` | `a`, `b`: `list[float]` per-axis coeffs; `c: float`; bounds lists; `eps_round: float` | `.evolve(state, t_final, n_steps)` — mutates `TtState` in-place | Diagonal-A Gaussian class (§52) |
+| `VarCoefTtEvolver(a_axis, b_axis, v_axis, domain, eps_round)` | `a_axis`, `b_axis`, `v_axis`: `list[list[float]]` per-axis nodal values; `domain: list[tuple[float,float]]`; `eps_round: float` | `.evolve(state, t_final, n_steps)` | Variable-coef additive-separable; rank-1 IC → rank-1 output (ADR-0178) |
+| `TtCoupledEvolver(a, b, c, coupling, dom_min, dom_max, eps_round)` | Same as `TtEvolver` + `coupling: tuple` — `("None",)`, `("Tridiagonal", rho)`, or `("Pairs", [(j,k,rho),...])` | `.evolve(state, t_final, n_steps)` | Nearest-neighbour pair-factor coupling (§52.9) |
+
+### Gridless / particle carriers (ADR-0171)
+
+Sparse signed-measure ensemble on ℝ (D=1). Curse-escaped: the 3ᴰ dense tree is
+never materialised; only sparse marginals and scalar observables cross the
+Python boundary.
+
+| Class | Constructor | Key method | Notes |
+|-------|-------------|------------|-------|
+| `MeasureState(positions, weights, dim)` | `positions`, `weights`: `NDArray[np.float64]`; `dim: int` (must be 1) | `.n_diracs()`, `.total_variation()`, `.second_moment()`, `.marginal(axis) -> (pos, wgt)` | Particle carrier; signed-weight Dirac ensemble (§50) |
+| `GridlessEvolver(a, b, c, *, voronoi_cap=64, gaussian_background=False)` | `a`, `b`, `c`: `float`; optional particle-cap / background kwargs | `.evolve(state, t_final, n_steps)` — mutates `MeasureState`; `.apply(tau, src, dst)` one-step | 1-D 3-branch Chernoff kernel; `WeightedVoronoi` reduction (ADR-0155) |
 
 ### v3 Evolver surface
 
