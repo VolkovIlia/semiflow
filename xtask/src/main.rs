@@ -4,6 +4,7 @@
 //!   check-lints        — walk `crates/*/src/**/*.rs`, check ≤50 lines/fn, ≤500 lines/file
 //!                        optional: `--crate NAME` to scope to one crate
 //!   check-unsafe-scope — enforce that `unsafe` appears only in allowed files (ADR-0019)
+//!   doc-check          — README ↔ reality drift gate: version truth + exposed-class truth
 //!   gen-stubs          — emit placeholder Rust stubs from contracts/semiflow-core.traits.yaml
 //!   bench-baseline     — run cargo bench and capture criterion baseline
 //!   bench-parallel     — run the 4 parallel benches with features parallel,simd (ADR-0060)
@@ -37,6 +38,7 @@ use std::{
 
 use anyhow::{bail, Result};
 
+mod doc_check;
 mod ffi_tasks;
 mod latency_gate;
 mod py_tasks;
@@ -52,7 +54,7 @@ fn main() {
         None => {
             eprintln!(
                 "Usage: cargo xtask \
-                 <check-lints|check-unsafe-scope|gen-stubs|bench-baseline|\
+                 <check-lints|check-unsafe-scope|doc-check|gen-stubs|bench-baseline|\
                  test-fast|test-full|test-flagship|test-ignored-gates|\
                  ffi-headers|ffi-smoke|ffi-graph-smoke|\
                  py-build|py-bench|py-smoke|py-graph-smoke|\
@@ -75,6 +77,7 @@ fn main() {
             check_lints(scope.as_deref())
         }
         "check-unsafe-scope" => unsafe_scope::check_unsafe_scope(),
+        "doc-check" => doc_check::run(),
         "gen-stubs" => gen_stubs(),
         "bench-baseline" => bench_baseline(),
         "bench-parallel" => bench_parallel(),
@@ -98,7 +101,7 @@ fn main() {
         other => {
             eprintln!("Unknown subcommand: {other}");
             eprintln!(
-                "Available: check-lints, check-unsafe-scope, gen-stubs, \
+                "Available: check-lints, check-unsafe-scope, doc-check, gen-stubs, \
                  bench-baseline, bench-parallel, \
                  test-fast, test-full, test-flagship, test-ignored-gates, \
                  ffi-headers, ffi-smoke, ffi-graph-smoke, \

@@ -71,6 +71,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- check-lints
 
+  doc-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p xtask -- doc-check
+
   # C-C3 fix: unsafe-scope is fast (exit 0 since allowlist+token-aware fix) and
   # MUST run on every push/PR to catch new unsafe outside the ADR-0019 allowlist.
   unsafe-scope:

@@ -17,10 +17,26 @@ on:
 permissions:
   contents: read
 
+# Serialize runs for the same ref so a re-pushed tag waits for the first run
+# to finish rather than attempting a parallel publish.  cancel-in-progress: false
+# avoids cancelling a live cargo publish mid-flight.
+concurrency:
+  group: release-crate-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  doc-check:
+    name: Doc-drift gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p xtask -- doc-check
+
   publish:
     name: Publish semiflow to crates.io
     runs-on: ubuntu-latest
+    needs: [doc-check]
 
     steps:
       - uses: actions/checkout@v4

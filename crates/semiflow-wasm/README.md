@@ -8,7 +8,7 @@
 WebAssembly bindings for [`semiflow`](../../crates/semiflow) —
 Chernoff approximations of operator semigroups (Remizov 2025).
 
-**Status**: Experimental — API not stabilised until v1.0.0
+**Status**: Experimental — API not stabilised until v1.0.0 <!-- doc-check: allow-vref -->
 
 ## npm install
 

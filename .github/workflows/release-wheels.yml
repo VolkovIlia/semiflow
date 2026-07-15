@@ -12,7 +12,22 @@ on:
 permissions:
   contents: read
 
+# Serialize runs for the same ref so a re-pushed tag waits for the first run
+# to finish rather than publishing in parallel.  cancel-in-progress: false
+# avoids cancelling a live upload mid-flight.
+concurrency:
+  group: release-wheels-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  doc-check:
+    name: Doc-drift gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p xtask -- doc-check
+
   build-wheels:
     name: Build wheels — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -105,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run only on tag pushes; skip for workflow_dispatch without a tag.
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-wheels, sdist]
+    needs: [doc-check, build-wheels, sdist]
     # OIDC Trusted Publishing requires id-token: write at the job level.
     permissions:
       id-token: write
@@ -123,7 +138,10 @@ jobs:
           merge-multiple: true
 
       # Publish to PyPI via OIDC — no token or password required.
+      # skip-existing: true treats "file already exists" as a green skip instead
+      # of an error, making duplicate/re-triggered tag pushes idempotent.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          skip-existing: true

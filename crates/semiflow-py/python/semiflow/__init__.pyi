@@ -1465,6 +1465,138 @@ class NonSeparable2D:
 
 
 @final
+class ReverseHeat1D:
+    """Reverse-mode AD evolver for constant-a 1-D heat (v9.0.0, math §51, ADR-0156).
+
+    Computes ``(J, ∂J/∂θ)`` where ``J(θ) = ‖(F_θ(τ))ⁿ u₀ − target‖²`` via
+    the K=1 forward-mode Dual path (§51.4; 0-ULP parity with forward AD by
+    construction).
+
+    **Narrow scope (§51.5)**: constant-a ``DiffusionChernoff`` only; θ is the
+    uniform diffusivity.  Variable-coefficient and nonlinear kernels are out of
+    scope for v9.0.0.
+
+    Parameters
+    ----------
+    theta : float
+        Diffusivity parameter θ > 0 (must be finite).
+    xmin : float
+        Left domain boundary.
+    xmax : float
+        Right domain boundary (must be > xmin).
+    n_grid : int
+        Number of grid nodes (must be >= 4).
+    n_steps : int
+        Number of Chernoff steps per ``value_and_grad`` call (must be >= 1).
+
+    Raises
+    ------
+    SemiflowError
+        kind='GridMismatch' — n_grid < 4 or xmin >= xmax.
+        kind='OutOfDomain' — theta <= 0 or not finite, or n_steps == 0.
+    """
+
+    def __init__(
+        self,
+        theta: float,
+        xmin: float,
+        xmax: float,
+        n_grid: int,
+        n_steps: int,
+    ) -> None: ...
+
+    def value_and_grad(
+        self,
+        tau: float,
+        u0: NDArray[np.float64],
+        target: NDArray[np.float64],
+    ) -> tuple[float, float]:
+        """Compute ``(J, ∂J/∂θ)`` for the scalar diffusivity parameter.
+
+        **K=1 path**: uses the forward-mode ``Dual<f64>`` pass (§51.4), which
+        guarantees **0-ULP parity** with the forward-mode reference.
+
+        Parameters
+        ----------
+        tau : float
+            Per-step time increment (must be > 0 and finite).
+        u0 : NDArray[np.float64]
+            Initial condition; 1-D float64 array of length ``n_grid``.
+        target : NDArray[np.float64]
+            Target state; 1-D float64 array of length ``n_grid``.
+
+        Returns
+        -------
+        (value, grad) : (float, float)
+            ``value`` is the L² loss ``‖(F_θ(τ))ⁿ u₀ − target‖²``.
+            ``grad`` is ``∂J/∂θ`` (scalar, forward-mode Dual, 0-ULP vs core).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — tau <= 0 or non-finite.
+            kind='GridMismatch' — u0/target length != n_grid.
+            kind='NanInf' — NaN/Inf in u0 or target.
+        """
+        ...
+
+    def value_and_grad_kvec(
+        self,
+        tau: float,
+        theta_vec: list[float],
+        u0: NDArray[np.float64],
+        target: NDArray[np.float64],
+    ) -> tuple[float, list[float]]:
+        """Compute ``(J, grad_vec)`` for a K-vector of parameters in ONE backward pass.
+
+        **K-vector path (§51.9, ADR-0156 Amendment 1)**: runs the genuine
+        cotangent backward sweep once, accumulating all K gradient components
+        ``∂J/∂θ_p`` in a single backward walk — O(1) trajectory passes
+        independent of K (vs O(K) for forward dual-AD).
+
+        For K=1, this method is byte-identical to ``value_and_grad`` (same
+        arithmetic path).
+
+        Parameters
+        ----------
+        tau : float
+            Per-step time increment (must be > 0 and finite).
+        theta_vec : list[float]
+            K diffusivity parameters; must be non-empty.
+        u0 : NDArray[np.float64]
+            Initial condition; 1-D float64 array of length ``n_grid``.
+        target : NDArray[np.float64]
+            Target state; 1-D float64 array of length ``n_grid``.
+
+        Returns
+        -------
+        (value, grad_vec) : (float, list[float])
+            ``value`` is the L² loss ``‖(F_θ(τ))ⁿ u₀ − target‖²``.
+            ``grad_vec`` is ``[∂J/∂θ_0, …, ∂J/∂θ_{K-1}]`` (length K).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — tau <= 0, non-finite, or theta_vec empty.
+            kind='GridMismatch' — u0/target length != n_grid.
+            kind='NanInf' — NaN/Inf in u0, target, or theta_vec.
+        """
+        ...
+
+    def theta(self) -> float:
+        """Return the diffusivity parameter θ."""
+        ...
+
+    def n_steps(self) -> int:
+        """Return the number of Chernoff steps."""
+        ...
+
+    def n_grid(self) -> int:
+        """Return the number of grid nodes."""
+        ...
+
+
+@final
 class Adjoint:
     """Adjoint semigroup wrapper for any supported 1-D Chernoff kernel.
 
