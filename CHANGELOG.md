@@ -4,6 +4,16 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1-beta] - 2026-07-15
+### Fixed
+- **docs(py):** de-stale the `semiflow-pde` PyPI README (long_description).
+  Fixed broken PyPI badge, removed false "not yet published" note, relabelled
+  obsolete internal "v9.0.0" markers to the public 0.9.0-beta scheme, and
+  corrected the false "Tt/Gridless are Rust-only, not exposed via PyO3" claim
+  (TtEvolver, TtState, TtCoupledEvolver, VarCoefTtEvolver, GridlessEvolver,
+  MeasureState are exposed — ADR-0171/ADR-0178; class-reference rows added).
+  Docs-only patch release to refresh the PyPI project page (9bac992).
+
 ## [0.12.0-beta] - 2026-07-02
 
 ### Added (#16)
