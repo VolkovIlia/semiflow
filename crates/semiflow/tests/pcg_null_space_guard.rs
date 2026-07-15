@@ -100,7 +100,7 @@ fn pcg_null_space_guard() {
         0.1_f64,
         &v_in,
         &mut v_out,
-        KrylovPath::ImplicitEuler { n_steps: 1 },
+        KrylovPath::ImplicitEuler { n_steps: 1, cg_max_iter: None },
         1e-10_f64,
         &mut scratch,
     );

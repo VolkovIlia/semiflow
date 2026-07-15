@@ -14,7 +14,12 @@ pub enum KrylovPath {
     Lanczos { m_max: usize },        // unchanged
     /// Implicit backward-Euler shift-invert (§59). `n_steps` sub-steps of
     /// size Δt = τ/n_steps; each solves (I + Δt·Â)x = b by preconditioned CG.
-    ImplicitEuler { n_steps: usize },   // NEW (ADR-0190)
+    ImplicitEuler {
+        n_steps: usize,
+        /// Optional CG iteration cap per sub-step.
+        /// `None` uses `ceil(√κ(S)·ln(2/tol))` (§59.4, fix #18); `Some(m)` overrides.
+        cg_max_iter: Option<usize>,    // NEW (issue #18)
+    },
 }
 ```
 
@@ -62,11 +67,13 @@ fn implicit_euler_action<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
     src: &[F], dst: &mut [F],
     tau: F, n_steps: usize, tol: F,
+    max_iter_override: Option<usize>,  // NEW (issue #18): None → auto-computed formula
     scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError>;
 ```
 
-Contract: `Δt = tau / n_steps`; `max_iter = min(N, ceil(4·sqrt(1 + Δt·op.lambda_max_bound())))`;
+Contract: `Δt = tau / n_steps`;
+`max_iter = min(N, max(16, ceil( sqrt(1 + Δt·op.lambda_max_bound()) · ln(2/tol_cg) )))` (§59.4, issue-#18 correction; old formula `ceil(4·√κ)` omitted `ln(2/tol_cg)` factor);
 `tol_cg = max(tol, 1e-12)`; warm-start each sub-step with the previous `u_k`.
 The lumped/consistent √μ / R pre-/post-scale is applied by the EXISTING §55 wrappers
 (`mass_lumped_evolve` / `MassKOperator::evolve`) — `implicit_euler_action` operates on
@@ -85,17 +92,23 @@ out = op.evolve_batched(t, V_nc, path="chebyshev", tol=1e-10, m_max=18)
 
 # NEW — implicit stiff path (§59):
 out = op.evolve_batched(t, V_nc, path="implicit", tol=1e-8, n_steps=100)
+
+# NEW — override CG cap (issue #18 escape hatch):
+out = op.evolve_batched(t, V_nc, path="implicit", tol=1e-8, n_steps=100, cg_max_iter=50)
 ```
 
 Signature (NORMATIVE):
 
 ```
 evolve_batched(t: float, v_nc: ndarray[f64], path: str = "chebyshev",
-               tol: float = 1e-10, m_max: int = 18, n_steps: int = 100) -> ndarray[f64]
+               tol: float = 1e-10, m_max: int = 18, n_steps: int = 100,
+               cg_max_iter: int | None = None) -> ndarray[f64]
 ```
 
-- `path="implicit"` routes to `KrylovPath::ImplicitEuler { n_steps }`; `m_max` is ignored.
+- `path="implicit"` routes to `KrylovPath::ImplicitEuler { n_steps, cg_max_iter }`; `m_max` is ignored.
 - `n_steps` MUST be `≥ 1` (else `ValueError`/`SemiflowError(kind="OutOfDomain")`).
+- `cg_max_iter=None` (default) uses `ceil(√κ·ln(2/tol))` (§59.4, fix #18);
+  pass an explicit integer to override, e.g. when the Gershgorin `λ_max` bound is loose.
 - Channel-major `py.detach` batching UNCHANGED (validate → detach → scatter, ADR-0031).
 
 ### 2.2 `mass_lumped_evolve` (free function)

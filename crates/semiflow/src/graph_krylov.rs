@@ -71,6 +71,13 @@ pub enum KrylovPath {
     ImplicitEuler {
         /// Number of backward-Euler sub-steps. Must be ≥ 1.
         n_steps: usize,
+        /// Optional CG iteration cap per sub-step.
+        ///
+        /// `None` (default) uses the theory-derived bound
+        /// `ceil(√κ(S)·ln(2/tol))` where `κ(S) ≤ 1 + Δt·λ_max` (§59.4, fix #18).
+        /// Set `Some(m)` to override, e.g. when `λ_max_bound` is a loose Gershgorin
+        /// estimate and a tighter user-known bound suffices.
+        cg_max_iter: Option<usize>,
     },
 }
 
@@ -171,13 +178,14 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
                 *m_max,
                 scratch,
             ),
-            KrylovPath::ImplicitEuler { n_steps } => implicit_euler_gk_action(
+            KrylovPath::ImplicitEuler { n_steps, cg_max_iter } => implicit_euler_gk_action(
                 &*self.laplacian,
                 src,
                 dst,
                 tau,
                 *n_steps,
                 self.tol,
+                *cg_max_iter,
                 scratch,
             ),
         }
@@ -228,7 +236,7 @@ pub fn graph_expmv_matvec_count<F: SemiflowFloat>(
             let m_max_u32 = *m_max as u32;
             (s, m.min(m_max_u32))
         }
-        KrylovPath::ImplicitEuler { n_steps } => {
+        KrylovPath::ImplicitEuler { n_steps, .. } => {
             // n_steps backward-Euler sub-steps; 0 = no Chebyshev/Lanczos degree (§59.4).
             // n_steps bounded by u32::MAX above — cast is exact.
             #[allow(clippy::cast_possible_truncation)]

@@ -181,7 +181,7 @@ fn bessel_i_k<F: SemiflowFloat>(k: usize, z: F) -> F {
 ///
 /// Writes to `dst` via `zero_into` + `axpy_into_slice` — the same pattern used
 /// by `chebyshev_action` and `lanczos_action`, so no `values_mut` is needed.
-// 7 args by necessity — op/src/dst/tau/n_steps/tol/scratch; mirrors lanczos_action shape.
+// 8 args by necessity — op/src/dst/tau/n_steps/tol/cg_max_iter/scratch.
 #[allow(clippy::too_many_arguments)]
 fn implicit_euler_gk_action<F: SemiflowFloat>(
     op: &impl SymmetricLinearOp<F>,
@@ -190,12 +190,21 @@ fn implicit_euler_gk_action<F: SemiflowFloat>(
     tau: F,
     n_steps: usize,
     tol: F,
+    cg_max_iter: Option<usize>,
     scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError> {
     let n = src.len();
     let mut out = scratch.take_vec(n);
-    implicit_euler_action(op as &dyn SymmetricLinearOp<F>, src.values(), &mut out,
-                          tau, n_steps, tol, scratch)?;
+    implicit_euler_action(
+        op as &dyn SymmetricLinearOp<F>,
+        src.values(),
+        &mut out,
+        tau,
+        n_steps,
+        tol,
+        cg_max_iter,
+        scratch,
+    )?;
     dst.zero_into();
     dst.axpy_into_slice(F::one(), &out);
     scratch.return_vec(out);

@@ -13365,12 +13365,25 @@ no assembled `S`. NORMATIVE stopping and limits:
 
 ```text
 converged  ⇔  ‖r_j‖₂ ≤ tol_cg · ‖b‖₂ ,   tol_cg := max(tol, 1e−12),
-max_iter   := min(N, ceil(K · sqrt(1 + Δt·λ_max)) ) ,   K a small constant (≈ 4),
+max_iter   := min(N, max(MIN_CG_ITER=16, ceil( sqrt(1+Δt·λ_max) · ln(2/tol_cg) ))) ,
 warm start :  x_0 := b   (previous sub-step's u_k is a good initial guess).      [§59.4.a]
 ```
 
 CG on an SPD system is exact in ≤ N steps and reaches `tol_cg` in
 `≈ ½·√κ(S)·ln(2/tol_cg)` iterations, `κ(S) = (1+Δt·λ_max)/(1+Δt·λ_min) ≤ 1+Δt·λ_max`.
+The implementation uses `safety=1.0` (not ½) so the cap is generous enough to never
+truncate a still-converging solve; a floor of `MIN_CG_ITER=16` prevents an absurdly low
+cap on very well-conditioned systems, and the leading `min(N,…)` provides the CG-exactness
+fallback (exact in ≤ N steps on SPD).  *Issue-#18 correction*: the pre-fix formula
+`ceil(4·√κ)` omitted the `ln(2/tol_cg)` factor and caused `ConvergenceFailed` on the
+library's own conservative operator.
+
+An optional escape hatch is available: passing `cg_max_iter: Some(m)` (Rust /
+`KrylovPath::ImplicitEuler { cg_max_iter: Some(m) }`) or `cg_max_iter=m` (Python
+`evolve_batched`) overrides the auto-computed cap with a user-supplied `m`.  `None` /
+default uses the formula above.  Useful when the Gershgorin `λ_max` bound is loose and
+the user knows fewer iterations suffice.
+
 Preconditioning replaces `κ(S)` by `κ(P^{−1}S) ≪ κ(S)`. If `max_iter` is hit without
 convergence → `SemiflowError::ConvergenceFailed` (errors-as-values; no partial write).
 
