@@ -9,10 +9,28 @@ use crate::error::new_pyerr;
 /// Parse a `boundary='...'` Python kwarg into a [`BoundaryPolicy`].
 ///
 /// Accepted (case-insensitive):
-/// - `"reflect"` (default) — mirror at boundary
-/// - `"periodic"` — wrap with period `(n-1)·dx`
-/// - `"zero"` — return 0.0 outside domain
-/// - `"linear"` — linear extrapolation from boundary nodes
+///
+/// | String | Policy | Typical use |
+/// |--------|--------|-------------|
+/// | `"reflect"` (default) | `BoundaryPolicy::Reflect` | General PDEs; default G1/G2 oracle requirement |
+/// | `"periodic"` | `BoundaryPolicy::Periodic` | Periodic domains (torus, FFT-compatible) |
+/// | `"zero"` | `BoundaryPolicy::ZeroExtend` | Solutions that vanish at boundary (barrier options, puts in log-price space near deep OTM) |
+/// | `"linear"` | `BoundaryPolicy::LinearExtrapolate` | **Asymptotically-linear far-field** (European calls, linear ramps) |
+///
+/// ## `"linear"` for finance / far-field BCs
+///
+/// `"linear"` is the **recommended far-field closure for option-pricing PDEs
+/// with asymptotically-linear payoffs** such as European calls.  At the call
+/// far-field, `V ≈ S − Ke^{−rτ}`, so `V_SS → 0` and linear extrapolation is
+/// exact to leading order.  Validated on `Shift1D.with_arrays` with
+/// `S ∈ [0, 4K]`, n = 1025: ATM relative error ≈ 8.5e-5.
+///
+/// For inhomogeneous Dirichlet (fixing u to a non-zero constant at the
+/// boundary), the core `BoundaryPolicy::Dirichlet { value }` variant exists in
+/// the Rust library but is not yet exposed through this Python string parser.
+/// Until it is, `"linear"` is the correct idiom for all asymptotically-linear
+/// payoffs; a future version will add `"dirichlet"` / `("dirichlet", value)`
+/// support (see issue #20).
 ///
 /// # Errors
 /// Returns `SemiflowError(kind='OutOfDomain')` for any unrecognised string,

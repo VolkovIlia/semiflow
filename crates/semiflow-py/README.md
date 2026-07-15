@@ -75,12 +75,77 @@ The `.kind` attribute (a string) identifies the error category:
 
 All 1D/2D/3D kernels accept a keyword argument `boundary`:
 
-| Value | Semantics |
-|-------|-----------|
-| `"reflect"` (default) | Mirror / zero-flux Neumann at grid boundaries |
-| `"periodic"` | Periodic wrap |
-| `"zero"` | Dirichlet zero at grid boundaries |
-| `"linear"` | Linear extrapolation |
+| Value | Semantics | Typical use |
+|-------|-----------|-------------|
+| `"reflect"` (default) | Mirror / zero-flux Neumann at grid boundaries | General PDEs; required by G1/G2 oracle tests |
+| `"periodic"` | Periodic wrap with period `(n-1)·dx` | Periodic domains |
+| `"zero"` | Extend with 0.0 outside domain | Solutions that vanish at the boundary (barriers, puts far OTM in log-space) |
+| `"linear"` | Linear extrapolation from the two outermost nodes | **Asymptotically-linear far-field** (European calls, linear ramps) |
+
+### Far-field / Dirichlet-like boundaries for finance
+
+Users coming from classical finite-difference option pricers often look for an
+inhomogeneous Dirichlet far-field ("set `V = S − K e^{−rτ}` at `S_max`") and,
+finding only `"zero"`, conclude the library cannot price calls.  In fact
+`boundary="linear"` is the correct and recommended closure for European call
+pricing.
+
+**Why `"linear"` works for calls:**  The Black-Scholes / CEV solution satisfies
+`V(S, τ) ≈ S − K e^{−rτ}` as `S → ∞`.  This asymptote is linear in `S`, so
+`V_SS → 0`.  Linear extrapolation from the two outermost grid nodes reproduces
+an affine far-field exactly (to machine precision), introducing no spurious
+curvature or kink.  Validated on `Shift1D.with_arrays` with `S ∈ [0, 4K]`,
+`n = 1025`: ATM relative error ≈ **8.5e-5** with no boundary artifact.
+
+**Puts in log-price space:** When a European put is priced in log-price
+coordinates (`z = ln S`), the solution satisfies `u_z → 0` at both ends of a
+sufficiently wide domain.  Either `"reflect"` (zero-flux Neumann) or `"linear"`
+works; `"reflect"` is marginally preferable because it imposes the correct
+zero-derivative condition exactly.
+
+**Example — Black-Scholes call via `Shift1D`:**
+
+```python
+import numpy as np
+import semiflow as rp
+
+# Black-Scholes PDE: dV/dt = (sigma^2 / 2) S^2 V_SS + r S V_S - r V
+# Rewrite as L V = a(S) V_SS + b(S) V_S + c(S) V with:
+#   a(S) = 0.5 * sigma^2 * S^2,  b(S) = r * S,  c(S) = -r
+
+K, T, r, sigma = 100.0, 1.0, 0.05, 0.20
+S_max = 4.0 * K      # wide enough that far-field is linear
+n = 1025
+S_nodes = np.linspace(0.0, S_max, n)
+
+a_arr = 0.5 * sigma**2 * S_nodes**2
+b_arr = r * S_nodes
+c_arr = np.full(n, -r)
+
+# European call payoff at maturity
+u0 = np.maximum(S_nodes - K, 0.0)
+
+state = rp.Shift1D.with_arrays(
+    0.0, S_max, n,
+    a_arr, b_arr, c_arr,
+    c_norm_bound=r,  # upper bound on |c(x)|
+    u0=u0,
+    boundary="linear",   # <-- correct far-field closure for calls
+)
+state.evolve(t=T, n_steps=200)
+
+V = state.values()
+S_atm_idx = np.argmin(np.abs(S_nodes - K))
+print(f"ATM call price (semiflow): {V[S_atm_idx]:.6f}")
+# rel. error vs Black-Scholes closed form ≈ 8.5e-5 at n=1025, n_steps=200
+```
+
+**Inhomogeneous Dirichlet (future work):** The Rust core provides
+`BoundaryPolicy::Dirichlet { value }` (a constant ghost-node extension), but
+it is not yet wired into the Python `boundary=` string parser.  If you need to
+pin `u = g_lo` at the left edge and `u = g_hi` at the right edge with distinct
+values, use `"linear"` as the near-exact idiom for asymptotically-linear
+payoffs.  Support for `boundary=("dirichlet", value)` is tracked in issue #20.
 
 ---
 

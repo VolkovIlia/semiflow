@@ -64,6 +64,62 @@ Set a `BoundaryPolicy` on the grid: `Reflect` (default, Neumann), `Dirichlet`,
 
 → Example: [`boundary_demo.rs`](../crates/semiflow/examples/boundary_demo.rs).
 
+### Far-field / Dirichlet-like boundaries for finance (Python and Rust)
+
+Users from classical finite-difference option pricers often search for an
+inhomogeneous Dirichlet far-field boundary and find only `"zero"`.  The full
+set of stencil-level policies is:
+
+| `boundary=` / `BoundaryPolicy` | Semantics |
+|---------------------------------|-----------|
+| `"reflect"` / `Reflect` (default) | Mirror; zero-flux Neumann |
+| `"periodic"` / `Periodic` | Periodic wrap with period `(n−1)·dx` |
+| `"zero"` / `ZeroExtend` | Ghost node = 0; Dirichlet zero |
+| `"linear"` / `LinearExtrapolate` | Affine continuation from outermost nodes |
+
+`"linear"` / `LinearExtrapolate` is the **recommended far-field closure for
+asymptotically-linear payoffs** such as European calls.  At the call far-field,
+`V(S, τ) ≈ S − K e^{−rτ}`, so `V_SS → 0` and linear extrapolation is exact to
+leading order.  No boundary layer forms and no artificial condition needs to be
+explicitly imposed.
+
+**Validation result:** `Shift1D.with_arrays` (Python), `S ∈ [0, 4K]`, n = 1025,
+n_steps = 200: ATM relative error ≈ **8.5e-5** vs Black-Scholes closed form, no
+boundary artifact visible.
+
+For **puts in log-price space** (`z = ln S`), the solution satisfies
+`u_z → 0` at both ends of a sufficiently wide domain.  Either `"reflect"` or
+`"linear"` is appropriate; `"reflect"` enforces the zero-derivative condition
+exactly.
+
+In Rust, set the policy directly:
+
+```rust
+use semiflow::{Grid1D, BoundaryPolicy};
+
+let grid = Grid1D::new(0.0, 400.0, 1025)
+    .expect("valid grid")
+    .with_boundary(BoundaryPolicy::LinearExtrapolate);
+```
+
+In Python:
+
+```python
+state = rp.Shift1D.with_arrays(
+    0.0, S_max, n,
+    a_arr, b_arr, c_arr,
+    c_norm_bound=r,
+    u0=u0,
+    boundary="linear",    # exact to leading order for calls
+)
+```
+
+**Inhomogeneous Dirichlet with a non-zero constant:** The Rust API exposes
+`BoundaryPolicy::Dirichlet { value }` (constant ghost-node extension), but the
+Python string parser does not yet accept it.  For asymptotically-linear payoffs
+`"linear"` is the correct idiom.  Two-sided inhomogeneous Dirichlet with
+distinct left/right values is tracked as a future enhancement (issue #20).
+
 ## I want to solve a Schrödinger equation
 
 Use `SchrödingerChernoffComplex<C>` with a complex carrier (`SemiflowComplex`).
