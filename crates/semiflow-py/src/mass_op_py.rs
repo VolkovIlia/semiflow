@@ -80,7 +80,7 @@ pub fn mass_lumped_evolve_py<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     catch_panic_py!({
         validate_t_final(t)?;
-        let kpath = krylov_path(path, m_max, n_steps)?;
+        let kpath = krylov_path(path, m_max, n_steps, None)?;
         let n = k_op.op.n();
         let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
         let masses = extract_masses(&m_diag, n)?;
@@ -238,7 +238,7 @@ impl PyMassKOperator {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max, n_steps)?;
+            let kpath = krylov_path(path, m_max, n_steps, None)?;
             let n = SymmetricLinearOp::n(self.op.as_ref());
             let v_sl = v
                 .as_slice()

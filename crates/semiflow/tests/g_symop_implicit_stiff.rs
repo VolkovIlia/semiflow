@@ -195,7 +195,7 @@ fn g_symop_implicit_stiff() {
 
     // Solve via backward-Euler, counting ALL apply_into_slice calls.
     let counted = CountedOp::new(&op);
-    let path = KrylovPath::ImplicitEuler { n_steps: N_STEPS };
+    let path = KrylovPath::ImplicitEuler { n_steps: N_STEPS, cg_max_iter: None };
     let mut out = vec![0.0_f64; N];
     let mut scratch = ScratchPool::new();
     graph_expmv_krylov(&counted, TAU, &v, &mut out, path, 1e-10, &mut scratch)

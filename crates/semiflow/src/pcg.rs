@@ -255,7 +255,12 @@ fn cg_loop<F: SemiflowFloat>(
 /// # Errors
 /// - [`SemiflowError::DomainViolation`] if `n_steps < 1`.
 /// - [`SemiflowError::ConvergenceFailed`] if CG stalls within `max_iter`.
-// 7 args by necessity — op/src/dst/tau/n_steps/tol/scratch: each essential.
+///
+/// # `max_iter_override`
+/// If `Some(m)`, uses `m` as the CG iteration cap instead of the theory-derived
+/// bound `ceil(√κ · ln(2/tol))`.  Useful when the Gershgorin `λ_max` bound is
+/// loose and the user knows fewer iterations suffice.  `None` → auto-computed.
+// 8 args by necessity — op/src/dst/tau/n_steps/tol/max_iter_override/scratch.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
@@ -264,6 +269,7 @@ pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
     tau: F,
     n_steps: usize,
     tol: F,
+    max_iter_override: Option<usize>,
     scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError> {
     if n_steps < 1 {
@@ -277,19 +283,39 @@ pub(crate) fn implicit_euler_action<F: SemiflowFloat>(
     #[allow(clippy::cast_precision_loss)]
     let dt = tau / F::from(n_steps as f64).unwrap();
     let tol_cg = tol.max(F::from(1e-12_f64).unwrap());
-    let max_it = compute_max_iter(op, dt, n);
+    let max_it = max_iter_override.unwrap_or_else(|| compute_max_iter(op, dt, n, tol_cg));
     let precond = Jacobi::build(op, dt, scratch);
     run_substeps(op, src, dst, dt, n_steps, tol_cg, max_it, &precond, scratch)
 }
 
-/// `max_iter = min(N, ceil(4·√(1 + Δt·λ_max)))` (§59.4, CG iteration budget).
-fn compute_max_iter<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, n: usize) -> usize {
+/// `max_iter = min(N, max(MIN_CG_ITER, ceil(√κ · ln(2/tol))))` (§59.4, CG iteration budget).
+///
+/// Corrects the pre-fix formula `ceil(4·√κ)` which omitted the `ln(2/tol)` factor and
+/// caused `ConvergenceFailed` on the library's own conservative operator (issue #18).
+///
+/// Derivation: standard CG bound for SPD `S = I + Δt·Â` with condition number
+/// `κ(S) ≤ 1 + Δt·λ_max` gives `m ≤ ½·√κ·ln(2/tol)`.  We use `safety=1.0` (not ½)
+/// so the cap is generous enough to never truncate a still-converging solve.
+/// The minimum `MIN_CG_ITER` guarantees a floor for very well-conditioned systems.
+const MIN_CG_ITER: usize = 16;
+
+fn compute_max_iter<F: SemiflowFloat>(
+    op: &dyn SymmetricLinearOp<F>,
+    dt: F,
+    n: usize,
+    tol: F,
+) -> usize {
     let lam = op.lambda_max_bound().to_f64().unwrap_or(1.0);
     let dt_f = dt.to_f64().unwrap_or(0.0);
-    // ceil() ≥ 0 (argument ≥ 1 after sqrt); bounded by n < usize::MAX in any realistic problem.
+    // Clamp tol to a reasonable range: [1e-15, 1.0).  tol=0 or tol<0 never occurs
+    // (caller uses tol_cg = user_tol.max(1e-12)), but guard for safety.
+    let tol_f = tol.to_f64().unwrap_or(1e-10).clamp(1e-15, 1.0 - f64::EPSILON);
+    let kappa_sqrt = (1.0_f64 + dt_f * lam).sqrt();
+    let ln_factor = (2.0_f64 / tol_f).ln().max(1.0);
+    // ceil() ≥ 0 (both factors ≥ 1); value bounded by n < usize::MAX in practice.
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    let raw = (4.0_f64 * (1.0 + dt_f * lam).sqrt()).ceil() as usize;
-    n.min(raw).max(1)
+    let raw = (kappa_sqrt * ln_factor).ceil() as usize;
+    n.min(raw).max(MIN_CG_ITER)
 }
 
 /// Loop `n_steps` backward-Euler sub-steps; each solves `S · u_{k+1} = u_k`.

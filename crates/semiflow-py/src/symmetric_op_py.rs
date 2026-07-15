@@ -106,9 +106,14 @@ impl PySymmetricOperator {
     ///     Max Krylov dimension (Lanczos only; default ``18``).
     /// n_steps : int
     ///     Backward-Euler sub-steps (implicit path only; default ``100``).
+    /// cg_max_iter : int or None
+    ///     CG iteration cap per sub-step (implicit path only; default ``None``).
+    ///     ``None`` uses the theory-derived bound ``ceil(√κ·ln(2/tol))`` (§59.4).
+    ///     Pass an explicit integer to override, e.g. when the Gershgorin bound
+    ///     is loose and fewer iterations are known to suffice.
     ///
     /// Returns ndarray[float64, shape (N, C)].
-    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
+    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize, cg_max_iter = None))]
     fn evolve_batched<'py>(
         &self,
         py: Python<'py>,
@@ -118,10 +123,11 @@ impl PySymmetricOperator {
         tol: f64,
         m_max: u32,
         n_steps: usize,
+        cg_max_iter: Option<usize>,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max, n_steps)?;
+            let kpath = krylov_path(path, m_max, n_steps, cg_max_iter)?;
             let n = self.op.n();
             let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
             let src_cn = gather_nc_to_cn(&v_nc.as_array(), n_nodes, n_cols);
@@ -247,13 +253,21 @@ pub(crate) fn csr_vals(arr: &PyReadonlyArray1<'_, f64>) -> PyResult<Vec<f64>> {
         .to_vec())
 }
 
-pub(crate) fn krylov_path(path: &str, m_max: u32, n_steps: usize) -> PyResult<KrylovPath> {
+pub(crate) fn krylov_path(
+    path: &str,
+    m_max: u32,
+    n_steps: usize,
+    cg_max_iter: Option<usize>,
+) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
         "lanczos" => Ok(KrylovPath::Lanczos {
             m_max: m_max as usize,
         }),
-        "implicit" => Ok(KrylovPath::ImplicitEuler { n_steps }),
+        "implicit" => Ok(KrylovPath::ImplicitEuler {
+            n_steps,
+            cg_max_iter,
+        }),
         other => Err(new_pyerr(
             "Unsupported",
             &format!("path must be 'chebyshev', 'lanczos', or 'implicit', got '{other}'"),
