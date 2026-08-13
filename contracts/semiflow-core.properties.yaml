@@ -10048,3 +10048,68 @@ implementation_notes:
     pattern: B
     introduced_in: issue-21-pencil-coefficients
     authority: ADR-0195
+
+  - name: G_SHIFT1D_WEIGHTS_ORACLE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — rel_err <= 1e-12 over {CubicHermite, SepticHermite, OctonicHermite} x {Reflect, ZeroExtend, Periodic, LinearExtrapolate} x n in {16,33}, swept far outside the domain"
+    rationale: |
+      G_SHIFT1D_WEIGHTS_ORACLE (RELEASE_BLOCKING, ADR-0196 §61.3): the adjoint
+      scatters interpolation weight rows that are MEASURED from the sampler
+      (w_j(y) = sample(e_j, y)) rather than hand-transposed. The assumption that
+      carries risk is compact support — that the probe set covers every node the
+      sampler can touch, boundary folds included. This gate falsifies it directly.
+      It is the gate that de-risks the whole feature, and it EARNED that on the
+      first run: the probe was centred on the raw cell index, but Reflect and
+      Periodic fold a far-outside query onto interior nodes arbitrarily distant
+      from it, so those weights were silently missed (sampler 2.297 vs weights
+      0.840). Without this gate the defect would have surfaced only as a small,
+      plausible gradient bias near the boundary.
+    gate: "|sum_j w_j*u_j - sample(u, y)| <= 1e-12 * max(|sample|, 1)"
+    test_file: "tests/shift1d_vjp_gates.rs::g_shift1d_weights_oracle"
+    feature_gate: none
+    introduced_in: issue-25-coeff-vjp
+    authority: ADR-0196
+
+  - name: G_SHIFT1D_TRANSPOSE_ID
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — rel_err <= 1e-11 for all four boundary policies, with variable a/b/c"
+    rationale: |
+      G_SHIFT1D_TRANSPOSE_ID (RELEASE_BLOCKING, ADR-0196 §61.3): the adjoint
+      identity <S^T lam, u> == <lam, S u> at machine precision. S is a
+      shift-and-interpolate gather and its transpose is the corresponding
+      scatter; a sign or fold error there would show up in a gradient check only
+      as a small bias, but shows up here immediately.
+      Non-vacuity: the datum uses variable a, b and c, so S is genuinely
+      non-self-adjoint (the drift foot is one-sided), and the test separately
+      asserts S^T lam != S lam. Without that second assertion the gate would pass
+      trivially on any self-adjoint datum.
+    gate: "|<S^T lam, u> - <lam, S u>| <= 1e-11 * max(|lhs|, 1) AND S^T lam != S lam"
+    test_file: "tests/shift1d_vjp_gates.rs::g_shift1d_transpose_id"
+    feature_gate: none
+    introduced_in: issue-25-coeff-vjp
+    authority: ADR-0196
+
+  - name: G_SHIFT1D_COEFF_FD
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — max|adjoint - fd| / max|fd| <= 1e-6 for each of a, b, c (n=24, n_steps=6, eps=1e-6)"
+    rationale: |
+      G_SHIFT1D_COEFF_FD (RELEASE_BLOCKING, ADR-0196 §61.5): the adjoint gradient
+      against central finite differences, per coefficient field, with
+      J = 0.5*||u_n||^2 so the caller-supplied cotangent is u_n.
+      The comparison is on VECTORS normalised by max|fd|, not per-component
+      relative error. Individual gradient components are legitimately ~0 — the
+      first version of this gate failed at 2.0e-5 on a component where the
+      adjoint read 2.0e-13 and the FD read exactly 0.0, i.e. the FD floor, not an
+      error in the adjoint.
+    gate: "max|adjoint - fd| / max|fd| <= 1e-6, per field"
+    test_file: "tests/shift1d_vjp_gates.rs::g_shift1d_coeff_fd"
+    feature_gate: "slow-tests"
+    pattern: B
+    introduced_in: issue-25-coeff-vjp
+    authority: ADR-0196

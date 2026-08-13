@@ -8712,6 +8712,89 @@ At ±60% the ladder has not reached the asymptotic regime: the commutator term o
 
 ---
 
+## §61 — Coefficient-field sensitivity of the shift kernel (v0.12.0, ADR-0196, NORMATIVE library; CITATION mathematics)
+
+> Scope: `∂J/∂θ_i` for the per-node coefficient arrays `a`, `b`, `c` of the §1–§2 shift kernel. Reuses the §43.4 adjoint-state recursion; what is new is the parameter derivative of a kernel whose coefficient sits **inside** the sampling position, and the resulting stencil structure.
+
+### §61.1 — The parameter derivatives (NORMATIVE)
+
+With `h_i = 2\sqrt{a_i \tau}` and `g_i = 2 b_i \tau`, the shipped node formula is
+$$
+(S(\tau)u)_i = \tfrac14 \tilde u(x_i + h_i) + \tfrac14 \tilde u(x_i - h_i) + \tfrac12 \tilde u(x_i + g_i) + \tau c_i u_i,
+\tag{61.1.a}
+$$
+where `\tilde u` is the **interpolant** of `u`. Since `\partial h_i/\partial a_i = \sqrt{\tau/a_i}` and `\partial g_i/\partial b_i = 2\tau`,
+$$
+\frac{\partial (Su)_i}{\partial a_i} = \tfrac14 \sqrt{\tfrac{\tau}{a_i}}\Bigl[\tilde u'(x_i + h_i) - \tilde u'(x_i - h_i)\Bigr],
+\qquad
+\frac{\partial (Su)_i}{\partial b_i} = \tau\, \tilde u'(x_i + g_i),
+\qquad
+\frac{\partial (Su)_i}{\partial c_i} = \tau\, u_i .
+\tag{61.1.b}
+$$
+
+**Domain (NORMATIVE).** The factor `\sqrt{\tau/a_i}` diverges as `a_i \to 0^+`: `\partial/\partial a` is **undefined** at a degenerate node. The gradient therefore requires `a_i > 0` strictly, while the forward kernel admits `a_i \ge 0` — the gradient's domain is strictly smaller than the forward one, and the implementation returns `DomainViolation` rather than an infinity.
+
+### §61.2 — Stencil structure: diagonal in the output, wide in the input (NORMATIVE)
+
+**Proposition 61.1.** The coefficients enter (61.1.a) only through their values at `x_i = ` `grid.x_at(i)`. Hence
+$$
+\frac{\partial (S u)_p}{\partial \theta_i} = 0 \quad \text{for } p \ne i ,
+\tag{61.2.a}
+$$
+i.e. the parameter→**output** coupling is diagonal. The parameter→**input** coupling is not: each entry of (61.1.b) is a linear functional of `u` supported on the interpolation stencil around the two feet (4 nodes each for Catmull-Rom, up to ~14 for septic through its embedded FD stencils), plus boundary folding onto ≤3 nodes at each end. `\partial(Su)_i/\partial c_i = \tau u_i` is a 1-point stencil with no interpolation at all.
+
+**Corollary 61.2 (cost).** By (61.2.a) all `n` parameter derivatives of a field are obtained in **one** `O(n)` pass, so the adjoint-state driver costs `O(n_\text{steps} \cdot n)` — the same order as the forward solve, times a small constant. A per-parameter formulation (the `GeneratorSensitivity` shape of §43) would cost `O(n_\text{steps} \cdot n^2)`; at `n = 1024`, `n_\text{steps} = 1000` that is `10^9` against `10^6`.
+
+### §61.3 — The transpose, and how its weights are obtained (NORMATIVE)
+
+`S` is a shift-and-interpolate **gather**; writing `w(y)` for the interpolation weight row at `y`, its exact transpose is the corresponding **scatter**
+$$
+S^{\top}\lambda \;=\; \sum_i \lambda_i \Bigl[\tfrac14 w(x_i + h_i) + \tfrac14 w(x_i - h_i) + \tfrac12 w(x_i + g_i)\Bigr] \;+\; \tau\,(c \odot \lambda).
+\tag{61.3.a}
+$$
+`S` is **not** self-adjoint for variable coefficients — the drift foot is one-sided — so (61.3.a) must be computed, never assumed.
+
+**Weight rows are measured, not derived (NORMATIVE implementation constraint).** Every interpolant in this library is linear in the node values, so
+$$
+w_j(y) \;=\; \operatorname{sample}(e_j,\; y),
+\tag{61.3.b}
+$$
+with `e_j` the `j`-th unit basis vector. The row is obtained by probing the sampler over its compact support. This is exact for every `InterpKind` and every `BoundaryPolicy` by construction, and avoids hand-transposing the septic Birkhoff–Garabedian–Lorentz polynomials composed with their central-FD stencils across seven boundary policies — the single most error-prone derivation this section could otherwise require.
+
+**The support set must be resolved through the boundary policy, not around the cell index.** Under `Reflect` or `Periodic` a query several cells outside the domain folds onto interior nodes arbitrarily far from the raw index. A raw-index window silently omits them; `G_SHIFT1D_WEIGHTS_ORACLE` measured exactly this (sampler `2.297` vs weights `0.840`) before the resolution was corrected to use the same `bc_index` mapping the sampler applies.
+
+### §61.4 — Adjoint-state recursion
+
+As §43.4: store the forward trajectory `u_0 … u_{n_\text{steps}}`, initialise `\lambda \leftarrow \partial J/\partial u_n` (caller-supplied — `J` lives outside the library), and sweep backward accumulating
+$$
+\frac{\partial J}{\partial \theta} \;{+}{=}\; \bigl\langle \lambda_{k+1},\; (\partial S_k/\partial\theta)\, u_k \bigr\rangle,
+\qquad \lambda_k = S^{\top}\lambda_{k+1},
+\tag{61.4.a}
+$$
+which (61.2.a) reduces to an elementwise product.
+
+### §61.5 — Acceptance gates
+
+| Gate | Definition | Threshold | Oracle |
+|---|---|---|---|
+| `G_SHIFT1D_WEIGHTS_ORACLE` | `Σ_j w_j·u_j` vs `sample(u, y)` over 3 interp kinds × 4 policies, in- and out-of-domain | `≤ 1e-12` rel | the sampler itself |
+| `G_SHIFT1D_TRANSPOSE_ID` | `⟨Sᵀλ, u⟩ = ⟨λ, Su⟩`, variable `a`,`b`,`c` | `≤ 1e-11` rel | adjoint identity |
+| `G_SHIFT1D_COEFF_FD` | gradient vs central FD, per field | `max‖Δ‖/max‖fd‖ ≤ 1e-6` | central differences |
+
+**Non-vacuity.** `G_SHIFT1D_TRANSPOSE_ID` separately asserts `Sᵀλ ≠ Sλ`, so it cannot pass on a datum where `S` happens to be self-adjoint. `G_SHIFT1D_COEFF_FD` compares **vectors** normalised by `max|fd|` rather than per-component ratios: individual gradient components are legitimately `~0`, where a per-component ratio is dominated by the FD floor rather than by any error in the adjoint.
+
+### §61.6 — Honest limits
+
+- `\partial/\partial a` undefined at `a_i = 0` (§61.1); gradient domain ⊊ forward domain.
+- Gradients are of the **discrete** kernel as implemented — interpolation and boundary folding included — not of the continuous solution operator.
+- `ShiftChernoff1D` has consistency order 1, so this is a first-order-accurate gradient of a first-order-accurate solve.
+- Trajectory memory `O(n_\text{steps}\cdot n)`; binomial checkpointing (§51.3) would give `O(\sqrt{n_\text{steps}}\cdot n)` at ~2× forward cost and is not wired up.
+- One field per call; a fused three-field variant sharing the trajectory is possible and not shipped.
+- `f64` only; `ChebyshevSpectralWithBC` unsupported.
+
+---
+
 ## §33 — Matrix-valued operators (v4.0, ADR-0082, NORMATIVE library; CITATION mathematics)
 
 ### §33.1 — Motivation (NORMATIVE library scope)

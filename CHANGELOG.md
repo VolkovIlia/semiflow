@@ -8,7 +8,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Issue campaign #17 / #19 / #21–#26.
 
-Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24.
+Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24, #25.
+All eight issues closed.
 
 ### Fixed
 
@@ -45,6 +46,22 @@ Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
+- **`shift1d_coeff_grad`** (#25, ADR-0196, math §61) — gradients w.r.t. the
+  per-node coefficient **fields** of `Shift1D.with_arrays`, i.e. local-vol Vega
+  surfaces `∂V/∂σ(S_i)`. `EvolverHeat1DGreeksV3` differentiates only w.r.t. a
+  single global diffusion scale. Mirrors `edge_weight_grad`'s contract: you
+  supply the cotangent, the loss stays outside the library. Costs
+  `O(n_steps · n)` — the same order as the forward solve — because the
+  parameter→output coupling is diagonal, which is why `GeneratorSensitivity`
+  (one parameter per call, `O(n_steps · n²)`) is deliberately not implemented.
+  The adjoint's interpolation weight rows are **measured** from the sampler
+  rather than hand-transposed, so they are correct for every `InterpKind` and
+  `BoundaryPolicy` by construction. Gates `G_SHIFT1D_WEIGHTS_ORACLE`,
+  `G_SHIFT1D_TRANSPOSE_ID`, `G_SHIFT1D_COEFF_FD`. Honest limits: `wrt='a'`
+  requires `a_i > 0` strictly (the `√(τ/a)` chain factor diverges), so the
+  gradient's domain is strictly smaller than the forward kernel's;
+  `O(n_steps · n)` trajectory memory with no checkpointing; order 1, matching
+  the kernel.
 - **`Heat2DVarA.with_grid_arrays`** (#21, ADR-0195, math §60) — full-grid
   `a_x(x,y)` / `a_y(x,y)`. Each diagonal coefficient could previously vary only
   along its *own* axis, because `Strang2D` applies one shared kernel to every

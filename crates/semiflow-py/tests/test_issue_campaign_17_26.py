@@ -27,6 +27,7 @@ from semiflow import (
     Heat2DVarA,
     Shift1D,
     SemiflowError,
+    shift1d_coeff_grad,
 )
 
 
@@ -474,3 +475,82 @@ class TestHeat2DVarAGridArrays:
         nan[3] = np.nan
         with pytest.raises(SemiflowError):
             Heat2DVarA.with_grid_arrays(0.0, 1.0, n, 0.0, 1.0, n, good, nan)
+
+
+# ---------------------------------------------------------------------------
+# Issue #25 — gradients w.r.t. Shift1D coefficient fields
+# ---------------------------------------------------------------------------
+
+
+class TestShift1DCoeffGrad:
+    """shift1d_coeff_grad: dJ/da_i, dJ/db_i, dJ/dc_i (#25)."""
+
+    N = 24
+    XMIN, XMAX = -2.0, 2.0
+
+    def _setup(self):
+        x = np.linspace(self.XMIN, self.XMAX, self.N)
+        a = 0.25 + 0.15 * np.abs(np.sin(np.arange(self.N) * 0.31))
+        b = 0.10 * np.sin(np.arange(self.N) * 0.17)
+        c = -0.05 * np.cos(np.arange(self.N) * 0.23)
+        u0 = np.sin(1.7 * x) + 0.5 * np.cos(0.7 * x) + 1.0
+        return a, b, c, u0
+
+    def _solve(self, a, b, c, u0, t, n_steps):
+        k = Shift1D.with_arrays(
+            self.XMIN, self.XMAX, self.N, a, b, c, float(np.max(np.abs(c))), u0
+        )
+        k.evolve(t, n_steps)
+        return k.values()
+
+    @pytest.mark.parametrize("wrt", ["a", "b", "c"])
+    def test_gradient_matches_finite_differences(self, wrt):
+        a, b, c, u0 = self._setup()
+        t, n_steps = 0.024, 6
+        un = self._solve(a, b, c, u0, t, n_steps)
+        grad = shift1d_coeff_grad(
+            self.XMIN, self.XMAX, self.N, a, b, c, u0, un, t, n_steps, wrt=wrt
+        )
+        assert grad.shape == (self.N,)
+
+        eps = 1e-6
+        fd = np.zeros(self.N)
+        loss = lambda A, B, C: 0.5 * np.sum(self._solve(A, B, C, u0, t, n_steps) ** 2)
+        for i in range(self.N):
+            arrs = {"a": a, "b": b, "c": c}
+            plus = {k: v.copy() for k, v in arrs.items()}
+            minus = {k: v.copy() for k, v in arrs.items()}
+            plus[wrt][i] += eps
+            minus[wrt][i] -= eps
+            fd[i] = (loss(plus["a"], plus["b"], plus["c"])
+                     - loss(minus["a"], minus["b"], minus["c"])) / (2 * eps)
+        scale = np.max(np.abs(fd))
+        assert scale > 1e-6, "FD gradient is identically zero"
+        assert np.max(np.abs(grad - fd)) / scale < 1e-5, (
+            f"wrt={wrt}: max|adjoint-fd|/max|fd| = "
+            f"{np.max(np.abs(grad - fd)) / scale:.3e}"
+        )
+
+    def test_degenerate_a_is_refused_for_wrt_a_only(self):
+        a, b, c, u0 = self._setup()
+        a[3] = 0.0
+        with pytest.raises(SemiflowError):
+            shift1d_coeff_grad(
+                self.XMIN, self.XMAX, self.N, a, b, c, u0, u0, 0.01, 2, wrt="a"
+            )
+        # b and c carry no sqrt(tau/a) factor and stay available.
+        out = shift1d_coeff_grad(
+            self.XMIN, self.XMAX, self.N, a, b, c, u0, u0, 0.01, 2, wrt="c"
+        )
+        assert np.all(np.isfinite(out))
+
+    def test_bad_wrt_and_lengths_raise(self):
+        a, b, c, u0 = self._setup()
+        with pytest.raises(SemiflowError):
+            shift1d_coeff_grad(
+                self.XMIN, self.XMAX, self.N, a, b, c, u0, u0, 0.01, 2, wrt="d"
+            )
+        with pytest.raises(SemiflowError):
+            shift1d_coeff_grad(
+                self.XMIN, self.XMAX, self.N, a[:-1], b, c, u0, u0, 0.01, 2, wrt="a"
+            )

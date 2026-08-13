@@ -276,7 +276,7 @@ pub mod schrodinger;
 pub mod schrodinger_complex;
 pub(crate) mod schrodinger_complex_state;
 pub mod scratch;
-pub mod shift1d;
+pub mod shift1d; pub mod shift1d_vjp;
 pub mod shift_nd;
 pub mod shift_nd_adaptive;
 pub(crate) mod shift_nd_gauss;

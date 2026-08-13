@@ -6473,3 +6473,106 @@ class Etdrk4:
         Returns ndarray of shape ``(n,)``.
         """
         ...
+
+
+# ---------------------------------------------------------------------------
+# Issue #24 / #25 — non-symmetric operator action, coefficient-field gradients
+# ---------------------------------------------------------------------------
+
+
+@final
+class GeneralOperator:
+    """Externally-assembled **possibly non-symmetric** sparse operator (#24, ADR-0194).
+
+    ``SymmetricOperator.from_csr`` validates symmetry, closing the Krylov surface
+    to non-self-adjoint generators. This opens ``e^{-tA}v`` to drifted
+    Fokker-Planck ``d_t p = d_x(D d_x p) - d_x(mu p)`` and to Cartea-Jaimungal
+    inventory ladders, via the symmetry-agnostic scaled-truncated-Taylor engine.
+
+    Honest limits
+    -------------
+    - Cost is ``Theta(t * ||A||_inf)`` matvecs — **linear in the depth, not
+      flat**. ``GraphKrylov``'s depth-independence does NOT transfer here.
+    - Only the **backward** error is certified. For a severely non-normal ``A``
+      the forward error can exceed the backward radius by ``kappa(V)``, which is
+      not estimated.
+    - No ``path=`` argument: Chebyshev needs a real spectrum in ``[0, lam_max]``
+      and Lanczos is structurally symmetric-only, so both are unavailable by
+      construction rather than by tolerance.
+    - No conservation claim: discrete mass conservation holds only if the
+      caller's ``A`` has exactly zero column sums.
+    """
+
+    @staticmethod
+    def from_csr(
+        n: int,
+        indptr: Sequence[int],
+        indices: Sequence[int],
+        data: Sequence[float],
+    ) -> "GeneralOperator": ...
+
+    def n(self) -> int: ...
+
+    def norm_inf_bound(self) -> float:
+        """Row-sum bound ``||A||_inf`` — a NORM bound, not a spectral interval."""
+        ...
+
+    def evolve_batched(
+        self, t: float, v_nc: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """``e^{-tA}v`` for C right-hand sides. ``v_nc`` is ``[N, C]``; result too."""
+        ...
+
+    def apply_transpose(self, v: Sequence[float]) -> NDArray[np.float64]:
+        """``A^T v`` — a real transpose, not the self-adjoint shortcut."""
+        ...
+
+
+def shift1d_coeff_grad(
+    xmin: float,
+    xmax: float,
+    n: int,
+    a: NDArray[np.float64],
+    b: NDArray[np.float64],
+    c: NDArray[np.float64],
+    u0: NDArray[np.float64],
+    dj_du_n: NDArray[np.float64],
+    t: float,
+    n_steps: int,
+    *,
+    wrt: Literal["a", "b", "c"] = "a",
+    boundary: BoundaryLiteral = "reflect",
+) -> NDArray[np.float64]:
+    """``dJ/dtheta`` for one coefficient field of a ``Shift1D`` generator (#25, ADR-0196).
+
+    ``EvolverHeat1DGreeksV3`` differentiates w.r.t. a single global diffusion
+    scale; this differentiates w.r.t. the per-node arrays of
+    ``Shift1D.with_arrays`` — local-vol Vega surfaces, ``dV/dsigma(S_i)``.
+
+    You supply the **cotangent** ``dj_du_n = dJ/du_n``; the loss ``J`` stays
+    outside the library (the ADR-0115 boundary). For ``J = 0.5*||u_n - target||^2``
+    pass ``u_n - target``.
+
+    Cost is ``O(n_steps * n)`` — the same order as the forward solve — because the
+    parameter-to-output coupling is diagonal (ADR-0196 §61.2).
+
+    When to use what
+    ----------------
+    - ``K <~ 10`` scalar parameters: bump-and-revalue is asymptotically optimal.
+    - Per-node coefficient fields (``K = n``): this function; reverse mode costs
+      ~2 forward solves for ALL parameters.
+    - Genuine second derivatives (gamma, vanna): ``EvolverHeat1DGreeksV3``.
+
+    Honest limits
+    -------------
+    - ``wrt='a'`` requires ``a_i > 0`` strictly: ``d h_i/d a_i = sqrt(tau/a_i)``
+      diverges at a degenerate node, so the gradient's domain is strictly smaller
+      than the forward kernel's (which admits ``a_i >= 0``).
+    - The gradient is of the **discrete** kernel as implemented — interpolation
+      and boundary folding included — not of the continuous solution operator.
+    - ``ShiftChernoff1D`` is order 1, so this is a first-order-accurate gradient
+      of a first-order-accurate solve.
+    - Trajectory memory is ``O(n_steps * n)``; no checkpointing.
+    - One field per call; f64 only.
+    """
+    ...
