@@ -9824,3 +9824,72 @@ implementation_notes:
     feature_gate: "slow-tests"
     introduced_in: issue-12-etd-phi-functions
     authority: ADR-0189
+
+# ---------------------------------------------------------------------------
+# v0.12.0 issue campaign #17 / #21 / #26 (ADR-0190, ADR-0191)
+# ---------------------------------------------------------------------------
+
+  - name: G_ASND_MOMENT
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — A=I dVar=1.000000 at n_steps in {100,400,1600} (exact 1.0, flat); A=diag(1.0,0.5) dVar=(1.000000, 0.500000); A=[[1,.4],[.4,1]] dCov=0.400000"
+    rationale: |
+      G_ASND_MOMENT (RELEASE_BLOCKING, ADR-0190 §32.9): the oracle whose absence
+      let issue #17 ship. A Gaussian evolved by AnisotropicShiftChernoffND under a
+      constant tensor must gain exactly 2·a_dd·t of variance per axis and 2·a_de·t
+      of covariance, on a resolved 96² grid, to within 2% — and FLAT in n_steps.
+      The flatness half is load-bearing: every pre-existing oracle for this kernel
+      (F(0)=I, constant-preservation, temporal self-convergence) is satisfied by a
+      sampler that injects a fixed spurious variance per step, because such a
+      sampler is the identity at tau=0, reproduces constants exactly, and
+      self-converges to its own biased limit.
+      Non-vacuity: the pre-ADR-0190 multilinear sampler produced 1.2113 / 2.2449 /
+      4.4901 on the A=I datum against an exact 1.0, so the 2% band cannot be met by
+      an implementation carrying an O(dx²) per-step interpolation floor. The three
+      step counts span 16x, so a step-count dependence cannot hide inside the band.
+      The diagonal-tensor sub-check additionally pins the x-fastest state layout:
+      transposing the axes anywhere between the coefficient closure, the Cholesky
+      cache and the sampler would swap a11 and a22 and miss by a factor of two.
+    gate: "rel_err(dVar_d, 2*a_dd*t) <= 2e-2 for all d AND rel_err(dCov, 2*a_de*t) <= 2e-2, at n_steps in {100, 400, 1600}"
+    test_file: "tests/aniso_nd_moment.rs::g_asnd_moment_isotropic_is_step_count_flat"
+    feature_gate: "slow-tests"
+    pattern: B
+    fast_companion: |
+      The full 96²-grid ladder costs ~200 s, so it is a Pattern-B slow gate
+      (plain #[ignore]; run by flagship-gates.yml via
+      `--features slow-tests -- --ignored`). Fast-iteration coverage is kept by
+      `asnd_moment_isotropic_smoke` (48² grid, n_steps=200, always on), which
+      asserts the same 2% band and additionally asserts that the pre-ADR-0190
+      floor would have been >20% of the exact value on that datum — so the cheap
+      variant cannot silently stop discriminating if the grid is ever retuned.
+      The diagonal-tensor and off-diagonal sub-checks are also always on.
+    introduced_in: issue-17-nd-sampler
+    authority: ADR-0190
+
+  - name: G_CONS_DEGENERATE
+    type: CONTRACT
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — CIR/CEV k(0)=0 assemble with finite PSD quadratic form; Wright-Fisher adjacent zeros produce no NaN through cn_step/thomas_solve; single interior zero blocks flux (right mass < 1e-12) while the floored-k control transports mass; k<0 and non-finite k still DomainViolation"
+    rationale: |
+      G_CONS_DEGENERATE (RELEASE_BLOCKING, ADR-0191 §56.8.bis): the conservative
+      assembler accepts k >= 0. Degenerate-at-the-boundary diffusions are the norm
+      rather than an edge case — CEV k(S)=½σ²S^{2β} vanishes at S=0, Feller/CIR
+      k(v)=½ξ²v vanishes at v=0, Wright-Fisher vanishes at both ends — and the
+      harmonic-mean face already gives such a node exactly zero conductivity, so
+      the boundary classifies itself.
+      Teeth: the zero-face sub-check pairs the degenerate run with a floored-k
+      control (k=0.15 at the same node) that MUST transport mass. Without it the
+      "no flux crossed" assertion would also pass for a kernel that transports
+      nothing at all.
+      Negative control: k < 0 and non-finite k remain DomainViolation. This is not
+      residual conservatism — negative conductivity yields negative transmissibility,
+      which breaks the §56.2 energy argument and is invisible to all three of
+      from_csr's checks, because the assembled diagonal can stay non-negative while
+      individual faces are negative.
+    gate: "k=0 accepted AND state stays finite AND <u,Au> >= -1e-12 AND zero-face flux < 1e-12 AND floored-k control > 1e-9 AND k<0 rejected"
+    test_file: "tests/conservative_degenerate.rs"
+    feature_gate: none
+    introduced_in: issue-26-degenerate-k
+    authority: ADR-0191

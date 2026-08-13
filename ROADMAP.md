@@ -12,6 +12,57 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Issue campaign #17/#19/#21–#26 — Wave A (correctness) IN PROGRESS (ADRs 0190–0191)
+
+Eight issues filed against 0.11.0-beta from a quant-finance showcase. One is a
+correctness bug (#17); exploration surfaced a second of the same class that had
+not been reported. The campaign splits into a correctness wave (landing first)
+and a capability wave.
+
+**#17 — `GridFnND::sample` ignored `InterpKind` and `BoundaryPolicy` (ADR-0190,
+math §32.9).** The N-D sampler hard-coded multilinear interpolation with an index
+clamp. Since the Chernoff product resamples at off-grid quadrature feet every
+step, that injected ≈ `dx²/6` of spurious second moment **per step**, growing
+*linearly in the step count*: the reported `dVar = 1.2113 / 2.2449 / 4.4901` at
+`n_steps = 100 / 400 / 1600` against an exact `1.0`. Now `1.000000` at all three.
+The reported "axis mixing" was not a kernel defect but a C-order `ravel()` against
+the library's x-fastest layout — addressed by accepting 2-D arrays directly and
+documenting the layout precisely. Gate `G_ASND_MOMENT` (the oracle whose absence
+let this ship). Honest limits: septic/octonic/Chebyshev have no `D > 1` stencil,
+so the N-D spatial floor is `O(dx⁴)`; the interpolant is no longer
+positivity-preserving. **The `G_DDIM` `N_AXIS = 8` ladder (ADR-0112 AMENDMENT 1)
+was calibrated around the removed floor and MUST be re-measured on prod HW.**
+
+**OPEN — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (surfaced during ADR-0190).**
+`DiffusionChernoff` is the ζ-A kernel for the divergence form `∂_x(a ∂_x ·)` and
+consumes both derivatives; zeroing them looked like a bug. It is deliberately
+NOT changed: PyO3, FFI and WASM all advertise the *non-divergence* operator
+`a_x(x)·∂_xx u`, so supplying the derivatives would silently switch three public
+APIs to a different PDE. Unresolved: whether the zeroed form is a principled
+discretisation of `a·u_xx`. A 1-D A/B measured slope ≈1.09 zeroed vs ≈1.03
+derived — both at the O(τ¹) ceiling ADR-0112 AM2 / §9.2.3.B already document for
+variable `a`, so self-convergence cannot discriminate. Needs an analytic oracle
+per candidate operator and an architect decision on the intended operator.
+
+**#26 — conservative diffusion admits `k ≥ 0` (ADR-0191, math §56.8.bis).**
+CEV, Feller/CIR and Wright–Fisher are degenerate at the boundary by construction;
+the harmonic-mean face already handles it (zero conductivity ⇒ zero flux ⇒ the
+boundary classifies itself). Supersedes the "#11 honest limit: `k > 0`" below.
+`k < 0` stays rejected — it breaks §56.2 PSD and no `from_csr` check catches it.
+Gate `G_CONS_DEGENERATE` with a floored-`k` teeth control.
+
+### Wave B (capability) — planned
+
+#19 batched multi-channel evolve for 1-D grid kernels; #21 full-grid
+`a_x(x,y)`/`a_y(x,y)` (needs a per-pencil composition — `Strang2D`/`AxisLift`
+share one kernel across pencils, so transverse-varying coefficients are currently
+inexpressible); #22 `AdaptivePI` over `Shift1D.with_arrays`; #23 `b`/`c` and
+array coefficients in `evolve_with_time_schedule`; #24 non-symmetric operators
+via the existing symmetry-agnostic `expmv` Taylor engine rather than new Arnoldi;
+#25 VJP w.r.t. `Shift1D` coefficient fields.
+
+---
+
 ## Issue campaign #11/#12/#13/#14 + A1 stiff fix — DONE (ADRs 0185–0189, commit 9e5f557)
 
 Five additive features merged at master commit `4df0693` (2026-06-27). No breaking

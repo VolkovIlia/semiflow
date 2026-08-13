@@ -74,3 +74,31 @@ proptest! {
         prop_assert!(hit == BoundaryHit::Inside(i));
     }
 }
+
+/// Binding gate (ADR-0190): the nodal weights that `interp_stencil` hands to the
+/// N-D tensor-product sampler must reproduce the arithmetic the generic 1-D
+/// sampler actually performs.
+///
+/// This calls the real `catmull_rom_scalar_generic`, not a re-typed copy, so the
+/// 1-D and N-D interpolation paths cannot drift apart silently. `grid.rs` keeps
+/// its own evaluation order — re-expressing it via the weights would perturb the
+/// f32 and `Dual` scalar paths bit-for-bit — and this test is what makes the two
+/// forms one contract rather than two implementations.
+#[test]
+fn catmull_rom_matches_interp_stencil() {
+    use crate::interp_stencil::interp_stencil;
+    let p = [0.3_f64, -1.2, 2.5, 0.7];
+    for k in 0..=16 {
+        let s = f64::from(k) / 16.0;
+        let (n_k, offsets, w) = interp_stencil::<f64>(crate::grid::InterpKind::CubicHermite, s)
+            .expect("CubicHermite is supported");
+        assert_eq!(n_k, 4);
+        assert_eq!(&offsets[..4], &[-1, 0, 1, 2]);
+        let via_weights: f64 = w.iter().zip(p.iter()).map(|(a, b)| a * b).sum();
+        let direct = super::catmull_rom_scalar_generic(p[0], p[1], p[2], p[3], s);
+        assert!(
+            (via_weights - direct).abs() < 1e-14,
+            "s={s}: weights={via_weights}, sampler={direct}"
+        );
+    }
+}

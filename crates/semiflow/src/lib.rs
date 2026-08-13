@@ -210,7 +210,7 @@ pub(crate) mod gridless_reduce;
 pub mod hdr;
 pub mod heisenberg_kernel;
 pub mod hormander;
-pub mod hormander_engel;
+pub mod hormander_engel; pub(crate) mod interp_stencil;
 pub(crate) mod hormander_engel_helpers;
 pub(crate) mod hormander_heisenberg;
 pub mod howland;

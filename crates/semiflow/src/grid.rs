@@ -430,7 +430,8 @@ fn cubic_hermite_at(values: &[f64], grid: &Grid1D<f64>, x: f64) -> f64 {
 ///
 /// This is the scalar-only version of `catmull_rom` in `grid_cubic`; SIMD
 /// is not used here so that `Grid1D<f32>` (and any future `SemiflowFloat`
-/// types) have a correct, clean scalar path.
+/// types) have a correct, clean scalar path. Kept in this evaluation order on
+/// purpose — `interp_stencil`'s weights are bound to it by the ADR-0190 gate.
 #[allow(clippy::many_single_char_names)]
 #[inline]
 fn catmull_rom_scalar_generic<F: SemiflowFloat>(pm1: F, p0: F, p1: F, p2: F, s: F) -> F {

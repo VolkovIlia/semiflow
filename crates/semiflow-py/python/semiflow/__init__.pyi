@@ -4571,6 +4571,20 @@ class AnisotropicShiftND2:
 
     Solves du/dt = A(x)∇²u + b(x)·∇u + c(x)u where A(x) is a 2×2 SPD tensor.
     Order 1 (honest, ADR-0112). F(0)=I guaranteed by π^{-D/2} normalization.
+
+    Flat array layout — x is the FASTEST axis
+    -----------------------------------------
+    Every flat array here (state, ``a_values``, ``b_values``, ``c_values``) is
+    indexed ``flat[i + j*nx]`` for the node ``(x_i, y_j)``. For a numpy array
+    ``U`` of shape ``(nx, ny)`` that is **Fortran** order::
+
+        k.set_state(U)                                    # recommended
+        k.set_state(np.ravel(U, order="F"))               # equivalent
+        U_out = k.values_2d()                             # -> (nx, ny)
+
+    A plain ``U.ravel()`` (C order) transposes the axes and silently applies
+    ``a11`` and ``a22`` to the wrong coordinates. Pass the 2-D array directly
+    and the binding ravels it correctly.
     """
 
     def __init__(
@@ -4585,11 +4599,20 @@ class AnisotropicShiftND2:
         *,
         b_values: Union[NDArray[np.float64], None] = None,
         c_values: Union[NDArray[np.float64], None] = None,
+        boundary: BoundaryLiteral = "reflect",
     ) -> None: ...
 
-    def set_state(self, u0: NDArray[np.float64]) -> None: ...
+    def set_state(self, u0: NDArray[np.float64]) -> None:
+        """Set the state from a flat length-``nx*ny`` array or a ``(nx, ny)`` array."""
+        ...
+
     def evolve(self, t: float, n_steps: int = 100) -> None: ...
     def values(self) -> NDArray[np.float64]: ...
+
+    def values_2d(self) -> NDArray[np.float64]:
+        """Current state as a ``(nx, ny)`` array (ADR-0190)."""
+        ...
+
     def order(self) -> int: ...
     def __len__(self) -> int: ...
 
@@ -4598,7 +4621,9 @@ class AnisotropicShiftND2:
 class AnisotropicShiftND3:
     """Anisotropic shift Chernoff on 3-D tensor-product grid (M19, D=3, order 1).
 
-    Same contract as AnisotropicShiftND2 but for 3 spatial dimensions.
+    Same contract as AnisotropicShiftND2 but for 3 spatial dimensions, including
+    the x-fastest flat layout: ``flat[i + j*nx + k*nx*ny]`` for ``(x_i, y_j, z_k)``,
+    i.e. ``np.ravel(U, order="F")`` for a ``(nx, ny, nz)`` array.
     """
 
     def __init__(
@@ -4616,6 +4641,7 @@ class AnisotropicShiftND3:
         *,
         b_values: Union[NDArray[np.float64], None] = None,
         c_values: Union[NDArray[np.float64], None] = None,
+        boundary: BoundaryLiteral = "reflect",
     ) -> None: ...
 
     def set_state(self, u0: NDArray[np.float64]) -> None: ...

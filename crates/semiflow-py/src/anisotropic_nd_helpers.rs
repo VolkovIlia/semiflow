@@ -101,6 +101,65 @@ pub(crate) fn build_grid_2d(
 // Interpolation and indexing helpers
 // ---------------------------------------------------------------------------
 
+/// Extract an N-D state as a flat x-fastest `Vec<f64>` (ADR-0190 A3).
+///
+/// Accepts a flat length-`nx*ny` array (assumed already x-fastest) **or** a 2-D
+/// `(nx, ny)` array of any memory order, which is ravelled to x-fastest here.
+/// The 2-D route exists because the library's flat layout is `flat[i + j*nx]` —
+/// Fortran order for shape `(nx, ny)` — while `ndarray.ravel()` defaults to C
+/// order, and the resulting silent axis transpose is precisely what issue #17
+/// reported as "axis mixing".
+pub(crate) fn extract_nd_state_2d(
+    obj: &Bound<'_, PyAny>,
+    nx: usize,
+    ny: usize,
+    name: &'static str,
+) -> PyResult<Vec<f64>> {
+    if let Ok(arr) = obj.extract::<numpy::PyReadonlyArray2<'_, f64>>() {
+        let view = arr.as_array();
+        let shape = view.shape();
+        if shape[0] != nx || shape[1] != ny {
+            return Err(new_pyerr(
+                "GridMismatch",
+                &format!(
+                    "{name} has shape ({}, {}), expected ({nx}, {ny})",
+                    shape[0], shape[1]
+                ),
+            ));
+        }
+        let mut out = Vec::with_capacity(nx * ny);
+        for j in 0..ny {
+            for i in 0..nx {
+                let v = view[[i, j]];
+                if !v.is_finite() {
+                    return Err(new_pyerr("NanInf", &format!("{name} contains NaN or Inf")));
+                }
+                out.push(v);
+            }
+        }
+        return Ok(out);
+    }
+    extract_finite_f64_vec(obj, nx * ny, name)
+}
+
+/// Reshape a flat x-fastest buffer into a `(nx, ny)` numpy array.
+pub(crate) fn flat_to_2d_fortran<'py>(
+    py: Python<'py>,
+    flat: &[f64],
+    nx: usize,
+    ny: usize,
+) -> PyResult<Bound<'py, numpy::PyArray2<f64>>> {
+    let mut rows = vec![0.0_f64; nx * ny];
+    for j in 0..ny {
+        for i in 0..nx {
+            rows[i * ny + j] = flat[i + j * nx];
+        }
+    }
+    let arr = numpy::ndarray::Array2::from_shape_vec((nx, ny), rows)
+        .map_err(|_| new_pyerr("GridMismatch", "internal reshape failure"))?;
+    Ok(numpy::ToPyArray::to_pyarray(&arr, py))
+}
+
 /// Linear interpolation of a pre-sampled 1D array at position x.
 ///
 /// Clamps x to [xmin, xmax]; handles edge nodes safely.
@@ -210,8 +269,9 @@ pub(crate) fn build_aniso_nd3_kernel(
     a_raw: Vec<f64>,
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
+    policy: semiflow::BoundaryPolicy,
 ) -> Result<AnisotropicShiftChernoffND<f64, 3>, semiflow::SemiflowError> {
-    let grid_nd = build_grid_nd3(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz)?;
+    let grid_nd = build_grid_nd3(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, policy)?;
     let (a_arc2, b_arc2, c_arc2, ns, axes, axes2, axes3) = pack_nd3_arcs(
         nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw,
     );
@@ -250,11 +310,12 @@ fn build_grid_nd3(
     zmin: f64,
     zmax: f64,
     nz: usize,
+    policy: semiflow::BoundaryPolicy,
 ) -> Result<GridND<f64, 3>, semiflow::SemiflowError> {
     GridND::<f64, 3>::new([
-        Grid1D::new(xmin, xmax, nx)?,
-        Grid1D::new(ymin, ymax, ny)?,
-        Grid1D::new(zmin, zmax, nz)?,
+        Grid1D::new(xmin, xmax, nx)?.with_boundary(policy),
+        Grid1D::new(ymin, ymax, ny)?.with_boundary(policy),
+        Grid1D::new(zmin, zmax, nz)?.with_boundary(policy),
     ])
 }
 

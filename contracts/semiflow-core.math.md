@@ -8610,6 +8610,40 @@ The §32.6 future-extension bullets above are HISTORICAL (v6.0.0 deferral record
 
 - The **order-4 d-D ζ⁴** and **Monte-Carlo full-grid** bullets remain DEFERRED (ζ⁴ presupposes the now-GO ζ² lift landing first; MC awaits benchmark demand).
 
+### §32.9 — Off-grid sampling of the d-D state: the accumulated interpolation moment (v0.12.0, ADR-0190, NORMATIVE library)
+
+Equation (32.3) evaluates $f$ at the shifted quadrature feet $y_q = x_k + \tau b(x_k) + 2\sqrt{\tau}\,\sigma \eta_q$, which are **off-grid**. The kernel is therefore the composition of the exact frozen-coefficient Gaussian average with the grid's sub-cell interpolation operator $\Pi$, and the Chernoff product applies that composition $n$ times. Whatever moment error $\Pi$ carries is applied $n$ times, not once.
+
+**Proposition 32.4 (interpolation moment injection, NORMATIVE).** Let $\Pi_1$ be piecewise-linear interpolation on a uniform grid of spacing $dx$. Evaluating $\Pi_1 f$ at a point lying a fraction $s \in [0,1)$ into a cell replaces a unit point mass by masses $1-s$ and $s$ at the two enclosing nodes, whose second central moment about the evaluation point is
+$$
+s(1-s)\,dx^2 .
+\tag{32.9.a}
+$$
+Averaged over feet equidistributed in the cell, $\int_0^1 s(1-s)\,ds = \tfrac{1}{6}$, so each application of $(F_A(\tau)\Pi_1)$ adds
+$$
+\Delta \mathrm{Var} \;\approx\; \tfrac{1}{6}\,dx^2
+\tag{32.9.b}
+$$
+per axis, **independently of $\tau$**. After $n$ steps the state carries
+$$
+\mathrm{Var}_n \;=\; \underbrace{2\,a_{dd}\,t}_{\text{generator}} \;+\; \underbrace{\tfrac{n}{6}\,dx^2}_{\text{interpolation}} \;+\; O(\tau),
+\tag{32.9.c}
+$$
+i.e. the spurious term is **linear in the step count at fixed grid**. Refining $n \to \infty$ at fixed $dx$ therefore drives the discrete evolution *away* from the semigroup it approximates. This is a property of the sampler, not of formula (32.3).
+
+**Corollary 32.5.** For an interpolant of order $p$ (nodal error $O(dx^{p})$) the injected per-step moment is $O(dx^{p})$ and (32.9.c) becomes $2a_{dd}t + O(n\,dx^{p})$. Catmull-Rom ($p = 4$) reduces the $n = 1600$, $dx = 16/95$, $a = 1$, $t = 0.5$ datum from an excess of $+3.49$ to $< 10^{-8}$.
+
+**Consequence for the §32.5 gate protocol.** ADR-0112 AMENDMENT 1 diagnosed (32.9.c) from the outside — it is why `N_AXIS` was driven down to 8 "so the temporal-truncation signal dominates the interpolation floor" — and ADR-0112 AMENDMENT 2 restated it as the ceiling on the ζ² lift's global rate. Both diagnoses were correct about the symptom and wrong to treat it as inherent: the floor was $O(dx^2)$ only because `GridFnND::sample` used $\Pi_1$ while the 1-D family had used $O(dx^4)$–$O(dx^8)$ interpolants since v6.0. With ADR-0190 the N-D floor is $O(dx^4)$, and the coarse-grid ladder MUST be re-measured rather than inherited.
+
+**Normative requirement (`G_ASND_MOMENT`).** A kernel whose generator is $\sum_{ij} a_{ij}\partial^2_{ij}$ MUST reproduce the second-moment growth
+$$
+\Delta \mathrm{Var}_d \;=\; 2\,a_{dd}\,t, \qquad \Delta \mathrm{Cov}_{de} \;=\; 2\,a_{de}\,t
+\tag{32.9.d}
+$$
+on a resolved grid, to within 2% and **flat in $n_{\text{steps}}$**. The flatness requirement is the load-bearing half: `F(0) = I`, constant-preservation and temporal self-convergence are all satisfied by a kernel obeying (32.9.c), because $\Pi_1$ is exact at $\tau = 0$, reproduces constants exactly (weights sum to 1), and the scheme self-converges to its own biased limit.
+
+**Honest limit.** The tensor-product interpolant is not positivity-preserving; $\Pi_1$ was. Undershoot is $O(dx^{p})$ and vanishes with resolution (measured $\min/\text{peak}$ on the §32 smoke datum: $-1.8\cdot10^{-3}$ at $n{=}8$, $-3.5\cdot10^{-10}$ at $n{=}32$, $+3.9\cdot10^{-21}$ at $n{=}64$), but a caller requiring a strictly non-negative state in an under-resolved region must select `InterpKind::Linear` explicitly and accept (32.9.c).
+
 ---
 
 ## §33 — Matrix-valued operators (v4.0, ADR-0082, NORMATIVE library; CITATION mathematics)
@@ -12969,8 +13003,9 @@ release; **no new sympy oracle**.
 
 ### §56.8 — Boundary and honest scope (NORMATIVE)
 
-- **`k > 0` required** — the harmonic mean (56.1.a) and PSD property assume strictly
-  positive conductivity; non-positive or non-finite `k_i` ⇒ `DomainViolation`.
+- **`k ≥ 0` required** (AMENDMENT 1, v0.12.0, ADR-0191 — supersedes the original
+  "`k > 0` required"; negative or non-finite `k_i` ⇒ `DomainViolation`). See §56.8.bis
+  for the degenerate-face derivation.
 - **Symmetric NSD by construction** — `A = −L_k` is PSD with `diag ≥ 0`; consumable by
   §55 and the §54 Krylov contraction. No indefinite/advective term is added.
 - **Interface-on-face invariant** — material interfaces MUST lie on faces (between
@@ -12984,6 +13019,36 @@ release; **no new sympy oracle**.
   RHS) for the steady solve, reusing `BoundaryPolicy`.
 - **Discontinuous-`k` spatial order is 1 near the jump** (FV intrinsic), but the steady
   series network (56.4) is exact on aligned faces — documented, not hidden (§56.6).
+
+### §56.8.bis — Degenerate conductivity `k = 0` (AMENDMENT 1, v0.12.0, ADR-0191, NORMATIVE)
+
+The original `k > 0` guard was stronger than the scheme requires. Degenerate-at-the-boundary diffusions are the generic case in several standard models rather than an edge case: CEV in price space has $k(S) = \tfrac12\sigma^2 S^{2\beta} \to 0$ as $S \to 0$; the Feller/CIR variance process has $k(v) = \tfrac12\xi^2 v \to 0$ as $v \to 0$ (the Heston volatility axis); Wright–Fisher-type bounded domains vanish at both ends.
+
+**Proposition 56.9 (degenerate face is an insulator, NORMATIVE).** Let $k_i \ge 0$ for all $i$. Define the face conductivity by (56.1.a) extended by continuity,
+$$
+k_{i+\frac12} \;=\;
+\begin{cases}
+\dfrac{2 k_i k_{i+1}}{k_i + k_{i+1}}, & k_i > 0 \ \text{and}\ k_{i+1} > 0,\\[2mm]
+0, & \text{otherwise},
+\end{cases}
+\tag{56.9.a}
+$$
+and the transmissibility by (56.1.b) extended by $T_{i+\frac12} = 0$ whenever $k_{i+\frac12} = 0$. Then:
+
+1. **The extension is the continuous limit.** For $k_i \to 0^+$ at fixed $k_{i+1} > 0$, $2k_ik_{i+1}/(k_i+k_{i+1}) \to 0$ and $T = 1/(dx/k_{\text{harm}} + R_c) \to 0$. Definition (56.9.a) assigns exactly that limit, so no discontinuity is introduced at $k = 0$.
+2. **Zero flux crosses a degenerate face**, since the discrete flux is $q_{i+\frac12} = T_{i+\frac12}(u_i - u_{i+1})$. The degenerate end therefore *classifies itself* — the discrete analogue of the Feller boundary classification — and requires no separate boundary condition.
+3. **PSD is preserved.** The energy identity $\langle u, L_k u\rangle = -\sum_i T_{i+\frac12}(u_{i+1}-u_i)^2$ of §56.2 needs only $T \ge 0$, which (56.9.a) satisfies with equality on degenerate faces. $A = -L_k$ remains symmetric PSD with $\mathrm{diag} \ge 0$, so the §55 carrier and the §54 Krylov contraction bound are unaffected.
+
+**Why the branch in (56.9.a) is normative rather than an implementation detail.** For a single degenerate node IEEE arithmetic already produces the right answer: $0 \cdot k_r/(0+k_r) = 0$, then $dx/0 = +\infty$ and $1/(\infty + R_c) = 0$. For **two adjacent** degenerate nodes it does not: $0\cdot 0/(0+0)$ is $0/0 = \mathrm{NaN}$. Adjacent zeros are exactly the Wright–Fisher case, and on the `ConservativeDiffusionChernoff → cn_step → thomas_solve` path there is no finiteness backstop (the sibling `assemble_conservative_csr_1d` route is covered by `SymmetricOperator::from_csr`'s `check_finite`), so the state vector would go silently NaN. The explicit branch costs one comparison and makes the degenerate case total.
+
+**`k < 0` remains rejected.** This is not residual conservatism. A negative conductivity yields negative $T$, which flips the sign of a term in the §56.2 energy sum and destroys the PSD property that the Krylov contraction bound and `Growth::contraction()` depend on — and none of `from_csr`'s three checks (finiteness, `diag ≥ 0`, symmetry) would catch it, because the assembled diagonal $(T_{i-\frac12}+T_{i+\frac12})/dx$ can remain non-negative while individual faces are negative.
+
+**Honest limits.**
+- **Order degrades at a degenerate end.** The scheme stays consistent and conservative, but $k \to 0$ makes the operator degenerate-parabolic there; the interior order claim of §56.6 does not extend to the degenerate node, and no order gate is asserted for it.
+- **No positivity guarantee is added.** Zero flux across the degenerate face prevents mass *leaking through* it; it does not make the scheme positivity-preserving in general.
+- **The prior workaround is now a modelling choice, not a requirement.** Flooring $k$ at $\varepsilon > 0$ remains available, but it is an artificial change to the model that moves quantiles measurably when density mass sits near the degenerate end — which is why the guard was worth relaxing rather than documenting around.
+
+**Gate `G_CONS_DEGENERATE`** — CIR/Feller and CEV data with $k(0) = 0$ assemble and stay finite and PSD; a Wright–Fisher datum with adjacent zeros at both ends produces no NaN through the CN/Thomas path; a single interior zero blocks flux to $< 10^{-12}$ while the floored-$k$ control transports mass (teeth); $k < 0$ and non-finite $k$ still raise `DomainViolation`.
 - **Contact resistance is purely resistive** (no interfacial capacitance).
 - **Full-tensor non-separable** `∂_x(k ∂_y u)` is OUT OF SCOPE (separable axes only).
 - **Bit-stable** — deterministic f64 assembly + tridiagonal Thomas / Krylov (no

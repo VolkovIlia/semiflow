@@ -380,41 +380,56 @@ pub(crate) fn bc_value_generic<F: SemiflowFloat>(
     idx: i64,
     dx: F,
 ) -> F {
+    bc_value_by(boundary, |i| values[i], n, idx, dx)
+}
+
+// ---------------------------------------------------------------------------
+// bc_value_by (accessor-based — serves strided N-D lines, ADR-0190)
+// ---------------------------------------------------------------------------
+
+/// `bc_value_generic` over an arbitrary node accessor instead of a slice.
+///
+/// `get(i)` must return the axis value at in-range node `i ∈ [0, n)`. This is
+/// the single source of truth for boundary-policy resolution: `bc_value_generic`
+/// delegates here with `|i| values[i]`, and [`crate::grid_nd::GridFnND::sample`]
+/// delegates here with a strided accessor `|i| values[base + i * stride]`, so
+/// the 1-D and N-D paths cannot drift apart (ADR-0190).
+pub(crate) fn bc_value_by<F: SemiflowFloat, G: Fn(usize) -> F>(
+    boundary: BoundaryPolicy<F>,
+    get: G,
+    n: usize,
+    idx: i64,
+    dx: F,
+) -> F {
     let half = crate::float::half::<F>();
     let three = F::from(3.0_f64).unwrap_or_else(F::zero);
     let four = F::from(4.0_f64).unwrap_or_else(F::zero);
     match bc_index(boundary, n, idx) {
-        BoundaryHit::Inside(i) => values[i],
+        BoundaryHit::Inside(i) => get(i),
         BoundaryHit::Zero => F::zero(),
         BoundaryHit::Dirichlet(v) => v,
         BoundaryHit::OutsideLeft(d) => {
-            let f0 = values[0];
-            let f1 = values[1];
-            let f2 = values[2];
-            let slope_combo = -three * f0 + four * f1 - f2;
+            let slope_combo = -three * get(0) + four * get(1) - get(2);
             let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            f0 - d_f * half * slope_combo
+            get(0) - d_f * half * slope_combo
         }
         BoundaryHit::OutsideRight(d) => {
-            let fnm1 = values[n - 1];
-            let fnm2 = values[n - 2];
-            let fnm3 = values[n - 3];
-            let slope_combo = three * fnm1 - four * fnm2 + fnm3;
+            let slope_combo = three * get(n - 1) - four * get(n - 2) + get(n - 3);
             let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            fnm1 + d_f * half * slope_combo
+            get(n - 1) + d_f * half * slope_combo
         }
         BoundaryHit::RobinSkew { reflected, depth } => {
             let BoundaryPolicy::Robin { alpha, beta } = boundary else {
                 // Unreachable: RobinSkew is only produced by Robin policy.
-                return values[reflected]; // even-reflect fallback, no panic
+                return get(reflected); // even-reflect fallback, no panic
             };
             let two = F::from(2.0_f64).unwrap_or_else(F::zero);
             let d_f = F::from(f64::from(depth)).unwrap_or_else(F::zero);
             let exponent = -(two * (alpha / beta) * d_f * dx);
-            exponent.exp() * values[reflected]
+            exponent.exp() * get(reflected)
         }
         // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
-        BoundaryHit::OddReflected { reflected } => F::zero() - values[reflected],
+        BoundaryHit::OddReflected { reflected } => F::zero() - get(reflected),
     }
 }
 

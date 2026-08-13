@@ -4,6 +4,93 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Issue campaign #17 / #21 / #26 — correctness wave.
+
+### Fixed
+
+- **`GridFnND::sample` ignored interpolation order and boundary policy**
+  (#17, ADR-0190, math §32.9) — **this silently corrupted every `D > 1` kernel.**
+  The N-D sampler hard-coded multilinear interpolation with an index clamp,
+  consulting neither the `InterpKind` nor the `BoundaryPolicy` each axis already
+  carried. Because the Chernoff product resamples at off-grid quadrature feet
+  every step, linear interpolation injected ≈ `dx²/6` of spurious second moment
+  **per step**, accumulating *linearly in the step count* — so refining
+  `n_steps`, the one knob users turn for accuracy, made the answer worse. On the
+  issue's datum (`A = I`, `t = 0.5`, 96² grid) the variance gain read
+  `1.2113 / 2.2449 / 4.4901` at `n_steps = 100 / 400 / 1600` against an exact
+  `1.0`; it now reads `1.000000` at all three. `A = diag(1.0, 0.5)` gives
+  `(1.000000, 0.500000)` and an off-diagonal `0.4` gives `dCov = 0.400000`.
+  `GridND` gains `interp` (default `CubicHermite`) and `with_interp`. Gate
+  `G_ASND_MOMENT`. Affects `shift_nd`, `shift_nd_zeta2`, `shift_nd_adaptive`,
+  `smolyak`, `obstacle`, `obstacle_nd`, `point_eval`, `carnot_complex`,
+  `carnot_stepk`, `hormander_engel` and the ND FFI/WASM surfaces.
+- **`thomas_solve` accepted non-finite pivots** (ADR-0191). The guard tested
+  `w == 0`, which is false for `NaN`, so a NaN pivot propagated into the state
+  vector silently. This was the only path in the conservative subsystem without
+  a finiteness backstop.
+
+### Added
+
+- **`k ≥ 0` in conservative divergence-form diffusion** (#26, ADR-0191,
+  math §56.8.bis). Degenerate-at-the-boundary conductivities are now accepted:
+  CEV `k(S) = ½σ²S^{2β}` at `S = 0`, Feller/CIR `k(v) = ½ξ²v` at `v = 0`,
+  Wright–Fisher at both ends. A degenerate face carries exactly zero flux, so
+  the boundary classifies itself and the operator stays symmetric PSD; the
+  `max(k, ε)` floor callers were forced into is no longer needed. `k < 0` and
+  non-finite `k` remain `DomainViolation`. Gate `G_CONS_DEGENERATE`.
+- **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
+  secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
+  now actually honoured by the sampler.
+- **`AnisotropicShiftND2.set_state` accepts a `(nx, ny)` array**, and
+  **`values_2d()`** returns one. The library's flat layout is x-fastest
+  (`flat[i + j*nx]` — Fortran order for shape `(nx, ny)`), and a reflexive
+  C-order `ravel()` transposes the axes; this is what issue #17 reported as
+  "axis mixing". Passing the 2-D array directly removes the trap.
+
+### Changed
+
+- **BREAKING (0.x)**: `GridND` gains a public `interp` field, so
+  `GridND { axes }` struct literals no longer compile. Use `GridND::new`.
+- `InterpKind::{SepticHermite, OctonicHermite, ChebyshevSpectralWithBC}` return
+  `Unsupported` for `D > 1` (checked once in `GridFnND::new`). The N-D spatial
+  floor is `O(dx⁴)`, not the 1-D family's `O(dx⁸)` — an honest limit, not a
+  temporary one.
+- The N-D tensor-product interpolant is not positivity-preserving, where
+  multilinear was. Undershoot is `O(dx⁴)` and converges away (measured
+  `min/peak`: `−1.8e−3` at n=8, `−3.5e−10` at n=32, `+3.9e−21` at n=64).
+  `apply_into_smoke_d2` now asserts that convergence rather than strict
+  non-negativity.
+- The `G_DDIM` D=2…5 order ladder (`N_AXIS = 8`, ADR-0112 AMENDMENT 1) was
+  calibrated *around* the interpolation floor this release removes and must be
+  re-measured on production hardware before tagging.
+- `G_BINDING_SMOLYAK_PARITY`'s recorded golden values were regenerated — the
+  sampler change moves them legitimately. Worth noting *how*: the new golden is
+  symmetric (`[a, b, b, a, …]`) as the symmetric Gaussian IC on a symmetric
+  domain requires, where the old one read `[a, b, c, c, …]` with `g[0]` and
+  `g[3]` differing by a factor of 22. The index clamp had been breaking the
+  reflection symmetry at the two ends.
+
+### Open
+
+- **`Heat2DVarA` / `Heat3DVarA` pass `a' ≡ 0`, `a'' ≡ 0` to a divergence-form
+  kernel.** `DiffusionChernoff` is documented as the ζ-A kernel for
+  `∂_x(a(x)·∂_x)` and genuinely consumes both derivatives; its own module doc
+  calls `|_| 0.0` the *constant-`a`* migration. This was investigated as a bug
+  and is **not** being changed: all three binding surfaces (PyO3, FFI, WASM)
+  consistently advertise the *non-divergence* operator `a_x(x)·∂_xx u`, and
+  supplying the derivatives would silently switch which PDE they solve. What
+  remains unresolved is whether zeroing the closures is a principled
+  discretisation of `a·u_xx` or just the γ-A stencil with its correction terms
+  off. A 1-D A/B (variable `a = 1 + ½sin(πx)`, self-convergence over
+  `n_steps ∈ {20, 40, 80}` vs a 1280-step reference) measured slope ≈1.09/1.14
+  zeroed and ≈1.03/1.09 derived — both at the O(τ¹) global ceiling that ADR-0112
+  AMENDMENT 2 and math.md §9.2.3.B already document for variable `a`, so the
+  measurement does not discriminate. Settling it needs an analytic oracle per
+  candidate operator and an architect decision. Recorded at
+  `anisotropic_nd3.rs::build_axis_diff` and as a skipped test with its evidence.
+
 ## [0.11.0-beta] — 2026-06-27
 
 Python binding surface for the 0.10.0-beta feature wave (#11–#14 + A1).

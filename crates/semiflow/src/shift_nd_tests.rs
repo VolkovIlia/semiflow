@@ -98,19 +98,54 @@ fn gauss_hermite_weight_sum_d2() {
     assert!((sum - pi).abs() < 1e-10, "2-D weight sum {sum} != π {pi}");
 }
 
-#[test]
-fn apply_into_smoke_d2() {
-    let k = unit_kernel_d2(8);
+/// Undershoot of one `apply_into` step on an `n`-node axis, relative to the peak.
+fn d2_min_over_peak(n: usize) -> f64 {
+    let k = unit_kernel_d2(n);
     let f0 = GridFnND::from_fn(k.grid.clone(), |x: &[f64; 2]| {
         (-x[0] * x[0] - x[1] * x[1]).exp()
     });
     let mut dst = f0.clone();
     let mut pool = ScratchPool::<f64>::new();
     k.apply_into(0.01, &f0, &mut dst, &mut pool).unwrap();
-    // All values finite and positive (Gaussian IC → Gaussian output)
     assert!(
-        dst.values.iter().all(|&v| v.is_finite() && v >= 0.0),
-        "apply_into smoke: non-finite or negative output"
+        dst.values.iter().all(|&v| v.is_finite()),
+        "apply_into smoke: non-finite output"
+    );
+    let peak = dst.values.iter().copied().fold(f64::MIN, f64::max);
+    let min = dst.values.iter().copied().fold(f64::MAX, f64::min);
+    min / peak
+}
+
+/// One step of the D=2 kernel stays finite, and any undershoot vanishes with
+/// resolution (ADR-0190).
+///
+/// Before ADR-0190 this asserted strict `v >= 0.0`, which held only because the
+/// sampler was multilinear — the same positivity-preserving property that made
+/// it inject `dx²/6` of spurious variance per step (issue #17). Catmull-Rom, in
+/// common with every high-order interpolant including the `SepticHermite` the
+/// 1-D family has defaulted to since v6.0, has negative lobes and is NOT
+/// positivity-preserving. The honest invariant is not "never negative" but
+/// "undershoot is an under-resolution artifact that converges away": on this
+/// deliberately coarse smoke grid the Gaussian `exp(−|x|²)` is resolved by ~1.4
+/// nodes at `n = 8`. Measured `min/peak`: `−1.8e−3` (n=8), `−1.4e−4` (n=16),
+/// `−3.5e−10` (n=32), `+3.9e−21` (n=64) — i.e. no undershoot at all at any
+/// resolution a user would actually run.
+#[test]
+fn apply_into_smoke_d2() {
+    let coarse = d2_min_over_peak(8);
+    assert!(
+        coarse > -1e-2,
+        "n=8 undershoot {coarse:.3e} exceeds the under-resolution allowance"
+    );
+    let finer = d2_min_over_peak(16);
+    assert!(
+        finer > coarse,
+        "undershoot must shrink with resolution: n=8 {coarse:.3e}, n=16 {finer:.3e}"
+    );
+    let resolved = d2_min_over_peak(32);
+    assert!(
+        resolved > -1e-8,
+        "n=32 should be essentially non-negative, got {resolved:.3e}"
     );
 }
 

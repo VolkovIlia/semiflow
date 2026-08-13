@@ -63,6 +63,23 @@ use crate::{
 ///
 /// This is the D=2 specialisation (``AnisotropicShiftND3`` covers D=3).
 ///
+/// .. _nd2-layout:
+///
+/// **Flat array layout — x is the FASTEST axis.**
+///
+/// Every flat array this class accepts or returns (the state, ``a_values``,
+/// ``b_values``, ``c_values``) is indexed ``flat[i + j*nx]`` for the node
+/// ``(x_i, y_j)``. For a numpy array ``U`` of shape ``(nx, ny)`` that is
+/// **Fortran order**::
+///
+///     kernel.set_state(np.ravel(U, order="F"))     # or just: set_state(U)
+///     U_out = np.asarray(kernel.values()).reshape(nx, ny, order="F")
+///
+/// A plain ``U.ravel()`` (C order) transposes the axes and will silently give
+/// the ``a11``/``a22`` diffusions to the wrong coordinates. Passing the 2-D
+/// array directly is the safe route: ``set_state`` accepts a ``(nx, ny)``
+/// array and ravels it correctly, and :meth:`values_2d` returns one.
+///
 /// Parameters
 /// ----------
 /// nx, ny : int
@@ -72,12 +89,18 @@ use crate::{
 /// ymin, ymax : float
 ///     Axis-1 (y) domain boundaries.
 /// `a_values` : array-like[float64]
-///     Pre-sampled diffusion-tensor values.  Length ``nx * ny * 4``.
+///     Pre-sampled diffusion-tensor values, ``[a11, a12, a21, a22]`` per node,
+///     node stride 4, nodes ordered x-fastest.  Length ``nx * ny * 4``.
 ///     The tensor must be SPD at every grid point.
 /// `b_values` : array-like[float64] or None
-///     Pre-sampled drift vector.  Length ``nx * ny * 2``.  ``None`` → zero.
+///     Pre-sampled drift vector, ``[b0, b1]`` per node.  Length ``nx * ny * 2``.
+///     ``None`` → zero.
 /// `c_values` : array-like[float64] or None
 ///     Pre-sampled reaction coefficient.  Length ``nx * ny``.  ``None`` → c = 0.
+/// boundary : str, optional
+///     Out-of-domain sampling policy, one of ``"reflect"`` (default),
+///     ``"periodic"``, ``"zero"``, ``"linear"``.  Applied to both axes.
+///     Before ADR-0190 the N-D sampler ignored the policy and clamped.
 ///
 /// Raises
 /// ------
@@ -95,7 +118,8 @@ pub struct PyAnisotropicShiftND2 {
 #[pymethods]
 impl PyAnisotropicShiftND2 {
     #[new]
-    #[pyo3(signature = (nx, ny, xmin, xmax, ymin, ymax, a_values, *, b_values = None, c_values = None))]
+    #[pyo3(signature = (nx, ny, xmin, xmax, ymin, ymax, a_values, *,
+                        b_values = None, c_values = None, boundary = "reflect"))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         nx: usize,
@@ -107,8 +131,10 @@ impl PyAnisotropicShiftND2 {
         a_values: &Bound<'_, PyAny>,
         b_values: Option<&Bound<'_, PyAny>>,
         c_values: Option<&Bound<'_, PyAny>>,
+        boundary: &str,
     ) -> PyResult<Self> {
         catch_panic_py!({
+            let policy = crate::boundary::parse_boundary(boundary)?;
             let n_pts = nx * ny;
             let a_raw = extract_finite_f64_vec(a_values, 4 * n_pts, "a_values")?;
             let b_raw = match b_values {
@@ -120,7 +146,7 @@ impl PyAnisotropicShiftND2 {
                 None => vec![0.0_f64; n_pts],
             };
             let kernel =
-                build_aniso_nd2_kernel(nx, ny, xmin, xmax, ymin, ymax, a_raw, b_raw, c_raw)
+                build_aniso_nd2_kernel(nx, ny, xmin, xmax, ymin, ymax, a_raw, b_raw, c_raw, policy)
                     .map_err(|e| from_core(&e))?;
             let grid = kernel.grid().clone();
             let current = vec![0.0_f64; nx * ny];
@@ -134,13 +160,28 @@ impl PyAnisotropicShiftND2 {
         })
     }
 
-    /// Set the initial condition from a flat float64 array of length ``nx * ny``.
+    /// Set the initial condition.
+    ///
+    /// Accepts either a flat array of length ``nx * ny`` in the x-fastest layout
+    /// (``flat[i + j*nx]``), or a 2-D ``(nx, ny)`` array of any memory order —
+    /// the latter is ravelled correctly here, which is the recommended route.
+    /// See :ref:`the layout note <nd2-layout>`.
     fn set_state(&mut self, u0: &Bound<'_, PyAny>) -> PyResult<()> {
         catch_panic_py!({
-            let n = self.nx * self.ny;
-            let vals = extract_finite_f64_vec(u0, n, "u0")?;
-            self.current = vals;
+            self.current = crate::anisotropic_nd_helpers::extract_nd_state_2d(
+                u0, self.nx, self.ny, "u0",
+            )?;
             Ok(())
+        })
+    }
+
+    /// Return the current state as a ``(nx, ny)`` ``numpy.ndarray[float64]``.
+    ///
+    /// Equivalent to ``np.asarray(k.values()).reshape(nx, ny, order="F")`` but
+    /// without the chance of reaching for the C-order reshape by reflex.
+    fn values_2d<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, numpy::PyArray2<f64>>> {
+        catch_panic_py!({
+            crate::anisotropic_nd_helpers::flat_to_2d_fortran(py, &self.current, self.nx, self.ny)
         })
     }
 
@@ -213,9 +254,10 @@ fn build_aniso_nd2_kernel(
     a_raw: Vec<f64>,
     b_raw: Vec<f64>,
     c_raw: Vec<f64>,
+    policy: semiflow::BoundaryPolicy,
 ) -> Result<AnisotropicShiftChernoffND<f64, 2>, semiflow::SemiflowError> {
-    let gx = Grid1D::new(xmin, xmax, nx)?;
-    let gy = Grid1D::new(ymin, ymax, ny)?;
+    let gx = Grid1D::new(xmin, xmax, nx)?.with_boundary(policy);
+    let gy = Grid1D::new(ymin, ymax, ny)?.with_boundary(policy);
     let grid_nd = GridND::<f64, 2>::new([gx, gy])?;
     let a_arc = Arc::new(a_raw);
     let b_arc = Arc::new(b_raw);
@@ -291,7 +333,7 @@ pub struct PyAnisotropicShiftND3 {
 impl PyAnisotropicShiftND3 {
     #[new]
     #[pyo3(signature = (nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_values, *,
-                        b_values = None, c_values = None))]
+                        b_values = None, c_values = None, boundary = "reflect"))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         nx: usize,
@@ -306,8 +348,10 @@ impl PyAnisotropicShiftND3 {
         a_values: &Bound<'_, PyAny>,
         b_values: Option<&Bound<'_, PyAny>>,
         c_values: Option<&Bound<'_, PyAny>>,
+        boundary: &str,
     ) -> PyResult<Self> {
         catch_panic_py!({
+            let policy = crate::boundary::parse_boundary(boundary)?;
             let n_pts = nx * ny * nz;
             let a_raw = extract_finite_f64_vec(a_values, 9 * n_pts, "a_values")?;
             let b_raw = match b_values {
@@ -319,7 +363,7 @@ impl PyAnisotropicShiftND3 {
                 None => vec![0.0_f64; n_pts],
             };
             let kernel = build_aniso_nd3_kernel(
-                nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw,
+                nx, ny, nz, xmin, xmax, ymin, ymax, zmin, zmax, a_raw, b_raw, c_raw, policy,
             )
             .map_err(|e| from_core(&e))?;
             let grid = kernel.grid().clone();
