@@ -4797,7 +4797,52 @@ class Heat2DVarA:
 
     Solves du/dt = a_x(x)·u_xx + a_y(y)·u_yy via palindromic Strang splitting.
     Additive sibling of Heat2D for non-unit diffusion.
+
+    Use :meth:`with_grid_arrays` for full-grid coefficients ``a_x(x,y)``,
+    ``a_y(x,y)`` — i.e. coefficients varying along the *other* axis, which the
+    per-axis constructor cannot express (#21, ADR-0195).
     """
+
+    @staticmethod
+    def with_grid_arrays(
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        a_x: NDArray[np.float64],
+        a_y: NDArray[np.float64],
+        *,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> "Heat2DVarA":
+        """Full-grid coefficients ``a_x(x,y)``, ``a_y(x,y)`` (#21, ADR-0195).
+
+        Each array is flat, length ``nx*ny``, indexed ``values[j*nx + i]`` for
+        the node ``(x_i, y_j)`` — the same x-fastest layout as
+        ``NonSeparable2D.with_beta_array``.
+
+        This lifts the restriction that each diagonal coefficient vary only
+        along its own axis. The decorrelated Heston generator needs exactly
+        that: after ``z = x - (rho/xi) v`` it is cross-term-free but BOTH
+        diagonal coefficients depend on ``v``.
+
+        Order 2 still holds, but by the classical symmetric-splitting argument
+        rather than by ``[L_x, L_y] = 0``, which is false here. The error
+        *constant* carries the double commutators and grows with the transverse
+        variation: measured slope 2.05 at +/-10% amplitude, 1.91 at +/-30%, and
+        1.18 at +/-60% on an ``n_steps in {20,40,80}`` ladder at ``t = 0.02``.
+        Verify the slope on your own coefficient field rather than assuming it.
+
+        Serial only — the threaded X/Y passes are not reused (ADR-0195 D2).
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' on a wrong length; kind='NanInf' or
+            kind='OutOfDomain' on non-finite or non-positive entries.
+        """
+        ...
 
     def __init__(
         self,

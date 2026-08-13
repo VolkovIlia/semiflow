@@ -10002,3 +10002,49 @@ implementation_notes:
     feature_gate: none
     introduced_in: issue-24-general-operator
     authority: ADR-0194
+
+  - name: G_PENCIL_REDUCTION
+    type: ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — sup_error <= 1e-13 vs Strang2D on a_x=0.7, a_y=0.3 (asymmetric datum; axis swap verified to change the answer by > 1e-6)"
+    rationale: |
+      G_PENCIL_REDUCTION (RELEASE_BLOCKING, ADR-0195 §60.4): when the coefficients
+      happen to be separable, Strang2DPencil must reproduce the shipped Strang2D.
+      This is the cheap, sharp anchor — it proves the per-pencil dispatch and the
+      palindromic leg ordering are right, independently of any convergence
+      question, and it would catch a swapped or misordered leg immediately.
+      Non-vacuity: a_x = 0.7 != a_y = 0.3 so the legs are distinguishable, and the
+      test separately asserts that swapping the axes DOES change the answer.
+    gate: "sup_error <= 1e-13"
+    test_file: "tests/strang2d_pencil_gates.rs::g_pencil_reduction_matches_strang2d"
+    feature_gate: none
+    introduced_in: issue-21-pencil-coefficients
+    authority: ADR-0195
+
+  - name: G_PENCIL_ORDER2
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — slope=1.913 at +/-30% transverse amplitude, t=0.02, n_steps in {20,40,80} (window [1.7, 2.3])"
+    rationale: |
+      G_PENCIL_ORDER2 (RELEASE_BLOCKING, ADR-0195 §60.2/§60.5): reference-free
+      Richardson self-convergence with a_x depending ONLY on y and a_y only on x —
+      a field Strang2D cannot represent at all. Order 2 here rests on the
+      classical symmetric-splitting BCH residue (60.2.a), NOT on [L_x, L_y] = 0,
+      which is false for this datum.
+      The estimator is successive-difference rather than error-vs-reference: a
+      fixed reference carries its own O(tau^2) error, which depressed the measured
+      slope from 1.913 to 1.521 on the same datum.
+      The amplitude is CALIBRATED, not assumed. Measured slope at t=0.02:
+      2.053 (amp 0.1), 1.913 (amp 0.3), 1.175 (amp 0.6). At +/-60% the ladder is
+      pre-asymptotic — the commutator term still dominates at tau=2.5e-4 — which
+      is §60.2's error-constant statement made quantitative, not a defect. The
+      gate uses +/-30%; the full table is published in §60.5 so the boundary of
+      usable tau is visible rather than implied.
+    gate: "log2(|u_n - u_2n| / |u_2n - u_4n|) in [1.7, 2.3]"
+    test_file: "tests/strang2d_pencil_gates.rs::g_pencil_order2_transverse"
+    feature_gate: "slow-tests"
+    pattern: B
+    introduced_in: issue-21-pencil-coefficients
+    authority: ADR-0195

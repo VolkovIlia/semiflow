@@ -402,3 +402,75 @@ class TestShift1DBatched:
         k = self._kernel(u0_nc[:, 0])
         with pytest.raises(SemiflowError):
             k.evolve_batched(0.05, u0_nc, 5)
+
+
+# ---------------------------------------------------------------------------
+# Issue #21 — full-grid a_x(x,y) / a_y(x,y)
+# ---------------------------------------------------------------------------
+
+
+class TestHeat2DVarAGridArrays:
+    """Heat2DVarA.with_grid_arrays: transverse-varying coefficients (#21)."""
+
+    N = 33
+
+    @staticmethod
+    def _flat(nx, ny, f):
+        """Build a full-grid array in the library's x-fastest layout."""
+        out = np.empty(nx * ny)
+        for j in range(ny):
+            for i in range(nx):
+                out[j * nx + i] = f(i / (nx - 1), j / (ny - 1))
+        return out
+
+    def _ic(self):
+        x = np.linspace(0.0, 1.0, self.N)
+        X, Y = np.meshgrid(x, x, indexing="ij")
+        return np.ravel(np.exp(-40.0 * ((X - 0.5) ** 2 + (Y - 0.5) ** 2)), order="F")
+
+    def test_separable_input_reproduces_the_per_axis_constructor(self):
+        """Reduction anchor: a_x(x,y)=a_x(x) must match the old constructor."""
+        n = self.N
+        ax_prof = 1.0 + 0.3 * np.sin(np.pi * np.linspace(0, 1, n))
+        ay_prof = 1.0 + 0.3 * np.cos(np.pi * np.linspace(0, 1, n))
+        old = Heat2DVarA(0.0, 1.0, n, 0.0, 1.0, n, ax_prof, ay_prof)
+        new = Heat2DVarA.with_grid_arrays(
+            0.0, 1.0, n, 0.0, 1.0, n,
+            self._flat(n, n, lambda x, y: 1.0 + 0.3 * np.sin(np.pi * x)),
+            self._flat(n, n, lambda x, y: 1.0 + 0.3 * np.cos(np.pi * y)),
+        )
+        u0 = self._ic()
+        assert np.allclose(
+            old.evolve(u0, 0.001, 20), new.evolve(u0, 0.001, 20), rtol=0, atol=1e-12
+        )
+
+    def test_transverse_variation_is_expressible_and_differs(self):
+        """The whole point: a_x depending on y, which the old API cannot say."""
+        n = self.N
+        k = Heat2DVarA.with_grid_arrays(
+            0.0, 1.0, n, 0.0, 1.0, n,
+            self._flat(n, n, lambda x, y: 1.0 + 0.3 * np.sin(2 * np.pi * y)),
+            self._flat(n, n, lambda x, y: 1.0 + 0.3 * np.cos(2 * np.pi * x)),
+        )
+        u0 = self._ic()
+        got = k.evolve(u0, 0.001, 20)
+        assert np.all(np.isfinite(got))
+
+        # The best separable stand-in (the transverse means, both 1.0) differs.
+        ones = np.ones(n)
+        sep = Heat2DVarA(0.0, 1.0, n, 0.0, 1.0, n, ones, ones).evolve(u0, 0.001, 20)
+        assert not np.allclose(got, sep, atol=1e-8)
+
+    def test_validation(self):
+        n = self.N
+        good = self._flat(n, n, lambda x, y: 1.0)
+        with pytest.raises(SemiflowError):  # wrong length
+            Heat2DVarA.with_grid_arrays(0.0, 1.0, n, 0.0, 1.0, n, good[:-1], good)
+        bad = good.copy()
+        bad[10] = 0.0
+        with pytest.raises(SemiflowError):  # non-positive
+            Heat2DVarA.with_grid_arrays(0.0, 1.0, n, 0.0, 1.0, n, bad, good)
+        nan = good.copy()
+        nan[3] = np.nan
+        with pytest.raises(SemiflowError):
+            Heat2DVarA.with_grid_arrays(0.0, 1.0, n, 0.0, 1.0, n, good, nan)

@@ -8,7 +8,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Issue campaign #17 / #19 / #21–#26.
 
-Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23, #24 so far.
+Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24.
 
 ### Fixed
 
@@ -45,6 +45,20 @@ Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23, #24 so far.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
+- **`Heat2DVarA.with_grid_arrays`** (#21, ADR-0195, math §60) — full-grid
+  `a_x(x,y)` / `a_y(x,y)`. Each diagonal coefficient could previously vary only
+  along its *own* axis, because `Strang2D` applies one shared kernel to every
+  pencil — and the decorrelated Heston generator needs exactly the opposite
+  (both coefficients depend on `v`). New core type
+  `semiflow::strang2d_pencil::Strang2DPencil` carries one 1-D kernel per pencil.
+  Gates `G_PENCIL_REDUCTION` (separable input reproduces `Strang2D` to 1e-13)
+  and `G_PENCIL_ORDER2`. §60 replaces the *justification* for order 2: `Strang2D`
+  argues from `[L_x, L_y] = 0`, which is false here, so order 2 now rests on the
+  classical symmetric-splitting BCH residue instead. The slope survives; the
+  error **constant** carries the double commutators — measured slope 2.05 / 1.91
+  / 1.18 at ±10% / ±30% / ±60% transverse amplitude, with the ±60% ladder
+  pre-asymptotic. Serial only, deliberately: reusing `Strang2D`'s threaded
+  passes would put the ADR-0018 bit-equality contract in the blast radius.
 - **`GeneralOperator`** (#24, ADR-0194) — externally-assembled **non-symmetric**
   CSR operators and their `e^{−tA}v` action. `SymmetricOperator::from_csr`
   validates symmetry, closing the whole Krylov surface to non-self-adjoint

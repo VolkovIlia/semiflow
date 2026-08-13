@@ -288,7 +288,7 @@ pub mod simd;
 pub mod smolyak;
 pub mod state;
 pub mod strang;
-pub mod strang2d;
+pub mod strang2d; pub mod strang2d_pencil;
 #[cfg(feature = "parallel")]
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]

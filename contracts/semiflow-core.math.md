@@ -8646,6 +8646,72 @@ on a resolved grid, to within 2% and **flat in $n_{\text{steps}}$**. The flatnes
 
 ---
 
+## §60 — Per-pencil 2-D Strang composition: the order argument for transverse-varying coefficients (v0.12.0, ADR-0195, NORMATIVE library; CITATION mathematics)
+
+> Scope: what changes when the two split legs of a 2-D palindromic Strang composition carry coefficients that vary along the *other* axis. Adds no new discretisation; it replaces the **justification** for order 2, which §10 Theorem 7 supplies in a form that no longer applies.
+
+### §60.1 — The premise §10 uses, and why it fails here
+
+§10 (Theorem 7) justifies `Φ²ᴰ(τ) = X(τ/2) ∘ Y(τ) ∘ X(τ/2)` at order 2 via the commutator identity
+$$
+[L_x \otimes I,\; I \otimes L_y] \;=\; 0,
+\tag{60.1.a}
+$$
+which holds for a **separable** generator and makes palindromic Strang exact at the BCH level. With `a_x = a_x(x,y)` and `a_y = a_y(x,y)`, i.e. each diagonal coefficient varying along the transverse axis, the two lifted operators
+$$
+L_x = a_x(x,y)\,\partial_{xx} + \dots, \qquad L_y = a_y(x,y)\,\partial_{yy} + \dots
+$$
+**do not commute**, and (60.1.a) is simply false. The conclusion survives; the proof does not.
+
+### §60.2 — Order 2 by symmetric splitting (NORMATIVE)
+
+**Proposition 60.1.** For arbitrary (non-commuting) generators `A`, `B` the palindromic product satisfies
+$$
+e^{\tau A/2} e^{\tau B} e^{\tau A/2}
+= e^{\tau(A+B) \;+\; \frac{\tau^3}{24}\left([B,[B,A]] - 2[A,[A,B]]\right) \;+\; O(\tau^4)},
+\tag{60.2.a}
+$$
+i.e. the `τ²` term of the BCH expansion vanishes **identically**, without any commutation assumption. The local error is therefore `O(τ³)` and the global error `O(τ²)`.
+
+**Consequence (NORMATIVE).** `Strang2DPencil` is order 2 for transverse-varying coefficients. The *slope* is what (60.2.a) preserves; the error **constant** is not — it now carries the double commutators, which grow with `‖∂_y a_x‖` and `‖∂_x a_y‖`. §10's error constant vanishes identically for a separable generator; this one does not.
+
+### §60.3 — Pencil discretisation (NORMATIVE)
+
+For the X-legs the transverse coordinate `y_j` is **frozen**, giving an exact 1-D operator per pencil; likewise `x_i` for the Y-leg. This introduces no approximation beyond the splitting itself — freezing the transverse coordinate is precisely what operator splitting already does.
+
+`order()` is `min` over all pencils, capped at 2: a per-pencil kernel of order 4 does not lift the composition above the τ² of (60.2.a). `growth()` is the **sup** over pencils — `(max M, max ω)` — since a growth bound must hold for the worst pencil.
+
+### §60.4 — Acceptance gates
+
+| Gate | Definition | Threshold | Oracle |
+|---|---|---|---|
+| `G_PENCIL_REDUCTION` | separable coefficients reproduce `Strang2D` | `sup_err ≤ 1e-13` | the shipped `Strang2D`, no sympy |
+| `G_PENCIL_ORDER2` | reference-free Richardson `log₂(‖u_n−u_{2n}‖/‖u_{2n}−u_{4n}‖)` | `∈ [1.7, 2.3]` | self-convergence, no sympy |
+
+**Non-vacuity.** `G_PENCIL_REDUCTION` uses `a_x = 0.7 ≠ a_y = 0.3` so the legs are distinguishable, and asserts separately that swapping the axes *does* change the answer. A companion test asserts that the transverse field differs from its best separable stand-in by `> 1e-4` — if it did not, `Strang2D` could express the datum and this section would be unnecessary.
+
+### §60.5 — Pre-asymptotic calibration (NORMATIVE — the gate datum is chosen, not assumed)
+
+Measured slope, `n_steps ∈ {20, 40, 80}`, `N = 33`:
+
+| transverse amplitude | `t = 0.005` | `t = 0.02` |
+|---|---|---|
+| 0.1 | 2.871 | **2.053** |
+| 0.3 | 2.723 | **1.913** |
+| 0.6 | 1.774 | 1.175 |
+
+At ±60% the ladder has not reached the asymptotic regime: the commutator term of (60.2.a) still dominates at `τ = 2.5·10⁻⁴`. This is §60.2's error-constant statement made quantitative, and the same pre-asymptotic phenomenon §41 / ADR-0110 formalised. `G_PENCIL_ORDER2` gates the ±30% datum; the full table is published so the boundary of usable τ is visible rather than implied.
+
+### §60.6 — Honest limits
+
+- **Serial only.** The threaded X/Y passes of `strang2d_parallel.rs` are not reused; doing so would put the ADR-0018 bit-equality contract in the blast radius of a feature addition.
+- **No mixed derivative.** `∂_x∂_y` must be removed by a decorrelation transform before this composition applies; the transform is the caller's.
+- **The τ range narrows with transverse variation** (§60.5). Verify the slope on the actual coefficient field.
+- **3-D is out of scope**: the Z-axis pencil count becomes `nx·ny` and the memory argument must be re-derived.
+- **No positivity or maximum-principle guarantee** is added; the splitting is unchanged.
+
+---
+
 ## §33 — Matrix-valued operators (v4.0, ADR-0082, NORMATIVE library; CITATION mathematics)
 
 ### §33.1 — Motivation (NORMATIVE library scope)

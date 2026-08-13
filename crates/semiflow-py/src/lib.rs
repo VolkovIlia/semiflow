@@ -98,6 +98,7 @@ mod graph_extra_heat;
 mod graph_heat_f32;
 mod general_op_py;
 mod graph_py;
+mod heat2d_pencil_py;
 mod graph_krylov_py;
 mod graph_sensitivity_py;
 mod graph_v2_4;
