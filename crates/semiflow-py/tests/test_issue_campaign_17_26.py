@@ -20,7 +20,14 @@ Three groups:
 import numpy as np
 import pytest
 
-from semiflow import AnisotropicShiftND2, Heat2D, Heat2DVarA
+from semiflow import (
+    AdaptivePI,
+    AnisotropicShiftND2,
+    Heat2D,
+    Heat2DVarA,
+    Shift1D,
+    SemiflowError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -172,3 +179,163 @@ class TestHeat2DVarAConstantCoeff:
     )
     def test_variable_a_self_convergence_slope_is_two(self):
         raise AssertionError("see skip reason")
+
+
+# ---------------------------------------------------------------------------
+# Issue #22 — AdaptivePI over variable-coefficient kernels
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptivePIWithArrays:
+    """AdaptivePI.with_arrays reaches Black-Scholes-type generators (#22).
+
+    The ``kernel=`` menu on ``__init__`` only reaches constant-coefficient
+    kernels — its ``"shift"`` arm hard-codes ``a=0.5, b=0, c=0`` — so a
+    variable-coefficient generator had no adaptive path at all.
+    """
+
+    @staticmethod
+    def _black_scholes(n=257, s_max=300.0, sigma=0.25, r=0.03, strike=100.0):
+        """½σ²S²·u_SS + rS·u_S − r·u on a uniform S grid, with a call payoff."""
+        s = np.linspace(0.0, s_max, n)
+        a = 0.5 * sigma**2 * s**2
+        b = r * s
+        c = np.full(n, -r)
+        u0 = np.maximum(s - strike, 0.0)
+        return s, a, b, c, u0
+
+    def test_with_arrays_runs_and_preserves_shape(self):
+        s, a, b, c, u0 = self._black_scholes()
+        pi = AdaptivePI.with_arrays(
+            0.0, 300.0, len(s), a, b, c, 0.03, u0, tol_abs=1e-6, tol_rel=1e-4
+        )
+        out = pi.evolve(0.5)
+        assert len(out) == len(s)
+        assert np.all(np.isfinite(out))
+
+    def test_with_arrays_actually_uses_the_coefficients(self):
+        """A different sigma must give a different answer — the arrays are live."""
+        s, a1, b, c, u0 = self._black_scholes(sigma=0.25)
+        _, a2, _, _, _ = self._black_scholes(sigma=0.50)
+        o1 = AdaptivePI.with_arrays(0.0, 300.0, len(s), a1, b, c, 0.03, u0).evolve(0.5)
+        o2 = AdaptivePI.with_arrays(0.0, 300.0, len(s), a2, b, c, 0.03, u0).evolve(0.5)
+        assert not np.allclose(o1, o2)
+
+    def test_tighter_tolerance_does_not_change_the_answer_much(self):
+        """Adaptivity is doing its job: the answer is tolerance-converged."""
+        s, a, b, c, u0 = self._black_scholes()
+        loose = AdaptivePI.with_arrays(
+            0.0, 300.0, len(s), a, b, c, 0.03, u0, tol_abs=1e-6, tol_rel=1e-4
+        ).evolve(0.5)
+        tight = AdaptivePI.with_arrays(
+            0.0, 300.0, len(s), a, b, c, 0.03, u0, tol_abs=1e-9, tol_rel=1e-7
+        ).evolve(0.5)
+        rel = np.max(np.abs(loose - tight)) / max(np.max(np.abs(tight)), 1.0)
+        assert rel < 5e-2, f"loose vs tight differ by {rel:.3e}"
+
+    def test_bad_coefficient_length_raises(self):
+        s, a, b, c, u0 = self._black_scholes(n=64)
+        with pytest.raises(SemiflowError):
+            AdaptivePI.with_arrays(0.0, 300.0, 64, a[:-1], b, c, 0.03, u0)
+
+
+# ---------------------------------------------------------------------------
+# Issue #23 — coefficient schedules for a, b AND c
+# ---------------------------------------------------------------------------
+
+
+class TestCoefficientSchedule:
+    """evolve_with_coefficient_schedule: b/c schedules and array entries (#23)."""
+
+    N = 129
+    XMIN, XMAX = -3.0, 3.0
+
+    def _fresh(self):
+        x = np.linspace(self.XMIN, self.XMAX, self.N)
+        u0 = np.exp(-(x**2))
+        return x, Shift1D(self.XMIN, self.XMAX, self.N, u0, a=0.5, b=0.0, c=0.0)
+
+    def test_scalar_a_schedule_matches_the_legacy_entry_point(self):
+        """New method reduces to the old one when only `a` varies."""
+        sched = [0.4, 0.6, 0.5]
+        _, k_new = self._fresh()
+        k_new.evolve_with_coefficient_schedule(0.3, 25, sched)
+        _, k_old = self._fresh()
+        k_old.evolve_with_time_schedule(0.3, 25, np.array(sched))
+        assert np.allclose(k_new.values(), k_old.values(), rtol=0, atol=1e-12)
+
+    def test_c_schedule_is_live(self):
+        """Time-varying killing must change the answer (the #23 motivation)."""
+        _, k0 = self._fresh()
+        k0.evolve_with_coefficient_schedule(0.3, 25, [0.5, 0.5, 0.5])
+        _, k1 = self._fresh()
+        k1.evolve_with_coefficient_schedule(
+            0.3, 25, [0.5, 0.5, 0.5], c_schedule=[-0.5, -1.0, -2.0]
+        )
+        assert not np.allclose(k0.values(), k1.values())
+        # Killing removes mass monotonically.
+        assert k1.values().sum() < k0.values().sum()
+
+    def test_array_entries_inside_a_schedule(self):
+        """Almgren-Chriss shape: killing linear in p with a time-varying slope."""
+        x, k = self._fresh()
+        slopes = [0.2, 0.6, 1.2]
+        c_sched = [-(s * np.abs(x)) for s in slopes]
+        k.evolve_with_coefficient_schedule(
+            0.3, 25, [0.5, 0.5, 0.5], c_schedule=c_sched
+        )
+        out = k.values()
+        assert np.all(np.isfinite(out))
+        # Space-varying killing must break the symmetry differently than a
+        # constant one: compare against the scalar-c control.
+        _, k2 = self._fresh()
+        k2.evolve_with_coefficient_schedule(
+            0.3, 25, [0.5, 0.5, 0.5], c_schedule=[-0.2, -0.6, -1.2]
+        )
+        assert not np.allclose(out, k2.values())
+
+    def test_mixed_scalar_and_array_entries(self):
+        x, k = self._fresh()
+        k.evolve_with_coefficient_schedule(
+            0.2, 20,
+            [0.5, 0.4 + 0.1 * np.abs(x)],       # scalar, then array
+            b_schedule=[0.1 * x, 0.0],           # array, then scalar
+        )
+        assert np.all(np.isfinite(k.values()))
+
+    def test_subsequent_evolve_keeps_the_final_segment_coefficients(self):
+        """The legacy method silently reverts to construction-time `a`; this one does not.
+
+        After a schedule ending at ``a = 2.0``, a follow-up ``evolve`` must
+        behave like a kernel with ``a = 2.0`` — not like the ``a = 0.5`` the
+        object was constructed with.
+        """
+        _, k = self._fresh()
+        k.evolve_with_coefficient_schedule(0.2, 20, [2.0, 2.0])
+        mid = k.values().copy()
+        k.evolve(0.2, 20)
+        got = k.values().copy()
+
+        # Reference: a fresh kernel at the schedule's final `a`, same state,
+        # same tau and step count.
+        want = Shift1D(self.XMIN, self.XMAX, self.N, mid, a=2.0, b=0.0, c=0.0)
+        want.evolve(0.2, 20)
+        assert np.allclose(got, want.values(), rtol=1e-12, atol=1e-14)
+
+        # Negative control: the construction-time coefficient gives a different
+        # answer, so the assertion above is not vacuous.
+        stale = Shift1D(self.XMIN, self.XMAX, self.N, mid, a=0.5, b=0.0, c=0.0)
+        stale.evolve(0.2, 20)
+        assert not np.allclose(got, stale.values())
+
+    def test_schedule_length_mismatch_raises(self):
+        _, k = self._fresh()
+        with pytest.raises(SemiflowError):
+            k.evolve_with_coefficient_schedule(0.3, 10, [0.5, 0.5], c_schedule=[0.1])
+
+    def test_wrong_array_length_raises(self):
+        _, k = self._fresh()
+        with pytest.raises(SemiflowError):
+            k.evolve_with_coefficient_schedule(
+                0.3, 10, [0.5], c_schedule=[np.zeros(self.N - 1)]
+            )

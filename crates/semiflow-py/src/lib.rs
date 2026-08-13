@@ -122,6 +122,7 @@ mod schrodinger_complex_py;
 mod schrodinger_helpers;
 mod send_assertions;
 mod shift1d_py;
+mod shift1d_schedule_py;
 mod smolyak_py;
 mod state;
 mod state_1d_chunked;

@@ -4,7 +4,7 @@ These stubs mirror the actual #[pymethods] signatures defined in
 crates/semiflow-py/src/state.rs / src/error.rs / src/lib.rs.
 """
 
-from typing import Any, Callable, Literal, Union, final
+from typing import Any, Callable, Literal, Sequence, Union, final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -779,6 +779,50 @@ class Shift1D:
         ------
         SemiflowError
             kind='OutOfDomain' on invalid parameters or empty schedule.
+
+        Note
+        ----
+        This method updates only the state; the object's coefficients stay at
+        their construction-time values, so a subsequent :meth:`evolve` reverts
+        to the original ``a``. Use :meth:`evolve_with_coefficient_schedule`,
+        which leaves the object consistent with where the walk ended.
+        """
+        ...
+
+    def evolve_with_coefficient_schedule(
+        self,
+        t_final: float,
+        n_steps_per_segment: int,
+        a_schedule: Sequence[Union[float, NDArray[np.float64]]],
+        *,
+        b_schedule: Sequence[Union[float, NDArray[np.float64]]] | None = None,
+        c_schedule: Sequence[Union[float, NDArray[np.float64]]] | None = None,
+    ) -> None:
+        """Piecewise-constant-in-time schedules for **all three** coefficients (#23).
+
+        Each schedule is a sequence of ``n_segments`` entries; each entry is
+        independently either a float (spatially constant over that segment) or a
+        length-``n`` array (interpolated with Catmull-Rom, as
+        :meth:`with_arrays` does). ``b_schedule`` and ``c_schedule`` default to
+        zero. ``a_schedule`` defines ``n_segments``; the others must match it.
+
+        Closes two gaps in :meth:`evolve_with_time_schedule`: no ``b``/``c``
+        schedules, and no space-varying coefficients inside a schedule. The
+        motivating case is optimal-execution policy evaluation
+        ``du/dtau = ½σ²·u_pp − γν(t)(p − ην(t))·u``, whose killing term is
+        linear in ``p`` with a time-varying slope — previously a fresh
+        ``Shift1D`` plus re-sampled arrays per macro-segment, with the state
+        round-tripping through numpy in between.
+
+        The whole walk runs in one GIL release with the state kept in Rust, and
+        the object's coefficients are left at the final segment's values so a
+        subsequent :meth:`evolve` continues rather than reverting.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if the schedules differ in length or an array
+            entry has the wrong length; kind='NanInf' on non-finite entries.
         """
         ...
 
@@ -2493,7 +2537,10 @@ class AdaptivePI:
         ``kind='GridMismatch'`` for invalid grid or IC-length mismatches.
         ``kind='NanInf'`` if ``u0`` contains NaN or Inf.
         ``kind='OutOfDomain'`` if ``t <= 0`` or non-finite.
-        ``kind='CflViolated'`` if adaptive integration exceeds ``max_substeps``.
+        ``kind='ConvergenceFailed'`` if adaptive integration exceeds
+        ``max_substeps``.  (Previously documented as ``'CflViolated'``; the core
+        returns ``AdaptiveStepRejected`` from this path, which maps to
+        ``'ConvergenceFailed'``.)
     """
 
     def __new__(
@@ -2508,6 +2555,38 @@ class AdaptivePI:
         tol_rel: float = 1e-4,
         boundary: BoundaryLiteral = "reflect",
     ) -> "AdaptivePI": ...
+
+    @staticmethod
+    def with_arrays(
+        xmin: float,
+        xmax: float,
+        n: int,
+        a: NDArray[np.float64],
+        b: NDArray[np.float64],
+        c: NDArray[np.float64],
+        c_norm_bound: float,
+        u0: NDArray[np.float64],
+        *,
+        tol_abs: float = 1e-6,
+        tol_rel: float = 1e-4,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> "AdaptivePI":
+        """Adaptive stepping over a variable-coefficient shift kernel (#22).
+
+        Solves ``du/dt = a(x)*u_xx + b(x)*u_x + c(x)*u`` with the same PI
+        controller as the ``kernel=`` variants. The ``kernel="shift"`` arm of
+        ``__init__`` hard-codes ``a=0.5, b=0, c=0``, so Black-Scholes-type
+        generators previously had no adaptive path and required hand-tuning
+        ``n_steps`` per (grid, maturity, vol) triple.
+
+        Parameters
+        ----------
+        a, b, c : NDArray[np.float64]
+            Pre-sampled coefficients on the grid; length ``n`` each.
+        c_norm_bound : float
+            ``sup|c|`` bound used for the growth estimate.
+        """
+        ...
 
     def evolve(
         self,

@@ -62,6 +62,10 @@ Issue campaign #17 / #21 / #26 — correctness wave.
   `min/peak`: `−1.8e−3` at n=8, `−3.5e−10` at n=32, `+3.9e−21` at n=64).
   `apply_into_smoke_d2` now asserts that convergence rather than strict
   non-negativity.
+- `AdaptivePI`'s documented error kind for exceeding `max_substeps` corrected
+  from `'CflViolated'` to `'ConvergenceFailed'` in both the rustdoc and the
+  `.pyi`. The core returns `AdaptiveStepRejected` from that path and never
+  `CflViolated`, so a caller following the docs caught the wrong kind.
 - The `G_DDIM` D=2…5 order ladder (`N_AXIS = 8`, ADR-0112 AMENDMENT 1) was
   calibrated *around* the interpolation floor this release removes and must be
   re-measured on production hardware before tagging.
@@ -71,6 +75,22 @@ Issue campaign #17 / #21 / #26 — correctness wave.
   domain requires, where the old one read `[a, b, c, c, …]` with `g[0]` and
   `g[3]` differing by a factor of 22. The index clamp had been breaking the
   reflection symmetry at the two ends.
+
+- **`AdaptivePI.with_arrays`** (#22, ADR-0192) — adaptive PI stepping over a
+  variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
+  The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`
+  arm hard-codes `a=0.5, b=0, c=0` — so Black-Scholes-type generators had no
+  adaptive path and `n_steps` was hand-tuned per (grid, maturity, vol) triple.
+- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0192) — per-segment
+  schedules for **all three** coefficients, each entry independently a scalar or
+  a length-`n` array. Closes both gaps in `evolve_with_time_schedule`: no `b`/`c`
+  schedules, and no space-varying coefficients inside a schedule (the
+  Almgren–Chriss killing term `−γν(t)(p − ην(t))` needs both). Runs the whole
+  walk in one GIL release with the state kept in Rust, ping-pongs instead of
+  cloning the state per step, and leaves the object's coefficients at the final
+  segment so a subsequent `evolve` continues instead of reverting.
+  `evolve_with_time_schedule` is unchanged; its revert-on-next-evolve behaviour
+  is now documented rather than altered.
 
 ### Open
 

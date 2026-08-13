@@ -240,6 +240,96 @@ impl Shift1D {
             Ok(())
         })
     }
+
+    /// Piecewise-constant-in-time schedules for **all three** coefficients (#23).
+    ///
+    /// Each of ``a_schedule`` / ``b_schedule`` / ``c_schedule`` is a sequence of
+    /// ``n_segments`` entries, and each entry is independently either a float
+    /// (spatially constant over that segment) or a length-``n`` array
+    /// (interpolated with Catmull-Rom, exactly as :meth:`with_arrays` does).
+    /// ``b_schedule`` / ``c_schedule`` default to zero everywhere.
+    ///
+    /// Unlike :meth:`evolve_with_time_schedule` this supports time-dependent
+    /// drift and killing, and space-varying coefficients inside a schedule —
+    /// e.g. the Almgren–Chriss policy evaluation
+    /// ``∂_τ u = ½σ²·u_pp − γν(t)(p − ην(t))·u``, whose killing term is linear
+    /// in ``p`` with a time-varying slope. The whole walk runs in one GIL
+    /// release with the state kept in Rust, instead of rebuilding a fresh
+    /// ``Shift1D`` and re-sampling every coefficient array per macro-segment.
+    ///
+    /// Time is split into ``n_segments`` uniform intervals of
+    /// ``t_final / n_segments``, each advanced by ``n_steps_per_segment`` steps.
+    ///
+    /// This mutates the object's state **and** leaves its coefficients at the
+    /// final segment's values, so a subsequent :meth:`evolve` continues from
+    /// where the schedule ended rather than silently reverting to the
+    /// construction-time coefficients.
+    ///
+    /// Raises
+    /// ------
+    /// `SemiflowError`
+    ///     ``kind='GridMismatch'`` if the schedules differ in length or an array
+    ///     entry has the wrong length; ``kind='NanInf'`` on non-finite entries.
+    #[pyo3(signature = (t_final, n_steps_per_segment, a_schedule, *,
+                        b_schedule = None, c_schedule = None))]
+    fn evolve_with_coefficient_schedule(
+        &mut self,
+        py: Python<'_>,
+        t_final: f64,
+        n_steps_per_segment: usize,
+        a_schedule: &Bound<'_, PyAny>,
+        b_schedule: Option<&Bound<'_, PyAny>>,
+        c_schedule: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        catch_panic_py!({
+            use crate::shift1d_schedule_py::{parse_schedule, run_coefficient_schedule};
+            validate_evolve_params(t_final, n_steps_per_segment)?;
+            let grid = self.inner.current.grid;
+            let n = self.inner.current.values.len();
+            // `a_schedule` defines n_segments; b/c must then match it.
+            let a_s = count_then_parse(a_schedule, n)?;
+            let n_segments = a_s.len();
+            if n_segments == 0 {
+                return Err(new_pyerr("OutOfDomain", "a_schedule must be non-empty"));
+            }
+            let b_s = parse_schedule(b_schedule, n_segments, n, 0.0, "b_schedule")?;
+            let c_s = parse_schedule(c_schedule, n_segments, n, 0.0, "c_schedule")?;
+            // Keep the last segment so the object's own kernel can be left
+            // consistent with where the walk ended (see the doc note above).
+            let tail = (
+                a_s[n_segments - 1].clone(),
+                b_s[n_segments - 1].clone(),
+                c_s[n_segments - 1].clone(),
+            );
+            let input: Vec<f64> = self.inner.current.values.clone();
+            let result: Result<Vec<f64>, _> = py.detach(|| {
+                run_coefficient_schedule(
+                    grid,
+                    input,
+                    t_final,
+                    n_steps_per_segment,
+                    (a_s, b_s, c_s),
+                )
+            });
+            self.inner.current.values = result.map_err(|e| from_core(&e))?;
+            self.inner.semigroup =
+                crate::shift1d_schedule_py::semigroup_from_segment(grid, &tail)
+                    .map_err(|e| from_core(&e))?;
+            Ok(())
+        })
+    }
+}
+
+/// Parse `a_schedule` without knowing `n_segments` up front (it defines it).
+fn count_then_parse(
+    obj: &Bound<'_, PyAny>,
+    n: usize,
+) -> PyResult<Vec<crate::shift1d_schedule_py::SegmentCoeff>> {
+    let items: Vec<Bound<'_, PyAny>> = obj
+        .try_iter()
+        .map_err(|_| new_pyerr("GridMismatch", "a_schedule must be a sequence"))?
+        .collect::<PyResult<_>>()?;
+    crate::shift1d_schedule_py::parse_schedule(Some(obj), items.len(), n, 0.0, "a_schedule")
 }
 
 // ---------------------------------------------------------------------------
