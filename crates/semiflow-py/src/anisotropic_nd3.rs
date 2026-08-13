@@ -200,9 +200,19 @@ impl PyHeat2DVarA {
         })
     }
 
-    /// Return approximation order (2 — palindromic Strang).
+    /// Consistency order — **1**, not 2 (ADR-0190 AMENDMENT 1).
+    ///
+    /// The palindromic Strang composition is second-order, but composition order
+    /// is capped by its axis kernels, and each axis here is the gamma-A stencil
+    /// with its coefficient derivatives zeroed (see `build_axis_diff`). That
+    /// stencil freezes `a` at the node, which agrees with `exp(tau*a*d_xx)` at
+    /// `O(tau)` and differs at `O(tau^2)` by `(tau^2/2)*a*(a''*f_xx +
+    /// 2*a'*f_xxx)` whenever `a` varies. Measured global order **1.007**
+    /// (`G_FROZEN_COEFF_ORDER1`); reporting 2 was an unearned claim, corrected
+    /// on the ADR-0112 precedent. `DiffusionChernoff::order() == 2` is
+    /// unaffected — that is earned when `a'`/`a''` are actually supplied.
     fn order(&self) -> u32 {
-        2
+        1
     }
 
     /// Number of X-axis nodes.
@@ -222,7 +232,7 @@ impl PyHeat2DVarA {
     }
 
     fn __repr__(&self) -> String {
-        format!("Heat2DVarA(nx={}, ny={}, order=2)", self.nx, self.ny)
+        format!("Heat2DVarA(nx={}, ny={}, order=1)", self.nx, self.ny)
     }
 }
 
@@ -338,9 +348,10 @@ impl PyHeat3DVarA {
         })
     }
 
-    /// Return approximation order (2 — palindromic Strang).
+    /// Consistency order — **1**, not 2; see `Heat2DVarA::order` and
+    /// ADR-0190 AMENDMENT 1. Same argument per axis.
     fn order(&self) -> u32 {
-        2
+        1
     }
 
     fn __len__(&self) -> usize {
@@ -349,7 +360,7 @@ impl PyHeat3DVarA {
 
     fn __repr__(&self) -> String {
         format!(
-            "Heat3DVarA(nx={}, ny={}, nz={}, order=2)",
+            "Heat3DVarA(nx={}, ny={}, nz={}, order=1)",
             self.nx, self.ny, self.nz,
         )
     }
@@ -401,34 +412,24 @@ fn build_strang2d(
 
 /// Build a `DiffusionChernoff` with constant-zero drift/reaction from a tabulated `a_vals`.
 ///
-/// # Why `a' ≡ 0` and `a'' ≡ 0` (open question, see below)
+/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0190 AMENDMENT 1, math §9.2.3.C
 ///
-/// `DiffusionChernoff` is documented as the ζ-A kernel for the **divergence
-/// form** `A_self = ∂_x(a(x)·∂_x)` and genuinely consumes `a'`/`a''`: the γ-A
-/// baseline offsets its sampling positions by `τ/2·a'(x)` and the ζ-A correction
-/// is `τ²(a·a'·f''' + (a·a''/2)·f'' + (a'·a''/4)·f')`. Its own module doc calls
-/// `|_| 0.0` the **constant-`a`** migration path.
+/// `DiffusionChernoff` is the zeta-A kernel for the **divergence** form
+/// `d_x(a(x) d_x)` and genuinely consumes `a'`/`a''`, so passing zeros alongside
+/// a *variable* `a` reads as a bug. It is not one. Zeroing them collapses the
+/// kernel to the frozen-coefficient stencil (the inner-Strang shift becomes the
+/// identity and every zeta-A term carries a factor `a'` or `a''`), which is a
+/// consistent discretisation of the **non-divergence** operator
+/// `d_t u = a_x(x) u_xx + a_y(y) u_yy` — the operator all three binding surfaces
+/// advertise (this file, `semiflow-ffi/src/strang_nd_2d_ffi.rs`,
+/// `semiflow-wasm/src/strang_nd_wasm.rs`).
 ///
-/// Passing zeros here with a *variable* `a` therefore looks like a bug — and it
-/// was investigated as one under ADR-0190. It is left in place deliberately:
-/// `Heat2DVarA`/`Heat3DVarA` advertise the **non-divergence** operator
-/// `∂_t u = a_x(x)·∂_xx u + a_y(y)·∂_yy u`, consistently across all three
-/// binding surfaces (this file, `semiflow-ffi/src/strang_nd_2d_ffi.rs`,
-/// `semiflow-wasm/src/strang_nd_wasm.rs`), and zeroing the derivative closures
-/// is how that operator is obtained from a divergence-form kernel. Supplying the
-/// derivatives would silently switch three public APIs to a different PDE.
-///
-/// What is NOT resolved: whether zeroing the closures yields a *principled*
-/// discretisation of `a·u_xx`, or merely the γ-A stencil with its correction
-/// terms switched off. A 1-D A/B on `Heat1D.with_a_array` (variable
-/// `a = 1 + ½sin(πx)`, self-convergence over `n_steps ∈ {20, 40, 80}` against a
-/// 1280-step reference) measured slope ≈ 1.09 / 1.14 with zeroed derivatives and
-/// ≈ 1.03 / 1.09 with derived ones — both at the O(τ¹) global ceiling that
-/// ADR-0112 AMENDMENT 2 and math.md §9.2.3.B already document for variable `a`,
-/// so the measurement does not discriminate. Settling it needs an analytic
-/// oracle for each candidate operator and an architect decision on which one
-/// `Heat2DVarA` is meant to be; it is recorded as an open item rather than
-/// decided here.
+/// Verified rather than argued: both candidate generators assembled densely on a
+/// periodic grid and exponentiated differ by `7.8e-2`, and this kernel lands
+/// `6.8e-3` from the non-divergence reference against `7.4e-2` from the
+/// divergence one, while the FD-derivative path lands the other way round
+/// (`G_FROZEN_COEFF_NONDIV`). The consequence for the order claim is handled in
+/// `order()`: the frozen-coefficient stencil is consistency order 1.
 fn build_axis_diff(
     a_vals: Vec<f64>,
     amin: f64,

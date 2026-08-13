@@ -437,7 +437,7 @@ class TestNonSeparable2DAniso:
 # ===========================================================================
 
 class TestHeat2DVarA:
-    """Tests for Heat2DVarA pyclass (M21, order 2).
+    """Tests for Heat2DVarA pyclass (M21, order 1 — ADR-0190 AMENDMENT 1).
 
     Oracle: Heat2D with unit diffusion.
     """
@@ -517,8 +517,13 @@ class TestHeat2DVarA:
             f"Heat2DVarA violates max principle: max(|u(t)|)={max_ut:.4f} > max(|u0|)={max_u0:.4f}"
         )
 
-    def test_order_is_2(self):
-        """order() returns 2 (palindromic Strang)."""
+    def test_order_is_1(self):
+        """order() returns 1, not 2.
+
+        The Strang composition is second-order, but the axis kernels freeze
+        ``a`` at the node (``a' = 0``), which is order 1 wherever ``a`` varies
+        along that axis — measured slope -1.007. See ADR-0190 AMENDMENT 1.
+        """
         a_x = np.ones(self.NX, dtype=np.float64)
         a_y = np.ones(self.NY, dtype=np.float64)
         var = Heat2DVarA(
@@ -526,7 +531,7 @@ class TestHeat2DVarA:
             self.YMIN, self.YMAX, self.NY,
             a_x, a_y,
         )
-        assert var.order() == 2
+        assert var.order() == 1
 
     def test_len_matches_grid(self):
         """len(var) == nx * ny."""
@@ -558,7 +563,7 @@ class TestHeat2DVarA:
 # ===========================================================================
 
 class TestHeat3DVarA:
-    """Tests for Heat3DVarA pyclass (M21, order 2).
+    """Tests for Heat3DVarA pyclass (M21, order 1 — ADR-0190 AMENDMENT 1).
 
     Oracle: Heat3D with unit diffusion.
     """
@@ -607,8 +612,8 @@ class TestHeat3DVarA:
         print(f"\nM21 Heat3DVarA vs Heat3D (a=1): sup_error={err:.3e}, tol=1e-10")
         assert err < 1e-10, f"Heat3DVarA(a=1) diverges from Heat3D: sup_error={err:.3e}"
 
-    def test_order_is_2(self):
-        """order() returns 2."""
+    def test_order_is_1(self):
+        """order() returns 1, not 2 — see Heat2DVarA (ADR-0190 AMENDMENT 1)."""
         a_x = np.ones(self.NX, dtype=np.float64)
         a_y = np.ones(self.NY, dtype=np.float64)
         a_z = np.ones(self.NZ, dtype=np.float64)
@@ -618,7 +623,7 @@ class TestHeat3DVarA:
             self.ZMIN, self.ZMAX, self.NZ,
             a_x, a_y, a_z,
         )
-        assert var.order() == 2
+        assert var.order() == 1
 
     def test_len_matches_grid(self):
         """len(var) == nx * ny * nz."""

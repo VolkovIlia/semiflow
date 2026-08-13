@@ -4793,10 +4793,20 @@ class NonSeparable2DAniso:
 
 @final
 class Heat2DVarA:
-    """Variable-coefficient 2D heat Chernoff (M21, order 2).
+    """Variable-coefficient 2D heat Chernoff (M21, order 1).
 
     Solves du/dt = a_x(x)·u_xx + a_y(y)·u_yy via palindromic Strang splitting.
     Additive sibling of Heat2D for non-unit diffusion.
+
+    Note the operator: this is the **non-divergence** form ``a(x)·u_xx``, not
+    ``d_x(a(x) d_x u)``. The two differ whenever ``a`` varies; if you want the
+    conservative form use :class:`ConservativeDiffusion1D` per axis.
+
+    ``order()`` reports **1**, not 2. The Strang composition is second-order,
+    but each axis kernel freezes ``a`` at the node, which is order 1 wherever
+    ``a`` varies along that axis (measured slope -1.007). Order 2 is recovered
+    only when ``a`` is constant along the swept axis. Corrected in ADR-0190
+    AMENDMENT 1; it previously reported 2.
 
     Use :meth:`with_grid_arrays` for full-grid coefficients ``a_x(x,y)``,
     ``a_y(x,y)`` — i.e. coefficients varying along the *other* axis, which the
@@ -4827,12 +4837,18 @@ class Heat2DVarA:
         that: after ``z = x - (rho/xi) v`` it is cross-term-free but BOTH
         diagonal coefficients depend on ``v``.
 
-        Order 2 still holds, but by the classical symmetric-splitting argument
-        rather than by ``[L_x, L_y] = 0``, which is false here. The error
-        *constant* carries the double commutators and grows with the transverse
-        variation: measured slope 2.05 at +/-10% amplitude, 1.91 at +/-30%, and
-        1.18 at +/-60% on an ``n_steps in {20,40,80}`` ladder at ``t = 0.02``.
-        Verify the slope on your own coefficient field rather than assuming it.
+        The *splitting* stays second-order by the classical symmetric-splitting
+        argument rather than by ``[L_x, L_y] = 0``, which is false here. The
+        error *constant* carries the double commutators and grows with the
+        transverse variation: measured slope 2.05 at +/-10% amplitude, 1.91 at
+        +/-30%, and 1.18 at +/-60% on an ``n_steps in {20,40,80}`` ladder at
+        ``t = 0.02`` — with ``a`` constant *along* each pencil, which is what
+        that gate varies.
+
+        Overall order is still capped by the axis kernels, so it is 1 as soon as
+        a coefficient varies along the axis it acts on — the usual case for a
+        full-grid field. Verify the slope on your own coefficient field rather
+        than assuming either number.
 
         Serial only — the threaded X/Y passes are not reused (ADR-0195 D2).
 
@@ -4875,10 +4891,14 @@ class Heat2DVarA:
 
 @final
 class Heat3DVarA:
-    """Variable-coefficient 3D heat Chernoff (M21, order 2).
+    """Variable-coefficient 3D heat Chernoff (M21, order 1).
 
     Solves du/dt = a_x(x)·u_xx + a_y(y)·u_yy + a_z(z)·u_zz via Strang3D.
     Additive sibling of Heat3D for non-unit diffusion.
+
+    Same operator and same order caveat as :class:`Heat2DVarA`: the
+    non-divergence form, and ``order()`` reports 1 because the axis kernels
+    freeze ``a`` at the node (ADR-0190 AMENDMENT 1).
     """
 
     def __init__(

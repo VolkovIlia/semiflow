@@ -188,8 +188,8 @@ Classes are grouped by kernel family. All stateful classes expose at least
 |-------|--------|-------|-------|
 | `Heat2D` | `Strang2D` | 2 | Unit diffusion on 2D grid; flat x-fastest output |
 | `Heat3D` | `Strang3D` | 2 | Unit diffusion on 3D grid; flat x-fastest output |
-| `Heat2DVarA` | `Strang2D` + variable-a | 2 | `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays |
-| `Heat3DVarA` | `Strang3D` + variable-a | 2 | `a_x u_xx + a_y u_yy + a_z u_zz`; pass `a_x`, `a_y`, `a_z` arrays |
+| `Heat2DVarA` | `Strang2D` + variable-a | 1 | **Non-divergence** `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays. Order 1, not 2: the axis kernels freeze `a` at the node (ADR-0190 AM1) |
+| `Heat3DVarA` | `Strang3D` + variable-a | 1 | **Non-divergence** `a_x u_xx + a_y u_yy + a_z u_zz`; same order caveat as `Heat2DVarA` |
 | `NonSeparable2D` | 5-leg palindromic | 2 | `∂²_x + ∂²_y + c·∂_x ∂_y`; scalar or `.with_beta_array` |
 | `NonSeparable2DAniso` | 5-leg + position-dep. β | 2 | `∂²_x + ∂²_y + β(x,y)·∂_x ∂_y`; requires `beta_values` array |
 
