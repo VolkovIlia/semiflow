@@ -96,6 +96,7 @@ mod graph_adjoint;
 mod graph_extra;
 mod graph_extra_heat;
 mod graph_heat_f32;
+mod general_op_py;
 mod graph_py;
 mod graph_krylov_py;
 mod graph_sensitivity_py;
@@ -245,7 +246,9 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     conservative_py::register(py, m)?;
     mass_op_py::register(py, m)?;
     phi_etdrk4_py::register(py, m)?;
-    symmetric_op_py::register(py, m)
+    symmetric_op_py::register(py, m)?;
+    // Issue #24: non-symmetric CSR operator action
+    general_op_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------

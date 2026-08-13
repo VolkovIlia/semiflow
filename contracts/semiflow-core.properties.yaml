@@ -9921,3 +9921,84 @@ implementation_notes:
     feature_gate: none
     introduced_in: issue-19-grid-batched
     authority: ADR-0193
+
+  - name: G_GENOP_DENSE
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — sup_error=4.441e-16 (drifted Fokker-Planck, n=10, t=0.3, arg=7.02, selected (s,m)=(6,18))"
+    rationale: |
+      G_GENOP_DENSE (RELEASE_BLOCKING, ADR-0194): upwinded drifted Fokker-Planck
+      ∂_t p = ∂_x(D ∂_x p) − ∂_x(μ p) on n=10 — genuinely unequal off-diagonals,
+      non-symmetric by construction rather than by rounding — evolved by
+      CsrExpmvChernoff at t=0.3 against a dense series reference summed to f64
+      convergence. The reference is independent of the path under test (different
+      scaling, different truncation, different arithmetic ordering) and was
+      cross-checked against a matrix-level scaling-and-squaring computation.
+      This gate is what caught the expmv::select_s_m finding recorded in ADR-0194:
+      at the tight ‖A‖_inf the shared selector returns (1,18), measuring 1.635e-4.
+    gate: "sup_error <= 1e-10"
+    test_file: "tests/general_operator_gates.rs::g_genop_dense"
+    feature_gate: none
+    introduced_in: issue-24-general-operator
+    authority: ADR-0194
+
+  - name: G_GENOP_NONNORMAL
+    type: BACKWARD_ERROR
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — sup_error=0.000e0 (Cartea-Jaimungal inventory ladder, n=12, t=0.5, arg=0.70 -> (s,m)=(1,18))"
+    rationale: |
+      G_GENOP_NONNORMAL (RELEASE_BLOCKING, ADR-0194): upper-bidiagonal
+      inventory-ladder generator — nilpotent plus diagonal, i.e. an
+      ill-conditioned eigenvector basis — is the case Arnoldi handles worst and
+      the reason the Taylor engine was chosen over it.
+      The tolerance is DELIBERATELY looser than G_GENOP_DENSE (1e-9 vs 1e-10).
+      Only the BACKWARD error is certified; for a severely non-normal A the
+      forward error can exceed the backward radius by kappa(V), which is not
+      estimated. This gate measures one instance and does not generalise — that
+      is the honest-limits statement of ADR-0194, made falsifiable.
+    gate: "sup_error <= 1e-9"
+    test_file: "tests/general_operator_gates.rs::g_genop_nonnormal"
+    feature_gate: none
+    introduced_in: issue-24-general-operator
+    authority: ADR-0194
+
+  - name: G_GENOP_ASYM_ACCEPTED
+    type: NEGATIVE_CONTROL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — SymmetricOperator::from_csr rejects the datum; GeneralOperator::from_csr accepts it"
+    rationale: |
+      G_GENOP_ASYM_ACCEPTED (RELEASE_BLOCKING, ADR-0194 TEETH gate): the SAME CSR
+      must be REJECTED by SymmetricOperator::from_csr and ACCEPTED by
+      GeneralOperator::from_csr. Without it the new capability could be an
+      accidental relaxation of an existing check rather than a genuinely new
+      operator class. Mirrors the G_CONS_NONCONS_FAILS pattern.
+      Companion `genop_transpose_is_exact` asserts the adjoint identity
+      <A^T x, y> == <x, A y> AND that A^T x differs from A x — the second half
+      being what proves the transpose is real rather than the self-adjoint
+      default GeneratorAction would otherwise supply.
+    gate: "SymmetricOperator::from_csr is_err AND GeneralOperator::from_csr is_ok"
+    test_file: "tests/general_operator_gates.rs::g_genop_asym_accepted"
+    feature_gate: none
+    introduced_in: issue-24-general-operator
+    authority: ADR-0194
+
+  - name: G_GENOP_COST_LINEAR
+    type: INFORMATIONAL
+    severity: ADVISORY
+    blocks_release: false
+    pass_status: "PASS (advisory) — cost ratio ~2.0x per doubling of t, confirming Theta(t*norm) scaling"
+    rationale: |
+      G_GENOP_COST_LINEAR (ADVISORY, ADR-0194): records s*m for t in {0.1,0.2,0.4}
+      and asserts each doubling costs 1.5-2.6x. This pins the ANTI-claim: the
+      Taylor path is NOT depth-flat, and G_GRAPH_EXPMV_DEPTH_FLAT must never be
+      extended to it. Stating that in prose is weaker than measuring it — if a
+      future change made the path depth-flat, or made someone believe it was,
+      this gate would notice.
+    gate: "cost(2t)/cost(t) in [1.5, 2.6]"
+    test_file: "tests/general_operator_gates.rs::g_genop_cost_linear_advisory"
+    feature_gate: none
+    introduced_in: issue-24-general-operator
+    authority: ADR-0194

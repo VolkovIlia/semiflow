@@ -182,7 +182,7 @@ pub mod float;
 pub(crate) mod gen_quadrature; pub mod generator_action;
 pub mod graph;
 pub mod graph_adjoint_presampled;
-pub mod graph_batched; pub mod grid_batched;
+pub mod graph_batched; pub mod general_operator; pub mod grid_batched;
 mod graph_batched_tests;
 pub mod graph_heat;
 pub mod graph_heat4;

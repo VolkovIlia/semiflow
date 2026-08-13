@@ -8,7 +8,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Issue campaign #17 / #19 / #21–#26.
 
-Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23 so far.
+Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23, #24 so far.
 
 ### Fixed
 
@@ -45,6 +45,19 @@ Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23 so far.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
+- **`GeneralOperator`** (#24, ADR-0194) — externally-assembled **non-symmetric**
+  CSR operators and their `e^{−tA}v` action. `SymmetricOperator::from_csr`
+  validates symmetry, closing the whole Krylov surface to non-self-adjoint
+  generators; drifted Fokker–Planck `∂_t p = ∂_x(D∂_x p) − ∂_x(μp)` and
+  Cartea–Jaimungal inventory ladders were both shut out. Routed to the
+  **existing** symmetry-agnostic scaled-truncated-Taylor engine rather than to
+  new Arnoldi code — which is also the safer choice for the nilpotent-plus-
+  diagonal ladder, where Arnoldi's residual-based stopping is least reliable.
+  Arnoldi stays deferred, now with a reason. Gates `G_GENOP_DENSE`,
+  `G_GENOP_NONNORMAL`, `G_GENOP_ASYM_ACCEPTED` (teeth), `G_GENOP_COST_LINEAR`
+  (advisory). Honest limits: cost is `Θ(t‖A‖_∞)` — **not** depth-flat; only the
+  backward error is certified; Chebyshev and Lanczos remain structurally
+  unavailable and there is deliberately no `path=` argument.
 - **`Shift1D.evolve_batched`** (#19, ADR-0193) — batched multi-channel evolve
   for the 1-D grid family, `[N, C]` in and out. A strike strip, bump Greeks, or
   a batch of Fokker–Planck density anchors is `C` independent solves under the
@@ -105,6 +118,17 @@ Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23 so far.
 
 ### Open
 
+- **`expmv::select_s_m`'s θ table is optimistic when fed a tight norm**
+  (found while building #24, ADR-0194 §Finding). At `arg = 7.02` it returns
+  `(s, m) = (1, 18)`, whose measured truncation error is **1.6e−4**, not double
+  precision; `(6, 18)` measures 4.4e−16 on the same datum. Existing callers do
+  not see this because they pass deliberately loose norm bounds
+  (`DiffusionExpmvChernoff` uses `4·a_norm_bound/dx²`), which inflates `s` enough
+  to compensate — so their gates pass on merit. `GeneralOperator` passes a tight
+  `‖A‖_∞` and so uses its own derived criterion
+  (`z ≤ (u·(m+1)!)^{1/(m+1)}`) instead. Retuning the shared table would change
+  the step counts and results of two shipped, gated kernels for a reason
+  unrelated to #24; left for a separate ADR.
 - **`Heat2DVarA` / `Heat3DVarA` pass `a' ≡ 0`, `a'' ≡ 0` to a divergence-form
   kernel.** `DiffusionChernoff` is documented as the ζ-A kernel for
   `∂_x(a(x)·∂_x)` and genuinely consumes both derivatives; its own module doc
