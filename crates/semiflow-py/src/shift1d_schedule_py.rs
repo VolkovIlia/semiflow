@@ -152,6 +152,48 @@ pub(crate) fn run_coefficient_schedule(
     Ok(state.values)
 }
 
+/// Batched `[N, C]` evolve for a `Shift1D` kernel (#19, ADR-0193).
+///
+/// Three-phase ADR-0031: validate + transpose to `[C, N]` under the GIL, run the
+/// whole batch inside one `py.detach`, transpose back under the GIL. The
+/// transpose is dissolved into the copy that crossing the GIL boundary requires
+/// anyway, so it costs nothing extra (ADR-0184 D1).
+///
+/// # Errors
+/// `GridMismatch` if `u0_nc` is not 2-D with `shape[0] == n`.
+pub(crate) fn evolve_batched_impl<'py>(
+    py: Python<'py>,
+    func: &ShiftChernoff1D<f64>,
+    grid: semiflow::Grid1D<f64>,
+    t: f64,
+    n_steps: usize,
+    u0_nc: numpy::PyReadonlyArray2<'py, f64>,
+) -> PyResult<Bound<'py, numpy::PyArray2<f64>>> {
+    let view = u0_nc.as_array();
+    let shape = view.shape();
+    let n = grid.n;
+    if shape[0] != n {
+        return Err(new_pyerr(
+            "GridMismatch",
+            &format!("u0_nc has shape[0]={}, expected n={n}", shape[0]),
+        ));
+    }
+    let n_cols = shape[1];
+    if n_cols == 0 {
+        return Err(new_pyerr("GridMismatch", "u0_nc must have at least 1 channel"));
+    }
+    let src_cn = crate::graph_py::gather_nc_to_cn(&view, n, n_cols);
+    if src_cn.iter().any(|v| !v.is_finite()) {
+        return Err(new_pyerr("NanInf", "u0_nc contains NaN or Inf"));
+    }
+    let mut dst_cn = vec![0.0_f64; n * n_cols];
+    let result = py.detach(|| {
+        semiflow::grid_batched::evolve_batched_1d(func, grid, t, n_steps, &src_cn, &mut dst_cn)
+    });
+    result.map_err(|e| crate::error::from_core(&e))?;
+    Ok(crate::graph_py::scatter_cn_to_nc(&dst_cn, n, n_cols, py))
+}
+
 /// Rebuild a `ChernoffSemigroup` carrying one segment's coefficients.
 ///
 /// Called after a schedule walk so the object's own kernel matches where the
@@ -177,4 +219,16 @@ pub(crate) fn semigroup_from_segment(
         grid,
     );
     semiflow::ChernoffSemigroup::new(kernel, 100)
+}
+
+/// Parse `a_schedule` without knowing `n_segments` up front — it defines it.
+pub(crate) fn count_then_parse(
+    obj: &Bound<'_, PyAny>,
+    n: usize,
+) -> PyResult<Vec<SegmentCoeff>> {
+    let items: Vec<Bound<'_, PyAny>> = obj
+        .try_iter()
+        .map_err(|_| new_pyerr("GridMismatch", "a_schedule must be a sequence"))?
+        .collect::<PyResult<_>>()?;
+    parse_schedule(Some(obj), items.len(), n, 0.0, "a_schedule")
 }

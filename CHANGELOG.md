@@ -8,7 +8,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Issue campaign #17 / #19 / #21–#26.
 
-Wave A (correctness): #17 + #26. Wave B (capability): #22, #23 so far.
+Wave A (correctness): #17 + #26. Wave B (capability): #19, #22, #23 so far.
 
 ### Fixed
 
@@ -45,6 +45,16 @@ Wave A (correctness): #17 + #26. Wave B (capability): #22, #23 so far.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
+- **`Shift1D.evolve_batched`** (#19, ADR-0193) — batched multi-channel evolve
+  for the 1-D grid family, `[N, C]` in and out. A strike strip, bump Greeks, or
+  a batch of Fokker–Planck density anchors is `C` independent solves under the
+  *same* generator with only `u0` differing; that was a Python loop paying
+  object construction and a GIL round-trip per column. Core entry point
+  `semiflow::grid_batched::evolve_batched_1d`, generic over any
+  `ChernoffFunction<F, S = GridFn1D<F>>`. Bit-identical to `C` sequential solves
+  (gate `G_GRID1D_BATCH_ULP`, asserted on `f64` bit patterns). Channel-parallel
+  and the pre-existing node-parallel path are mutually exclusive by
+  construction, so nesting cannot oversubscribe.
 - **`AdaptivePI.with_arrays`** (#22, ADR-0192) — adaptive PI stepping over a
   variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
   The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`

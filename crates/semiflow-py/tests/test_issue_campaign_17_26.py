@@ -339,3 +339,66 @@ class TestCoefficientSchedule:
             k.evolve_with_coefficient_schedule(
                 0.3, 10, [0.5], c_schedule=[np.zeros(self.N - 1)]
             )
+
+
+# ---------------------------------------------------------------------------
+# Issue #19 — batched multi-channel evolve for 1-D grid kernels
+# ---------------------------------------------------------------------------
+
+
+class TestShift1DBatched:
+    """Shift1D.evolve_batched: [N, C] in, [N, C] out, 0-ULP vs the loop (#19)."""
+
+    N = 129
+    XMIN, XMAX = -4.0, 4.0
+
+    def _kernel(self, u0):
+        x = np.linspace(self.XMIN, self.XMAX, self.N)
+        a = 0.3 + 0.2 * np.abs(np.tanh(0.5 * x))
+        b = 0.15 * np.sin(x)
+        c = -0.05 * np.log1p(x**2)
+        return Shift1D.with_arrays(
+            self.XMIN, self.XMAX, self.N, a, b, c, 0.7, u0
+        )
+
+    def _strip(self, n_cols):
+        """A strike strip: same generator, different initial conditions."""
+        x = np.linspace(self.XMIN, self.XMAX, self.N)
+        return np.stack(
+            [np.exp(-((x - (0.3 * c - 0.6)) ** 2)) + 0.01 * c for c in range(n_cols)],
+            axis=1,
+        )
+
+    def test_batched_is_bit_identical_to_the_python_loop(self):
+        """The point of the gate: batching must not perturb a single bit."""
+        for n_cols in (1, 3, 8):
+            u0_nc = self._strip(n_cols)
+            batched = self._kernel(u0_nc[:, 0]).evolve_batched(0.05, u0_nc, 7)
+            assert batched.shape == (self.N, n_cols)
+            for c in range(n_cols):
+                k = self._kernel(u0_nc[:, c].copy())
+                k.evolve(0.05, 7)
+                want = k.values()
+                assert np.array_equal(
+                    batched[:, c].view(np.int64), want.view(np.int64)
+                ), f"n_cols={n_cols} c={c}: batched != sequential bit-for-bit"
+
+    def test_batched_does_not_mutate_the_object(self):
+        u0_nc = self._strip(4)
+        k = self._kernel(u0_nc[:, 0])
+        before = k.values().copy()
+        k.evolve_batched(0.05, u0_nc, 5)
+        assert np.array_equal(k.values(), before)
+
+    def test_wrong_row_count_raises(self):
+        u0_nc = self._strip(3)
+        k = self._kernel(u0_nc[:, 0])
+        with pytest.raises(SemiflowError):
+            k.evolve_batched(0.05, u0_nc[:-1, :], 5)
+
+    def test_nan_input_raises(self):
+        u0_nc = self._strip(3).copy()
+        u0_nc[5, 1] = np.nan
+        k = self._kernel(u0_nc[:, 0])
+        with pytest.raises(SemiflowError):
+            k.evolve_batched(0.05, u0_nc, 5)

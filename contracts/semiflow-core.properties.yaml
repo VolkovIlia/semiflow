@@ -9893,3 +9893,31 @@ implementation_notes:
     feature_gate: none
     introduced_in: issue-26-degenerate-k
     authority: ADR-0191
+
+  - name: G_GRID1D_BATCH_ULP
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — bit-identical (to_bits equality) across n in {64,512,4096,8192} x n_cols in {1,2,3,5,8} x n_steps in {1,7}, serial and parallel builds"
+    rationale: |
+      G_GRID1D_BATCH_ULP (RELEASE_BLOCKING, ADR-0193 §"0-ULP"): the batched 1-D
+      grid evolve must be BIT-identical to n_cols sequential ChernoffSemigroup
+      solves, not merely close. Every channel runs the identical apply_into
+      sequence at the identical tau and there is no cross-channel reduction, so
+      0-ULP is achievable by construction (the ADR-0184 D5 argument carried over
+      from the graph path). Comparison is on raw f64 bit patterns, so a change
+      that perturbed the arithmetic — reordering, an FMA contraction, or a
+      ScratchPool leaking state between channels — cannot hide inside a
+      tolerance.
+      The grid sizes straddle the channel-parallel dispatch boundary in both
+      directions (node parallelism engages at 2 x min_points_per_thread, default
+      4096), so the parallel build exercises both branches.
+      Companion non-vacuity test `grid_batch_channels_are_independent`: perturbing
+      one channel's input must change that channel and no other. Bit-equality
+      against a sequential run would not catch shared-buffer cross-talk if both
+      paths were wrong the same way; this one does.
+    gate: "batched[c*N..(c+1)*N].to_bits() == sequential(c).to_bits() for all c"
+    test_file: "tests/grid_batched_ulp.rs::g_grid1d_batch_ulp"
+    feature_gate: none
+    introduced_in: issue-19-grid-batched
+    authority: ADR-0193

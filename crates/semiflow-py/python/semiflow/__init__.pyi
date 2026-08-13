@@ -789,6 +789,37 @@ class Shift1D:
         """
         ...
 
+    def evolve_batched(
+        self,
+        t: float,
+        u0_nc: NDArray[np.float64],
+        n_steps: int = 100,
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` channels under this kernel in one call (#19, ADR-0193).
+
+        ``u0_nc`` is ``[N, C]`` float64; the return has the same shape. Pricing a
+        strike strip, bumping for Greeks, or evolving a batch of Fokker-Planck
+        density anchors is ``C`` independent solves under the *same* generator
+        with only ``u0`` differing — previously a Python loop paying object
+        construction and a GIL round-trip per column.
+
+        **Functional**: does NOT mutate this object's own state, and uses the
+        coefficients and boundary policy it was built with.
+
+        Bit-identical to ``C`` sequential :meth:`evolve` calls (gate
+        ``G_GRID1D_BATCH_ULP``) — batching is a throughput device, not an
+        accuracy one. Above 2 channels the work is spread across threads when
+        the grid is small enough that node-level parallelism is not already
+        engaged; the two regimes are mutually exclusive by construction.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if ``u0_nc`` is not 2-D with ``shape[0] == n``;
+            kind='NanInf' on non-finite entries.
+        """
+        ...
+
     def evolve_with_coefficient_schedule(
         self,
         t_final: float,
