@@ -74,7 +74,7 @@ mod full {
     #[wasm_bindgen]
     pub struct GraphAdjointPresampled {
         ps: PreSampledMagnusAdj<f64>,
-        /// Dummy graph for GraphSignal allocator (n_nodes only).
+        /// Dummy graph for `GraphSignal` allocator (`n_nodes` only).
         graph: Arc<Graph<f64>>,
         tau: f64,
         n_steps: usize,
@@ -86,7 +86,12 @@ mod full {
         /// in adjoint-schedule order.
         ///
         /// The host must sample the Laplacian at exactly these times to build `valsSeq`.
-        pub fn abscissaTimes(t_horizon: f64, n_steps: u32) -> Result<Float64Array, JsValue> {
+        ///
+        /// # Errors
+        /// Throws a JS `Error` for `n_steps == 0` or non-finite/non-positive
+        /// `t_horizon`.
+        #[wasm_bindgen(js_name = "abscissaTimes")]
+        pub fn abscissa_times(t_horizon: f64, n_steps: u32) -> Result<Float64Array, JsValue> {
             let ns = n_steps as usize;
             if ns == 0 || !t_horizon.is_finite() || t_horizon <= 0.0 {
                 return Err(make_js_error(
@@ -111,8 +116,13 @@ mod full {
         /// tHorizon   — total time horizon.
         /// rhoBar     — Gershgorin spectral bound.
         /// kind       — 0 = combinatorial, 1 = sym-normalized.
+        ///
+        /// # Errors
+        /// Throws a JS `Error` on an inconsistent CSR shape or an invalid
+        /// horizon/step count.
         #[allow(clippy::too_many_arguments)]
-        pub fn fromPresampled(
+        #[wasm_bindgen(js_name = "fromPresampled")]
+        pub fn from_presampled(
             n_nodes: u32,
             row_ptr: &[u32],
             col_idx: &[u32],
@@ -145,6 +155,7 @@ mod full {
             let ps = MagnusGraphHeatChernoff::<f64>::from_presampled(seq, rho_bar, false)
                 .map_err(|e| err_to_js(&e))?;
             let graph = Arc::new(Graph::<f64>::path(nn.max(1)));
+            #[allow(clippy::cast_precision_loss)] // ns is a u32-sourced step count
             let tau = t_horizon / ns as f64;
             Ok(GraphAdjointPresampled {
                 ps,
@@ -157,7 +168,12 @@ mod full {
         /// Backward costate sweep `lambdaN → lambda0`.
         ///
         /// `nSteps` must match the construction value.
-        pub fn evolveStateAdjoint(
+        ///
+        /// # Errors
+        /// Throws a JS `Error` if `n_steps` differs from the construction value
+        /// or the cotangent length does not match the node count.
+        #[wasm_bindgen(js_name = "evolveStateAdjoint")]
+        pub fn evolve_state_adjoint(
             &self,
             lambda_n: &[f64],
             n_steps: u32,
@@ -185,12 +201,16 @@ mod full {
         }
 
         /// Number of graph nodes.
-        pub fn nNodes(&self) -> usize {
+        #[wasm_bindgen(js_name = "nNodes")]
+        #[must_use]
+        pub fn n_nodes(&self) -> usize {
             self.ps.n_nodes()
         }
 
         /// Number of construction-time steps.
-        pub fn nSteps(&self) -> usize {
+        #[wasm_bindgen(js_name = "nSteps")]
+        #[must_use]
+        pub fn n_steps(&self) -> usize {
             self.n_steps
         }
     }

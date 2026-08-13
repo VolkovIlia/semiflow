@@ -28,11 +28,10 @@
 
 use std::sync::Arc;
 
-use js_sys::Float64Array;
 use semiflow::{
     magnus_graph::LaplacianAtTime,
     varcoef_magnus_graph::{VarCoefMagnusGraphHeatChernoff as CoreVarCoefMagnus, WeightAtTime},
-    Graph, GraphSignal, Laplacian, MagnusGraphHeat6thChernoff as CoreMagnusK6,
+    Graph, GraphSignal, MagnusGraphHeat6thChernoff as CoreMagnusK6,
     MagnusGraphHeatChernoff as CoreMagnusK4, ScratchPool,
 };
 use wasm_bindgen::prelude::*;
@@ -42,8 +41,7 @@ use crate::{
     graph_wasm::GraphPath,
 };
 
-mod graph_magnus_wasm_helpers;
-use graph_magnus_wasm_helpers::{make_a_at_t, make_lap_at_t, validate_evolve, JsLapCb};
+use crate::graph_magnus_wasm_helpers::{make_a_at_t, make_lap_at_t, validate_evolve, JsLapCb};
 
 // ---------------------------------------------------------------------------
 // MagnusGraphHeat — Magnus K=4 time-varying graph heat

@@ -141,11 +141,12 @@ impl LaplacianWasm {
     /// CSR row-pointer array (copy), length `n_nodes + 1`.
     ///
     /// Returns a `Uint32Array`. Values are `usize` widened to `u32`; graphs
-    /// are bounded to u32::MAX nodes so no truncation occurs in practice.
+    /// are bounded to `u32::MAX` nodes so no truncation occurs in practice.
     ///
     /// # Errors
     /// Throws on allocation failure (extremely unlikely).
     #[wasm_bindgen(js_name = "rowPtr")]
+    #[must_use]
     pub fn row_ptr(&self) -> Vec<u32> {
         self.inner.row_ptr().iter().map(|&x| x as u32).collect()
     }
@@ -154,14 +155,16 @@ impl LaplacianWasm {
     ///
     /// Returns a `Uint32Array`.
     #[wasm_bindgen(js_name = "colIdx")]
+    #[must_use]
     pub fn col_idx(&self) -> Vec<u32> {
-        self.inner.col_idx().iter().map(|&x| x).collect()
+        self.inner.col_idx().to_vec()
     }
 
     /// CSR values array (copy), length `n_directed_edges`.
     ///
     /// Returns a `Float64Array`.
     #[wasm_bindgen(js_name = "vals")]
+    #[must_use]
     pub fn vals(&self) -> Vec<f64> {
         self.inner.vals().to_vec()
     }
