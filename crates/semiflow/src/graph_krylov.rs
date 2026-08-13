@@ -36,16 +36,18 @@ pub const MAX_DENSE_N: usize = 12;
 /// Stiff operators (`z_total > Z_SAFE`) use `s = ⌈z_total / Z_SAFE⌉` substeps.
 const Z_SAFE: f64 = 200.0;
 
-/// Al-Mohy–Higham 2011 Table 3.1 (`m`, `θ_m`).  Mirror of `expmv.rs::THETA_M`.
+/// Al-Mohy–Higham 2011 Table 3.1 (`m`, `θ_m`).  Mirror of `expmv.rs::THETA_M`,
+/// truncated at `m = MAX_LANCZOS_DIM = 18` (a structural cap: the tridiagonal
+/// buffers are `[[F; 18]; 18]`).
+///
+/// CORRECTED in ADR-0197 — the previous values were mis-paired with their
+/// degrees, so `lanczos_select_s_m` under-substepped by up to 8×.
+#[rustfmt::skip]
 const THETA_M: &[(u32, f64)] = &[
-    (1, 2.29e-16),
-    (2, 2.58e-8),
-    (4, 3.40e-3),
-    (5, 1.44e-1),
-    (8, 1.44),
-    (10, 2.74),
-    (13, 4.74),
-    (18, 8.84),
+    (1, 2.220e-16), (2, 2.581e-8),  (3, 1.386e-5),  (4, 3.397e-4),  (5, 2.401e-3),
+    (6, 9.066e-3),  (7, 2.384e-2),  (8, 4.991e-2),  (9, 8.958e-2),  (10, 1.442e-1),
+    (11, 2.142e-1), (12, 2.996e-1), (13, 3.998e-1), (14, 5.139e-1), (15, 6.411e-1),
+    (16, 7.803e-1), (17, 9.305e-1), (18, 1.091),
 ];
 
 // ── KrylovPath ───────────────────────────────────────────────────────────────

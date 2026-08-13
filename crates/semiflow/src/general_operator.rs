@@ -179,8 +179,8 @@ fn row_sum_norm<F: SemiflowFloat>(n: usize, row_ptr: &[usize], vals: &[F]) -> f6
     let mut best = 0.0_f64;
     for i in 0..n {
         let mut acc = 0.0_f64;
-        for k in row_ptr[i]..row_ptr[i + 1] {
-            acc += vals[k].to_f64().unwrap_or(f64::NAN).abs();
+        for v in &vals[row_ptr[i]..row_ptr[i + 1]] {
+            acc += v.to_f64().unwrap_or(f64::NAN).abs();
         }
         if acc > best {
             best = acc;
@@ -285,13 +285,13 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
                 value: tau_f,
             });
         }
-        let (s, m) = select_s_m_tight(self.op.norm_inf, tau_f);
-        let tau_s = from_f64::<F>(tau_f / f64::from(s));
+        let (n_sub, degree) = select_s_m_tight(self.op.norm_inf, tau_f);
+        let tau_s = from_f64::<F>(tau_f / f64::from(n_sub));
         let mut y = src.to_vec();
-        let mut w = vec![F::zero(); n];
+        let mut work = vec![F::zero(); n];
         let mut av = vec![F::zero(); n];
-        for _ in 0..s {
-            horner_substep(&self.op, &mut y, &mut w, &mut av, tau_s, m);
+        for _ in 0..n_sub {
+            horner_substep(&self.op, &mut y, &mut work, &mut av, tau_s, degree);
         }
         if y.iter().any(|v| !v.is_finite()) {
             return Err(SemiflowError::DomainViolation {
@@ -304,46 +304,25 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
     }
 }
 
-/// Taylor degree used by [`CsrExpmvChernoff`]. Matches `expmv::M_MAX`.
-const TAYLOR_M: u32 = 18;
-
-/// Largest per-substep argument `z = (τ/s)·‖A‖` admitted at degree [`TAYLOR_M`].
-///
-/// Derived, not tabulated: the degree-`m` Taylor truncation term at argument `z`
-/// is `z^{m+1}/(m+1)!`, so requiring it at unit roundoff gives
-/// `z ≤ (u·(m+1)!)^{1/(m+1)}`. At `m = 18`, `u = 2⁻⁵³`:
-/// `(2.2204e−16 · 19!)^{1/19} = (26.75)^{1/19} = 1.1894`.
-const Z_MAX: f64 = 1.1894;
-
 /// Scaling/degree selection for this kernel.
 ///
-/// **Why not `expmv::select_s_m`.** That selector is shared with
-/// `DiffusionExpmvChernoff` and `phi_action`, and its θ table is optimistic when
-/// fed a *tight* norm: at `arg = 7.02` it returns `(s, m) = (1, 18)`, whose
-/// measured truncation error on the drifted-Fokker–Planck datum is **1.6e−4**,
-/// not double precision. Its existing callers never see this because they pass a
-/// deliberately loose bound (`DiffusionExpmvChernoff` uses `4·a_norm_bound/dx²`,
-/// an over-estimate that inflates `s` enough to compensate). `GeneralOperator`
-/// passes the tight `‖A‖_∞`, so the optimism is exposed rather than masked.
+/// Delegates to [`crate::expmv::select_s_m`], the shared Al-Mohy–Higham
+/// selector. It did NOT always do so: this kernel originally carried its own
+/// derived criterion (`z ≤ (u·(m+1)!)^{1/(m+1)} = 1.1894` at `m = 18`) because
+/// the shared θ table was optimistic when fed a *tight* norm — at `arg = 7.02`
+/// it returned `(s, m) = (1, 18)`, whose measured truncation error on the
+/// drifted-Fokker–Planck datum was `1.6e−4`, not double precision. Existing
+/// callers never saw it because they pass deliberately loose bounds
+/// (`DiffusionExpmvChernoff` uses `4·a_norm_bound/dx²`) that inflate `s` enough
+/// to compensate; `GeneralOperator` passes the tight `‖A‖_∞`.
 ///
-/// Rather than retune a table shared by two gated kernels — which would change
-/// their step counts and results — this kernel uses the self-contained criterion
-/// above. Under it the same datum selects `(6, 18)` and measures `4.4e−16`.
-/// The shared table is flagged as a separate finding in ADR-0194; it is not
-/// touched here.
+/// ADR-0197 traced that to a mis-transcribed table and corrected it. The derived
+/// forward-error radius (1.1894) and the corrected backward-error radius
+/// (`θ_18 = 1.091`) agree to within 10%, so the duplication no longer buys
+/// anything and the shared selector — which also offers degrees up to 30, and so
+/// fewer substeps — is used instead.
 fn select_s_m_tight(norm_a: f64, tau: f64) -> (u32, u32) {
-    let arg = tau * norm_a;
-    if !arg.is_finite() || arg <= Z_MAX {
-        return (1, TAYLOR_M);
-    }
-    let s_raw = (arg / Z_MAX).ceil();
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    let s = if s_raw >= f64::from(u32::MAX) {
-        u32::MAX
-    } else {
-        s_raw as u32
-    };
-    (s.max(1), TAYLOR_M)
+    crate::expmv::select_s_m(norm_a, tau)
 }
 
 /// One Horner substep of `e^{−τ_s A}` truncated at degree `m`.
