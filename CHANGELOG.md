@@ -6,7 +6,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Issue campaign #17 / #21 / #26 — correctness wave.
+Issue campaign #17 / #19 / #21–#26.
+
+Wave A (correctness): #17 + #26. Wave B (capability): #22, #23 so far.
 
 ### Fixed
 
@@ -43,6 +45,21 @@ Issue campaign #17 / #21 / #26 — correctness wave.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
+- **`AdaptivePI.with_arrays`** (#22, ADR-0192) — adaptive PI stepping over a
+  variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
+  The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`
+  arm hard-codes `a=0.5, b=0, c=0` — so Black-Scholes-type generators had no
+  adaptive path and `n_steps` was hand-tuned per (grid, maturity, vol) triple.
+- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0192) — per-segment
+  schedules for **all three** coefficients, each entry independently a scalar or
+  a length-`n` array. Closes both gaps in `evolve_with_time_schedule`: no `b`/`c`
+  schedules, and no space-varying coefficients inside a schedule (the
+  Almgren–Chriss killing term `−γν(t)(p − ην(t))` needs both). Runs the whole
+  walk in one GIL release with the state kept in Rust, ping-pongs instead of
+  cloning the state per step, and leaves the object's coefficients at the final
+  segment so a subsequent `evolve` continues instead of reverting.
+  `evolve_with_time_schedule` is unchanged; its revert-on-next-evolve behaviour
+  is now documented rather than altered.
 - **`AnisotropicShiftND2.set_state` accepts a `(nx, ny)` array**, and
   **`values_2d()`** returns one. The library's flat layout is x-fastest
   (`flat[i + j*nx]` — Fortran order for shape `(nx, ny)`), and a reflexive
@@ -75,22 +92,6 @@ Issue campaign #17 / #21 / #26 — correctness wave.
   domain requires, where the old one read `[a, b, c, c, …]` with `g[0]` and
   `g[3]` differing by a factor of 22. The index clamp had been breaking the
   reflection symmetry at the two ends.
-
-- **`AdaptivePI.with_arrays`** (#22, ADR-0192) — adaptive PI stepping over a
-  variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
-  The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`
-  arm hard-codes `a=0.5, b=0, c=0` — so Black-Scholes-type generators had no
-  adaptive path and `n_steps` was hand-tuned per (grid, maturity, vol) triple.
-- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0192) — per-segment
-  schedules for **all three** coefficients, each entry independently a scalar or
-  a length-`n` array. Closes both gaps in `evolve_with_time_schedule`: no `b`/`c`
-  schedules, and no space-varying coefficients inside a schedule (the
-  Almgren–Chriss killing term `−γν(t)(p − ην(t))` needs both). Runs the whole
-  walk in one GIL release with the state kept in Rust, ping-pongs instead of
-  cloning the state per step, and leaves the object's coefficients at the final
-  segment so a subsequent `evolve` continues instead of reverting.
-  `evolve_with_time_schedule` is unchanged; its revert-on-next-evolve behaviour
-  is now documented rather than altered.
 
 ### Open
 
