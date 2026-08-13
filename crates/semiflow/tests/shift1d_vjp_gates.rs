@@ -74,7 +74,7 @@ fn g_shift1d_weights_oracle() {
                 // boundary folds are exercised, not just the interior.
                 for k in -20..=(20 + 20 * (n as i32)) {
                     let y = XMIN - 5.0 * dx + (k as f64) * dx * 0.37;
-                    let direct = grid.interp_generic(&u, y).unwrap();
+                    let direct = grid.interp(&u, y).unwrap();
                     let via = semiflow::shift1d_vjp::weight_row_dot(&grid, y, &u).unwrap();
                     assert!(
                         (direct - via).abs() <= 1e-12 * direct.abs().max(1.0),

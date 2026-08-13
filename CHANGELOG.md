@@ -149,6 +149,19 @@ All eight issues closed.
 
 ### Open
 
+- **Adding `shift1d_vjp` (#25) slows the unrelated 1-D pre-sampled path by ~70%**
+  (ADR-0196 AMENDMENT 1). `test_path2_faster_than_path1` measures 2.5× at
+  baseline and through #21, and **1.9× with #25** — the gate asserts ≥2×, so it
+  now **fails**. Bisected commit-by-commit; removing `pub mod shift1d_vjp` and
+  changing nothing else restores 2.5×, so it is the module's *presence* under
+  `codegen-units = 1` + LTO, not any call into it. Two fixes were tried and did
+  not work: making the module f64-monomorphic on the SIMD `Grid1D::interp` path
+  (kept anyway — it is an independent correctness fix, since the gradient must
+  differentiate the sampler the solve runs) and `#[inline(always)]` on
+  `Grid1D::interp` (reverted). Left failing rather than relaxed: the project's
+  gate-integrity rule reserves threshold changes for the architect. Options are
+  an approved threshold change, feature-gating the module, or a codegen
+  investigation.
 - **`expmv::select_s_m`'s θ table is optimistic when fed a tight norm**
   (found while building #24, ADR-0194 §Finding). At `arg = 7.02` it returns
   `(s, m) = (1, 18)`, whose measured truncation error is **1.6e−4**, not double

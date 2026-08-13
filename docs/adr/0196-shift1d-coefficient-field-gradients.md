@@ -118,3 +118,51 @@ is documented rather than implied.
   sharing the trajectory is possible and is not shipped.
 - **f64 only**, and `ChebyshevSpectralWithBC` grids are unsupported (its
   virtual-node construction is transposable in principle; deferred).
+
+## AMENDMENT 1 (2026-08-13) — a measured performance regression this ADR causes
+
+**Status**: OPEN — needs an architect decision. Recorded rather than papered over.
+
+Adding `shift1d_vjp` to the core crate slows the **unrelated** 1-D pre-sampled
+coefficient path by ~70%. Measured by `test_path2_faster_than_path1`
+(`crates/semiflow-py/tests/test_coeff.py`), which asserts that
+`Heat1D.with_a_array` (pre-sampled, pure Rust) is ≥2× faster than
+`Heat1D.with_a_function` (Python callback):
+
+| tree | Path 1 | Path 2 | speedup |
+|---|---|---|---|
+| baseline `0e6d25b` | 122.0 ms | 49.2 ms | **2.5×** |
+| through #21 (`249434d`) | 121.6 ms | 48.4 ms | **2.5×** |
+| with #25 (`d2ded9e`) | 167.8 ms | 83.0 ms | **1.9×** ✗ |
+| #25, module removed | 122.0 ms | 48.8 ms | **2.5×** |
+
+Bisected commit-by-commit: every commit through #21 measures 2.5×; #25 alone
+moves it. Removing `pub mod shift1d_vjp` — changing nothing else — restores
+2.5×, so it is the module's **presence**, not any call into it, that costs the
+time. Under `codegen-units = 1` with LTO, the added code changes global inlining
+decisions on a path it never executes.
+
+Two fixes were tried and **did not work**:
+
+1. **Making the module f64-monomorphic and routing it through `Grid1D::interp`**
+   (the f64 SIMD entry point) instead of `interp_generic`. This was kept anyway —
+   it is an independent *correctness* improvement, because the gradient must
+   differentiate the sampler the forward solve actually runs, and `interp` and
+   `interp_generic` can differ at ULP level. It did not move the timing.
+2. **`#[inline(always)]` on `Grid1D::interp`**, on the theory that the new
+   external caller had pushed it out of the hot path's inline budget. No effect;
+   reverted.
+
+**Not resolved here, deliberately.** The obvious "fix" is to relax the 2× gate,
+and that is exactly what the project's gate-integrity rule forbids the producing
+agent from doing on its own authority. The options are an architect-approved
+threshold change (with a `Gate-Change-Approved-By:` trailer), feature-gating
+`shift1d_vjp` so the default wheel is unaffected — which only moves the decision,
+since the wheel must enable it to expose `shift1d_coeff_grad` — or a codegen
+investigation. The gate is left **failing** so the decision is visible.
+
+Worth weighing in that decision: the property the gate exists to protect
+("pre-sampled is substantially faster than the callback path") still holds at
+1.9×; what has actually regressed is ~70% of absolute throughput on a 1-D hot
+path, which matters for the tail-latency niche the README names as one of the
+library's two confirmed wins.

@@ -54,6 +54,15 @@
 //! `InterpKind` and every `BoundaryPolicy`, including ones added later. The
 //! support assumption is not taken on faith — `weight_row` is gated against
 //! `Σ_j w_j·u_j == sample(u, y)` on random data.
+//!
+//! The probing uses `Grid1D::interp` — the **f64 SIMD** entry point the forward
+//! kernel itself uses — not the scalar `interp_generic`. That is a correctness
+//! requirement (the gradient must differentiate the sampler the solve actually
+//! runs, and the two can differ at ULP level) and it is also why this module is
+//! f64-monomorphic: instantiating `interp_generic` at `f64` from a new call site
+//! made every septic/octonic/Chebyshev generic sampler newly reachable there,
+//! and under `codegen-units = 1` + LTO that perturbed inlining enough to slow
+//! the 1-D pre-sampled path by ~70% (`test_path2_faster_than_path1`, 2.5x -> 1.9x).
 
 extern crate alloc;
 
@@ -80,15 +89,10 @@ pub(crate) const MAX_ROW: usize = 2 * PROBE_HALF_WIDTH as usize + 2 + 6;
 /// folds to interior nodes arbitrarily far from the raw index — a raw-index
 /// window silently misses them, which is exactly what
 /// `G_SHIFT1D_WEIGHTS_ORACLE` falsified on the first attempt.
-fn candidate_nodes<F: SemiflowFloat>(
-    grid: &Grid1D<F>,
-    y: F,
-    idx_out: &mut [usize; MAX_ROW],
-) -> usize {
+fn candidate_nodes(grid: &Grid1D<f64>, y: f64, idx_out: &mut [usize; MAX_ROW]) -> usize {
     let n = grid.n;
-    let t_frac = (y - grid.xmin) / grid.dx();
     #[allow(clippy::cast_possible_truncation)]
-    let centre = num_traits::Float::floor(t_frac).to_f64().unwrap_or(0.0) as i64;
+    let centre = ((y - grid.xmin) / grid.dx()).floor() as i64;
     let mut count = 0_usize;
     let push = |j: usize, count: &mut usize, idx_out: &mut [usize; MAX_ROW]| {
         if !idx_out[..*count].contains(&j) && *count < MAX_ROW {
@@ -97,7 +101,7 @@ fn candidate_nodes<F: SemiflowFloat>(
         }
     };
     for d in -PROBE_HALF_WIDTH..=PROBE_HALF_WIDTH + 1 {
-        match crate::boundary::bc_index::<F>(grid.boundary, n, centre + d) {
+        match crate::boundary::bc_index::<f64>(grid.boundary, n, centre + d) {
             crate::boundary::BoundaryHit::Inside(j) => push(j, &mut count, idx_out),
             crate::boundary::BoundaryHit::RobinSkew { reflected, .. }
             | crate::boundary::BoundaryHit::OddReflected { reflected } => {
@@ -132,19 +136,19 @@ fn candidate_nodes<F: SemiflowFloat>(
 ///
 /// # Errors
 /// Propagates `Unsupported` from the grid's interpolation kind.
-pub(crate) fn weight_row<F: SemiflowFloat>(
-    grid: &Grid1D<F>,
-    y: F,
-    probe: &mut [F],
+pub(crate) fn weight_row(
+    grid: &Grid1D<f64>,
+    y: f64,
+    probe: &mut [f64],
     idx_out: &mut [usize; MAX_ROW],
-    w_out: &mut [F; MAX_ROW],
+    w_out: &mut [f64; MAX_ROW],
 ) -> Result<usize, SemiflowError> {
     let count = candidate_nodes(grid, y, idx_out);
     for slot in 0..count {
         let j = idx_out[slot];
-        probe[j] = F::one();
-        w_out[slot] = grid.interp_generic(probe, y)?;
-        probe[j] = F::zero();
+        probe[j] = 1.0;
+        w_out[slot] = grid.interp(probe, y)?;
+        probe[j] = 0.0;
     }
     Ok(count)
 }
@@ -161,14 +165,14 @@ pub(crate) fn weight_row<F: SemiflowFloat>(
 ///
 /// # Errors
 /// Propagates `Unsupported` from the grid's interpolation kind.
-pub(crate) fn sample_deriv<F: SemiflowFloat>(
-    values: &[F],
-    grid: &Grid1D<F>,
-    y: F,
-) -> Result<F, SemiflowError> {
-    let delta = grid.dx() * crate::float::from_f64::<F>(1.0e-4_f64);
-    let plus = grid.interp_generic(values, y + delta)?;
-    let minus = grid.interp_generic(values, y - delta)?;
+pub(crate) fn sample_deriv(
+    values: &[f64],
+    grid: &Grid1D<f64>,
+    y: f64,
+) -> Result<f64, SemiflowError> {
+    let delta = grid.dx() * 1.0e-4_f64;
+    let plus = grid.interp(values, y + delta)?;
+    let minus = grid.interp(values, y - delta)?;
     Ok((plus - minus) / (delta + delta))
 }
 
@@ -223,9 +227,9 @@ fn forward_step(
 ) -> Result<(), SemiflowError> {
     for i in 0..grid.n {
         let (fp, fm, fd) = feet(grid, co, tau, i);
-        dst[i] = 0.25 * grid.interp_generic(src, fp)?
-            + 0.25 * grid.interp_generic(src, fm)?
-            + 0.50 * grid.interp_generic(src, fd)?
+        dst[i] = 0.25 * grid.interp(src, fp)?
+            + 0.25 * grid.interp(src, fm)?
+            + 0.50 * grid.interp(src, fd)?
             + tau * co.c[i] * src[i];
     }
     Ok(())
@@ -417,16 +421,16 @@ pub fn shift1d_forward(
 ///
 /// # Errors
 /// Propagates from the grid's interpolation kind.
-pub fn weight_row_dot<F: SemiflowFloat>(
-    grid: &Grid1D<F>,
-    y: F,
-    values: &[F],
-) -> Result<F, SemiflowError> {
-    let mut probe = vec![F::zero(); grid.n];
+pub fn weight_row_dot(
+    grid: &Grid1D<f64>,
+    y: f64,
+    values: &[f64],
+) -> Result<f64, SemiflowError> {
+    let mut probe = vec![0.0_f64; grid.n];
     let mut idx = [0_usize; MAX_ROW];
-    let mut w = [F::zero(); MAX_ROW];
+    let mut w = [0.0_f64; MAX_ROW];
     let k = weight_row(grid, y, &mut probe, &mut idx, &mut w)?;
-    let mut acc = F::zero();
+    let mut acc = 0.0_f64;
     for slot in 0..k {
         acc += w[slot] * values[idx[slot]];
     }
