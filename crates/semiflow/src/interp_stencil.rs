@@ -1,6 +1,6 @@
 //! [`interp_stencil`] — node offsets and weights for a 1-D interpolant (ADR-0190).
 //!
-//! Every interpolant SemiFlow supports is **linear in the node values**: sampling
+//! Every interpolant `SemiFlow` supports is **linear in the node values**: sampling
 //! at a cell-local fraction `s ∈ [0, 1)` is a fixed-offset weighted sum
 //!
 //! ```text
@@ -97,11 +97,13 @@ fn catmull_rom_weights<F: SemiflowFloat>(s: F) -> ([i64; K_MAX], [F; K_MAX]) {
     let half = crate::float::half::<F>();
     let s2 = s * s;
     let s3 = s2 * s;
-    let w_m1 = half * (-s + two * s2 - s3);
-    let w_0 = half * (two - five * s2 + three * s3);
-    let w_1 = half * (s + four * s2 - three * s3);
-    let w_2 = half * (-s2 + s3);
-    ([-1, 0, 1, 2], [w_m1, w_0, w_1, w_2])
+    // Named by node position rather than by offset (`w_m1`/`w_1` differ in one
+    // character and read as typos of one another).
+    let w_prev = half * (-s + two * s2 - s3);
+    let w_cur = half * (two - five * s2 + three * s3);
+    let w_next = half * (s + four * s2 - three * s3);
+    let w_far = half * (-s2 + s3);
+    ([-1, 0, 1, 2], [w_prev, w_cur, w_next, w_far])
 }
 
 #[cfg(test)]
@@ -119,6 +121,9 @@ mod tests {
     }
 
     #[test]
+    // Bit-exactness at `s = 0` is the claim, not an accidental float compare:
+    // it is why sampling at a node reproduces that node's value to the last ULP.
+    #[allow(clippy::float_cmp)]
     fn catmull_rom_weights_interpolate_nodes() {
         let (_, w0) = catmull_rom_weights::<f64>(0.0);
         assert_eq!(w0, [0.0, 1.0, 0.0, 0.0]);

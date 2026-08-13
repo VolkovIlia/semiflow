@@ -146,35 +146,184 @@ order: the measurement says cubic already saturates the fix.
   a factor of 22. The index clamp had been breaking the reflection symmetry
   asymmetrically at the two ends, and the fix restores it.
 
-## Related finding — left OPEN, deliberately
+## AMENDMENT 1 (2026-08-14) — the `Heat2DVarA` `a' ≡ 0` question, settled
 
-`Heat2DVarA` / `Heat3DVarA` build their per-axis kernels by passing `a' ≡ 0` and
-`a'' ≡ 0` to `DiffusionChernoff` (`anisotropic_nd3.rs::build_axis_diff`). Since
-`DiffusionChernoff` is documented as the ζ-A kernel for the **divergence form**
-`∂_x(a(x)·∂_x)`, genuinely consumes both derivatives, and its own module doc
-calls `|_| 0.0` the *constant-`a`* migration path, this reads as a bug of the
-same family as the one this ADR fixes — a variable coefficient silently losing
-the terms that make the discretisation the advertised one.
+The original text of this section left the `a' ≡ 0` / `a'' ≡ 0` closures in
+`anisotropic_nd3.rs::build_axis_diff` recorded as an OPEN question: a
+self-convergence measurement could not discriminate between the two candidate
+operators, because both sit at the `O(τ¹)` global ceiling that ADR-0112
+AMENDMENT 2 and math.md §9.2.3.B already document for variable `a`. What was
+missing was an analytic oracle. It has now been built, and the question is
+closed.
 
-It is **not** changed here, on two grounds. First, all three binding surfaces —
-`anisotropic_nd3.rs`, `semiflow-ffi/src/strang_nd_2d_ffi.rs`,
-`semiflow-wasm/src/strang_nd_wasm.rs` — consistently advertise the
-*non-divergence* operator `∂_t u = a_x(x)·∂_xx u + a_y(y)·∂_yy u`. Supplying the
-derivatives would switch three public APIs to a different PDE without anyone
-asking. Second, the evidence does not support the change: a 1-D A/B on
-`Heat1D.with_a_array` (variable `a = 1 + ½sin(πx)`, `N = 129`, self-convergence
-over `n_steps ∈ {20, 40, 80}` against a 1280-step reference) measured slopes
-1.089 / 1.144 with zeroed derivatives and 1.029 / 1.089 with derived ones, with
-*larger* absolute error in the derived case. Both sit at the O(τ¹) global
-ceiling that ADR-0112 AMENDMENT 2 and math.md §9.2.3.B already document for
-variable `a`, so a self-convergence measurement cannot discriminate between the
-two candidate operators at all.
+### The oracle
 
-What would settle it: an analytic oracle for each candidate (`∂_x(a ∂_x u)` and
-`a·u_xx`) on a manufactured solution, plus an architect decision on which
-operator `Heat2DVarA` is contractually meant to be. Recorded in the rustdoc at
-the call site and as a skipped test carrying this evidence, so the question stays
-visible rather than being silently resolved either way.
+On a periodic grid (`N = 128`, `a(x) = 1 + ½sin 2πx`, `t = 0.02`) the two
+candidate generators were assembled as dense matrices — `diag(a)·D₂` for the
+non-divergence form `a(x)·u_xx`, and the conservative arithmetic-face operator
+for `∂_x(a ∂_x)` — and exponentiated by scaling-and-squaring. They differ by
+`7.8e−2` in sup norm, so the comparison is not vacuous. `Heat1D.with_a_array`
+accepts explicit `a_prime` / `a_double_prime`, which lets the *same* kernel be
+run in both configurations:
+
+| kernel configuration | `‖u − a·u_xx‖` | `‖u − (a u_x)_x‖` |
+|---|---|---|
+| `a' = a'' = 0` (the `Heat2DVarA` per-axis kernel) | **6.8e−3** | 7.4e−2 |
+| `a'`, `a''` from FD (the shipped 1-D path) | 8.2e−2 | **6.7e−3** |
+
+Both residuals are flat in `n_steps` from 200 to 12800, i.e. they are the spatial
+discretisation error, not a temporal one. Each configuration is an order of
+magnitude closer to one reference than to the other.
+
+### Verdict
+
+The zeroed closures are **correct**, and produce exactly the operator all three
+binding surfaces advertise. Zeroing them collapses the kernel to the
+frozen-coefficient stencil — nodes at `x`, `x ± 2√(a(x)τ)`, `x ± 2√(3a(x)τ)`
+with the Gauss–Hermite weights, and the entire ζ-A correction identically zero
+because every one of its terms carries a factor `a'` or `a''` — which is a
+consistent discretisation of `a(x)·∂_xx`. No API changes PDE.
+
+### What *was* wrong: the order claim
+
+`Heat2DVarA::order()` and `Heat3DVarA::order()` returned **2**. They do not earn
+it. The Strang composition is second-order, but composition order is capped by
+its axis kernels, and the frozen-coefficient stencil expands as
+
+```text
+  S(τ)f      = f + τ·a f'' + (τ²/2)·a² f'''' + …
+  e^{τa∂ₓₓ}f = f + τ·a f'' + (τ²/2)·a (a f'')'' + …
+```
+
+which agree at `O(τ)` and differ at `O(τ²)` by `(τ²/2)·a·(a'' f'' + 2a' f''')`
+whenever `a` varies. Consistency order is therefore 1. Measured on the same
+datum by self-convergence over `n_steps ∈ {80, 160, 320, 640}` against a
+40960-step reference: **slope −1.007** for the zeroed kernel, against −1.459 for
+the divergence-form path.
+
+Both now report `order() == 1`, on the ADR-0112 precedent ("correct `order()` to
+1 rather than keep an unearned claim"). `DiffusionChernoff::order() == 2` is
+untouched and remains correct: that order is earned when `a'`/`a''` are actually
+supplied.
+
+### Gates
+
+`G_FROZEN_COEFF_NONDIV` and `G_FROZEN_COEFF_ORDER1`
+(`crates/semiflow/tests/frozen_coeff_operator.rs`, Pattern B). The first carries
+the dense-reference comparison, including the non-vacuity check that the two
+references genuinely differ; the second pins the order-1 slope, and fails loudly
+if the kernel ever becomes order 2, since `order()` would then be wrong again in
+the other direction.
+
+Note what this closes that no previous test could: every existing oracle for this
+kernel — `F(0) = I`, constant preservation, temporal self-convergence — is
+satisfied by *both* candidate operators, and the one quantitative test used
+`a ≡ 1`, exactly the case where they coincide.
+
+## AMENDMENT 2 (2026-08-14) — the FFI/WASM `boundary` mirror is not a parity gap
+
+The original plan called for mirroring the new `boundary=` kwarg on
+`AnisotropicShiftND2/3` into the C ABI and the WASM surface, per the bindings
+parity rule. That turned out to rest on a false premise, so it is **not** done,
+and the reason is recorded here rather than left as a silent omission.
+
+Neither surface exposes boundary selection **for any kernel**. Every FFI
+constructor hard-codes `.with_boundary(BoundaryPolicy::Reflect)` — `adaptive_ffi`,
+`cdr_ffi`, `diffusion_hi_zeta_ffi`, `expmv_ffi`, `drift_reaction_zeta4_ffi` and
+the rest — and `semiflow-wasm` never calls `with_boundary` at all, so every WASM
+kernel runs on the `Reflect` default. This predates the campaign: `Shift1D` has
+carried `boundary=` in Python since before it, against an FFI `Shift1D` that
+cannot express anything but `Reflect`.
+
+Adding the parameter to exactly the two ND constructors would therefore not
+restore parity; it would create a new inconsistency inside the C ABI, where one
+constructor of forty takes a boundary and the rest silently do not. Exposing
+boundary selection across the C and WASM surfaces is a coherent piece of work —
+one shared parser, one enum in the header, one sweep of the constructors, and an
+ABI decision about whether to extend existing entry points or add `_bc` variants
+— and it belongs in its own change, not as a two-function exception here.
+
+## AMENDMENT 3 (2026-08-14) — `G_DDIM` fails, and the reason is that its estimator was measuring the wrong thing
+
+**Status**: OPEN — needs an architect decision. The gate is left failing.
+
+`G_DDIM D=2` (`RELEASE_BLOCKING`, `anisotropic_shift_nd_d2_slope.rs`) now reads
+`slope = −0.9249` against a `≤ −0.95` gate. It read `≈ −1.03` before this ADR.
+Nothing about the gate changed; what changed is the sampler underneath it. The
+investigation below says the gate was never measuring what it claimed, and the
+kernel's true temporal order on its own normative datum is **½**, not 1.
+
+### The estimator is contaminated
+
+The gate is a self-convergence test: reference at `n_ref = 512`, sweep
+`n ∈ {32, 64, 128, 256}`. The largest swept `n` is **half** the reference, so the
+last point's "error" is dominated by the reference's own remaining temporal
+error. Holding the sweep fixed and raising only `n_ref` shows it directly:
+
+| `n_ref` | 512 | 1024 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|---|
+| slope, `N_AXIS = 8` | −0.925 | −0.718 | −0.625 | −0.574 | −0.543 |
+| slope, `N_AXIS = 16` | −0.934 | −0.727 | −0.634 | −0.583 | −0.552 |
+
+A converged estimator would be flat in `n_ref`. This one drifts monotonically
+toward ≈ −0.55, i.e. the `−0.95` the gate used to see was an artefact of a
+reference only 2× finer than the datum.
+
+### The order is ½
+
+Successive differences `sup|u_{2n} − u_n|` need no reference and cannot be
+contaminated. Their ratio is the convergence factor per halving of τ:
+
+| `n → 2n` | 32→64 | 64→128 | 128→256 | 256→512 | 512→1k | 1k→2k | 2k→4k | 4k→8k | 8k→16k |
+|---|---|---|---|---|---|---|---|---|---|
+| ratio, `N_AXIS = 8` | — | 1.374 | 1.383 | 1.391 | 1.398 | 1.402 | 1.406 | 1.408 | 1.410 |
+| ratio, `N_AXIS = 16` | — | 1.397 | 1.398 | 1.401 | 1.404 | 1.407 | 1.409 | 1.410 | 1.411 |
+| ratio, `N_AXIS = 32` | — | 0.917 | 1.294 | 1.371 | 1.384 | 1.393 | 1.399 | 1.404 | 1.407 |
+
+The ratio settles on **√2 = 1.414**, stably across three grid resolutions and
+nine octaves of `n`. Order 2 would give 4, order 1 would give 2. This is
+`O(τ^{1/2})`.
+
+The mechanism is consistent with the kernel's own structure. The Gauss–Hermite
+shift is `2√(a τ)·η`, and for a *variable* `A` the coefficient is frozen at the
+node while the sample is taken at the shifted point, so the operator mismatch is
+`A′·2√(aτ)·η` — a relative `O(√τ)` on the leading `O(τ)` term, i.e. local
+`O(τ^{3/2})` and global `O(τ^{1/2})`. ADR-0112's "honest order-1" accounted for a
+variable-`A` per-step mismatch of `O(τ²)`; the `√τ` inside the shift makes it
+`O(τ^{3/2})`.
+
+### It is not a regression
+
+The same probe on the pre-campaign baseline (`0e6d25b`) gives ratios of
+1.28 / 1.35 / 1.45 / 1.66 / 1.90 / 1.73 — noisy, no clean power law — with
+absolute differences an order of magnitude larger (`1.9e−2` against `2.2e−3` at
+`n = 32→64`, `N_AXIS = 8`). So the order was never 1. What this ADR changed is
+that the kernel became ~10× more accurate and its convergence became clean
+enough to read.
+
+### Why this is not resolved here
+
+Three things would have to be decided together, and two of them are the
+architect's:
+
+1. **`order()` cannot express ½.** `ChernoffFunction::order()` returns `u32`
+   (ADR-0074), and `AnisotropicShiftChernoffND::order()` returns 1. Truncating ½
+   to 0 would change adaptive step control; leaving 1 keeps an unearned claim.
+2. **Re-baselining the gate is a threshold change.** The estimator should be
+   fixed (`n_ref ≥ 8·n_max`), which makes the gate fail *harder*, and the
+   threshold restated near `−0.45`. The project's gate-integrity rule reserves
+   that for the architect, and the producing agent self-approving is the
+   anti-pattern the rule exists to prevent.
+3. **`shift_nd_zeta2` may already be the answer.** The ζ² correction exists to
+   lift exactly this kernel, and its own gates (`G_AS_ZETA2_TAU2`) confirm a
+   genuine `O(τ²)` correction magnitude. Whether it lifts the *global* order to 1
+   has not been measured with an uncontaminated estimator, and should be before
+   anyone changes `order()`.
+
+The gate is left **failing** so the decision is visible. `ADR-0112 §Decision 3`'s
+`N(D)` ladder, and the `FLAG for ai-solutions-architect` already carried in the
+test's own header, are both downstream of the same contaminated measurement and
+should be revisited in the same pass.
 
 ## Honest limits
 

@@ -10113,3 +10113,87 @@ implementation_notes:
     pattern: B
     introduced_in: issue-25-coeff-vjp
     authority: ADR-0196
+
+  - name: G_THETA_M_TABLE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — |T_m(±θ_m) − exp(±θ_m)| / |exp(±θ_m)| <= 1e-12 at all 22 degrees"
+    rationale: |
+      G_THETA_M_TABLE (RELEASE_BLOCKING, ADR-0197 §45.2): every (m, θ_m) pair in
+      expmv.rs::THETA_M and its graph_krylov.rs mirror is a radius that degree m
+      actually honours. The shipped table paired each degree with a radius from
+      two to three rows further down Al-Mohy & Higham Table 3.1 — m=18 carried
+      θ≈8.84, whose true owner is m≈51, against its own 1.09 — so select_s_m
+      chose too few substeps and results were silently wrong (1.6e-4 where
+      double precision was claimed).
+      Nothing in the previous suite could see it: expmv_div_form_action_accuracy
+      measures ABSOLUTE sup-error on a strongly decaying symmetric operator,
+      where a relative error of 1e4 at the claimed radius hides inside an
+      absolute error of 1e-15, and its own reference runs at per-step argument
+      <= 1.0, i.e. inside the CORRECT radius.
+      Tolerance 1e-12: the corrected table's own worst forward error is 3.8e-14
+      (monomial Horner roundoff on top of the backward-error radius), and the
+      smallest damaging mis-pairing measured 1.4e-8.
+      Honest limit, asserted in the companion non-vacuity test: the old
+      (4, 3.40e-3) entry is 10x too permissive in BACKWARD-error terms but its
+      forward error is 3.8e-15, below the corrected table's own worst case. A
+      forward-error gate is structurally blind to that entry; it is corrected on
+      the strength of the exact-rational recomputation, not of this gate.
+    gate: "rel(T_m(±θ_m), exp(±θ_m)) <= 1e-12 for every table entry; and the five damaging pre-ADR-0197 radii must FAIL that bound"
+    test_file: "tests/theta_m_table.rs::g_theta_m_table"
+    feature_gate: none
+    pattern: A
+    introduced_in: theta-m-correction
+    authority: ADR-0197
+
+  - name: G_FROZEN_COEFF_NONDIV
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — |u - nondiv| = 6.8e-3 vs |u - div| = 7.4e-2 (references separated by 7.8e-2)"
+    rationale: |
+      G_FROZEN_COEFF_NONDIV (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.C):
+      identifies WHICH PDE the zeroed-derivative DiffusionChernoff solves.
+      Heat2DVarA/Heat3DVarA build each axis kernel with a' = a'' = 0 alongside a
+      variable a; because DiffusionChernoff is the zeta-A discretisation of the
+      DIVERGENCE form and genuinely consumes both derivatives, that reads as a
+      bug. It is not: the zeroed kernel is a consistent discretisation of the
+      NON-DIVERGENCE operator a(x)*u_xx, which is what all three binding
+      surfaces advertise.
+      Both candidate generators are assembled densely on a periodic grid and
+      exponentiated by scaling-and-squaring; the gate asserts the kernel is at
+      least 5x closer to the non-divergence reference, and separately that the
+      two references differ by more than 1e-2 so the comparison is not vacuous.
+      Every pre-existing oracle for this kernel (F(0)=I, constant preservation,
+      temporal self-convergence) is satisfied by BOTH operators, and the one
+      quantitative test used a = 1, exactly where they coincide.
+    gate: "|u - diag(a)D2 ref| * 5 < |u - d_x(a d_x) ref|, with reference separation > 1e-2"
+    test_file: "tests/frozen_coeff_operator.rs::g_frozen_coeff_nondiv"
+    feature_gate: "slow-tests"
+    pattern: B
+    introduced_in: heat2dvara-operator-resolution
+    authority: ADR-0190
+
+  - name: G_FROZEN_COEFF_ORDER1
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — OLS slope -1.007 over n_steps in {80,160,320,640} vs a 40960-step reference"
+    rationale: |
+      G_FROZEN_COEFF_ORDER1 (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.C):
+      the frozen-coefficient stencil is consistency order 1, not 2, for variable
+      a. S(tau)f = f + tau*a*f_xx + (tau^2/2)*a^2*f_xxxx + ... against
+      exp(tau*a*d_xx)f = f + tau*a*f_xx + (tau^2/2)*a*(a*f_xx)_xx + ...; the
+      tau^2 terms differ by (tau^2/2)*a*(a''*f_xx + 2*a'*f_xxx).
+      This is why Heat2DVarA::order() and Heat3DVarA::order() were corrected
+      from 2 to 1 (ADR-0112 precedent: correct order() rather than keep an
+      unearned claim). The band is two-sided on purpose — a measured slope near
+      2 would mean the kernel changed and order() is wrong in the other
+      direction.
+    gate: "-1.25 <= OLS slope <= -0.85"
+    test_file: "tests/frozen_coeff_operator.rs::g_frozen_coeff_order1"
+    feature_gate: "slow-tests"
+    pattern: B
+    introduced_in: heat2dvara-operator-resolution
+    authority: ADR-0190

@@ -15,6 +15,10 @@
 //! exact `1.0` — i.e. the error grew with the very parameter users increase to
 //! improve accuracy.
 
+// Grid-index -> coordinate arithmetic; every index here is a small test
+// constant, far below the f64 mantissa.
+#![allow(clippy::cast_precision_loss)]
+
 use semiflow::{
     grid_nd::{GridFnND, GridND},
     shift_nd::AnisotropicShiftChernoffND,

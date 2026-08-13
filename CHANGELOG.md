@@ -34,6 +34,35 @@ All eight issues closed.
   vector silently. This was the only path in the conservative subsystem without
   a finiteness backstop.
 
+- **`expmv`'s θ_m table was mis-transcribed** (ADR-0197, math §45.2.bis) —
+  **`expmv` and the Lanczos path were silently under-substepping by up to 8×.**
+  `THETA_M` claimed to be Al-Mohy & Higham Table 3.1 but paired each degree with
+  a radius from two to three rows further down it: `m = 18` carried `θ ≈ 8.84`,
+  whose real owner is `m ≈ 51`, against its own `θ_18 = 1.09`. Since
+  `select_s_m` takes `s = ⌈τ‖A‖/θ_m⌉`, too large a θ means too few substeps and
+  a wrong answer with no runtime symptom. Forward relative error of `T_18` at
+  the claimed radius: **3.8e+04**; at the correct one, 5.0e−16. The replacement
+  values were recomputed from the definition in exact rational arithmetic rather
+  than re-copied, and reproduce Table 3.1 at every degree. `M_MAX` raised 18 → 30
+  (the old cap protected the Horner *argument*, which the wrong table was itself
+  violating). `graph_krylov`'s mirror corrected in place, keeping its structural
+  `m ≤ 18` cap. Found while building #24 — the tight `‖A‖_∞` there exposed what
+  loose norm bounds elsewhere had been masking. New gate `G_THETA_M_TABLE`;
+  `expmv_div_form_action_accuracy` improves from 1.1e−15 to 2.2e−16.
+- **`Heat2DVarA` / `Heat3DVarA` claimed order 2 and are order 1**
+  (ADR-0190 AMENDMENT 1, math §9.2.3.C). Their axis kernels freeze `a` at the
+  node, which agrees with `e^{τa∂ₓₓ}` at `O(τ)` and differs at `O(τ²)` by
+  `(τ²/2)·a·(a''f'' + 2a'f''')` whenever `a` varies. Measured global order
+  **1.007**. Corrected on the ADR-0112 precedent; `DiffusionChernoff::order() == 2`
+  is untouched and still earned, because that path supplies `a'`/`a''`.
+- **The WASM crate's `full` feature never compiled.** `graph_magnus_wasm.rs`
+  declared `mod graph_magnus_wasm_helpers;` at a path that has never existed
+  (Rust 2018 resolves a nested `mod` in a non-`mod.rs` file to a subdirectory),
+  and `graph_adjoint_wasm.rs` carried five non-snake-case methods. No build path
+  enables `full` — not `xtask wasm-build`, not CI — so ~20 gated modules,
+  including the whole Magnus graph surface, had been dead and unbuildable.
+  Fixed, and CI now type-checks `--features full` so it cannot rot again.
+
 ### Added
 
 - **`k ≥ 0` in conservative divergence-form diffusion** (#26, ADR-0191,
@@ -147,48 +176,50 @@ All eight issues closed.
   `g[3]` differing by a factor of 22. The index clamp had been breaking the
   reflection symmetry at the two ends.
 
+- **`shift1d_vjp` no longer costs the 1-D path 70%** (ADR-0196 AMENDMENT 1).
+  The regression recorded below in the previous revision was real but was not in
+  that module: `boundary::bc_value` / `bc_index` / `reflect_index` flip between
+  inlined and out-of-line with unrelated crate volume, and a septic sample
+  resolves eight nodes through `bc_value` while `DiffusionChernoff` takes eleven
+  samples per grid node — ~88 calls per node, ~2.2 M per `evolve(0.1, 100)`.
+  Marking the three `#[inline(always)]` removes the fragility. Ten other
+  interventions (`inline(always)` on `Grid1D::interp`, on `GridFn1D::sample`,
+  outlining the samplers, hot-arm-first dispatch, resolving the coefficient
+  `Storage` variant once per node, `codegen-units = 16`, `lto = "off"`, …) were
+  each built and timed, changed nothing, and were reverted. Results are unchanged
+  bit-for-bit. The path is now **faster than before the campaign**: Path 2
+  50.7 ms → 34.2 ms, Path 1 123.8 ms → 110.4 ms, speedup 2.4× → 3.2× against the
+  same `0e6d25b` baseline re-measured on the same machine.
+- `general_operator` uses the shared `expmv::select_s_m` again, now that the θ
+  table it was avoiding is correct; its own derived criterion is deleted.
+
 ### Open
 
-- **Adding `shift1d_vjp` (#25) slows the unrelated 1-D pre-sampled path by ~70%**
-  (ADR-0196 AMENDMENT 1). `test_path2_faster_than_path1` measures 2.5× at
-  baseline and through #21, and **1.9× with #25** — the gate asserts ≥2×, so it
-  now **fails**. Bisected commit-by-commit; removing `pub mod shift1d_vjp` and
-  changing nothing else restores 2.5×, so it is the module's *presence* under
-  `codegen-units = 1` + LTO, not any call into it. Two fixes were tried and did
-  not work: making the module f64-monomorphic on the SIMD `Grid1D::interp` path
-  (kept anyway — it is an independent correctness fix, since the gradient must
-  differentiate the sampler the solve runs) and `#[inline(always)]` on
-  `Grid1D::interp` (reverted). Left failing rather than relaxed: the project's
-  gate-integrity rule reserves threshold changes for the architect. Options are
-  an approved threshold change, feature-gating the module, or a codegen
-  investigation.
-- **`expmv::select_s_m`'s θ table is optimistic when fed a tight norm**
-  (found while building #24, ADR-0194 §Finding). At `arg = 7.02` it returns
-  `(s, m) = (1, 18)`, whose measured truncation error is **1.6e−4**, not double
-  precision; `(6, 18)` measures 4.4e−16 on the same datum. Existing callers do
-  not see this because they pass deliberately loose norm bounds
-  (`DiffusionExpmvChernoff` uses `4·a_norm_bound/dx²`), which inflates `s` enough
-  to compensate — so their gates pass on merit. `GeneralOperator` passes a tight
-  `‖A‖_∞` and so uses its own derived criterion
-  (`z ≤ (u·(m+1)!)^{1/(m+1)}`) instead. Retuning the shared table would change
-  the step counts and results of two shipped, gated kernels for a reason
-  unrelated to #24; left for a separate ADR.
-- **`Heat2DVarA` / `Heat3DVarA` pass `a' ≡ 0`, `a'' ≡ 0` to a divergence-form
-  kernel.** `DiffusionChernoff` is documented as the ζ-A kernel for
-  `∂_x(a(x)·∂_x)` and genuinely consumes both derivatives; its own module doc
-  calls `|_| 0.0` the *constant-`a`* migration. This was investigated as a bug
-  and is **not** being changed: all three binding surfaces (PyO3, FFI, WASM)
-  consistently advertise the *non-divergence* operator `a_x(x)·∂_xx u`, and
-  supplying the derivatives would silently switch which PDE they solve. What
-  remains unresolved is whether zeroing the closures is a principled
-  discretisation of `a·u_xx` or just the γ-A stencil with its correction terms
-  off. A 1-D A/B (variable `a = 1 + ½sin(πx)`, self-convergence over
-  `n_steps ∈ {20, 40, 80}` vs a 1280-step reference) measured slope ≈1.09/1.14
-  zeroed and ≈1.03/1.09 derived — both at the O(τ¹) global ceiling that ADR-0112
-  AMENDMENT 2 and math.md §9.2.3.B already document for variable `a`, so the
-  measurement does not discriminate. Settling it needs an analytic oracle per
-  candidate operator and an architect decision. Recorded at
-  `anisotropic_nd3.rs::build_axis_diff` and as a skipped test with its evidence.
+- **`G_DDIM D=2` fails at slope −0.9249 (gate ≤ −0.95), and its estimator was
+  never sound** (ADR-0190 AMENDMENT 3). The gate is a self-convergence test whose
+  reference sits at `n_ref = 512` against a sweep reaching `n = 256` — only 2×
+  finer, so the last point measures the reference's own error. Holding the sweep
+  and raising `n_ref` to 1024 / 2048 / 4096 / 8192 walks the slope to
+  −0.72 / −0.63 / −0.57 / −0.54. Reference-free successive differences
+  `sup|u_{2n} − u_n|` settle on a ratio of **√2** across `n ∈ [32, 16384]` and
+  `N_AXIS ∈ {8, 16, 32}`: the kernel's global temporal order on its own normative
+  variable-`A` datum is **½**, not 1. The mechanism is the `√τ` inside the
+  Gauss–Hermite shift — freezing `A` at the node costs `A′·2√(aτ)η`, i.e. local
+  `O(τ^{3/2})`. Not a regression: the same probe on `0e6d25b` gives no clean
+  power law at all and errors 10× larger; the ND sampler fix made the kernel
+  accurate enough for its order to be legible. Left failing, because resolving it
+  means (a) deciding what `order()` should return when the answer is ½ and the
+  trait returns `u32`, (b) re-baselining a `RELEASE_BLOCKING` threshold, which
+  the gate-integrity rule reserves for the architect, and (c) first measuring
+  whether `shift_nd_zeta2`'s ζ² correction lifts the global order, with an
+  estimator that is not contaminated.
+- **Boundary selection is absent from the C and WASM surfaces entirely**
+  (ADR-0190 AMENDMENT 2). Every FFI constructor hard-codes
+  `BoundaryPolicy::Reflect` and `semiflow-wasm` never calls `with_boundary` at
+  all; this predates the campaign (`Shift1D` has had `boundary=` in Python for
+  longer). Mirroring the new ND `boundary=` kwarg into just those two
+  constructors would create an inconsistency rather than fix one, so it is not
+  done here — exposing boundary selection across both surfaces is its own change.
 
 ## [0.11.0-beta] — 2026-06-27
 

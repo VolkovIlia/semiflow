@@ -263,7 +263,7 @@ mod tests {
         }
         // Reuse same buffer.
         let v2 = pool.borrow_vec(32);
-        assert!(v2.len() == 32);
+        assert_eq!(v2.len(), 32);
         // All zero after borrow (resize fills with zero).
         assert!(v2.iter().all(|&x| x == 0.0));
         drop(v2);

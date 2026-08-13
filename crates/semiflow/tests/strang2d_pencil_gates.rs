@@ -11,6 +11,10 @@
 //! * `G_PENCIL_ORDER2` — τ-self-convergence with `a_x` varying **only**
 //!   transversally, which `Strang2D` cannot represent at all.
 
+// Grid-index -> coordinate arithmetic; `ax`/`ay` name the two axis
+// coefficients the kernel under test names them.
+#![allow(clippy::cast_precision_loss, clippy::similar_names)]
+
 use semiflow::{
     strang2d_pencil::Strang2DPencil, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
     ScratchPool, Strang2D,
@@ -191,7 +195,7 @@ fn pencil_counts_are_validated() {
     .is_err());
     assert!(Strang2DPencil::new(
         (0..N).map(|_| const_kernel(1.0, gx)).collect(),
-        (0..N + 1).map(|_| const_kernel(1.0, gy)).collect(),
+        (0..=N).map(|_| const_kernel(1.0, gy)).collect(),
         grid,
     )
     .is_err());

@@ -6,11 +6,20 @@
 //! object's state.
 
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
-#![allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
+#![allow(
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    // `a`/`b`/`c`/`n`/`t` are the Python-facing keyword names; renaming them to
+    // satisfy a lint would break the documented call signature.
+    clippy::many_single_char_names,
+    clippy::similar_names
+)]
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow::shift1d_vjp::{shift1d_coeff_gradient, ShiftCoeffField, ShiftCoeffs};
+use semiflow::shift1d_vjp::{
+    shift1d_coeff_gradient, Shift1DProblem, ShiftCoeffField, ShiftCoeffs,
+};
 
 use crate::{
     boundary::parse_boundary,
@@ -79,8 +88,13 @@ pub fn shift1d_coeff_grad<'py>(
         let tau = t / n_steps as f64;
         let mut grad = vec![0.0_f64; n];
         let result = py.detach(|| {
-            let co = ShiftCoeffs { a: &a, b: &b, c: &c };
-            shift1d_coeff_gradient(&grid, &co, field, &u0, tau, n_steps, &dj_du_n, &mut grad)
+            let problem = Shift1DProblem {
+                grid: &grid,
+                coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+                tau,
+                n_steps,
+            };
+            shift1d_coeff_gradient(&problem, field, &u0, &dj_du_n, &mut grad)
         });
         result.map_err(|e| from_core(&e))?;
         Ok(grad.as_slice().to_pyarray(py))

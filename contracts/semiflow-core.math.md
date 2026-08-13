@@ -1452,6 +1452,45 @@ constant α=0.5; ±50% otherwise per ADR-0008 Amendment 1 budget).
   correction. Mathematically straightforward; deferred behind
   cost-benefit analysis.
 
+#### §9.2.3.C — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0190 AMENDMENT 1)
+
+`DiffusionChernoff` takes `a`, `a'`, `a''` as independent closures. Supplying a
+*variable* `a` together with `a' ≡ 0`, `a'' ≡ 0` — as `Heat2DVarA` / `Heat3DVarA`
+do for each axis — is not an inconsistency; it selects a different operator.
+
+**Reduction.** With `a' ≡ 0` the inner-Strang shift is the identity
+(`x_pre = x + (τ/2)·a'(x) = x`, the §9.2.3 reduction lemma), and every term of
+the ζ-A correction `τ²(a a' f''' + (a a''/2) f'' + (a' a''/4) f')` carries a
+factor `a'` or `a''` and vanishes identically. What remains is the five-node
+Gauss–Hermite stencil with `a` **frozen at the evaluation node**:
+
+$$ (S_{\text{frozen}}(\tau)f)(x) \;=\; W_0 f(x) + W_1\big[f(x + h) + f(x-h)\big] + W_2\big[f(x + h_3) + f(x - h_3)\big], $$
+
+with $h = 2\sqrt{a(x)\tau}$, $h_3 = 2\sqrt{3a(x)\tau}$ and the moment weights
+$(W_0, W_1, W_2) = (7/12,\, 3/16,\, 1/48)$, exact through the fourth Gaussian
+moment.
+
+**Which operator.** Expanding at fixed `x`,
+
+$$ S_{\text{frozen}}(\tau)f = f + \tau\, a(x) f'' + \tfrac{\tau^2}{2} a(x)^2 f'''' + O(\tau^3), $$
+
+so $S_{\text{frozen}}(0) = I$ and $S'_{\text{frozen}}(0) = a(x)\partial_{xx}$:
+the Chernoff generator is the **non-divergence** operator $a(x)\,\partial_{xx}$,
+not $\partial_x(a\,\partial_x)$. This is verified against dense references rather
+than only argued — `G_FROZEN_COEFF_NONDIV`.
+
+**Order.** Against $e^{\tau a \partial_{xx}} f = f + \tau a f'' + \tfrac{\tau^2}{2} a\,(a f'')'' + O(\tau^3)$
+the $\tau^2$ terms differ by $\tfrac{\tau^2}{2}\,a\,(a'' f'' + 2 a' f''')$, which
+is non-zero wherever `a` varies. Consistency order is therefore **1**, and the
+`τ³` commutator cancellation that lifts the Strang composition to global
+$O(\tau^2)$ (previous subsection) does not apply, because the factors are only
+local-$O(\tau^2)$. Measured global order: **1.007** (`G_FROZEN_COEFF_ORDER1`).
+
+Consequence for the public surface: `Heat2DVarA::order()` and
+`Heat3DVarA::order()` report 1. Order 2 is recovered exactly when `a` is constant
+along the axis being swept, where `a' ≡ 0` is *true* rather than imposed and the
+reduction lemma makes the kernel bit-identical to the constant-`a` formula.
+
 #### Strang-composition order preservation (cross-ref §9.4 / §9.7)
 
 `StrangSplit<DiffusionChernoff, DriftReactionChernoff>` order analysis
@@ -11076,6 +11115,51 @@ $\arg \approx 9$ loses precision; remaining argument is traded into $s$ — Al-M
 Higham Code Fragment 3.1 guard). Total cost: $s\cdot m$ banded mat-vecs, each
 $O(K\!\cdot\!N)$; no LU, no $Q^{-1}$, no dense matrix; $O(1)$ work vectors $y, w$
 ($\texttt{no\_std + alloc}$ clean).
+
+### §45.2.bis — The θ_m table (NORMATIVE, ADR-0197)
+
+$\theta_m$ is the largest argument at which the degree-$m$ truncated Taylor
+exponential $T_m$ meets double-precision **backward** error: writing
+$e^{-x}T_m(x) = \exp\!\big(\sum_{k>m} c_k x^k\big)$ and
+$h_{m+1}(x) = \sum_{k>m} |c_k| x^k$,
+
+$$\theta_m \;=\; \max\{\theta > 0 \;:\; h_{m+1}(\theta)/\theta \le u\},\qquad u = 2^{-53}.$$
+
+The selector takes $s = \lceil \tau\lVert A\rVert / \theta_m\rceil$, so a
+$\theta_m$ that is too large yields too few substeps and a silently inaccurate
+result — the failure has no runtime symptom.
+
+**Correction (ADR-0197).** The shipped table paired each degree with a radius
+belonging to a degree two to three rows further down Al-Mohy & Higham Table 3.1:
+`(5, 1.44e-1)` carries $\theta_{10}$, `(8, 1.44)` carries $\theta_{20}$,
+`(13, 4.74)` carries $\theta_{35}$, and `(18, 8.84)` carries $\theta_{51}$
+against its own $\theta_{18} = 1.09$. Only the first two entries were right.
+Measured consequence, forward relative error of $T_m(-x)$ against $e^{-x}$:
+`3.8e+04` at the old $(18, 8.84)$, `2.9e+00` at $(13, 4.74)$, against `5.0e-16`
+at the correct $(18, 1.09)$.
+
+The replacement values were **recomputed from the definition above** in exact
+rational arithmetic rather than re-copied, and reproduce Table 3.1 to three
+significant figures at every degree:
+
+| $m$ | $\theta_m$ | $m$ | $\theta_m$ | $m$ | $\theta_m$ |
+|---|---|---|---|---|---|
+| 1 | 2.220e−16 | 9 | 8.958e−2 | 17 | 9.305e−1 |
+| 2 | 2.581e−8 | 10 | 1.442e−1 | 18 | 1.091 |
+| 3 | 1.386e−5 | 11 | 2.142e−1 | 19 | 1.260 |
+| 4 | 3.397e−4 | 12 | 2.996e−1 | 20 | 1.438 |
+| 5 | 2.401e−3 | 13 | 3.998e−1 | 25 | 2.429 |
+| 6 | 9.066e−3 | 14 | 5.139e−1 | 30 | 3.540 |
+| 7 | 2.384e−2 | 15 | 6.411e−1 | | |
+| 8 | 4.991e−2 | 16 | 7.803e−1 | | |
+
+`M_MAX` is raised $18 \to 30$: the previous cap protected the *argument* of a
+monomial Horner evaluation ("above arg ≈ 9"), a limit the wrong table was itself
+violating, and with correct radii the per-substep argument never exceeds
+$\theta_{30} = 3.54$. `graph_krylov`'s mirror keeps $m \le 18$, a structural cap
+from its $[[F;18];18]$ tridiagonal buffers.
+
+Gate: `G_THETA_M_TABLE`.
 
 ### §45.2 — Why this is NOT the closed Padé path (structural bypass; CITATION)
 

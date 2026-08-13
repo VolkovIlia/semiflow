@@ -9,6 +9,9 @@
 //! the scaled-and-squared Taylor path under test (different scaling, different
 //! truncation, different arithmetic ordering).
 
+// Row/column index -> matrix entry arithmetic on small test operators.
+#![allow(clippy::cast_precision_loss)]
+
 use semiflow::general_operator::{expmv_cost_probe, GeneralOperator};
 
 /// Dense `e^{−tA}·v` by direct series summation — independent of the kernel.

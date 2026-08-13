@@ -12,8 +12,21 @@
 //! * `G_SHIFT1D_COEFF_FD` — the gradient against central finite differences,
 //!   per field.
 
+// Test-local index arithmetic and short math names (`a`/`b`/`c` are the
+// coefficient fields the module under test names them).
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_lossless,
+    clippy::many_single_char_names,
+    clippy::similar_names
+)]
+
 use semiflow::{
-    shift1d_vjp::{shift1d_coeff_gradient, shift1d_forward, ShiftCoeffField, ShiftCoeffs},
+    shift1d_vjp::{
+        shift1d_coeff_gradient, shift1d_forward, Shift1DProblem, ShiftCoeffField, ShiftCoeffs,
+    },
     BoundaryPolicy, Grid1D, InterpKind,
 };
 
@@ -119,6 +132,42 @@ fn g_shift1d_transpose_id() {
     }
 }
 
+/// The three coefficient fields, borrowed.
+#[derive(Clone, Copy)]
+struct Fields<'a> {
+    a: &'a [f64],
+    b: &'a [f64],
+    c: &'a [f64],
+}
+
+/// `J` as a function of the three coefficient fields.
+type LossFn<'a> = dyn Fn(&[f64], &[f64], &[f64]) -> f64 + 'a;
+
+/// Central-difference gradient of `loss` w.r.t. every node of one field.
+///
+/// `eps = 1e-6` sits between the `O(eps²)` truncation term and the
+/// `O(machine-eps · |J| / eps)` roundoff term for a loss of order 1.
+fn fd_gradient(
+    field: ShiftCoeffField,
+    fields: Fields<'_>,
+    loss: &LossFn<'_>,
+) -> Vec<f64> {
+    let (a, b, c) = (fields.a, fields.b, fields.c);
+    let eps = 1e-6;
+    let mut out = vec![0.0_f64; a.len()];
+    for (i, slot) in out.iter_mut().enumerate() {
+        let (mut ap, mut bp, mut cp) = (a.to_vec(), b.to_vec(), c.to_vec());
+        let (mut am, mut bm, mut cm) = (a.to_vec(), b.to_vec(), c.to_vec());
+        match field {
+            ShiftCoeffField::A => (ap[i], am[i]) = (ap[i] + eps, am[i] - eps),
+            ShiftCoeffField::B => (bp[i], bm[i]) = (bp[i] + eps, bm[i] - eps),
+            ShiftCoeffField::C => (cp[i], cm[i]) = (cp[i] + eps, cm[i] - eps),
+        }
+        *slot = (loss(&ap, &bp, &cp) - loss(&am, &bm, &cm)) / (2.0 * eps);
+    }
+    out
+}
+
 /// `G_SHIFT1D_COEFF_FD` — gradient vs central finite differences, per field.
 ///
 /// `J(u_n) = ½‖u_n‖²`, so the cotangent is `∂J/∂u_n = u_n` — supplied by the
@@ -135,41 +184,31 @@ fn g_shift1d_coeff_fd() {
     let (tau, n_steps) = (0.004, 6);
 
     let loss = |a: &[f64], b: &[f64], c: &[f64]| -> f64 {
-        let co = ShiftCoeffs { a, b, c };
-        let un = shift1d_forward(&grid, &co, &u0, tau, n_steps).unwrap();
+        let p = Shift1DProblem {
+            grid: &grid,
+            coeffs: ShiftCoeffs { a, b, c },
+            tau,
+            n_steps,
+        };
+        let un = shift1d_forward(&p, &u0).unwrap();
         0.5 * un.iter().map(|v| v * v).sum::<f64>()
     };
 
     for field in [ShiftCoeffField::A, ShiftCoeffField::B, ShiftCoeffField::C] {
-        let co = ShiftCoeffs { a: &a, b: &b, c: &c };
-        let un = shift1d_forward(&grid, &co, &u0, tau, n_steps).unwrap();
+        let p = Shift1DProblem {
+            grid: &grid,
+            coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+            tau,
+            n_steps,
+        };
+        let un = shift1d_forward(&p, &u0).unwrap();
         let mut grad = vec![0.0_f64; n];
-        shift1d_coeff_gradient(&grid, &co, field, &u0, tau, n_steps, &un, &mut grad).unwrap();
+        shift1d_coeff_gradient(&p, field, &u0, &un, &mut grad).unwrap();
 
         // Vector comparison, not per-component relative error: components of a
         // gradient can legitimately be ~0, where a per-component ratio is
         // dominated by the FD floor rather than by any error in the adjoint.
-        let eps = 1e-6;
-        let mut fd_grad = vec![0.0_f64; n];
-        for i in 0..n {
-            let (mut ap, mut bp, mut cp) = (a.clone(), b.clone(), c.clone());
-            let (mut am, mut bm, mut cm) = (a.clone(), b.clone(), c.clone());
-            match field {
-                ShiftCoeffField::A => {
-                    ap[i] += eps;
-                    am[i] -= eps;
-                }
-                ShiftCoeffField::B => {
-                    bp[i] += eps;
-                    bm[i] -= eps;
-                }
-                ShiftCoeffField::C => {
-                    cp[i] += eps;
-                    cm[i] -= eps;
-                }
-            }
-            fd_grad[i] = (loss(&ap, &bp, &cp) - loss(&am, &bm, &cm)) / (2.0 * eps);
-        }
+        let fd_grad = fd_gradient(field, Fields { a: &a, b: &b, c: &c }, &loss);
         let scale = fd_grad.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
         assert!(scale > 1e-6, "field={field:?}: FD gradient is identically zero");
         let worst = grad
@@ -192,17 +231,18 @@ fn shift1d_vjp_rejects_degenerate_a() {
     let grid = Grid1D::new(XMIN, XMAX, n).unwrap();
     let (mut a, b, c) = coeffs(n);
     a[4] = 0.0;
-    let co = ShiftCoeffs { a: &a, b: &b, c: &c };
+    let p = Shift1DProblem {
+        grid: &grid,
+        coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+        tau: 0.01,
+        n_steps: 2,
+    };
     let u0 = smooth(n, 1.0);
     let mut grad = vec![0.0_f64; n];
     assert!(
-        shift1d_coeff_gradient(&grid, &co, ShiftCoeffField::A, &u0, 0.01, 2, &u0, &mut grad)
-            .is_err(),
+        shift1d_coeff_gradient(&p, ShiftCoeffField::A, &u0, &u0, &mut grad).is_err(),
         "d/da must be refused at a_i = 0 (the sqrt(tau/a) chain factor diverges)"
     );
     // b and c carry no such factor and stay available.
-    assert!(
-        shift1d_coeff_gradient(&grid, &co, ShiftCoeffField::C, &u0, 0.01, 2, &u0, &mut grad)
-            .is_ok()
-    );
+    assert!(shift1d_coeff_gradient(&p, ShiftCoeffField::C, &u0, &u0, &mut grad).is_ok());
 }

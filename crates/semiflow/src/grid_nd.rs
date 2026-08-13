@@ -297,7 +297,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
         }
         // Collapse from the slowest axis down; `flat_hi` accumulates the
         // contribution of every axis already pinned.
-        Ok(self.collapse(D as isize - 1, &plan, 0))
+        Ok(self.collapse(D, &plan, 0))
     }
 
     /// Node offsets/weights and the cell index for axis `d` at coordinate `xd`.
@@ -316,26 +316,28 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
         })
     }
 
-    /// Interpolate axes `0..=d`, with every axis above `d` already pinned into
-    /// the flat offset `flat_hi`.
+    /// Interpolate the `remaining` fastest axes (`0..remaining`), with every
+    /// axis at or above `remaining` already pinned into `flat_hi`; `remaining
+    /// == 0` is the base case. The depth counts *axes still to resolve* rather
+    /// than the current axis index so the recursion terminates on `usize`.
     ///
     /// Each axis is resolved by [`bc_value_by`], so an out-of-range stencil node
     /// folds through that axis's own [`crate::grid::BoundaryPolicy`] — including
     /// the affine policies (`LinearExtrapolate`, `Dirichlet`, `Robin`), which a
     /// flat index map could not express.
-    fn collapse(&self, d: isize, plan: &[AxisStencil<F>; D], flat_hi: usize) -> F {
-        let Ok(d_u) = usize::try_from(d) else {
+    fn collapse(&self, remaining: usize, plan: &[AxisStencil<F>; D], flat_hi: usize) -> F {
+        let Some(d) = remaining.checked_sub(1) else {
             return self.values[flat_hi];
         };
-        let ax = &self.grid.axes[d_u];
-        let stride = self.axis_stride(d_u);
-        let st = &plan[d_u];
+        let ax = &self.grid.axes[d];
+        let stride = self.axis_stride(d);
+        let st = &plan[d];
         let mut acc = F::zero();
         for j in 0..st.k {
             let node_idx = st.idx + st.offsets[j];
             let v = bc_value_by(
                 ax.boundary,
-                |i| self.collapse(d - 1, plan, flat_hi + i * stride),
+                |i| self.collapse(d, plan, flat_hi + i * stride),
                 ax.n,
                 node_idx,
                 ax.dx(),

@@ -9,6 +9,14 @@
 //! forcing callers to floor `k` at an artificial positive value that moves
 //! quantiles when mass sits near the degenerate end.
 
+// `assert_eq!(k[0], 0.0)` is a *bit-exact* claim on purpose — the point of
+// each gate is that the datum is genuinely degenerate, not merely small.
+#![allow(
+    clippy::float_cmp,
+    clippy::cast_precision_loss,
+    clippy::many_single_char_names
+)]
+
 use semiflow::{
     conservative::ConservativeDiffusionChernoff,
     conservative_assemble::assemble_conservative_csr_1d,

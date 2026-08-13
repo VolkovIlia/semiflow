@@ -79,6 +79,10 @@ use crate::{error::SemiflowError, float::SemiflowFloat, grid::Grid1D};
 const PROBE_HALF_WIDTH: i64 = 6;
 
 /// Maximum number of nodes a single weight row can touch.
+///
+/// `PROBE_HALF_WIDTH` is a positive literal, so the cast is exact on every
+/// target — the lint fires on the `i64 → usize` *form*, not on this value.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub(crate) const MAX_ROW: usize = 2 * PROBE_HALF_WIDTH as usize + 2 + 6;
 
 /// Nodes the sampler can touch when evaluating at `y`.
@@ -202,6 +206,26 @@ pub struct ShiftCoeffs<'a, F: SemiflowFloat = f64> {
     pub c: &'a [F],
 }
 
+/// The primal problem a gradient is taken *about*: kernel, coefficient fields,
+/// and the uniform stepping it is iterated with.
+///
+/// Grouped into one value rather than passed as four positional arguments
+/// because every internal helper threads exactly this tuple, and because the
+/// gradient entry point otherwise reaches eight parameters — over the suckless
+/// argument budget, and long enough that positional call sites become hard to
+/// read.
+pub struct Shift1DProblem<'a> {
+    /// Spatial grid — carries the `InterpKind` and `BoundaryPolicy` the
+    /// gradient differentiates through.
+    pub grid: &'a Grid1D<f64>,
+    /// Per-node coefficient fields.
+    pub coeffs: ShiftCoeffs<'a, f64>,
+    /// Uniform time step. Must be finite and `> 0`.
+    pub tau: f64,
+    /// Number of Chernoff steps composed.
+    pub n_steps: usize,
+}
+
 // ---------------------------------------------------------------------------
 // Forward step, transpose, and the adjoint-state driver
 // ---------------------------------------------------------------------------
@@ -249,7 +273,9 @@ fn adjoint_step(
     out: &mut [f64],
     probe: &mut [f64],
 ) -> Result<(), SemiflowError> {
-    out.iter_mut().for_each(|v| *v = 0.0);
+    for v in out.iter_mut() {
+        *v = 0.0;
+    }
     let mut idx = [0_usize; MAX_ROW];
     let mut w = [0.0_f64; MAX_ROW];
     for i in 0..grid.n {
@@ -304,17 +330,17 @@ fn param_deriv_diag(
 
 /// Length and domain checks shared by the gradient entry point.
 fn validate_gradient_inputs(
-    n: usize,
-    co: &ShiftCoeffs<'_, f64>,
+    problem: &Shift1DProblem<'_>,
     u0: &[f64],
     dj_du_n: &[f64],
-    grad: &[f64],
-    tau: f64,
+    out: &[f64],
 ) -> Result<(), SemiflowError> {
+    let n = problem.grid.n;
+    let co = &problem.coeffs;
     for len in [
         u0.len(),
         dj_du_n.len(),
-        grad.len(),
+        out.len(),
         co.a.len(),
         co.b.len(),
         co.c.len(),
@@ -327,10 +353,10 @@ fn validate_gradient_inputs(
             });
         }
     }
-    if !tau.is_finite() || tau <= 0.0 {
+    if !problem.tau.is_finite() || problem.tau <= 0.0 {
         return Err(SemiflowError::DomainViolation {
             what: "shift1d_coeff_gradient: tau must be finite and > 0",
-            value: tau,
+            value: problem.tau,
         });
     }
     Ok(())
@@ -340,8 +366,8 @@ fn validate_gradient_inputs(
 ///
 /// `dj_du_n` is the caller-supplied cotangent at the final time; the loss `J`
 /// itself lives **outside** the library (the ADR-0115 boundary — no autograd
-/// hook, no torch/JAX types in core). `grad` is caller-owned and is zeroed and
-/// length-checked here.
+/// hook, no torch/JAX types in core). `out` is the caller-owned gradient
+/// buffer; it is zeroed and length-checked here.
 ///
 /// Reverse in time, forward-JVP in parameter, accumulating
 /// `∂J/∂θ_i += ⟨λ_{k+1}, (∂S_k/∂θ)u_k⟩` — which the diagonality of §61.2 reduces
@@ -351,23 +377,23 @@ fn validate_gradient_inputs(
 /// `DomainViolation` on a length mismatch or `a_i <= 0` (field `A`);
 /// `Unsupported` from the grid's interpolation kind.
 pub fn shift1d_coeff_gradient(
-    grid: &Grid1D<f64>,
-    co: &ShiftCoeffs<'_, f64>,
+    problem: &Shift1DProblem<'_>,
     field: ShiftCoeffField,
     u0: &[f64],
-    tau: f64,
-    n_steps: usize,
     dj_du_n: &[f64],
-    grad: &mut [f64],
+    out: &mut [f64],
 ) -> Result<(), SemiflowError> {
+    validate_gradient_inputs(problem, u0, dj_du_n, out)?;
+    let (grid, co, tau) = (problem.grid, &problem.coeffs, problem.tau);
     let n = grid.n;
-    validate_gradient_inputs(n, co, u0, dj_du_n, grad, tau)?;
-    grad.iter_mut().for_each(|g| *g = 0.0);
+    for g in out.iter_mut() {
+        *g = 0.0;
+    }
 
     // Forward trajectory: u_0 … u_{n_steps}.
-    let mut traj: Vec<Vec<f64>> = Vec::with_capacity(n_steps + 1);
+    let mut traj: Vec<Vec<f64>> = Vec::with_capacity(problem.n_steps + 1);
     traj.push(u0.to_vec());
-    for k in 0..n_steps {
+    for k in 0..problem.n_steps {
         let mut next = vec![0.0_f64; n];
         forward_step(grid, co, tau, &traj[k], &mut next)?;
         traj.push(next);
@@ -378,10 +404,10 @@ pub fn shift1d_coeff_gradient(
     let mut lam_next = vec![0.0_f64; n];
     let mut diag = vec![0.0_f64; n];
     let mut probe = vec![0.0_f64; n];
-    for k in (0..n_steps).rev() {
+    for k in (0..problem.n_steps).rev() {
         param_deriv_diag(grid, co, field, tau, &traj[k], &mut diag)?;
         for i in 0..n {
-            grad[i] += lam[i] * diag[i];
+            out[i] += lam[i] * diag[i];
         }
         adjoint_step(grid, co, tau, &lam, &mut lam_next, &mut probe)?;
         core::mem::swap(&mut lam, &mut lam_next);
@@ -389,22 +415,19 @@ pub fn shift1d_coeff_gradient(
     Ok(())
 }
 
-/// Evolve `u0` for `n_steps` with the shipped node formula (for callers that
-/// need the primal alongside the gradient).
+/// Evolve `u0` for `problem.n_steps` with the shipped node formula (for callers
+/// that need the primal alongside the gradient).
 ///
 /// # Errors
 /// Propagates from the interpolation kind.
 pub fn shift1d_forward(
-    grid: &Grid1D<f64>,
-    co: &ShiftCoeffs<'_, f64>,
+    problem: &Shift1DProblem<'_>,
     u0: &[f64],
-    tau: f64,
-    n_steps: usize,
 ) -> Result<Vec<f64>, SemiflowError> {
     let mut cur = u0.to_vec();
-    let mut next = vec![0.0_f64; grid.n];
-    for _ in 0..n_steps {
-        forward_step(grid, co, tau, &cur, &mut next)?;
+    let mut next = vec![0.0_f64; problem.grid.n];
+    for _ in 0..problem.n_steps {
+        forward_step(problem.grid, &problem.coeffs, problem.tau, &cur, &mut next)?;
         core::mem::swap(&mut cur, &mut next);
     }
     Ok(cur)

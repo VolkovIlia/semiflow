@@ -12,7 +12,7 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
-## Issue campaign #17/#19/#21–#26 — Wave A (correctness) IN PROGRESS (ADRs 0190–0191)
+## Issue campaign #17/#19/#21–#26 — DONE (ADRs 0190–0197)
 
 Eight issues filed against 0.11.0-beta from a quant-finance showcase. One is a
 correctness bug (#17); exploration surfaced a second of the same class that had
@@ -30,19 +30,37 @@ the library's x-fastest layout — addressed by accepting 2-D arrays directly an
 documenting the layout precisely. Gate `G_ASND_MOMENT` (the oracle whose absence
 let this ship). Honest limits: septic/octonic/Chebyshev have no `D > 1` stencil,
 so the N-D spatial floor is `O(dx⁴)`; the interpolant is no longer
-positivity-preserving. **The `G_DDIM` `N_AXIS = 8` ladder (ADR-0112 AMENDMENT 1)
-was calibrated around the removed floor and MUST be re-measured on prod HW.**
+positivity-preserving. **The `G_DDIM` ladder was re-measured (ADR-0190 AMENDMENT 3) and the gate now
+FAILS at −0.9249.** The cause is not the sampler fix: the gate's reference sits
+only 2× finer than its datum, and a reference-free successive-difference probe
+puts the kernel's true global order at **½** across `n ∈ [32, 16384]` and three
+grid resolutions. Left failing; needs an architect decision on `order()`, on the
+threshold, and on whether `shift_nd_zeta2` lifts it. See "Open" in CHANGELOG.
 
-**OPEN — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (surfaced during ADR-0190).**
-`DiffusionChernoff` is the ζ-A kernel for the divergence form `∂_x(a ∂_x ·)` and
-consumes both derivatives; zeroing them looked like a bug. It is deliberately
-NOT changed: PyO3, FFI and WASM all advertise the *non-divergence* operator
-`a_x(x)·∂_xx u`, so supplying the derivatives would silently switch three public
-APIs to a different PDE. Unresolved: whether the zeroed form is a principled
-discretisation of `a·u_xx`. A 1-D A/B measured slope ≈1.09 zeroed vs ≈1.03
-derived — both at the O(τ¹) ceiling ADR-0112 AM2 / §9.2.3.B already document for
-variable `a`, so self-convergence cannot discriminate. Needs an analytic oracle
-per candidate operator and an architect decision on the intended operator.
+**RESOLVED — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (ADR-0190 AMENDMENT 1,
+math §9.2.3.C).** Zeroing the closures looked like a bug, and the earlier
+self-convergence A/B could not discriminate because both candidates sit at the
+`O(τ¹)` ceiling. The missing analytic oracle was built: both candidate
+generators assembled densely and exponentiated, `7.8e−2` apart, with the zeroed
+kernel landing `6.8e−3` from the **non-divergence** reference and `7.4e−2` from
+the divergence one (and the FD-derivative path the other way round). The closures
+are correct and produce exactly the operator all three binding surfaces
+advertise. What *was* wrong is the order claim: the frozen-coefficient stencil is
+consistency order 1, measured **1.007**, so `Heat2DVarA::order()` and
+`Heat3DVarA::order()` now report 1 rather than 2. Gates `G_FROZEN_COEFF_NONDIV`,
+`G_FROZEN_COEFF_ORDER1`.
+
+**Found in passing — the θ_m table was mis-transcribed (ADR-0197, math
+§45.2.bis).** `expmv::THETA_M` and its `graph_krylov` mirror paired each Taylor
+degree with a backward-error radius belonging to a degree two to three rows
+further down Al-Mohy & Higham Table 3.1, so `select_s_m` under-substepped by up
+to 8× (`T_18` at the claimed `θ ≈ 8.84` has relative error `3.8e+04`). Recomputed
+from the definition in exact rational arithmetic; `M_MAX` 18 → 30. Gate
+`G_THETA_M_TABLE`.
+
+**Found in passing — the WASM `full` feature never compiled.** ~20 gated modules,
+including the whole Magnus graph surface, were dead and unbuildable behind a
+feature no build path enables. Fixed; CI now type-checks it.
 
 **#26 — conservative diffusion admits `k ≥ 0` (ADR-0191, math §56.8.bis).**
 CEV, Feller/CIR and Wright–Fisher are degenerate at the boundary by construction;
@@ -51,7 +69,7 @@ boundary classifies itself). Supersedes the "#11 honest limit: `k > 0`" below.
 `k < 0` stays rejected — it breaks §56.2 PSD and no `from_csr` check catches it.
 Gate `G_CONS_DEGENERATE` with a floored-`k` teeth control.
 
-### Wave B (capability) — planned
+### Wave B (capability) — DONE
 
 #19 batched multi-channel evolve for 1-D grid kernels; #21 full-grid
 `a_x(x,y)`/`a_y(x,y)` (needs a per-pencil composition — `Strang2D`/`AxisLift`

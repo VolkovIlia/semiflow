@@ -11,6 +11,10 @@
 //! The grid sizes straddle the channel-parallel dispatch boundary in both
 //! directions, so the parallel build exercises both branches.
 
+// Grid-index -> coordinate arithmetic; every index here is a small test
+// constant, far below the f64 mantissa.
+#![allow(clippy::cast_precision_loss)]
+
 use semiflow::{
     grid_batched::evolve_batched_1d, ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D,
 };
