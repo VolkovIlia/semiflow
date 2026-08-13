@@ -119,50 +119,91 @@ is documented rather than implied.
 - **f64 only**, and `ChebyshevSpectralWithBC` grids are unsupported (its
   virtual-node construction is transposable in principle; deferred).
 
-## AMENDMENT 1 (2026-08-13) — a measured performance regression this ADR causes
+## AMENDMENT 1 (2026-08-14) — a performance regression this ADR exposed, and its cause
 
-**Status**: OPEN — needs an architect decision. Recorded rather than papered over.
+**Status**: RESOLVED. The regression was real; its cause was **not** in this
+module, and the fix leaves the affected path faster than it was before the
+campaign.
 
-Adding `shift1d_vjp` to the core crate slows the **unrelated** 1-D pre-sampled
-coefficient path by ~70%. Measured by `test_path2_faster_than_path1`
+### What was observed
+
+Adding `shift1d_vjp` to the core crate slowed the **unrelated** 1-D pre-sampled
+coefficient path by ~70%, measured by `test_path2_faster_than_path1`
 (`crates/semiflow-py/tests/test_coeff.py`), which asserts that
 `Heat1D.with_a_array` (pre-sampled, pure Rust) is ≥2× faster than
 `Heat1D.with_a_function` (Python callback):
 
 | tree | Path 1 | Path 2 | speedup |
 |---|---|---|---|
-| baseline `0e6d25b` | 122.0 ms | 49.2 ms | **2.5×** |
+| baseline `0e6d25b` | 123.8 ms | 50.7 ms | **2.4×** |
 | through #21 (`249434d`) | 121.6 ms | 48.4 ms | **2.5×** |
 | with #25 (`d2ded9e`) | 167.8 ms | 83.0 ms | **1.9×** ✗ |
-| #25, module removed | 122.0 ms | 48.8 ms | **2.5×** |
+| #25, `pub mod shift1d_vjp` removed | 122.0 ms | 48.8 ms | **2.5×** |
+| **after the fix below** | **110.4 ms** | **34.2 ms** | **3.2×** ✓ |
 
-Bisected commit-by-commit: every commit through #21 measures 2.5×; #25 alone
-moves it. Removing `pub mod shift1d_vjp` — changing nothing else — restores
-2.5×, so it is the module's **presence**, not any call into it, that costs the
-time. Under `codegen-units = 1` with LTO, the added code changes global inlining
-decisions on a path it never executes.
+Bisected commit-by-commit; removing the module — changing nothing else —
+restored the speed, so it looked like the module's *presence*.
 
-Two fixes were tried and **did not work**:
+### What it actually was
 
-1. **Making the module f64-monomorphic and routing it through `Grid1D::interp`**
-   (the f64 SIMD entry point) instead of `interp_generic`. This was kept anyway —
-   it is an independent *correctness* improvement, because the gradient must
-   differentiate the sampler the forward solve actually runs, and `interp` and
-   `interp_generic` can differ at ULP level. It did not move the timing.
-2. **`#[inline(always)]` on `Grid1D::interp`**, on the theory that the new
-   external caller had pushed it out of the hot path's inline budget. No effect;
-   reverted.
+It was not the module. Isolating it further, by rebuilding the module one
+function at a time, put the trigger on the gradient driver — and then a control
+run showed the *same* stub-driver tree had become slow after unrelated edits
+elsewhere. That is the signature of a codegen threshold, not of a cause.
 
-**Not resolved here, deliberately.** The obvious "fix" is to relax the 2× gate,
-and that is exactly what the project's gate-integrity rule forbids the producing
-agent from doing on its own authority. The options are an architect-approved
-threshold change (with a `Gate-Change-Approved-By:` trailer), feature-gating
-`shift1d_vjp` so the default wheel is unaffected — which only moves the decision,
-since the wheel must enable it to expose `shift1d_coeff_grad` — or a codegen
-investigation. The gate is left **failing** so the decision is visible.
+Disassembling the extension module (`objdump` on an unstripped
+`release-ffi` build) located it precisely. Every symbol in the two builds is
+byte-for-byte the same size except one: `diffusion::apply_at_node_f64`. Inside
+it, the boundary-resolution primitives — `boundary::bc_value`, and through it
+`bc_index` / `reflect_index` — flip between inlined and out-of-line depending on
+how much other code happens to be in the crate.
 
-Worth weighing in that decision: the property the gate exists to protect
-("pre-sampled is substantially faster than the callback path") still holds at
-1.9×; what has actually regressed is ~70% of absolute throughput on a 1-D hot
-path, which matters for the tail-latency niche the README names as one of the
-library's two confirmed wins.
+The leverage is arithmetic. A `SepticHermite` sample resolves **eight** nodes
+through `bc_value`, and `DiffusionChernoff::apply_at_node_f64` takes **eleven**
+samples per grid node (six in the γ-A baseline, five in the ζ-A correction) —
+about **88 `bc_value` calls per grid node**, ~2.2 M per `evolve(0.1, 100)` on a
+256-node grid. At ~15 ns of call overhead that is ~33 ms, which is exactly the
+regression that was measured.
+
+### Interventions that did nothing
+
+Recorded so the next person does not repeat them. Each was built and timed:
+
+| intervention | result |
+|---|---|
+| f64-monomorphise the module onto `Grid1D::interp` | no change (kept: independent correctness fix) |
+| `#[inline(always)]` on `Grid1D::interp` | no change |
+| `#[inline(always)]` on `GridFn1D::sample` | no change |
+| `#[inline(never)]` on the septic/octonic/Chebyshev samplers | no change |
+| hot-arm-first dispatch + out-of-line `interp_rare` | no change |
+| `#[inline(always)]` on `call_a` / `call_a_prime` / `call_a_double_prime` | no change |
+| resolve the coefficient-`Storage` variant once per node | no change |
+| `#[inline(never)]` on `gamma_a_baseline_f64` / `zeta_correction_f64` | no change |
+| `codegen-units = 16` | 83 ms → 76 ms; ratio still 2.0× |
+| `lto = "off"` | no change |
+
+All were reverted.
+
+### Fix
+
+`#[inline(always)]` on `boundary::bc_value`, `boundary::bc_index` and
+`boundary::reflect_index`. These are the leaf primitives of every off-grid
+sample in the library; at ~88 invocations per grid node their call overhead is a
+first-order term, and leaving the decision to a cost model that cannot see that
+multiplier is what made an unrelated module able to move the number by 70%.
+
+Results are unchanged bit-for-bit — inlining performs no floating-point
+reassociation, and `test-fast` including the ADR-0018 parallel bit-equality
+gates passes unchanged.
+
+The path ends up **faster than before the campaign**: 50.7 ms → 34.2 ms on
+Path 2 (1.5×) and 123.8 ms → 110.4 ms on Path 1, against the same
+`0e6d25b` baseline re-measured on the same machine.
+
+### Honest limit
+
+This removes the specific 88×-multiplier fragility; it does not make the kernel's
+codegen insensitive in general. `apply_at_node_f64` remains a large function
+whose shape moves with crate-wide code volume. A perf gate stated as a *ratio
+between two paths* also cannot distinguish "Path 2 got slower" from "Path 1 got
+faster" — worth revisiting if this recurs.

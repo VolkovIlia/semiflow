@@ -228,6 +228,8 @@ pub enum InterpKind {
 // ---------------------------------------------------------------------------
 
 /// Reflect a signed index into `[0, n)`.
+#[inline(always)]
+#[allow(clippy::inline_always)] // see bc_value
 pub(crate) fn reflect_index(n: usize, idx: i64) -> usize {
     #[allow(clippy::cast_possible_wrap)]
     let n_i = n as i64;
@@ -251,6 +253,8 @@ pub(crate) fn reflect_index(n: usize, idx: i64) -> usize {
 /// **Total** (never errors) for all six policies and all valid `n >= 2`.
 /// In-range fast-path → `Inside(idx as usize)` (I5). v2.6 additions:
 /// `Dirichlet` → `Dirichlet(value)` out-of-range; `Neumann`/`Robin` → clamp/skew.
+#[inline(always)]
+#[allow(clippy::inline_always)] // see bc_value
 pub(crate) fn bc_index<F: SemiflowFloat>(
     boundary: BoundaryPolicy<F>,
     n: usize,
@@ -330,6 +334,13 @@ fn robin_skew_hit<F: crate::float::SemiflowFloat>(
 /// Resolve `bc_index(idx)` and compute the corresponding value (f64-specific).
 /// `Dirichlet(v)` → `v`; `RobinSkew` → `exp(-2(α/β)·depth·dx)·values[reflected]`
 /// (v6.2.3, math §3.5.tris). `dx` used only for `RobinSkew`.
+///
+/// `#[inline(always)]`: a septic-Hermite sample resolves eight nodes through
+/// this function and `DiffusionChernoff` takes eleven samples per grid node —
+/// ~88 calls per node. Whether the cost model inlines it moved the 1-D kernel
+/// by ~70% across otherwise-unrelated edits (ADR-0196 AMENDMENT 1).
+#[inline(always)]
+#[allow(clippy::inline_always)] // ~88 calls per grid node; see the note above
 pub(crate) fn bc_value(
     boundary: BoundaryPolicy<f64>,
     values: &[f64],
