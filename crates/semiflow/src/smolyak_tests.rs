@@ -62,7 +62,7 @@ fn make_grid_d5(n: usize) -> GridND<f64, 5> {
 ///
 /// These assert finiteness and `F(0) = I` — invariants that do not depend on the
 /// grid size — so the smallest legal grid serves them exactly as well as a large
-/// one. The size matters because ADR-0190 made `GridFnND::sample` a genuine
+/// one. The size matters because ADR-0191 made `GridFnND::sample` a genuine
 /// tensor-product interpolant: at `D = 5` the default `CubicHermite` reads
 /// `4⁵ = 1024` nodes per sample against multilinear's `2⁵ = 32`, so an `n = 8`
 /// grid (`8⁵ = 32768` points × 341 sparse quadrature nodes) turned these two

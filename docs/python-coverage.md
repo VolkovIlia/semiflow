@@ -1,5 +1,5 @@
 ---
-version: 1.5.0
+version: 1.7.0
 last_updated: 2026-08-14
 freshness_score: 1.0
 dependencies:
@@ -16,19 +16,23 @@ dependencies:
   - docs/adr/0159-tensor-train-chernoff.md
   - docs/adr/0162-band-split-tt-coupling-resolved.md
   - docs/adr/0169-s3-honest-scope-public-api-promotion.md
-  - docs/adr/0190-nd-sampler-interpolation-order-and-boundary.md
-  - docs/adr/0192-adaptive-and-schedules-over-variable-coefficients.md
-  - docs/adr/0193-batched-multichannel-grid-evolve.md
-  - docs/adr/0194-general-nonsymmetric-operator-action.md
-  - docs/adr/0195-per-pencil-strang-composition.md
-  - docs/adr/0196-shift1d-coefficient-field-gradients.md
+  - docs/adr/0186-symmetric-operator.md
+  - docs/adr/0191-implicit-stiff-symmetric-operator.md
+  - docs/adr/0191-nd-sampler-interpolation-order-and-boundary.md
+  - docs/adr/0193-adaptive-and-schedules-over-variable-coefficients.md
+  - docs/adr/0194-batched-multichannel-grid-evolve.md
+  - docs/adr/0195-general-nonsymmetric-operator-action.md
+  - docs/adr/0196-per-pencil-strang-composition.md
+  - docs/adr/0197-shift1d-coefficient-field-gradients.md
 changelog:
   - 1.0.0: Initial coverage matrix for v2.3.0 Python parity expansion (feat/python-parity-v2.3)
   - 1.1.0: v6.2.2 ADR-0115 additions — GraphAdjoint, edge_weight_grad, dtype kwarg, Laplacian accessors, from_edges fix
   - 1.2.0: v9.0.0 — ReverseHeat1D added to PyO3 + WASM; TtChernoff/TtState/GridlessChernoff/ParticleReduction Rust-only
   - 1.3.0: v9.1.0 — CoupledTtChernoff Rust-only (TT contraction interface design deferred)
   - 1.4.0: v9.2.0 — six S3* types (s3-poc feature) Rust-only; no new binding exposure
-  - 1.5.0: 0.12.0-beta issue campaign #17/#19/#21-#26 — GeneralOperator, shift1d_coeff_grad,
+  - 1.5.0: v0.11.0-beta — add section 9 (SymmetricOperator / MassKOperator / mass_lumped_evolve; issue #15, ADR-0186)
+  - 1.6.0: issue #16 branch — document path="implicit" kwarg on evolve_batched / mass_lumped_evolve / MassKOperator.evolve (ADR-0190)
+  - 1.7.0: 0.13.0-beta issue campaign #17/#19/#21-#26 — GeneralOperator, shift1d_coeff_grad,
     Shift1D.evolve_batched / evolve_with_coefficient_schedule, AdaptivePI.with_arrays,
     Heat2DVarA.with_grid_arrays (pencil backend), ND boundary= kwarg
 graph-unverified: false
@@ -286,36 +290,60 @@ Gradient parity: 0-ULP between PyO3 and WASM implementations
 
 ---
 
-## 8. 0.12.0-beta issue campaign (#17 / #19 / #21–#26)
-
-Python surface added by the campaign. FFI and WASM are unchanged for all of it —
-see ADR-0190 AMENDMENT 2 for why the ND `boundary=` kwarg in particular was NOT
-mirrored (neither surface exposes boundary selection for *any* kernel, so a
-two-constructor exception would create an inconsistency rather than close one).
-
-| Surface | Rust | Python | FFI | WASM | Authority |
-|---------|------|--------|-----|------|-----------|
-| `GeneralOperator::from_csr` + `expmv` (non-symmetric CSR) | ✅ | ✅ `GeneralOperator` | ❌ | ❌ | ADR-0194 |
-| `shift1d_coeff_gradient` (VJP w.r.t. `a`/`b`/`c` fields) | ✅ | ✅ `shift1d_coeff_grad` | ❌ | ❌ | ADR-0196 |
-| Batched multi-channel 1-D evolve | ✅ `grid_batched` | ✅ `Shift1D.evolve_batched` | ❌ | ❌ | ADR-0193 |
-| Full coefficient schedules (`a`/`b`/`c`, scalar or array) | ✅ | ✅ `Shift1D.evolve_with_coefficient_schedule` | ❌ | ❌ | ADR-0192 |
-| `AdaptivePI` over pre-sampled coefficients | ✅ | ✅ `AdaptivePI.with_arrays` | ❌ | ❌ | ADR-0192 |
-| Per-pencil 2-D composition (transverse-varying `a`) | ✅ `Strang2DPencil` | ✅ `Heat2DVarA.with_grid_arrays` | ❌ | ❌ | ADR-0195 |
-| ND `boundary=` selection | ✅ (`Grid1D::with_boundary`, always) | ✅ `AnisotropicShiftND2/3(boundary=…)` | ❌ none for any kernel | ❌ none for any kernel | ADR-0190 |
-| ND 2-D/3-D array state (`set_state`, `values_2d`) | n/a | ✅ | ❌ | ❌ | ADR-0190 |
-
-Behaviour changes on the existing Python surface, not additions:
-
-| Surface | Change | Authority |
-|---------|--------|-----------|
-| every `D > 1` kernel | `GridFnND::sample` now honours `InterpKind` + `BoundaryPolicy`; results change (they become correct) | ADR-0190 |
-| `Heat2DVarA.order()`, `Heat3DVarA.order()` | 2 → **1**; the axis kernels freeze `a` at the node | ADR-0190 AM1 |
-| `ConservativeDiffusion1D` | accepts `k ≥ 0` (CEV / Feller / Wright–Fisher degenerate ends) | ADR-0191 |
-| `DiffusionExpmv1D`, graph Lanczos | corrected θ_m table changes the substep count | ADR-0197 |
-
+## 8. Generic Symmetric Operator (v0.11.0-beta, issue #15; `path="implicit"` issue #16)
+| Rust type / function | PyO3 surface | Status | Notes |
+|----------------------|-------------|--------|-------|
+| `SymmetricOperator::from_csr` | `SymmetricOperator.from_csr(indptr, indices, data, n)` | ✅ stable | accepts CSR arrays (int32 or int64 indices) |
+| `SymmetricOperator::evolve_batched` | `SymmetricOperator.evolve_batched(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | `path=` kwarg selects Krylov mode |
+| `mass_lumped_evolve` | `mass_lumped_evolve(K_csr, mass_diag, v, t, *, path="lanczos", n_steps=100)` | ✅ stable | lumped-mass `(M,K)` 3-liner |
+| `MassKOperator::evolve` | `MassKOperator.evolve(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | consistent-mass `(M,K)` via Cholesky congruence |
+| `symmetric_op_expmv_frechet` | `symmetric_op_expmv_frechet(op, v, t, dj_du)` | ✅ stable | combined action + per-entry Fréchet gradient |
+| `EntrySensitivity` | returned by `symmetric_op_expmv_frechet`; not a separate Python class | ✅ stable | gradient returned directly |
+**`path=` values for `evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve`:**
+| `path=` | Method | When to use |
+|---------|--------|-------------|
+| `"lanczos"` (default) | Lanczos Krylov expmv | General-purpose; matvec count flat in `t` per sub-step |
+| `"chebyshev"` | Chebyshev polynomial expmv | O(1) working vectors; slightly cheaper per matvec than Lanczos for moderate stiffness |
+| `"implicit"` | PCG backward-Euler `(I+Δt·A)^{−n_steps}` (ADR-0190, issue #16) | Stiff operators with `λ_max ≳ 10⁵` where the explicit paths time out |
+**`n_steps` parameter** (default 100, only used with `path="implicit"`): number of
+backward-Euler sub-steps. Accuracy is O(t/n_steps); increase to tighten tolerance.
+Cost per sub-step is proportional to `√κ` of the Jacobi-preconditioned system,
+not strictly `λ_max`-independent (IC(0) is deferred, §59.6).
+**Notes**
+- GIL is released inside `evolve_batched` for all `path=` values.
+- `SymmetricOperator` accepts any externally-assembled symmetric PSD sparse matrix
+  (FEM stiffness with Robin BC, anisotropic conductivity, conservative diffusion via
+  `to_symmetric_operator()`). The operator must be PSD; a non-PSD matrix is a
+  domain error.
+- FFI and WASM do not expose the symmetric-operator surface (PyO3-only; ADR-0186).
+- `MassKOperator` gradient via `EntrySensitivity` covers `SymmetricOperator` only;
+  `MassKOperator` differentiability is deferred.
 ---
 
-## 9. Known Gaps and Deferred Items
+## 9. 0.13.0-beta issue campaign (#17 / #19 / #21–#26)
+
+Python surface added by the campaign. FFI and WASM are unchanged for all of it —
+see ADR-0191 AMENDMENT 2 for why the ND `boundary=` kwarg in particular was NOT
+mirrored (neither surface exposes boundary selection for *any* kernel, so a
+two-constructor exception would create an inconsistency rather than close one).
+| Surface | Rust | Python | FFI | WASM | Authority |
+|---------|------|--------|-----|------|-----------|
+| `GeneralOperator::from_csr` + `expmv` (non-symmetric CSR) | ✅ | ✅ `GeneralOperator` | ❌ | ❌ | ADR-0195 |
+| `shift1d_coeff_gradient` (VJP w.r.t. `a`/`b`/`c` fields) | ✅ | ✅ `shift1d_coeff_grad` | ❌ | ❌ | ADR-0197 |
+| Batched multi-channel 1-D evolve | ✅ `grid_batched` | ✅ `Shift1D.evolve_batched` | ❌ | ❌ | ADR-0194 |
+| Full coefficient schedules (`a`/`b`/`c`, scalar or array) | ✅ | ✅ `Shift1D.evolve_with_coefficient_schedule` | ❌ | ❌ | ADR-0193 |
+| `AdaptivePI` over pre-sampled coefficients | ✅ | ✅ `AdaptivePI.with_arrays` | ❌ | ❌ | ADR-0193 |
+| Per-pencil 2-D composition (transverse-varying `a`) | ✅ `Strang2DPencil` | ✅ `Heat2DVarA.with_grid_arrays` | ❌ | ❌ | ADR-0196 |
+| ND `boundary=` selection | ✅ (`Grid1D::with_boundary`, always) | ✅ `AnisotropicShiftND2/3(boundary=…)` | ❌ none for any kernel | ❌ none for any kernel | ADR-0191 |
+| ND 2-D/3-D array state (`set_state`, `values_2d`) | n/a | ✅ | ❌ | ❌ | ADR-0191 |
+Behaviour changes on the existing Python surface, not additions:
+| Surface | Change | Authority |
+|---------|--------|-----------|
+| every `D > 1` kernel | `GridFnND::sample` now honours `InterpKind` + `BoundaryPolicy`; results change (they become correct) | ADR-0191 |
+| `Heat2DVarA.order()`, `Heat3DVarA.order()` | 2 → **1**; the axis kernels freeze `a` at the node | ADR-0191 AM1 |
+| `ConservativeDiffusion1D` | accepts `k ≥ 0` (CEV / Feller / Wright–Fisher degenerate ends) | ADR-0192 |
+| `DiffusionExpmv1D`, graph Lanczos | corrected θ_m table changes the substep count | ADR-0198 |
+## 10. Known Gaps and Deferred Items
 
 The following items are Rust-only as of v9.2.0 and are not exposed through any
 binding:

@@ -64,39 +64,18 @@
 //!
 //! ### v9.0.0 — third S-curve: reverse AD, tensor-train carrier, gridless particle
 //!
-//! Three additive shifts; no existing kernel semantics change.
-//!
 //! - **Shift B — [`ReverseChernoff`] + [`CheckpointSchedule`]** (§51, ADR-0156):
-//!   reverse-mode differentiable Chernoff layer via binomial checkpointing.
-//!   The adjoint of `(F(τ))ⁿ` is the *transposed* product of the same shift-and-scale
-//!   steps — algebraically exact, no implicit backward solve, no external autodiff crate.
-//!   Binomial checkpointing achieves `O(√n)` peak memory (slope 0.39, `G_REVERSE_AD_CHECKPOINT`
-//!   PASS).  The full gradient matches central-difference and forward-mode `Dual<F>` (§46)
-//!   to 0 ULP (`G_REVERSE_AD_GRADIENT` PASS, cross-mode parity).  **Narrow scope**:
-//!   constructable only for `C: LinearChernoffFamily`; transpose-exactness is not claimed
-//!   for variable-coefficient or nonlinear kernels.
+//!   reverse-mode Chernoff via binomial checkpointing; O(√n) peak memory, 0 ULP gradient.
+//!   Narrow scope: `LinearChernoffFamily` only; transpose-exactness not claimed otherwise.
 //!
 //! - **Shift C — [`TtChernoff`] + [`TtState`]** (§52, ADR-0159):
-//!   tensor-train state carrier that escapes the curse of dimensionality for the
-//!   **linear diagonal-`A` Gaussian class**.  Each Chernoff step applies d rank-O(1)
-//!   per-axis TT-operators (Kazeev–Khoromskij) followed by deterministic TT-rounding
-//!   (in-tree one-sided Jacobi SVD, no LAPACK, no new dependency).  For constant diagonal
-//!   `A`, TT-rank is algebraically capped at r ≤ d/2 (Rohrbach–Dolgov–Grasedyck–Scheichl),
-//!   giving storage `O(d³·n)` — polynomial in d.  The rank-1 case (`r=1`) reduces exactly
-//!   to the shipped Strang⊗ tensor product.  Validated for d ∈ {4, 6, 8, 10}
-//!   (`G_TT_CHERNOFF_DIMSCALING`, `slow-tests`).  Off-diagonal / variable-coefficient /
-//!   nonlinear operators are research-track.
+//!   tensor-train carrier for the linear diagonal-`A` Gaussian class; rank ≤ d/2, O(d³·n).
+//!   Validated d ∈ {4,6,8,10} (`G_TT_CHERNOFF_DIMSCALING`). Non-diagonal: research-track.
 //!
 //! - **[`GridlessChernoff`] + [`ParticleReduction`]** (§50, ADR-0155):
-//!   deterministic branching particle evolver on a `MeasureState` ensemble — the §38
-//!   adjoint push-forward on weighted Diracs, implemented at O(d·P) per step independent
-//!   of any ambient grid.  Validated at d=2 (`G_GRIDLESS_DIM_SCALING` PASS, sup-error
-//!   1.197e-3 < 5e-3).  The pre-registered variance go/no-go fired (`G_GRIDLESS_VARIANCE`
-//!   NO-GO, 1.417× MSE ratio at d=2, below the ≥2× gate); high-dimensional curse
-//!   re-enters through the particle-reduction grid at d≥3 — an intrinsic limit of the
-//!   particle representation.  This result is **retained as a documented negative** and a
-//!   correct d=2 primitive; high-dimensional gridless evolution is research-track
-//!   (see ADR-0155 Amendment 1 and the separate [`TtChernoff`] resolution in §52).
+//!   branching particle evolver on `MeasureState`; O(d·P)/step, grid-free.
+//!   d=2 PASS (sup 1.197e-3). Variance NO-GO (1.417× < ≥2× gate); curse re-enters d≥3
+//!   — documented negative; high-d is research-track (ADR-0155 Amendment 1).
 //!
 //! See `contracts/semiflow-core.math.md` §50–52; `docs/adr/0155`, `0156`, `0159`.
 //!
@@ -113,10 +92,7 @@
 //!    `## Proven boundary` section citing the RELEASE-BLOCKING gate and the
 //!    mathematical scope.
 //!
-//! Six tokens: `S3DriftSpectralEvolver`, `S3DenseCouplingEvolver`,
-//! `S3VarCoefEvolver`, `S3NonSepVarCoefEvolver`, `S3BurgersColeHopf`,
-//! `S3ReactionDiffusion`.  Container types: `AxisCoef`, `CpTerm`, `CpCoef`,
-//! `CoefRole`, `Reaction`.  See `docs/adr/0169-s3-honest-scope-public-api-promotion.md`.
+//! See `docs/adr/0169-s3-honest-scope-public-api-promotion.md` for the six public tokens.
 //!
 //! See `contracts/semiflow-core.math.md` for the full mathematical specification.
 //!
@@ -155,14 +131,15 @@ pub mod adjoint;
 pub mod adjoint_fp;
 pub mod approximation;
 pub mod axis;
-pub mod boundary;
+pub mod boundary; pub(crate) mod boundary_value;
 pub mod carnot_complex;
 pub(crate) mod carnot_complex_helpers;
 pub mod carnot_stepk;
 pub(crate) mod carnot_stepk_helpers;
 pub mod chernoff;
 pub mod complex;
-pub mod conservative; pub mod conservative_assemble;
+pub mod conservative;
+pub mod conservative_assemble;
 pub mod controller;
 pub mod diffusion;
 pub mod diffusion4;
@@ -176,19 +153,25 @@ pub(crate) mod diffusion_zeta_common;
 pub mod drift_reaction;
 pub mod drift_reaction_zeta4;
 pub mod dual;
-pub mod error; pub mod etdrk4; pub(crate) mod etdrk4_helpers;
+pub mod entry_sensitivity;
+pub mod error;
+pub mod etdrk4;
+pub(crate) mod etdrk4_helpers;
 pub mod expmv;
 pub mod float;
-pub(crate) mod gen_quadrature; pub mod generator_action;
+pub(crate) mod gen_quadrature;
+pub mod generator_action;
 pub mod graph;
 pub mod graph_adjoint_presampled;
 pub mod graph_batched; pub mod general_operator; pub mod grid_batched;
 mod graph_batched_tests;
+pub mod graph_frechet;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
-pub mod entry_sensitivity; pub mod graph_frechet; pub mod graph_krylov; pub mod mass_operator; pub mod symmetric_operator;
-pub mod graph_sensitivity; pub(crate) mod graph_sensitivity_helpers;
+pub mod graph_krylov;
+pub mod graph_sensitivity;
+pub(crate) mod graph_sensitivity_helpers;
 mod graph_sensitivity_tests;
 pub mod graph_signal;
 pub mod graph_traj;
@@ -228,6 +211,7 @@ pub mod manifold;
 pub mod manifold_chernoff;
 pub mod manifold_hyperbolic;
 pub mod manifold_kahler;
+pub mod mass_operator;
 pub mod matrix_2d3d;
 pub(crate) mod matrix_inv;
 pub(crate) mod matrix_pade;
@@ -237,8 +221,10 @@ pub mod matrix_system;
 pub mod matrix_system_complex;
 pub mod multilayer;
 pub mod nonlinearity;
-pub mod nonseparable2d; pub mod nonseparable2d_aniso;
-pub mod nonseparable_mixed; pub mod nonseparable_mixed_closure;
+pub mod nonseparable2d;
+pub mod nonseparable2d_aniso;
+pub mod nonseparable_mixed;
+pub mod nonseparable_mixed_closure;
 pub mod obstacle;
 pub mod obstacle_gamma;
 pub mod obstacle_nd;
@@ -252,7 +238,10 @@ pub(crate) mod parallel1d;
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]
 pub mod parallel_pool;
-pub(crate) mod pencil; pub mod phi_action; pub(crate) mod phi_action_helpers;
+pub(crate) mod pcg;
+pub(crate) mod pencil;
+pub mod phi_action;
+pub(crate) mod phi_action_helpers;
 pub mod point_eval;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
@@ -301,6 +290,7 @@ pub mod strang3d_axislift;
 pub mod strang3d_parallel;
 pub mod strang_graph;
 pub mod subordinated;
+pub mod symmetric_operator;
 pub mod truncated_exp;
 pub mod truncated_exp4;
 pub mod truncated_exp4_cached;
@@ -354,8 +344,11 @@ pub use crate::{
     carnot_complex::{ComplexTripleJump, CplxGridFn5, GAMMA_STAR},
     carnot_stepk::{Filiform5X1, Filiform5X2},
     chernoff::{ApplyChernoffExt, ChernoffFunction, ChernoffSemigroup, Evolver, Growth},
-    complex::SemiflowComplex, conservative::{ConservativeDiffusionChernoff, steady_state_dirichlet_1d}, conservative_assemble::{assemble_conservative_csr_1d, assemble_conservative_csr_nd},
-    controller::{ClassicalPI, H211bFilter, StepController}, diffusion::DiffusionChernoff,
+    complex::SemiflowComplex,
+    conservative::{steady_state_dirichlet_1d, ConservativeDiffusionChernoff},
+    conservative_assemble::{assemble_conservative_csr_1d, assemble_conservative_csr_nd},
+    controller::{ClassicalPI, H211bFilter, StepController},
+    diffusion::DiffusionChernoff,
     diffusion4::Diffusion4thChernoff,
     diffusion4_zeta4::Diffusion4thZeta4Chernoff,
     diffusion6::Diffusion6thChernoff,
@@ -364,30 +357,39 @@ pub use crate::{
     drift_reaction::DriftReactionChernoff,
     drift_reaction_zeta4::DriftReactionZeta4Chernoff,
     dual::Dual,
-    error::SemiflowError, etdrk4::Etdrk4,
+    entry_sensitivity::EntrySensitivity,
+    error::SemiflowError,
+    etdrk4::Etdrk4,
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
+    generator_action::{DivFormGenerator, GeneratorAction, NegLaplacianGenerator},
     graph::{Graph, Laplacian, LaplacianKind},
-    graph_adjoint_presampled::{fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj},
+    graph_adjoint_presampled::{
+        fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
+    },
+    graph_frechet::graph_expmv_frechet,
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
-    graph_frechet::graph_expmv_frechet,
-    graph_heat6::GraphHeat6thChernoff, entry_sensitivity::EntrySensitivity,
-    graph_krylov::{dense_graph_expmv_ref, graph_expmv_krylov, graph_expmv_matvec_count, GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
-    mass_operator::{dense_massk_expmv_ref, mass_lumped_evolve, MassKOperator, TriangularFactor}, symmetric_operator::{dense_csr_expmv_ref, SymmetricLinearOp, SymmetricOperator},
-    multilayer::{Layer, MassWeightedConservativeChernoff, MultilayerStack, multilayer_evolve},
-    graph_sensitivity::{adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
-        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity},
+    graph_heat6::GraphHeat6thChernoff,
+    graph_krylov::{
+        dense_graph_expmv_ref, graph_expmv_krylov, graph_expmv_matvec_count, GraphKrylovChernoff,
+        KrylovPath, MAX_DENSE_N,
+    },
+    graph_sensitivity::{
+        adjoint_state_gradient, apply_edge_weight_deriv, magnus_step_jvp_into,
+        EdgeWeightSensitivity, GeneratorSensitivity, NodeTimescaleSensitivity,
+    },
     graph_signal::{CsrRowIter, GraphSignal},
     graph_traj::{GraphTraj, SegmentWeightFn, MAX_GRAPH_TRAJ_SEGMENTS},
     graph_var_coef::VarCoefGraphHeatChernoff,
     grid::{BoundaryPolicy, Grid1D, InterpKind, OobPolicy},
-    grid2d::Grid2D, grid3d::Grid3D,
+    grid2d::Grid2D,
+    grid3d::Grid3D,
     grid_fn::GridFn1D,
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
     grid_nd::{GridFnND, GridND},
-    generator_action::{DivFormGenerator, GeneratorAction, NegLaplacianGenerator}, gridless::{GridlessChernoff, ParticleReduction},
+    gridless::{GridlessChernoff, ParticleReduction},
     hdr::HdrSnapshot,
     heisenberg_kernel::heisenberg_heat_kernel,
     hormander::{
@@ -405,18 +407,21 @@ pub use crate::{
     manifold::{BoundedGeometryManifold, Hyperbolic2, Sphere2, Torus},
     manifold_chernoff::ManifoldChernoff,
     manifold_kahler::FubiniStudyCp1,
+    mass_operator::{dense_massk_expmv_ref, mass_lumped_evolve, MassKOperator, TriangularFactor},
     matrix_2d3d::{
         MatrixDiffusionChernoff2D, MatrixDiffusionChernoff3D, MatrixGridFn2D, MatrixGridFn3D,
     },
     matrix_system::{MatrixDiffusionChernoff, MatrixGridFn1D},
     matrix_system_complex::{MatrixDiffusionChernoffComplex, MatrixGridFnComplex1D},
+    multilayer::{multilayer_evolve, Layer, MassWeightedConservativeChernoff, MultilayerStack},
     nonlinearity::{AllenCahn, Nonlinearity, NonlinearityDiff},
     nonseparable2d::NonSeparable2DChernoff,
     nonseparable2d_aniso::NonSeparable2DAnisotropicChernoff,
     nonseparable_mixed::NonSeparableMixedChernoff,
     obstacle::{ClosureObstacle, ConstantObstacle, Obstacle, ObstacleChernoff},
     obstacle_nd::ObstacleChernoffND,
-    phi_action::{dense_phi_aug_ref, phi_action, phi_action_batched, PHI_MAX}, point_eval::{sample_gridfn2d, PointEval},
+    phi_action::{dense_phi_aug_ref, phi_action, phi_action_batched, PHI_MAX},
+    point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff, ReflectingRegion},
@@ -451,18 +456,14 @@ pub use crate::{
         GammaSubordinator, InverseGaussianSubordinator, LevySubordinator, StableSubordinator,
         SubordinatedChernoff,
     },
+    symmetric_operator::{dense_csr_expmv_ref, SymmetricLinearOp, SymmetricOperator},
     truncated_exp::TruncatedExpDiffusionChernoff,
     truncated_exp4::{TruncatedExp4WithCache, TruncatedExp4thDiffusionChernoff},
-    // TT-Chernoff (v9.0.0 Shift C): TT representation of the Chernoff semigroup.
-    // Escapes the exponential curse (polynomial TT-rank) for linear diagonal-A
-    // (Gaussian class). See math §50 / contracts §50.2 / ADR-0159.
+    // TT-Chernoff (v9.0.0 Shift C, §52, ADR-0159): diagonal-A Gaussian class, rank ≤ d/2.
     tt_chernoff::{TtChernoff, TtState},
-    // CoupledTtChernoff (v9.1.0 Shift C RESOLUTION): genuine cross-axis coupling.
-    // Applies D1_j⊗D1_k pair-bond operators; grows rank from a rank-1 IC.
-    // See math §52.9 / ADR-0159 Amendment 1.
+    // CoupledTtChernoff (v9.1.0, ADR-0159 Am.1): cross-axis D1_j⊗D1_k pair bonds.
     tt_coupled::{CoupledTtChernoff, CouplingTopology},
-    // VarCoefTt (issue #2, ADR-0178): additive-separable variable-coefficient TT evolver.
-    // Rank-1 IC stays rank-1 (bond-preserving, §52.10d). Solver-free.
+    // VarCoefTt (#2, ADR-0178): additive-separable var-coef TT; rank-1-preserving.
     tt_varcoef::VarCoefTt,
     varcoef_magnus_graph::{compute_rho_bar, VarCoefMagnusGraphHeatChernoff, WeightAtTime},
     wentzell::{DynamicWentzellChernoff, HalfSpaceWentzell, WentzellRegion},
@@ -481,7 +482,6 @@ pub use crate::{
     tt_nonsep_varcoef_api::S3NonSepVarCoefEvolver,
     tt_varcoef_spectral::{AxisCoef, S3VarCoefEvolver},
 };
-
 /// Drain all thread-local parallel scratch pools on the calling thread.
 ///
 /// Combines [`strang2d_parallel::drain_thread_local_pools_2d`] and

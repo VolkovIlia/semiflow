@@ -1,27 +1,6 @@
 //! Batched multi-channel evolve for graph heat kernels (ADR-0184, Issue #10).
-//!
-//! **Memory layout**: `[C, N]` channel-major flat buffer.
-//! Channel `c` occupies `cols[c*N .. c*N+N]`.  Python callers use `[N, C]`
-//! (torch-native); the transpose is dissolved into the mandatory GIL-boundary
-//! copy (ADR-0184 D1).
-//!
-//! ## Forward API
-//! | Function | Covers |
-//! |---|---|
-//! | [`evolve_batched`] | all plain `ChernoffFunction<F, S = GraphSignal>` kernels |
-//! | [`evolve_batched_magnus`] | `MagnusGraphHeatChernoff` (K=4, hoisted GL₄) |
-//! | [`evolve_batched_magnus6`] | `MagnusGraphHeat6thChernoff` (K=6, hoisted GL₆, f64 only) |
-//! | [`evolve_batched_varcoef_magnus`] | `VarCoefMagnusGraphHeatChernoff` (hoisted GL₄ + a) |
-//!
-//! ## Adjoint API (impls on existing types)
-//! `PreSampledMagnusAdj::evolve_state_adjoint_batched_into`
-//! `PreSampledVarCoefAdj::evolve_state_adjoint_batched_into`
-//! [`adjoint_state_gradient_batched`]
-//!
-//! ## 0-ULP correctness
-//! Every batched path calls the SAME single-channel kernel C times (D5).
-//! All typed helpers use `t_start = 0`, matching `ChernoffFunction::apply_into`,
-//! so hoisting Laplacian samples (identical every step) preserves bit patterns.
+//! `[C, N]` channel-major layout; 0-ULP vs serial (D5); hoisted GL₄/GL₆/VC samples.
+#![allow(clippy::missing_errors_doc)]
 
 #[cfg(feature = "parallel")]
 mod parallel;
@@ -49,22 +28,9 @@ use crate::{
     varcoef_magnus_graph::VarCoefMagnusGraphHeatChernoff,
 };
 
-// ---------------------------------------------------------------------------
-// evolve_batched — generic (covers GraphHeat 1/2, GraphHeat4th, GraphHeat6)
-// ---------------------------------------------------------------------------
+// ── evolve_batched — generic ChernoffFunction<F, S = GraphSignal> ────────────
 
-/// Evolve `n_cols` channels in one call using a plain [`ChernoffFunction`].
-///
-/// `graph` is used only for ping-pong buffer allocation; its topology must
-/// match `src_cols` (i.e. `graph.n_nodes() == src_cols.len() / n_cols`).
-/// `n_steps` == 0 → copy src to dst unchanged.
-///
-/// When compiled with `parallel` feature and `n_cols >= 2`, channels are
-/// distributed across threads via `std::thread::scope` (ADR-0184 D3).
-/// Results are bit-identical to serial (0-ULP, ADR-0184 D5).
-///
-/// # Errors
-/// `DomainViolation` if layout is inconsistent.
+/// Evolve `n_cols` channels. `n_steps == 0` → copies src. Errors: layout violation.
 #[cfg(not(feature = "parallel"))]
 #[allow(clippy::cast_precision_loss)]
 pub fn evolve_batched<C, F>(
@@ -95,17 +61,21 @@ where
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_channel(func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch)?;
+        evolve_channel(
+            func,
+            tau,
+            n_steps,
+            src_c,
+            dst_c,
+            &mut buf_a,
+            &mut buf_b,
+            &mut scratch,
+        )?;
     }
     Ok(())
 }
 
-/// Evolve `n_cols` channels (parallel build — `C: Sync` required, ADR-0184 D3).
-///
-/// `n_steps` == 0 → copy src to dst unchanged.
-///
-/// # Errors
-/// `DomainViolation` if layout is inconsistent.
+/// Parallel build — `C: Sync` required (ADR-0184 D3). Errors: layout violation.
 #[cfg(feature = "parallel")]
 #[allow(clippy::cast_precision_loss)]
 pub fn evolve_batched<C, F>(
@@ -139,22 +109,24 @@ where
     let mut buf_b = GraphSignal::zeros(Arc::clone(graph));
     let src_c = &src_cols[0..n];
     let dst_c = &mut dst_cols[0..n];
-    evolve_channel(func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch)
+    evolve_channel(
+        func,
+        tau,
+        n_steps,
+        src_c,
+        dst_c,
+        &mut buf_a,
+        &mut buf_b,
+        &mut scratch,
+    )
 }
 
-// ---------------------------------------------------------------------------
-// evolve_batched_magnus — MagnusGraphHeatChernoff K=4 (hoisted GL₄)
-// ---------------------------------------------------------------------------
+// ── evolve_batched_magnus — MagnusGraphHeatChernoff K=4 (hoisted GL₄) ───────
 
-/// Evolve `n_cols` channels with Magnus K=4, hoisting GL₄ Laplacian samples.
-///
-/// `t_start = 0` on every step (mirrors `apply_into`) → l1/l2 are identical
-/// each step, so they are sampled ONCE and shared across all channels and steps.
-/// `n_steps` == 0 → copy src to dst unchanged.
-///
-/// # Errors
-/// Layout violations or convergence-radius exceeded.
+/// Evolve `n_cols` channels with Magnus K=4, hoisting GL₄ samples once.
+/// `n_steps == 0` → copies src. Errors: layout or convergence-radius.
 #[allow(clippy::cast_precision_loss)]
+#[allow(clippy::too_many_lines)]
 pub fn evolve_batched_magnus<F: SemiflowFloat>(
     mc: &MagnusGraphHeatChernoff<F>,
     t_final: F,
@@ -194,23 +166,27 @@ pub fn evolve_batched_magnus<F: SemiflowFloat>(
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_magnus_channel(&l1, &l2, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch);
+        evolve_magnus_channel(
+            &l1,
+            &l2,
+            tau,
+            n_steps,
+            src_c,
+            dst_c,
+            &mut buf_a,
+            &mut buf_b,
+            &mut scratch,
+        );
     }
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// evolve_batched_magnus6 — MagnusGraphHeat6thChernoff K=6 (f64 only, hoisted)
-// ---------------------------------------------------------------------------
+// ── evolve_batched_magnus6 — MagnusGraphHeat6thChernoff K=6 (f64, hoisted) ──
 
-/// Evolve `n_cols` channels with Magnus K=6, hoisting GL₆ Laplacian samples.
-///
-/// `f64` only (`ADR-0056`). `t_start` = 0 on every step → l1/l2/l3 sampled ONCE.
-/// `n_steps` == 0 → copy src to dst unchanged.
-///
-/// # Errors
-/// Layout violations or convergence-radius exceeded.
+/// Evolve `n_cols` channels with Magnus K=6 (f64 only, ADR-0056), hoisting GL₆ samples.
+/// `n_steps == 0` → copies src. Errors: layout or convergence-radius.
 #[allow(clippy::cast_precision_loss)]
+#[allow(clippy::too_many_lines)]
 pub fn evolve_batched_magnus6(
     mc: &MagnusGraphHeat6thChernoff<f64>,
     t_final: f64,
@@ -240,7 +216,9 @@ pub fn evolve_batched_magnus6(
     // Parallel dispatch (ADR-0184 D3): pre-hoisted Laplacians shared read-only.
     #[cfg(feature = "parallel")]
     if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
-        parallel::par_evolve_magnus6(&l1, &l2, &l3, tau, n_steps, src_cols, dst_cols, n, &graph_arc);
+        parallel::par_evolve_magnus6(
+            &l1, &l2, &l3, tau, n_steps, src_cols, dst_cols, n, &graph_arc,
+        );
         return Ok(());
     }
     let mut scratch = ScratchPool::<f64>::new();
@@ -249,23 +227,28 @@ pub fn evolve_batched_magnus6(
     for c in 0..n_cols {
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
-        evolve_magnus6_channel(&l1, &l2, &l3, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch);
+        evolve_magnus6_channel(
+            &l1,
+            &l2,
+            &l3,
+            tau,
+            n_steps,
+            src_c,
+            dst_c,
+            &mut buf_a,
+            &mut buf_b,
+            &mut scratch,
+        );
     }
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// evolve_batched_varcoef_magnus — VarCoef Magnus K=4 (hoisted GL₄ + a)
-// ---------------------------------------------------------------------------
+// ── evolve_batched_varcoef_magnus — VarCoef Magnus K=4 (hoisted GL₄ + a) ───
 
 /// Evolve `n_cols` channels with variable-coefficient Magnus K=4.
-///
-/// Hoists GL₄ Laplacian + diffusion-coefficient samples (same `t_start = 0`
-/// every step). `n_steps` == 0 → copy src to dst unchanged.
-///
-/// # Errors
-/// Layout violations, bad a-weights, or convergence-radius exceeded.
+/// Hoists GL₄ + diffusion-coefficient samples. Errors: layout/a-weights/radius.
 #[allow(clippy::cast_precision_loss)]
+#[allow(clippy::too_many_lines)]
 pub fn evolve_batched_varcoef_magnus<F: SemiflowFloat>(
     mc: &VarCoefMagnusGraphHeatChernoff<F>,
     t_final: F,
@@ -295,8 +278,16 @@ pub fn evolve_batched_varcoef_magnus<F: SemiflowFloat>(
     #[cfg(feature = "parallel")]
     if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
         parallel::par_evolve_vc(
-            &samples.l1, &samples.sqrt_a1, &samples.l2, &samples.sqrt_a2,
-            tau, n_steps, src_cols, dst_cols, n, &dummy_g,
+            &samples.l1,
+            &samples.sqrt_a1,
+            &samples.l2,
+            &samples.sqrt_a2,
+            tau,
+            n_steps,
+            src_cols,
+            dst_cols,
+            n,
+            &dummy_g,
         );
         return Ok(());
     }
@@ -307,29 +298,27 @@ pub fn evolve_batched_varcoef_magnus<F: SemiflowFloat>(
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
         evolve_vc_channel(
-            &samples.l1, &samples.sqrt_a1, &samples.l2, &samples.sqrt_a2,
-            tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch,
+            &samples.l1,
+            &samples.sqrt_a1,
+            &samples.l2,
+            &samples.sqrt_a2,
+            tau,
+            n_steps,
+            src_c,
+            dst_c,
+            &mut buf_a,
+            &mut buf_b,
+            &mut scratch,
         );
     }
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// PreSampledMagnusAdj — batched state adjoint
-// ---------------------------------------------------------------------------
+// ── PreSampledMagnusAdj — batched state adjoint ───────────────────────────────
 
 impl<F: SemiflowFloat> PreSampledMagnusAdj<F> {
-    /// Backward costate sweep for `n_cols` channels simultaneously.
-    ///
-    /// `src_cols` and `dst_cols` are `[C, N]` flat (channel-major).
-    /// `n_steps` == 0 → copy src to dst unchanged.
-    ///
-    /// 0-ULP identical to calling `evolve_state_adjoint_into` C times in
-    /// ascending channel order (same kernel, same presampled sequence).
-    ///
-    /// # Errors
-    /// `DomainViolation` if `n_steps != self.n_steps()`, layout mismatch, or
-    /// convergence check fails.
+    /// Backward costate sweep for `n_cols` channels (`[C, N]` flat).
+    /// 0-ULP vs `C` serial calls. Errors: `n_steps` mismatch, layout, convergence.
     pub fn evolve_state_adjoint_batched_into(
         &self,
         tau: F,
@@ -355,17 +344,11 @@ impl<F: SemiflowFloat> PreSampledMagnusAdj<F> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// PreSampledVarCoefAdj — batched state adjoint
-// ---------------------------------------------------------------------------
+// ── PreSampledVarCoefAdj — batched state adjoint ─────────────────────────────
 
 impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
-    /// Backward costate sweep for `n_cols` channels simultaneously (`VarCoef`).
-    ///
-    /// 0-ULP identical to calling `evolve_state_adjoint_into` C times.
-    ///
-    /// # Errors
-    /// `DomainViolation` if layout mismatch or `n_steps != self.n_steps()`.
+    /// Backward costate sweep for `n_cols` channels (`VarCoef`). 0-ULP vs `C` serial calls.
+    /// Errors: layout mismatch or `n_steps != self.n_steps()`.
     pub fn evolve_state_adjoint_batched_into(
         &self,
         tau: F,
@@ -399,25 +382,10 @@ impl<F: SemiflowFloat> PreSampledVarCoefAdj<F> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// adjoint_state_gradient_batched — summed edge-weight gradient
-// ---------------------------------------------------------------------------
+// ── adjoint_state_gradient_batched — summed edge-weight gradient ─────────────
 
-/// Summed adjoint-state gradient `∂J/∂θ = Σ_c ∂J_c/∂θ` over `n_cols` channels.
-///
-/// `u0_cols` and `dj_cols` are `[C, N]` flat.  `grad_theta` (length `n_params`)
-/// is **zeroed once** then accumulated in ascending channel index (ADR-0184 D4).
-///
-/// 0-ULP identical to calling [`crate::adjoint_state_gradient`] C times in ascending
-/// channel order: each channel's gradient is computed via `accumulate_grad_channel`
-/// into a zeroed temp, then added into `grad_theta`.
-///
-/// In the parallel build (`P: Sync`), per-channel gradients are computed on
-/// separate threads, then reduced in ascending channel order on the calling thread
-/// (ADR-0184 D4) — preserving the same bit pattern as the serial sum.
-///
-/// # Errors
-/// `DomainViolation` if layout inconsistent or `grad_theta.len() != n_params`.
+/// Summed gradient `∂J/∂θ = Σ_c ∂J_c/∂θ` (ADR-0184 D4). `grad_theta` zeroed then
+/// accumulated. 0-ULP vs `C` serial calls. Errors: layout or param count mismatch.
 #[cfg(not(feature = "parallel"))]
 #[allow(clippy::too_many_arguments)]
 pub fn adjoint_state_gradient_batched<F, P>(
@@ -435,7 +403,13 @@ where
     P: GeneratorSensitivity<F>,
 {
     let n = mc.graph.n_nodes();
-    let n_cols = validate_adj_grad_layout(u0_cols, dj_cols, n, grad_theta.len(), param_deriv.n_params())?;
+    let n_cols = validate_adj_grad_layout(
+        u0_cols,
+        dj_cols,
+        n,
+        grad_theta.len(),
+        param_deriv.n_params(),
+    )?;
     grad_theta.fill(F::zero());
     if n_steps == 0 || n_cols == 0 {
         return Ok(());
@@ -445,20 +419,27 @@ where
     for c in 0..n_cols {
         let u0_c = &u0_cols[c * n..(c + 1) * n];
         let dj_c = &dj_cols[c * n..(c + 1) * n];
-        accumulate_grad_channel(mc, u0_c, dj_c, &graph_arc, n_steps, tau, param_deriv, n_params, grad_theta, scratch)?;
+        accumulate_grad_channel(
+            mc,
+            u0_c,
+            dj_c,
+            &graph_arc,
+            n_steps,
+            tau,
+            param_deriv,
+            n_params,
+            grad_theta,
+            scratch,
+        )?;
     }
     Ok(())
 }
 
-/// Summed adjoint-state gradient (parallel build, `P: Sync` required, ADR-0184 D3/D4).
-///
-/// The `scratch` parameter is accepted for API compatibility with the serial version
-/// but is unused in the parallel path (each worker creates its own `ScratchPool`).
-///
-/// # Errors
-/// `DomainViolation` if layout inconsistent or `grad_theta.len() != n_params`.
+/// Parallel build — `P: Sync` required (ADR-0184 D3/D4). `_scratch` unused (API compat).
+/// Errors: layout or param count mismatch.
 #[cfg(feature = "parallel")]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub fn adjoint_state_gradient_batched<F, P>(
     mc: &MagnusGraphHeatChernoff<F>,
     u0_cols: &[F],
@@ -474,13 +455,29 @@ where
     P: GeneratorSensitivity<F> + Sync,
 {
     let n = mc.graph.n_nodes();
-    let n_cols = validate_adj_grad_layout(u0_cols, dj_cols, n, grad_theta.len(), param_deriv.n_params())?;
+    let n_cols = validate_adj_grad_layout(
+        u0_cols,
+        dj_cols,
+        n,
+        grad_theta.len(),
+        param_deriv.n_params(),
+    )?;
     grad_theta.fill(F::zero());
     if n_steps == 0 || n_cols == 0 {
         return Ok(());
     }
     if n_cols >= parallel::MIN_CHANNELS_PARALLEL {
-        return parallel::par_grad_batched(mc, u0_cols, dj_cols, n_steps, tau, param_deriv, grad_theta, n_cols, n);
+        return parallel::par_grad_batched(
+            mc,
+            u0_cols,
+            dj_cols,
+            n_steps,
+            tau,
+            param_deriv,
+            grad_theta,
+            n_cols,
+            n,
+        );
     }
     // Serial fallback for single-channel gradient.
     let graph_arc = Arc::clone(&mc.graph);
@@ -488,5 +485,16 @@ where
     let mut scr = ScratchPool::<F>::new();
     let u0_c = &u0_cols[0..n];
     let dj_c = &dj_cols[0..n];
-    accumulate_grad_channel(mc, u0_c, dj_c, &graph_arc, n_steps, tau, param_deriv, n_params, grad_theta, &mut scr)
+    accumulate_grad_channel(
+        mc,
+        u0_c,
+        dj_c,
+        &graph_arc,
+        n_steps,
+        tau,
+        param_deriv,
+        n_params,
+        grad_theta,
+        &mut scr,
+    )
 }

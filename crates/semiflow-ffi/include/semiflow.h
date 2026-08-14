@@ -2079,7 +2079,7 @@ const char *smf_status_str(SemiflowStatus s);
 /**
  * Return the crate version string as a static null-terminated C string.
  *
- * Example: `"0.10.0"`.  The returned pointer is valid for the lifetime of
+ * Example: `"0.13.0-beta"`.  The returned pointer is valid for the lifetime of
  * the process; do not free.
  *
  * ## Return values

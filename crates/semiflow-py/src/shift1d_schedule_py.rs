@@ -1,4 +1,4 @@
-//! Piecewise-constant coefficient schedules for `Shift1D` (#23, ADR-0192).
+//! Piecewise-constant coefficient schedules for `Shift1D` (#23, ADR-0193).
 //!
 //! `Shift1D.evolve_with_time_schedule` takes a **scalar** schedule for `a` only,
 //! with `b` and `c` fixed constants for the whole run. Two gaps bite in practice:
@@ -152,7 +152,7 @@ pub(crate) fn run_coefficient_schedule(
     Ok(state.values)
 }
 
-/// Batched `[N, C]` evolve for a `Shift1D` kernel (#19, ADR-0193).
+/// Batched `[N, C]` evolve for a `Shift1D` kernel (#19, ADR-0194).
 ///
 /// Three-phase ADR-0031: validate + transpose to `[C, N]` under the GIL, run the
 /// whole batch inside one `py.detach`, transpose back under the GIL. The

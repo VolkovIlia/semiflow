@@ -1,4 +1,4 @@
-"""Acceptance tests for the #17 / #21 / #26 issue campaign (ADR-0190, ADR-0191).
+"""Acceptance tests for the #17 / #21 / #26 issue campaign (ADR-0191, ADR-0192).
 
 Three groups:
 
@@ -76,7 +76,7 @@ class TestAnisotropicMoment:
     def test_isotropic_variance_is_step_count_flat(self, n_steps):
         exact = 2.0 * 1.0 * T_FINAL
         vx, vy, cxy = _run_nd2(np.eye(2), n_steps)
-        # Pre-ADR-0190 this returned 1.2113 / 2.2449 / 4.4901 for exact = 1.0.
+        # Pre-ADR-0191 this returned 1.2113 / 2.2449 / 4.4901 for exact = 1.0.
         assert abs(vx - exact) / exact < 2e-2, f"dVar_x={vx} vs {exact}"
         assert abs(vy - exact) / exact < 2e-2, f"dVar_y={vy} vs {exact}"
         assert abs(cxy) < 2e-2
@@ -143,7 +143,7 @@ class TestNDLayout:
             k.evolve(0.4, 40)
             out[policy] = k.values()
             assert np.all(np.isfinite(out[policy]))
-        # ADR-0190: the N-D sampler used to clamp and ignore the policy entirely,
+        # ADR-0191: the N-D sampler used to clamp and ignore the policy entirely,
         # so all three would have been byte-identical.
         assert not np.allclose(out["reflect"], out["zero"])
 
@@ -170,7 +170,7 @@ class TestHeat2DVarAConstantCoeff:
         assert np.max(np.abs(got - want)) < 1e-10
 
     @pytest.mark.skip(
-        reason="OPEN (ADR-0190): Heat2DVarA passes a'=a''=0 to a divergence-form "
+        reason="OPEN (ADR-0191): Heat2DVarA passes a'=a''=0 to a divergence-form "
         "kernel while advertising the non-divergence operator a_x(x)*u_xx across "
         "all three binding surfaces. A 1-D A/B measured slope ~1.09 with zeroed "
         "derivatives and ~1.03 with derived ones -- both at the O(tau^1) global "

@@ -1,4 +1,4 @@
-//! Batched multi-channel evolve for 1-D grid kernels (ADR-0193, Issue #19).
+//! Batched multi-channel evolve for 1-D grid kernels (ADR-0194, Issue #19).
 //!
 //! ADR-0184 gave the **graph** kernels a batched path; the **grid** 1-D family
 //! (`ShiftChernoff1D`, `DiffusionChernoff`, `Diffusion4thChernoff`,

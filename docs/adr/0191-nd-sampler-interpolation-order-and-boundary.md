@@ -1,4 +1,4 @@
-# ADR-0190 — `GridFnND::sample`: honour interpolation order and boundary policy
+# ADR-0191 — `GridFnND::sample`: honour interpolation order and boundary policy
 
 - **Status**: Proposed (Issue #17; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13
@@ -326,7 +326,7 @@ and must be measured with the uncontaminated estimator introduced here.
 
 ### The ladder had also become unrunnable
 
-ADR-0190 made a sample read `K^D` nodes. At `D = 4` that is `4⁴ = 256` against
+ADR-0191 made a sample read `K^D` nodes. At `D = 4` that is `4⁴ = 256` against
 multilinear's `2⁴ = 16`, and combined with the `5^D` Gauss–Hermite nodes the old
 `n_ref = 512` configuration measured **8105 s at D = 4** — up from ~6 min — and
 extrapolates to ~85 h at `D = 5`, past any runner limit.

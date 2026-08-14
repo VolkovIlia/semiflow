@@ -4,6 +4,7 @@
 //!   check-lints        — walk `crates/*/src/**/*.rs`, check ≤50 lines/fn, ≤500 lines/file
 //!                        optional: `--crate NAME` to scope to one crate
 //!   check-unsafe-scope — enforce that `unsafe` appears only in allowed files (ADR-0019)
+//!   doc-check          — README ↔ reality drift gate: version truth + exposed-class truth
 //!   gen-stubs          — emit placeholder Rust stubs from contracts/semiflow-core.traits.yaml
 //!   bench-baseline     — run cargo bench and capture criterion baseline
 //!   bench-parallel     — run the 4 parallel benches with features parallel,simd (ADR-0060)
@@ -13,6 +14,7 @@
 //!   test-flagship      — same flags as test-full but runs only 3 named binaries
 //!   test-ignored-gates — same flags as test-full but passes `-- --ignored`
 //!                        (runs all heavy RELEASE_BLOCKING `#[ignore]` tests)
+//!   changelog-check    — assert CHANGELOG.md has a non-empty section for the workspace version
 //!   ffi-headers        — generate crates/semiflow-ffi/include/semiflow.h via cbindgen
 //!   ffi-smoke          — build cdylib, compile heat.c, run C smoke test
 //!   ffi-graph-smoke    — build cdylib, compile graph_heat.c, run Graph PDE smoke test
@@ -28,6 +30,8 @@
 //!   binary-size-check  — report sizes of built binding artefacts vs targets (D3, v0.13.0)
 //!   latency-gate       — run L-gate latency harness from contracts/semiflow-core.properties.yaml
 //!                        (ADR-0068 Track 2; advisory in v2.6, blocking in v2.7)
+//!   version-audit      — ONLINE advisory: compare workspace version vs PyPI/crates.io/npm
+//!                        exit 0 always (advisory); pass --strict to exit 2 on behind/ahead
 
 use std::{
     env,
@@ -37,11 +41,14 @@ use std::{
 
 use anyhow::{bail, Result};
 
+mod changelog_check;
+mod doc_check;
 mod ffi_tasks;
 mod latency_gate;
 mod py_tasks;
 mod size_check;
 mod unsafe_scope;
+mod version_audit;
 mod wasm_npm;
 mod wasm_tasks;
 
@@ -52,12 +59,12 @@ fn main() {
         None => {
             eprintln!(
                 "Usage: cargo xtask \
-                 <check-lints|check-unsafe-scope|gen-stubs|bench-baseline|\
-                 test-fast|test-full|test-flagship|test-ignored-gates|\
+                 <changelog-check|check-lints|check-unsafe-scope|doc-check|gen-stubs|\
+                 bench-baseline|test-fast|test-full|test-flagship|test-ignored-gates|\
                  ffi-headers|ffi-smoke|ffi-graph-smoke|\
                  py-build|py-bench|py-smoke|py-graph-smoke|\
                  wasm-build [--size]|wasm-test|wasm-graph-smoke|wasm-pack-npm|\
-                 binary-size-check|latency-gate>"
+                 binary-size-check|latency-gate|version-audit>"
             );
             process::exit(1);
         }
@@ -65,6 +72,7 @@ fn main() {
 
     let rest: Vec<String> = args.collect();
     let result = match cmd.as_str() {
+        "changelog-check" => changelog_check::run(),
         "check-lints" => {
             // Optional `--crate <name>` to scope to a single crate directory.
             let scope = rest
@@ -75,6 +83,7 @@ fn main() {
             check_lints(scope.as_deref())
         }
         "check-unsafe-scope" => unsafe_scope::check_unsafe_scope(),
+        "doc-check" => doc_check::run(),
         "gen-stubs" => gen_stubs(),
         "bench-baseline" => bench_baseline(),
         "bench-parallel" => bench_parallel(),
@@ -95,16 +104,17 @@ fn main() {
         "wasm-pack-npm" => wasm_npm::wasm_pack_npm(),
         "binary-size-check" => size_check::binary_size_check(),
         "latency-gate" => latency_gate::run(&rest),
+        "version-audit" => version_audit::run(&rest),
         other => {
             eprintln!("Unknown subcommand: {other}");
             eprintln!(
-                "Available: check-lints, check-unsafe-scope, gen-stubs, \
-                 bench-baseline, bench-parallel, \
+                "Available: changelog-check, check-lints, check-unsafe-scope, doc-check, \
+                 gen-stubs, bench-baseline, bench-parallel, \
                  test-fast, test-full, test-flagship, test-ignored-gates, \
                  ffi-headers, ffi-smoke, ffi-graph-smoke, \
                  py-build, py-bench, py-smoke, py-graph-smoke, \
                  wasm-build [--size], wasm-test, wasm-graph-smoke, wasm-pack-npm, \
-                 binary-size-check, latency-gate"
+                 binary-size-check, latency-gate, version-audit"
             );
             process::exit(1);
         }

@@ -437,7 +437,7 @@ class TestNonSeparable2DAniso:
 # ===========================================================================
 
 class TestHeat2DVarA:
-    """Tests for Heat2DVarA pyclass (M21, order 1 — ADR-0190 AMENDMENT 1).
+    """Tests for Heat2DVarA pyclass (M21, order 1 — ADR-0191 AMENDMENT 1).
 
     Oracle: Heat2D with unit diffusion.
     """
@@ -522,7 +522,7 @@ class TestHeat2DVarA:
 
         The Strang composition is second-order, but the axis kernels freeze
         ``a`` at the node (``a' = 0``), which is order 1 wherever ``a`` varies
-        along that axis — measured slope -1.007. See ADR-0190 AMENDMENT 1.
+        along that axis — measured slope -1.007. See ADR-0191 AMENDMENT 1.
         """
         a_x = np.ones(self.NX, dtype=np.float64)
         a_y = np.ones(self.NY, dtype=np.float64)
@@ -563,7 +563,7 @@ class TestHeat2DVarA:
 # ===========================================================================
 
 class TestHeat3DVarA:
-    """Tests for Heat3DVarA pyclass (M21, order 1 — ADR-0190 AMENDMENT 1).
+    """Tests for Heat3DVarA pyclass (M21, order 1 — ADR-0191 AMENDMENT 1).
 
     Oracle: Heat3D with unit diffusion.
     """
@@ -613,7 +613,7 @@ class TestHeat3DVarA:
         assert err < 1e-10, f"Heat3DVarA(a=1) diverges from Heat3D: sup_error={err:.3e}"
 
     def test_order_is_1(self):
-        """order() returns 1, not 2 — see Heat2DVarA (ADR-0190 AMENDMENT 1)."""
+        """order() returns 1, not 2 — see Heat2DVarA (ADR-0191 AMENDMENT 1)."""
         a_x = np.ones(self.NX, dtype=np.float64)
         a_y = np.ones(self.NY, dtype=np.float64)
         a_z = np.ones(self.NZ, dtype=np.float64)

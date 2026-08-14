@@ -1,7 +1,7 @@
 # semiflow-py
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/VolkovIlia/semiflow/actions)
-[![PyPI badge — pending
+[![PyPI](https://img.shields.io/pypi/v/semiflow-pde)](https://pypi.org/project/semiflow-pde/)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](../../LICENSE-MIT)
 
 PyO3 Python bindings for [`semiflow`](../../crates/semiflow) —
@@ -9,13 +9,15 @@ Chernoff approximations of operator semigroups (Remizov 2025, Theorem 6).
 
 **Built on the `semiflow` core crate** (ADR-0154, 2026-06-10). The Python
 surface has parity with all core kernel families via ADR-0111 Waves P1–P7
-plus the v9.0.0 addition of `ReverseHeat1D` (reverse-mode AD, math §51,
+plus the 0.9.0-beta addition of `ReverseHeat1D` (reverse-mode AD, math §51,
 ADR-0156): 26 binding classes + 1 free function. Pyright errors: 0. Complete
 `__init__.pyi` stubs; `py.typed` marker; GIL released in all `evolve` paths
 (ADR-0031).
 
-`TtChernoff` / `TtState` and `GridlessChernoff` / `ParticleReduction` are
-**Rust-only at v9.0.0** — not exposed via PyO3 (binding design deferred).
+Tensor-train and gridless carriers (`TtEvolver`, `TtState`, `TtCoupledEvolver`,
+`VarCoefTtEvolver`, `GridlessEvolver`, `MeasureState`) are **fully exposed via
+PyO3** as of 0.12.0-beta (Rust-only at 0.9.0-beta; bindings added in ADR-0171 /
+ADR-0178).
 
 ## Installation
 
@@ -23,10 +25,10 @@ ADR-0156): 26 binding classes + 1 free function. Pyright errors: 0. Complete
 pip install semiflow-pde
 ```
 
-> **Note**: as of v6.0 the package is not yet published to PyPI. Wheels are
-> distributed via [GitHub releases](https://github.com/VolkovIlia/semiflow/releases).
-> Download the `semiflow-*.whl` for your platform and install with
-> `pip install semiflow-*.whl`.
+> **Note**: `semiflow-pde` is published on [PyPI](https://pypi.org/project/semiflow-pde/).
+> Wheels for common platforms are also available via
+> [GitHub releases](https://github.com/VolkovIlia/semiflow/releases) if you need
+> a specific build: `pip install semiflow_pde-*.whl`.
 
 Or build from source (requires Rust toolchain + maturin):
 
@@ -73,12 +75,77 @@ The `.kind` attribute (a string) identifies the error category:
 
 All 1D/2D/3D kernels accept a keyword argument `boundary`:
 
-| Value | Semantics |
-|-------|-----------|
-| `"reflect"` (default) | Mirror / zero-flux Neumann at grid boundaries |
-| `"periodic"` | Periodic wrap |
-| `"zero"` | Dirichlet zero at grid boundaries |
-| `"linear"` | Linear extrapolation |
+| Value | Semantics | Typical use |
+|-------|-----------|-------------|
+| `"reflect"` (default) | Mirror / zero-flux Neumann at grid boundaries | General PDEs; required by G1/G2 oracle tests |
+| `"periodic"` | Periodic wrap with period `(n-1)·dx` | Periodic domains |
+| `"zero"` | Extend with 0.0 outside domain | Solutions that vanish at the boundary (barriers, puts far OTM in log-space) |
+| `"linear"` | Linear extrapolation from the two outermost nodes | **Asymptotically-linear far-field** (European calls, linear ramps) |
+
+### Far-field / Dirichlet-like boundaries for finance
+
+Users coming from classical finite-difference option pricers often look for an
+inhomogeneous Dirichlet far-field ("set `V = S − K e^{−rτ}` at `S_max`") and,
+finding only `"zero"`, conclude the library cannot price calls.  In fact
+`boundary="linear"` is the correct and recommended closure for European call
+pricing.
+
+**Why `"linear"` works for calls:**  The Black-Scholes / CEV solution satisfies
+`V(S, τ) ≈ S − K e^{−rτ}` as `S → ∞`.  This asymptote is linear in `S`, so
+`V_SS → 0`.  Linear extrapolation from the two outermost grid nodes reproduces
+an affine far-field exactly (to machine precision), introducing no spurious
+curvature or kink.  Validated on `Shift1D.with_arrays` with `S ∈ [0, 4K]`,
+`n = 1025`: ATM relative error ≈ **8.5e-5** with no boundary artifact.
+
+**Puts in log-price space:** When a European put is priced in log-price
+coordinates (`z = ln S`), the solution satisfies `u_z → 0` at both ends of a
+sufficiently wide domain.  Either `"reflect"` (zero-flux Neumann) or `"linear"`
+works; `"reflect"` is marginally preferable because it imposes the correct
+zero-derivative condition exactly.
+
+**Example — Black-Scholes call via `Shift1D`:**
+
+```python
+import numpy as np
+import semiflow as rp
+
+# Black-Scholes PDE: dV/dt = (sigma^2 / 2) S^2 V_SS + r S V_S - r V
+# Rewrite as L V = a(S) V_SS + b(S) V_S + c(S) V with:
+#   a(S) = 0.5 * sigma^2 * S^2,  b(S) = r * S,  c(S) = -r
+
+K, T, r, sigma = 100.0, 1.0, 0.05, 0.20
+S_max = 4.0 * K      # wide enough that far-field is linear
+n = 1025
+S_nodes = np.linspace(0.0, S_max, n)
+
+a_arr = 0.5 * sigma**2 * S_nodes**2
+b_arr = r * S_nodes
+c_arr = np.full(n, -r)
+
+# European call payoff at maturity
+u0 = np.maximum(S_nodes - K, 0.0)
+
+state = rp.Shift1D.with_arrays(
+    0.0, S_max, n,
+    a_arr, b_arr, c_arr,
+    c_norm_bound=r,  # upper bound on |c(x)|
+    u0=u0,
+    boundary="linear",   # <-- correct far-field closure for calls
+)
+state.evolve(t=T, n_steps=200)
+
+V = state.values()
+S_atm_idx = np.argmin(np.abs(S_nodes - K))
+print(f"ATM call price (semiflow): {V[S_atm_idx]:.6f}")
+# rel. error vs Black-Scholes closed form ≈ 8.5e-5 at n=1025, n_steps=200
+```
+
+**Inhomogeneous Dirichlet (future work):** The Rust core provides
+`BoundaryPolicy::Dirichlet { value }` (a constant ghost-node extension), but
+it is not yet wired into the Python `boundary=` string parser.  If you need to
+pin `u = g_lo` at the left edge and `u = g_hi` at the right edge with distinct
+values, use `"linear"` as the near-exact idiom for asymptotically-linear
+payoffs.  Support for `boundary=("dirichlet", value)` is tracked in issue #20.
 
 ---
 
@@ -188,7 +255,7 @@ Classes are grouped by kernel family. All stateful classes expose at least
 |-------|--------|-------|-------|
 | `Heat2D` | `Strang2D` | 2 | Unit diffusion on 2D grid; flat x-fastest output |
 | `Heat3D` | `Strang3D` | 2 | Unit diffusion on 3D grid; flat x-fastest output |
-| `Heat2DVarA` | `Strang2D` + variable-a | 1 | **Non-divergence** `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays. Order 1, not 2: the axis kernels freeze `a` at the node (ADR-0190 AM1) |
+| `Heat2DVarA` | `Strang2D` + variable-a | 1 | **Non-divergence** `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays. Order 1, not 2: the axis kernels freeze `a` at the node (ADR-0191 AM1) |
 | `Heat3DVarA` | `Strang3D` + variable-a | 1 | **Non-divergence** `a_x u_xx + a_y u_yy + a_z u_zz`; same order caveat as `Heat2DVarA` |
 | `NonSeparable2D` | 5-leg palindromic | 2 | `∂²_x + ∂²_y + c·∂_x ∂_y`; scalar or `.with_beta_array` |
 | `NonSeparable2DAniso` | 5-leg + position-dep. β | 2 | `∂²_x + ∂²_y + β(x,y)·∂_x ∂_y`; requires `beta_values` array |
@@ -268,7 +335,7 @@ Both support `.with_potential(v_array)` and `.norm_squared()`.
 | `Adjoint(xmin, xmax, n, u0, *, kernel="heat2", self_adjoint=False, boundary="reflect")` | Adjoint semigroup; `kernel` in `"heat2"`, `"heat4"`, `"heat6"`, `"drift"`, `"shift"` |
 | `AdaptivePI(xmin, xmax, n, u0, *, kernel="heat2", tol_abs=1e-6, tol_rel=1e-4, boundary="reflect")` | PI-controller adaptive step |
 
-### Reverse-mode AD (v9.0.0, ADR-0156)
+### Reverse-mode AD (0.9.0-beta, ADR-0156)
 
 | Class | Notes |
 |-------|-------|
@@ -313,8 +380,32 @@ Raises `SemiflowError` with `.kind` in `{'OutOfDomain', 'GridMismatch', 'NanInf'
 
 **NARROW scope (§51.5):** constant-a `DiffusionChernoff` only; θ is the
 uniform diffusivity. Variable-coefficient and nonlinear kernels are out of scope
-at v9.0.0. `TtChernoff` and `GridlessChernoff` are **not** exposed in PyO3
-(Rust-only at v9.0.0).
+for `ReverseHeat1D`.
+
+### Tensor-train carriers (ADR-0171 / ADR-0178)
+
+Curse-escaped O(d·n·r²) storage for separable diagonal-A diffusion on ℝᵈ.
+State and evolvers share the `TtState` carrier; `TtEvolver` / `TtCoupledEvolver`
+cover constant-coefficient cases, `VarCoefTtEvolver` covers variable-coefficient
+additive-separable operators (issue #2, ADR-0178).
+
+| Class | Constructor | Key method | Notes |
+|-------|-------------|------------|-------|
+| `TtState(slices)` | `slices: list[NDArray[np.float64]]` — per-axis 1-D arrays | `.ndim()`, `.n_j(j)`, `.peak_rank()`, `.storage_size()`, `.inner_separable(functionals)` | Shared carrier for all TT evolvers |
+| `TtEvolver(a, b, c, dom_min, dom_max, eps_round)` | `a`, `b`: `list[float]` per-axis coeffs; `c: float`; bounds lists; `eps_round: float` | `.evolve(state, t_final, n_steps)` — mutates `TtState` in-place | Diagonal-A Gaussian class (§52) |
+| `VarCoefTtEvolver(a_axis, b_axis, v_axis, domain, eps_round)` | `a_axis`, `b_axis`, `v_axis`: `list[list[float]]` per-axis nodal values; `domain: list[tuple[float,float]]`; `eps_round: float` | `.evolve(state, t_final, n_steps)` | Variable-coef additive-separable; rank-1 IC → rank-1 output (ADR-0178) |
+| `TtCoupledEvolver(a, b, c, coupling, dom_min, dom_max, eps_round)` | Same as `TtEvolver` + `coupling: tuple` — `("None",)`, `("Tridiagonal", rho)`, or `("Pairs", [(j,k,rho),...])` | `.evolve(state, t_final, n_steps)` | Nearest-neighbour pair-factor coupling (§52.9) |
+
+### Gridless / particle carriers (ADR-0171)
+
+Sparse signed-measure ensemble on ℝ (D=1). Curse-escaped: the 3ᴰ dense tree is
+never materialised; only sparse marginals and scalar observables cross the
+Python boundary.
+
+| Class | Constructor | Key method | Notes |
+|-------|-------------|------------|-------|
+| `MeasureState(positions, weights, dim)` | `positions`, `weights`: `NDArray[np.float64]`; `dim: int` (must be 1) | `.n_diracs()`, `.total_variation()`, `.second_moment()`, `.marginal(axis) -> (pos, wgt)` | Particle carrier; signed-weight Dirac ensemble (§50) |
+| `GridlessEvolver(a, b, c, *, voronoi_cap=64, gaussian_background=False)` | `a`, `b`, `c`: `float`; optional particle-cap / background kwargs | `.evolve(state, t_final, n_steps)` — mutates `MeasureState`; `.apply(tau, src, dst)` one-step | 1-D 3-branch Chernoff kernel; `WeightedVoronoi` reduction (ADR-0155) |
 
 ### v3 Evolver surface
 
@@ -322,6 +413,88 @@ at v9.0.0. `TtChernoff` and `GridlessChernoff` are **not** exposed in PyO3
 |-------|-------|
 | `EvolverHeat1DUnitV3(domain_lo, domain_hi, n_grid, u0, n_chernoff)` | Zero-alloc `apply_into` hot path; `.evolve_into(t, buf)` |
 | `GrowthV3` | Growth bound `(multiplier, omega)` returned by `.growth()` |
+
+### Greeks and hyper-dual AD
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `EvolverHeat1DGreeksV3` | `(domain_lo, domain_hi, n_grid, u0, n_chernoff, scale_theta=0.5)` | `.greeks(t) -> (value, delta, gamma)`, `.size()`, `.n_chernoff()` | Hyper-dual `Dual<Dual<f64>>` sweep; returns primal + ∂u/∂θ + ∂²u/∂θ² in one pass (ADR-0133 A3) |
+
+### Adjoint Fokker-Planck (particle pushforward)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `AdjointFokkerPlanckV8` | `(a, b, c)` — constant diffusion, drift, reaction coefficients | `.step(tau, positions, weights, n_steps=1) -> (positions, weights)`, `.total_variation(...)`, `.second_moment(...)` | Weak-* Fokker-Planck pushforward: each Dirac δ_x spawns 4 children per step (Lemma A.1, §38.3); D=1 constant-coefficient only |
+
+### Killing and absorbing boundary conditions
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `Killing2nd1D` | `(xmin, xmax, n, u0, *, kappa=0.0, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-2 soft-killing `∂_t u = ∂²u − κu`; palindromic Strang split `e^{−τκ/2} C(τ) e^{−τκ/2}` (ADR-0126, §21.8) |
+| `KilledDirichlet1D` | `(domain_lo, domain_hi, n_grid, u0, n_chernoff)` | `.apply(t) -> NDArray`, `.size()` | Crank-Nicolson Cayley map; absorbing Dirichlet u\|∂R=0; order 2 (ADR-0135 Amdt 2, §44.ter) |
+| `DirichletHeat2nd1D` | `(xmin, xmax, n, u0, *, origin=nan, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-2 Dirichlet via odd-image method; sibling of `Reflected1D` (Neumann); higher-order than `Killing1D` (ADR-0176, §21.9) |
+
+### Obstacle / variational-inequality family
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `ObstacleChernoff` | `(xmin, xmax, n, u0, *, a=1.0, b=0.0, c=0.0, level=nan, obstacle_array=None)` | `.evolve(t, n_steps=100) -> NDArray`, `.values()`, `.evolve_active_set_adjoint(w_fwd, lam, tau)`, `.order()`, `len()` | `V^{n+1} = Π_g(S(Δτ)Vⁿ)`; constant or array obstacle floor; order 1 globally (§44, Theorem 44.1) |
+| `ObstacleGammaV8` | `(domain_lo, domain_hi, n_grid, *, level=..., obstacle_array=None)` | `.inactive_gamma(v) -> (gamma, defined, count)`, `.size()` | Inactive-set Γ = V″ primitive; `defined[i]=False` means Γ **refused** (active set / contact); D=1 only (ADR-0153 §4.1) |
+| `ObstacleNDV8` | `(xmin, xmax, nx, ymin, ymax, ny, level)` | `.apply(tau, v) -> NDArray`, `.shape()` | D=2 projective-splitting obstacle `Π_g ∘ S(Δτ)`; input shape `(nx, ny)` accepted (raveled order='F' internally); output is a flat nx*ny float64 array — use `out.reshape((nx, ny), order='F')` to recover 2D layout (ADR-0153 §4.2) |
+
+### Resolvent time-jump family (TWS contour)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `ResolventJumpV8` | `(domain_lo, domain_hi, n_grid, m_nodes)` | `.jump(t, g) -> NDArray`, `.size()`, `.m_nodes()` | Evaluates `e^{tA}g` via TWS parabolic-contour ILT; large-t alternative to many Chernoff steps; `m_nodes >= 6` (ADR-0138, §47) |
+| `ResolventJump2DV8` | `(xmin, xmax, nx, ymin, ymax, ny, m_nodes)` | `.jump(t, g) -> NDArray`, `.shape()`, `.m_nodes()` | 2D TWS contour ILT; input/output shape `(nx, ny)` Fortran-order (ADR-0153, §47.8) |
+| `ResolventJump3DV8` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, m_nodes)` | `.jump(t, g) -> NDArray`, `.shape()`, `.m_nodes()` | 3D TWS contour ILT; input/output shape `(nx, ny, nz)` Fortran-order (ADR-0153, §47.8) |
+
+### Matrix diffusion (coupled 2-component)
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `MatrixDiffusion2D` | `(xmin, xmax, nx, ymin, ymax, ny, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 2D diffusion `∂_t u = a∂²u + cu`; flat buffer length `2·nx·ny`; index `(j·nx+i)·2+component` (ADR-0124, §33.2) |
+| `MatrixDiffusion3D` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 3D; flat buffer length `2·nx·ny·nz`; index `(k·nx·ny+j·nx+i)·2+component` (ADR-0124, §33.3) |
+
+### Wentzell dynamic boundary conditions
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `GammaFamily` | Static factories: `.constant(c)`, `.linear(a, b)`, `.exponential(rate)` | — | Ergonomic γ-schedule builder for `WentzellV8`; expands to pre-sampled float64 array (ADR-0153) |
+| `WentzellV8` | `(domain_lo, domain_hi, n_grid, u0, n_steps, c_reaction, gamma_schedule)` or `.from_family(...)` | `.evolve(t, t_offset=0.0) -> NDArray`, `.size()`, `.n_steps()` | Dynamic Wentzell BC `∂_t u + γ(t)·∂_ν u + c·u = 0`; bulk-boundary Cayley Lie split; order 1; 1D half-line only (ADR-0151, §49) |
+
+### Additional 1D kernels
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `DiffusionExpmv1D` | `(xmin, xmax, n, u0, *, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Tolerance-driven expmv kernel (Al-Mohy & Higham 2011); `order()` returns `u32::MAX`; not a fixed convergence order (ADR-0121) |
+| `DriftReaction4th1D` | `(xmin, xmax, n, u0, *, boundary="reflect")` | `.evolve(t, n_steps=100)`, `.values()`, `.order()`, `len()` | Order-4 `b(x)∂_x u + c(x)u` via palindromic `R_sym(τ/2) ∘ K5(τ) ∘ R_sym(τ/2)`; defaults `b=0.5, b'=0, c=0` (ADR-0127) |
+
+### Sparse-grid and high-dimensional kernels
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `SmolyakD6V8` | `(domain_lo, domain_hi, n_per_axis)` | `.apply(tau, u0, n_steps=1) -> NDArray`, `.n_nodes()`, `.level()`, `.size()` | D=6 Smolyak sparse-grid unit-diffusion; level ℓ=D+3=9 (533 nodes); input/output flat `n_per_axis^6` (ADR-0138, ADR-0123 Amdt 1) |
+| `ComplexTripleJumpV8` | `(domain_lo, domain_hi, n_per_axis)` | `.apply_real(tau, u0) -> NDArray`, `.verify_gamma_star() -> bool`, `.size()` | Order-4 complex triple-jump on filiform-N5 Carnot (D=5); returns real projection `Re(Ψ(τ)f)`; complex substeps are internal (ADR-0138, ADR-0136 Amdt 2) |
+
+### Graph adjoint and Krylov families
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `GraphAdjoint` | `(graph=None, laplacian=None, *, lap_at_t, rho_bar, a=None, kernel="magnus_graph", convergence_check=True)` | `.evolve_state_adjoint(lambda_n, t, n_steps=100) -> NDArray`, `.n_nodes()` | Backward costate sweep `λ_0 = S⋆_1⋯S⋆_n · λ_n` via transpose Magnus K=4 map; supports `"magnus_graph"` / `"varcoef_magnus_graph"` (ADR-0115, §42) |
+| `GraphAdjointPresampled` | `.from_presampled(graph, lap_at_t, rho_bar, n_steps, t_horizon, a=None, kernel="magnus_graph", convergence_check=True)` | `.evolve_state_adjoint(lambda_n, n_steps=None) -> NDArray`, `.evolve_state_adjoint_batched(lambda_cols, n_steps=None) -> NDArray`, `.n_nodes()`, `.n_steps()` | Pre-samples callbacks once at construction; adjoint sweep runs fully in `py.detach` with no per-step GIL re-entry (ADR-0180) |
+| `GraphKrylov` | `(laplacian, *, path="chebyshev", tol=1e-10, m_max=18)` | `.evolve_batched(t, features_nc) -> NDArray`, `.n_nodes()` | Depth-independent `e^{-tL_G}·V` via Krylov; accepts `[N, C]` feature matrix; single GIL release (ADR-0185, §54) |
+
+### Symmetric operator and FEM utilities
+
+| Class | Constructor | Key methods | Notes |
+|-------|-------------|-------------|-------|
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55) |
+| `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
+| `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, n_steps) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv`. Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects. Cost is `Θ(t‖A‖_∞)` matvecs — linear in the horizon, NOT depth-flat like Lanczos (§57, ADR-0195) |
+| `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
+| `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
 ---
 

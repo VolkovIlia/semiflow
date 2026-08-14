@@ -1,7 +1,7 @@
 //! `graph_expmv_frechet` — VJP gradient via §54.5 augmented Fréchet (ADR-0185).
 //!
 //! Computes `∂J/∂w_k` for `J = Σ_c ⟨dj_c, e^{−tL} u0_c⟩` using the exact
-//! Duhamel integral via 8-point Gauss-Legendre quadrature on `[0, 1]`:
+//! Duhamel integral via 8-point Gauss-Legendre quadrature on `[0,1]`:
 //!
 //! ```text
 //! ∂J/∂w_k = −t ∫₀¹ ⟨e^{−(1−s)tL} dj, (∂L/∂w_k) e^{−stL} u0⟩ ds
@@ -113,7 +113,10 @@ where
     for (k, gk) in grad_w.iter_mut().enumerate() {
         // tmp = (∂A/∂w_k) b_buf  (= −E_k b_buf for edge-weight sensitivity)
         param_deriv.apply_param_deriv(k, t, b_buf, tmp)?;
-        let dot = a_buf.iter().zip(tmp.iter()).fold(F::zero(), |acc, (&a, &b)| acc + a * b);
+        let dot = a_buf
+            .iter()
+            .zip(tmp.iter())
+            .fold(F::zero(), |acc, (&a, &b)| acc + a * b);
         *gk += t * wq * dot;
     }
     Ok(())
@@ -203,6 +206,7 @@ where
 /// Returns `DomainViolation` if `t_final ≤ 0`, any length mismatch, or the
 /// inner Krylov solve fails.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub fn graph_expmv_frechet<F, P>(
     gk: &GraphKrylovChernoff<F>,
     u0_cols: &[F],
@@ -219,7 +223,15 @@ where
 {
     let n = gk.n_nodes();
     let n_p = param_deriv.n_params();
-    validate_args(t_final, u0_cols.len(), dj_cols.len(), grad_w.len(), n_cols, n, n_p)?;
+    validate_args(
+        t_final,
+        u0_cols.len(),
+        dj_cols.len(),
+        grad_w.len(),
+        n_cols,
+        n,
+        n_p,
+    )?;
 
     // D4: zero accumulator before ascending-channel sweep (ADR-0185 §D4).
     for g in grad_w.iter_mut() {
@@ -227,15 +239,23 @@ where
     }
 
     // Dummy graph: `n` nodes, no edges.  Used only as the GraphSignal domain.
-    let g_dummy = Arc::new(
-        Graph::<F>::from_edges(n, core::iter::empty()).expect("empty graph never fails"),
-    );
+    let g_dummy =
+        Arc::new(Graph::<F>::from_edges(n, core::iter::empty()).expect("empty graph never fails"));
 
     // D4: ascending channel order.
     for c in 0..n_cols {
         let u0_c = &u0_cols[c * n..(c + 1) * n];
         let dj_c = &dj_cols[c * n..(c + 1) * n];
-        frechet_channel(gk, u0_c, dj_c, &g_dummy, t_final, param_deriv, grad_w, scratch)?;
+        frechet_channel(
+            gk,
+            u0_c,
+            dj_c,
+            &g_dummy,
+            t_final,
+            param_deriv,
+            grad_w,
+            scratch,
+        )?;
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-//! `G_ASND_MOMENT` — second-moment growth of `AnisotropicShiftChernoffND` (ADR-0190).
+//! `G_ASND_MOMENT` — second-moment growth of `AnisotropicShiftChernoffND` (ADR-0191).
 //!
 //! The kernel's generator is `∂_t u = A·∇²u`, so a Gaussian initial condition
 //! must gain **exactly** `2·a_dd·t` of variance along axis `d`, independently of
@@ -10,7 +10,7 @@
 //! fixed amount of spurious variance *per step* preserves constants exactly,
 //! is the identity at `τ = 0`, and self-converges to its own wrong answer.
 //!
-//! Pre-ADR-0190 measurement (multilinear sampler, 96² grid, `A = I`, `t = 0.5`):
+//! Pre-ADR-0191 measurement (multilinear sampler, 96² grid, `A = I`, `t = 0.5`):
 //! `dVar = 1.2113 / 2.2449 / 4.4901` at `n_steps = 100 / 400 / 1600` against an
 //! exact `1.0` — i.e. the error grew with the very parameter users increase to
 //! improve accuracy.
@@ -102,7 +102,7 @@ fn run_on(nx: usize, a: [f64; 4], n_steps: usize) -> (f64, f64, f64) {
 ///
 /// The full `G_ASND_MOMENT` ladder below is `slow-tests`-gated because 1600
 /// steps on a 96² grid costs ~200 s, which does not belong in `xtask test-fast`.
-/// This cheap variant still catches the defect decisively: the pre-ADR-0190
+/// This cheap variant still catches the defect decisively: the pre-ADR-0191
 /// sampler carried `n·dx²/6` of spurious variance, which at `n = 200` on this
 /// coarser grid is a ~90% error against a 2% band. Refining the grid makes the
 /// old failure *smaller*, so a coarse grid is the conservative choice here.
@@ -127,7 +127,7 @@ fn asnd_moment_isotropic_smoke() {
 
 /// `G_ASND_MOMENT` — isotropic gain is `2·a·t` and is FLAT in the step count.
 ///
-/// Non-vacuity: the pre-ADR-0190 sampler produced 1.2113 / 2.2449 / 4.4901 here,
+/// Non-vacuity: the pre-ADR-0191 sampler produced 1.2113 / 2.2449 / 4.4901 here,
 /// so the 2% band cannot be met by an implementation that carries a per-step
 /// interpolation floor. The three step counts differ by 16×, so a step-count
 /// dependence of the kind issue #17 reported cannot hide inside the band.

@@ -241,7 +241,7 @@ impl Shift1D {
         })
     }
 
-    /// Evolve `C` channels under this kernel in one call (#19, ADR-0193).
+    /// Evolve `C` channels under this kernel in one call (#19, ADR-0194).
     ///
     /// ``u0_nc`` is ``[N, C]``; the return has the same shape. Functional — does
     /// not mutate this object. Bit-identical to `C` sequential :meth:`evolve`

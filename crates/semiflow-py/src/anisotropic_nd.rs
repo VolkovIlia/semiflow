@@ -100,7 +100,7 @@ use crate::{
 /// boundary : str, optional
 ///     Out-of-domain sampling policy, one of ``"reflect"`` (default),
 ///     ``"periodic"``, ``"zero"``, ``"linear"``.  Applied to both axes.
-///     Before ADR-0190 the N-D sampler ignored the policy and clamped.
+///     Before ADR-0191 the N-D sampler ignored the policy and clamped.
 ///
 /// Raises
 /// ------

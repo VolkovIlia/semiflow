@@ -93,6 +93,13 @@ double-publishing the same version.
 
 ## API
 
+The **complete, authoritative list** of exported JS classes and their TypeScript
+signatures is the wasm-pack-generated declaration file `semiflow_wasm.d.ts`,
+shipped alongside the compiled `.wasm` in the `@semiflow/wasm` npm package.
+Consult that file — or the inline TypeDoc comments — rather than any per-class
+enumeration in prose here.  The curated examples below highlight the most
+commonly used entry points.
+
 The package ships two build sizes controlled by a Cargo feature flag.
 
 ### Default build ("lite") — ≈ 768 KB raw Wasm
@@ -148,7 +155,7 @@ and hypoelliptic engines. Additions include:
 - **Other** — `Obstacle1D` (JS name), `ObstacleND2Wasm`, `ObstacleGammaV8Wasm`,
   `Adjoint1D`, `AdaptivePI1D`, `ComplexTripleJumpWasm`, `PointEvalWasm`
 
-**Documented deferrals (not yet wired to WASM):** `ObstacleND`, `GraphTraj`,
+**Documented deferrals (not yet wired to WASM):** `ObstacleND`,
 Laplacian introspection, `GraphAdjoint` dense read-back, S³ carrier handles
 (`TtEvolver`/`GridlessEvolver` FFI handles — deferred to a follow-up release).
 

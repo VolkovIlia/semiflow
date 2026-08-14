@@ -117,9 +117,9 @@ fn d2_min_over_peak(n: usize) -> f64 {
 }
 
 /// One step of the D=2 kernel stays finite, and any undershoot vanishes with
-/// resolution (ADR-0190).
+/// resolution (ADR-0191).
 ///
-/// Before ADR-0190 this asserted strict `v >= 0.0`, which held only because the
+/// Before ADR-0191 this asserted strict `v >= 0.0`, which held only because the
 /// sampler was multilinear — the same positivity-preserving property that made
 /// it inject `dx²/6` of spurious variance per step (issue #17). Catmull-Rom, in
 /// common with every high-order interpolant including the `SepticHermite` the

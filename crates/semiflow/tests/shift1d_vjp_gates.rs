@@ -1,4 +1,4 @@
-//! `G_SHIFT1D_*` — coefficient-field gradients for `ShiftChernoff1D` (ADR-0196).
+//! `G_SHIFT1D_*` — coefficient-field gradients for `ShiftChernoff1D` (ADR-0197).
 //!
 //! Three gates, in increasing cost and decreasing sharpness:
 //!

@@ -9,11 +9,11 @@
 //! [`crate::shift_nd::AnisotropicShiftChernoffND<F, D>`] (math.md §32,
 //! ADR-0081) and [`crate::hormander::HypoellipticChernoff`] (future generic).
 //!
-//! ## Sub-grid sampling (ADR-0190)
+//! ## Sub-grid sampling (ADR-0191)
 //!
 //! [`GridFnND::sample`] evaluates the tensor-product interpolant selected by
 //! [`GridND::interp`] (default [`InterpKind::CubicHermite`]) and honours each
-//! axis's own [`crate::grid::BoundaryPolicy`]. Until ADR-0190 it hard-coded
+//! axis's own [`crate::grid::BoundaryPolicy`]. Until ADR-0191 it hard-coded
 //! multilinear interpolation with an index clamp; because every Chernoff step
 //! resamples at off-grid quadrature feet, that injected ≈ `dx²/6` of spurious
 //! second moment **per step**, growing linearly in the step count (math §32.7).
@@ -58,7 +58,7 @@ pub struct GridND<F: SemiflowFloat = f64, const D: usize = 2> {
     pub axes: [Grid1D<F>; D],
     /// Tensor-product interpolation kind used by [`GridFnND::sample`].
     ///
-    /// Default [`InterpKind::CubicHermite`] (ADR-0190). A single grid-level
+    /// Default [`InterpKind::CubicHermite`] (ADR-0191). A single grid-level
     /// knob rather than a per-axis one because `Grid1D::new` already stamps
     /// every axis with `SepticHermite`, leaving no way to tell a deliberate
     /// choice from an inherited default. `CubicHermite` removes the accumulated
@@ -96,7 +96,7 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
         })
     }
 
-    /// Override the tensor-product interpolation kind (builder, ADR-0190).
+    /// Override the tensor-product interpolation kind (builder, ADR-0191).
     ///
     /// Only [`InterpKind::CubicHermite`] and [`InterpKind::Linear`] are
     /// implemented for `D > 1`; the others make [`GridFnND::sample`] return
@@ -167,12 +167,12 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
 }
 
 // ---------------------------------------------------------------------------
-// AxisStencil — one axis's contribution to a tensor-product sample (ADR-0190)
+// AxisStencil — one axis's contribution to a tensor-product sample (ADR-0191)
 // ---------------------------------------------------------------------------
 
 /// Per-axis interpolation stencil, fully resolved once per sample.
 ///
-/// `hits`/`stride` are hoisted out of the collapse recursion (ADR-0190 AM 4):
+/// `hits`/`stride` are hoisted out of the collapse recursion (ADR-0191 AM 4):
 /// the recursion re-visits axis `d` once per combination of the axes above it,
 /// so resolving the policy inside it cost 1364 [`bc_index`] calls per sample at
 /// `D = 5` against the 20 that are distinct.
@@ -231,7 +231,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
     ///
     /// # Errors
     /// - `DomainViolation` if `values.len() != grid.len()`.
-    /// - `Unsupported` if `grid.interp` has no `D > 1` stencil (ADR-0190). The
+    /// - `Unsupported` if `grid.interp` has no `D > 1` stencil (ADR-0191). The
     ///   check lives here, once per state, so that [`GridFnND::sample`] cannot
     ///   fail inside the per-node kernel loops for an in-shape coordinate.
     pub fn new(grid: GridND<F, D>, values: Vec<F>) -> Result<Self, SemiflowError> {
@@ -262,7 +262,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
         Self { values, grid }
     }
 
-    /// Tensor-product interpolation at an arbitrary d-D point `x` (ADR-0190).
+    /// Tensor-product interpolation at an arbitrary d-D point `x` (ADR-0191).
     ///
     /// Evaluates `Σ_{k∈K^D} (Π_d w^{(d)}_{k_d}) · f[idx + o_k]`, where the
     /// per-axis nodal weights come from [`GridND::interp`] and out-of-range

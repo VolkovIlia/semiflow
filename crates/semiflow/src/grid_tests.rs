@@ -75,7 +75,7 @@ proptest! {
     }
 }
 
-/// Binding gate (ADR-0190): the nodal weights that `interp_stencil` hands to the
+/// Binding gate (ADR-0191): the nodal weights that `interp_stencil` hands to the
 /// N-D tensor-product sampler must reproduce the arithmetic the generic 1-D
 /// sampler actually performs.
 ///

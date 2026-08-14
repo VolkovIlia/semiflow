@@ -139,3 +139,202 @@ fn lanczos_iterate<F: SemiflowFloat>(
     }
     m_actual
 }
+
+// ── Modified Bessel I_k(z) — no_std power series ─────────────────────────────
+//
+// I_k(z) = Σ_{m=0}^∞ (z/2)^{2m+k} / (m! · (m+k)!)
+// Term recurrence: term_{m+1} = term_m · (z/2)² / ((m+1)(m+k+1))
+
+fn bessel_i_k<F: SemiflowFloat>(k: usize, z: F) -> F {
+    if z < F::from(1e-300_f64).unwrap() {
+        return if k == 0 { F::one() } else { F::zero() };
+    }
+    let hz = z / F::from(2.0_f64).unwrap();
+    let hz2 = hz * hz;
+    // Leading term (z/2)^k / k!
+    // Loop indices are Bessel series indices bounded by degree (≤ 200) — precision loss impossible.
+    #[allow(clippy::cast_precision_loss)]
+    let mut term = {
+        let mut t = F::one();
+        for i in 1..=(k as u64) {
+            t = t * hz / F::from(i as f64).unwrap();
+        }
+        t
+    };
+    let mut sum = term;
+    #[allow(clippy::cast_precision_loss)]
+    for m in 0u64..1000 {
+        term = term * hz2
+            / (F::from((m + 1) as f64).unwrap() * F::from((m + 1 + k as u64) as f64).unwrap());
+        let next = sum + term;
+        if next == sum {
+            break;
+        }
+        sum = next;
+    }
+    sum
+}
+
+// ── Implicit-Euler action bridging GraphSignal → slice → GraphSignal ─────────
+
+/// Bridge `implicit_euler_action` (slice API) to the `GraphSignal` domain.
+///
+/// Writes to `dst` via `zero_into` + `axpy_into_slice` — the same pattern used
+/// by `chebyshev_action` and `lanczos_action`, so no `values_mut` is needed.
+// 8 args by necessity — op/src/dst/tau/n_steps/tol/cg_max_iter/scratch.
+#[allow(clippy::too_many_arguments)]
+fn implicit_euler_gk_action<F: SemiflowFloat>(
+    op: &impl SymmetricLinearOp<F>,
+    src: &GraphSignal<F>,
+    dst: &mut GraphSignal<F>,
+    tau: F,
+    n_steps: usize,
+    tol: F,
+    cg_max_iter: Option<usize>,
+    scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError> {
+    let n = src.len();
+    let mut out = scratch.take_vec(n);
+    implicit_euler_action(
+        op as &dyn SymmetricLinearOp<F>,
+        src.values(),
+        &mut out,
+        tau,
+        n_steps,
+        tol,
+        cg_max_iter,
+        scratch,
+    )?;
+    dst.zero_into();
+    dst.axpy_into_slice(F::one(), &out);
+    scratch.return_vec(out);
+    Ok(())
+}
+
+// ── Chebyshev and Lanczos semigroup actions ───────────────────────────────────
+//
+// Moved here from graph_krylov.rs to keep that file within the 500-line budget.
+
+// 7 args by necessity — 4 op-state vars + tau/lambda_max/tol/scratch.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+fn chebyshev_action<F: SemiflowFloat>(
+    op: &impl SymmetricLinearOp<F>,
+    src: &GraphSignal<F>,
+    dst: &mut GraphSignal<F>,
+    tau: F,
+    lambda_max: F,
+    tol: F,
+    scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError> {
+    let n = src.len();
+    let z_total = tau * lambda_max / F::from(2.0_f64).unwrap();
+    let s = cheb_substep_count(z_total);
+    let step_tau = tau / F::from(f64::from(s)).unwrap(); // f64::from(u32) exact
+    let z_sub = step_tau * lambda_max / F::from(2.0_f64).unwrap();
+    let m = chebyshev_degree(z_sub, tol);
+    let em_z = (-z_sub).exp();
+    let scale = F::from(2.0_f64).unwrap() / lambda_max;
+    let two = F::from(2.0_f64).unwrap();
+    let mut t_prev = scratch.take_vec(n);
+    let mut t_curr = scratch.take_vec(n);
+    let mut spmv = scratch.take_vec(n);
+    let mut result = scratch.take_vec(n);
+    let mut current = scratch.take_vec(n);
+    current.copy_from_slice(src.values());
+    for _ in 0..s {
+        chebyshev_step(
+            op,
+            &current,
+            &mut t_prev,
+            &mut t_curr,
+            &mut spmv,
+            &mut result,
+            n,
+            m,
+            scale,
+            two,
+            z_sub,
+            em_z,
+            z_total,
+        )?;
+        core::mem::swap(&mut current, &mut result);
+    }
+    dst.zero_into();
+    dst.axpy_into_slice(F::one(), &current);
+    scratch.return_vec(t_prev);
+    scratch.return_vec(t_curr);
+    scratch.return_vec(spmv);
+    scratch.return_vec(result);
+    scratch.return_vec(current);
+    Ok(())
+}
+
+/// One Lanczos step: `dst ≈ e^{-tau·A} · src` using m Krylov iterations.
+#[allow(clippy::too_many_lines)]
+fn lanczos_step_inner<F: SemiflowFloat>(
+    op: &impl SymmetricLinearOp<F>,
+    src: &[F],
+    dst: &mut [F],
+    tau: F,
+    m: usize,
+    scratch: &mut ScratchPool<F>,
+) -> Result<(), SemiflowError> {
+    let n = src.len();
+    let m = m.min(n).min(MAX_LANCZOS_DIM);
+    let v_norm = src
+        .iter()
+        .map(|&x| x * x)
+        .fold(F::zero(), |a, x| a + x)
+        .sqrt();
+    if v_norm < F::from(1e-300_f64).unwrap() {
+        for x in dst.iter_mut() {
+            *x = F::zero();
+        }
+        return Ok(());
+    }
+    let mut q_basis = scratch.take_vec(m * n);
+    let mut q_prev = scratch.take_vec(n);
+    let mut q_curr = scratch.take_vec(n);
+    let mut z_buf = scratch.take_vec(n);
+    let mut alpha = [F::zero(); MAX_LANCZOS_DIM];
+    let mut beta = [F::zero(); MAX_LANCZOS_DIM];
+
+    // q_1 = v / ‖v‖; store as first basis column
+    let inv_v = F::one() / v_norm;
+    for i in 0..n {
+        q_curr[i] = src[i] * inv_v;
+    }
+    q_basis[0..n].copy_from_slice(&q_curr);
+
+    let m_actual = lanczos_iterate(
+        op,
+        &mut q_curr,
+        &mut q_prev,
+        &mut z_buf,
+        &mut q_basis,
+        &mut alpha,
+        &mut beta,
+        n,
+        m,
+    );
+
+    // Reconstruct dst = Q_m · e^{-τ T_m} · (‖v‖ e_1)
+    let exp_t = build_exp_tridiag(&alpha, &beta, tau, m_actual)?;
+    for x in dst.iter_mut() {
+        *x = F::zero();
+    }
+    for k in 0..m_actual {
+        let coeff = v_norm * exp_t[k][0];
+        let qk = &q_basis[k * n..(k + 1) * n];
+        for i in 0..n {
+            dst[i] += coeff * qk[i];
+        }
+    }
+
+    scratch.return_vec(q_basis);
+    scratch.return_vec(q_prev);
+    scratch.return_vec(q_curr);
+    scratch.return_vec(z_buf);
+    Ok(())
+}

@@ -19,7 +19,7 @@ correctness bug (#17); exploration surfaced a second of the same class that had
 not been reported. The campaign splits into a correctness wave (landing first)
 and a capability wave.
 
-**#17 — `GridFnND::sample` ignored `InterpKind` and `BoundaryPolicy` (ADR-0190,
+**#17 — `GridFnND::sample` ignored `InterpKind` and `BoundaryPolicy` (ADR-0191,
 math §32.9).** The N-D sampler hard-coded multilinear interpolation with an index
 clamp. Since the Chernoff product resamples at off-grid quadrature feet every
 step, that injected ≈ `dx²/6` of spurious second moment **per step**, growing
@@ -30,14 +30,14 @@ the library's x-fastest layout — addressed by accepting 2-D arrays directly an
 documenting the layout precisely. Gate `G_ASND_MOMENT` (the oracle whose absence
 let this ship). Honest limits: septic/octonic/Chebyshev have no `D > 1` stencil,
 so the N-D spatial floor is `O(dx⁴)`; the interpolant is no longer
-positivity-preserving. **The `G_DDIM` ladder was re-measured (ADR-0190 AMENDMENT 3) and the gate now
+positivity-preserving. **The `G_DDIM` ladder was re-measured (ADR-0191 AMENDMENT 3) and the gate now
 FAILS at −0.9249.** The cause is not the sampler fix: the gate's reference sits
 only 2× finer than its datum, and a reference-free successive-difference probe
 puts the kernel's true global order at **½** across `n ∈ [32, 16384]` and three
 grid resolutions. Left failing; needs an architect decision on `order()`, on the
 threshold, and on whether `shift_nd_zeta2` lifts it. See "Open" in CHANGELOG.
 
-**RESOLVED — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (ADR-0190 AMENDMENT 1,
+**RESOLVED — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (ADR-0191 AMENDMENT 1,
 math §9.2.3.B.bis).** Zeroing the closures looked like a bug, and the earlier
 self-convergence A/B could not discriminate because both candidates sit at the
 `O(τ¹)` ceiling. The missing analytic oracle was built: both candidate
@@ -50,7 +50,7 @@ consistency order 1, measured **1.007**, so `Heat2DVarA::order()` and
 `Heat3DVarA::order()` now report 1 rather than 2. Gates `G_FROZEN_COEFF_NONDIV`,
 `G_FROZEN_COEFF_ORDER1`.
 
-**Found in passing — the θ_m table was mis-transcribed (ADR-0197, math
+**Found in passing — the θ_m table was mis-transcribed (ADR-0198, math
 §45.2.bis).** `expmv::THETA_M` and its `graph_krylov` mirror paired each Taylor
 degree with a backward-error radius belonging to a degree two to three rows
 further down Al-Mohy & Higham Table 3.1, so `select_s_m` under-substepped by up
@@ -62,7 +62,7 @@ from the definition in exact rational arithmetic; `M_MAX` 18 → 30. Gate
 including the whole Magnus graph surface, were dead and unbuildable behind a
 feature no build path enables. Fixed; CI now type-checks it.
 
-**#26 — conservative diffusion admits `k ≥ 0` (ADR-0191, math §56.8.bis).**
+**#26 — conservative diffusion admits `k ≥ 0` (ADR-0192, math §56.8.bis).**
 CEV, Feller/CIR and Wright–Fisher are degenerate at the boundary by construction;
 the harmonic-mean face already handles it (zero conductivity ⇒ zero flux ⇒ the
 boundary classifies itself). Supersedes the "#11 honest limit: `k > 0`" below.
@@ -78,6 +78,33 @@ inexpressible); #22 `AdaptivePI` over `Shift1D.with_arrays`; #23 `b`/`c` and
 array coefficients in `evolve_with_time_schedule`; #24 non-symmetric operators
 via the existing symmetry-agnostic `expmv` Taylor engine rather than new Arnoldi;
 #25 VJP w.r.t. `Shift1D` coefficient fields.
+
+---
+
+## Issue #16 — Implicit / shift-invert stiff mode for `SymmetricOperator` (ADR-0190, math §59) — IN PROGRESS (branch `feat/issue-16-implicit-symmetric-operator`)
+
+Single-issue additive feature. No breaking changes to any existing kernel, gate,
+or PyO3 surface.
+
+**#16 — Dependency-free PCG backward-Euler action for stiff externally-assembled operators:**
+`SymmetricOperator.evolve_batched`, `mass_lumped_evolve`, and `MassKOperator.evolve`
+gain a new `path="implicit"` keyword that computes `e^{−tA}v ≈ (I+Δt·A)^{−n_steps} v`
+via preconditioned Conjugate Gradient (Jacobi preconditioner, built once per fixed
+`Δt` and reused across all sub-steps and channels). The `+I` shift lifts
+`σ(Â) ⊂ [0, λ_max]` to `σ(S) ⊂ (0, ∞)`, making `S` SPD for every `Δt > 0`
+regardless of whether `A` is singular — CG is always well-posed (§59.3). No new
+dependency; no governance amendment required (dep budget 3/3 saturated; constitution
+v7.0.0 override slots full; PCG needs none). Resolves the gap left by ADR-0188/§57.4
+(tridiagonal Thomas solve, 1-D only) for general-sparse-CSR FEM stiffness matrices.
+New `KrylovPath::ImplicitEuler { n_steps }` enum arm in `graph_krylov.rs`; all
+`match KrylovPath` sites fail to compile without the new arm (compile-time-enforced,
+≤4 sites).
+Gates: `G_SYMOP_IMPLICIT_DENSE` ≤ 1e-9; `G_SYMOP_IMPLICIT_STIFF` ≤ 1e-9;
+`G_SYMOP_IMPLICIT_PCG_SPD` structural.
+Honest limits: accuracy is O(Δt) = O(t/n_steps); cost governed by `√κ`
+(Jacobi) — NOT strictly `λ_max`-independent. IC(0) (zero-fill incomplete Cholesky,
+keeps `S` sparsity, near-constant cost for well-structured FEM) is §59.6
+deferred work. SDIRK2 (order-2 L-stable) reusing the same `P` is a further deferral.
 
 ---
 

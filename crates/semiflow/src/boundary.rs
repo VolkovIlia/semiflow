@@ -54,7 +54,54 @@ pub enum BoundaryPolicy<F: SemiflowFloat = f64> {
     ZeroExtend,
     /// Wrap `x` with period `(n − 1)·dx` (standard periodic boundary).
     Periodic,
-    /// Affine continuation from boundary nodes.
+    /// Linear (affine) extrapolation from the two outermost boundary nodes.
+    ///
+    /// When the query index falls outside `[0, n)`, the value is extrapolated
+    /// as a straight line through the two nearest in-range nodes.  Concretely,
+    /// for an index `d` steps beyond the *left* boundary:
+    ///
+    /// ```text
+    /// v ≈ v[0]  − d · (−3·v[0] + 4·v[1] − v[2]) / 2
+    /// ```
+    ///
+    /// and symmetrically at the *right* boundary.  The formula is
+    /// second-order accurate in the grid spacing.
+    ///
+    /// ## Recommended use: asymptotically-linear far-field payoffs
+    ///
+    /// `LinearExtrapolate` is the **intended far-field closure for
+    /// asymptotically-linear payoffs** such as European calls in Black-Scholes
+    /// or CEV models.  For a call priced on a finite grid `S ∈ [0, S_max]`:
+    ///
+    /// - In the deep in-the-money region the payoff asymptote is
+    ///   `V(S, τ) ≈ S − K e^{−rτ}`, a linear function of `S`.
+    /// - Therefore `V_SS → 0` as `S → ∞`, so linear extrapolation is
+    ///   **exact to leading order** beyond `S_max`: the boundary introduces
+    ///   no spurious curvature or numerical kink.
+    /// - Validated: `Shift1D.with_arrays` on `S ∈ [0, 4K]`, n = 1025,
+    ///   attains ATM rel. error ≈ 8.5e-5 with no visible boundary artifact.
+    ///
+    /// **Contrast with `ZeroExtend`** (`"zero"`): zero-extension is exact only
+    /// when the solution genuinely vanishes at the boundary (e.g. barrier
+    /// options or puts in log-price space far below the strike).  For calls
+    /// it forces `V = 0` at `S_max`, which is *wrong* and introduces a
+    /// boundary layer that degrades accuracy.
+    ///
+    /// ## Puts in log-price space
+    ///
+    /// When a put is priced in log-price space (`z = ln S`), the solution
+    /// satisfies `u_z → 0` at both ends of a sufficiently wide domain.
+    /// In that regime, `Reflect` (`BoundaryPolicy::Reflect`) is the natural
+    /// zero-flux closure and is equally accurate; `LinearExtrapolate` also
+    /// works (both policies converge to the interior solution as the domain
+    /// widens, but reflect guarantees the correct conservation property).
+    ///
+    /// ## Kernel-level vs stencil-level
+    ///
+    /// This is a *stencil-level ghost-node* policy: it controls what value
+    /// the interpolation stencil reads when it reaches outside `[0, n)`.
+    /// For an *operator-level* absorbing Dirichlet condition (u = 0 at a
+    /// barrier), use `KillingChernoff<C, BoxRegion>` (math §21) instead.
     LinearExtrapolate,
     /// Constant-extension to `value` for out-of-range indices (v2.6, ADR-0068).
     ///
@@ -223,6 +270,10 @@ pub enum InterpKind {
     },
 }
 
+// Accessor-based value resolution lives in `boundary_value.rs` (500-line cap);
+// re-exported here so `crate::boundary::bc_value_by` keeps resolving.
+pub(crate) use crate::boundary_value::{bc_value_by, bc_value_from_hit};
+
 // ---------------------------------------------------------------------------
 // reflect_index (moved verbatim from grid.rs)
 // ---------------------------------------------------------------------------
@@ -335,10 +386,10 @@ fn robin_skew_hit<F: crate::float::SemiflowFloat>(
 /// `Dirichlet(v)` → `v`; `RobinSkew` → `exp(-2(α/β)·depth·dx)·values[reflected]`
 /// (v6.2.3, math §3.5.tris). `dx` used only for `RobinSkew`.
 ///
-/// `#[inline(always)]`: a septic-Hermite sample resolves eight nodes through
-/// this function and `DiffusionChernoff` takes eleven samples per grid node —
-/// ~88 calls per node. Whether the cost model inlines it moved the 1-D kernel
-/// by ~70% across otherwise-unrelated edits (ADR-0196 AMENDMENT 1).
+/// `#[inline(always)]`: a septic sample resolves eight nodes through this
+/// function and `DiffusionChernoff` takes eleven samples per grid node — ~88
+/// calls per node. Whether the cost model inlined it moved the 1-D kernel by
+/// ~70% across unrelated edits (ADR-0197 AM 1).
 #[inline(always)]
 #[allow(clippy::inline_always)] // ~88 calls per grid node; see the note above
 pub(crate) fn bc_value(
@@ -392,76 +443,6 @@ pub(crate) fn bc_value_generic<F: SemiflowFloat>(
     dx: F,
 ) -> F {
     bc_value_by(boundary, |i| values[i], n, idx, dx)
-}
-
-// ---------------------------------------------------------------------------
-// bc_value_by (accessor-based — serves strided N-D lines, ADR-0190)
-// ---------------------------------------------------------------------------
-
-/// `bc_value_generic` over an arbitrary node accessor instead of a slice.
-///
-/// `get(i)` must return the axis value at in-range node `i ∈ [0, n)`. This is
-/// the single source of truth for boundary-policy resolution: `bc_value_generic`
-/// delegates here with `|i| values[i]`, and [`crate::grid_nd::GridFnND::sample`]
-/// delegates here with a strided accessor `|i| values[base + i * stride]`, so
-/// the 1-D and N-D paths cannot drift apart (ADR-0190).
-pub(crate) fn bc_value_by<F: SemiflowFloat, G: Fn(usize) -> F>(
-    boundary: BoundaryPolicy<F>,
-    get: G,
-    n: usize,
-    idx: i64,
-    dx: F,
-) -> F {
-    bc_value_from_hit(bc_index(boundary, n, idx), boundary, get, n, dx)
-}
-
-/// The value half of [`bc_value_by`], with the index resolution already done.
-///
-/// Split out so a caller that resolves the same `(boundary, n, idx)` many times
-/// can call [`bc_index`] once and reuse the hit. `GridFnND::sample` does: its
-/// recursion re-visits each axis's stencil `K^(D-1)` times, so at `D = 5` the
-/// unsplit form performed 1364 index resolutions per sample against 20 here
-/// (ADR-0190 AMENDMENT 4).
-///
-/// The arithmetic is byte-for-byte the arithmetic that was inline in
-/// `bc_value_by`, in the same order, so results are bit-identical.
-pub(crate) fn bc_value_from_hit<F: SemiflowFloat, G: Fn(usize) -> F>(
-    hit: BoundaryHit<F>,
-    boundary: BoundaryPolicy<F>,
-    get: G,
-    n: usize,
-    dx: F,
-) -> F {
-    let half = crate::float::half::<F>();
-    let three = F::from(3.0_f64).unwrap_or_else(F::zero);
-    let four = F::from(4.0_f64).unwrap_or_else(F::zero);
-    match hit {
-        BoundaryHit::Inside(i) => get(i),
-        BoundaryHit::Zero => F::zero(),
-        BoundaryHit::Dirichlet(v) => v,
-        BoundaryHit::OutsideLeft(d) => {
-            let slope_combo = -three * get(0) + four * get(1) - get(2);
-            let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            get(0) - d_f * half * slope_combo
-        }
-        BoundaryHit::OutsideRight(d) => {
-            let slope_combo = three * get(n - 1) - four * get(n - 2) + get(n - 3);
-            let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            get(n - 1) + d_f * half * slope_combo
-        }
-        BoundaryHit::RobinSkew { reflected, depth } => {
-            let BoundaryPolicy::Robin { alpha, beta } = boundary else {
-                // Unreachable: RobinSkew is only produced by Robin policy.
-                return get(reflected); // even-reflect fallback, no panic
-            };
-            let two = F::from(2.0_f64).unwrap_or_else(F::zero);
-            let d_f = F::from(f64::from(depth)).unwrap_or_else(F::zero);
-            let exponent = -(two * (alpha / beta) * d_f * dx);
-            exponent.exp() * get(reflected)
-        }
-        // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
-        BoundaryHit::OddReflected { reflected } => F::zero() - get(reflected),
-    }
 }
 
 // ---------------------------------------------------------------------------

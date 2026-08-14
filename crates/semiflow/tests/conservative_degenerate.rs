@@ -1,4 +1,4 @@
-//! `G_CONS_DEGENERATE` — conservative diffusion admits `k = 0` (ADR-0191, §56.8).
+//! `G_CONS_DEGENERATE` — conservative diffusion admits `k = 0` (ADR-0192, §56.8).
 //!
 //! Degenerate-at-the-boundary diffusions are the norm in finance rather than an
 //! edge case: CEV `k(S) = ½σ²S^{2β}` vanishes at `S = 0`, Feller/CIR

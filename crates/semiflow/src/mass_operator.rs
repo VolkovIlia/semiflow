@@ -103,7 +103,11 @@ impl<F: SemiflowFloat> TriangularFactor<F> {
             // Upper-triangular row i: self.r[i*n+i..i*n+n], paired with x[i..n].
             let r_row = &self.r[i * n + i..i * n + n];
             let x_tail = &x[i..n];
-            *o = r_row.iter().zip(x_tail.iter()).map(|(&r, &v)| r * v).fold(F::zero(), core::ops::Add::add);
+            *o = r_row
+                .iter()
+                .zip(x_tail.iter())
+                .map(|(&r, &v)| r * v)
+                .fold(F::zero(), core::ops::Add::add);
         }
     }
 }
@@ -135,7 +139,11 @@ impl<F: SemiflowFloat> MassKOperator<F> {
         } else {
             k.lambda_max_bound() * F::from(1e6_f64).unwrap()
         };
-        Self { k, r, lambda_max_bound }
+        Self {
+            k,
+            r,
+            lambda_max_bound,
+        }
     }
 
     /// Evolve `out ← e^{−τ M⁻¹K} v` using the Krylov solver on `Â = R⁻ᵀKR⁻¹`.
@@ -190,11 +198,15 @@ fn estimate_lambda_min_m<F: SemiflowFloat>(r: &TriangularFactor<F>) -> F {
     let inv_sqrt_n = F::one() / F::from(n as f64).unwrap_or(F::one()).sqrt();
     let mut y: Vec<F> = vec![inv_sqrt_n; n];
     let mut tmp = vec![F::zero(); n];
-    let mut x   = vec![F::zero(); n];
+    let mut x = vec![F::zero(); n];
     for _ in 0..5 {
         r.solve_rt(&y, &mut tmp); // tmp = R⁻ᵀ y
-        r.solve_r(&tmp, &mut x);  // x   = R⁻¹(R⁻ᵀ y) = M⁻¹ y
-        let norm = x.iter().map(|&v| v * v).fold(F::zero(), |a, b| a + b).sqrt();
+        r.solve_r(&tmp, &mut x); // x   = R⁻¹(R⁻ᵀ y) = M⁻¹ y
+        let norm = x
+            .iter()
+            .map(|&v| v * v)
+            .fold(F::zero(), |a, b| a + b)
+            .sqrt();
         if norm < F::from(1e-300_f64).unwrap() {
             break;
         }
@@ -204,7 +216,11 @@ fn estimate_lambda_min_m<F: SemiflowFloat>(r: &TriangularFactor<F>) -> F {
         }
     }
     // ‖x_5‖ ≈ 1/λ_min(M)  → return λ_min(M) ≈ 1/‖x_5‖
-    let norm = x.iter().map(|&v| v * v).fold(F::zero(), |a, b| a + b).sqrt();
+    let norm = x
+        .iter()
+        .map(|&v| v * v)
+        .fold(F::zero(), |a, b| a + b)
+        .sqrt();
     if norm < F::from(1e-300_f64).unwrap() {
         return F::from(1e-10_f64).unwrap();
     }
@@ -235,8 +251,8 @@ pub fn mass_lumped_evolve<F: SemiflowFloat>(
     let a_hat = k.lumped_congruence(masses)?;
     let n = a_hat.n();
     // Pre-scale: w0 = D^{½} v
-    let mut w0  = vec![F::zero(); n];
-    let mut w1  = vec![F::zero(); n];
+    let mut w0 = vec![F::zero(); n];
+    let mut w1 = vec![F::zero(); n];
     for i in 0..n {
         w0[i] = v[i] * masses[i].sqrt();
     }
@@ -275,7 +291,7 @@ pub fn dense_massk_expmv_ref<F: SemiflowFloat>(
     }
     // Build -τ Â as MAX_DENSE_N×MAX_DENSE_N matrix (zero-padded).
     let mut a_mat = [[F::zero(); MAX_DENSE_N]; MAX_DENSE_N];
-    let mut ej  = vec![F::zero(); n];
+    let mut ej = vec![F::zero(); n];
     let mut col = vec![F::zero(); n];
     for j in 0..n {
         ej[j] = F::one();

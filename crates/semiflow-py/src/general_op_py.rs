@@ -1,4 +1,4 @@
-//! `GeneralOperator` — non-symmetric CSR operator action (#24, ADR-0194).
+//! `GeneralOperator` — non-symmetric CSR operator action (#24, ADR-0195).
 //!
 //! `SymmetricOperator.from_csr` validates symmetry, so the whole Krylov surface
 //! is closed to non-self-adjoint generators. This opens it via the

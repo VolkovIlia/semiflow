@@ -1,4 +1,4 @@
-# ADR-0195 — Per-pencil 2-D Strang composition for transverse-varying coefficients
+# ADR-0196 — Per-pencil 2-D Strang composition for transverse-varying coefficients
 
 - **Status**: Proposed (Issue #21; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

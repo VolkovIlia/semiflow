@@ -223,7 +223,7 @@ def test_size() -> None:
 # golden.  A spot-check on the first 8 and last 4 entries verifies the
 # canonical values printed by the core golden test.
 
-# Regenerated at ADR-0190 (issue #17): `GridFnND::sample` became a genuine
+# Regenerated at ADR-0191 (issue #17): `GridFnND::sample` became a genuine
 # tensor-product interpolant honouring each axis's BoundaryPolicy, instead of
 # multilinear-with-index-clamp, so the canonical output legitimately changed.
 # Reprinted by `cargo test -p semiflow --release --features slow-tests \

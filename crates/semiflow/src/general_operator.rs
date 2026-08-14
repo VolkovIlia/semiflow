@@ -1,5 +1,5 @@
 //! [`GeneralOperator`] — externally-assembled **possibly non-symmetric** CSR
-//! operator, and its scaled-truncated-Taylor action (ADR-0194, Issue #24).
+//! operator, and its scaled-truncated-Taylor action (ADR-0195, Issue #24).
 //!
 //! `SymmetricOperator::from_csr` validates symmetry, so the whole Krylov surface
 //! (`evolve_batched` with `chebyshev`/`lanczos`, `phi_action`, `Etdrk4`,
@@ -28,7 +28,7 @@
 //! `s`-scaling bounds `‖(τ/s)A‖ ≤ θ_m` inside every substep.
 //!
 //! The price is stated rather than hidden: cost is `Θ(τ‖A‖_∞)` matvecs —
-//! **linear in the depth, not flat**. See §"Honest limits" in ADR-0194.
+//! **linear in the depth, not flat**. See §"Honest limits" in ADR-0195.
 
 extern crate alloc;
 
@@ -316,7 +316,7 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
 /// (`DiffusionExpmvChernoff` uses `4·a_norm_bound/dx²`) that inflate `s` enough
 /// to compensate; `GeneralOperator` passes the tight `‖A‖_∞`.
 ///
-/// ADR-0197 traced that to a mis-transcribed table and corrected it. The derived
+/// ADR-0198 traced that to a mis-transcribed table and corrected it. The derived
 /// forward-error radius (1.1894) and the corrected backward-error radius
 /// (`θ_18 = 1.091`) agree to within 10%, so the duplication no longer buys
 /// anything and the shared selector — which also offers degrees up to 30, and so

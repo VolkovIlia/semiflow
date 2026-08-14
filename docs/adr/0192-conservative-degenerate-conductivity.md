@@ -1,4 +1,4 @@
-# ADR-0191 — Conservative diffusion admits degenerate conductivity `k = 0`
+# ADR-0192 — Conservative diffusion admits degenerate conductivity `k = 0`
 
 - **Status**: Proposed (Issue #26; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

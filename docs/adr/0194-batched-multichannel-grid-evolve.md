@@ -1,4 +1,4 @@
-# ADR-0193 — Batched multi-channel evolve for 1-D grid kernels
+# ADR-0194 — Batched multi-channel evolve for 1-D grid kernels
 
 - **Status**: Proposed (Issue #19; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

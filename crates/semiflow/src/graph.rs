@@ -494,7 +494,7 @@ fn compute_gershgorin_bound<F: SemiflowFloat>(rows: &[Vec<(u32, F)>]) -> F {
             let av = if v < F::zero() { F::zero() - v } else { v };
             acc + av
         });
-        if row_sum > max_sum { max_sum = row_sum; }
+        max_sum = if row_sum > max_sum { row_sum } else { max_sum };
     }
     max_sum
 }

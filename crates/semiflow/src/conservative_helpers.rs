@@ -9,7 +9,7 @@
 /// **degenerate** node (`k = 0`) returns `0`: the harmonic mean of a conductor
 /// and an insulator is an insulator, which is the physically right answer and
 /// the reason degenerate diffusions need no special casing downstream (§56.8,
-/// ADR-0191).
+/// ADR-0192).
 ///
 /// The zero test is explicit rather than left to IEEE arithmetic. For a single
 /// zero, `0·k_r/(0+k_r)` would indeed give `0`; but for two adjacent zeros
@@ -30,7 +30,7 @@ fn harmonic_mean<F: SemiflowFloat>(k_l: F, k_r: F) -> F {
 ///
 /// `R_c ≥ 0` — perfect contact if `R_c = 0`. A degenerate face (`k_harm = 0`)
 /// carries **zero** flux: the resistance `dx/k_harm` is infinite, so `T = 0`
-/// regardless of `R_c` (§56.8, ADR-0191). Returned directly rather than via
+/// regardless of `R_c` (§56.8, ADR-0192). Returned directly rather than via
 /// `1/∞` so the result is exact and independent of the IEEE division mode.
 #[inline]
 fn face_transmissibility<F: SemiflowFloat>(k_harm: F, dx: F, r_c: F) -> F {
@@ -78,7 +78,7 @@ pub(crate) fn build_faces<F: SemiflowFloat>(
     Ok(faces)
 }
 
-/// Validate all `k_i ≥ 0` and finite (§56.8, ADR-0191).
+/// Validate all `k_i ≥ 0` and finite (§56.8, ADR-0192).
 ///
 /// `k = 0` is admitted: degenerate-at-the-boundary diffusions are the norm, not
 /// an edge case — CEV `k(S) = ½σ²S^{2β}` vanishes at `S = 0`, Feller/CIR

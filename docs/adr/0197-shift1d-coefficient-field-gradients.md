@@ -1,4 +1,4 @@
-# ADR-0196 — Gradients w.r.t. `Shift1D` coefficient fields
+# ADR-0197 — Gradients w.r.t. `Shift1D` coefficient fields
 
 - **Status**: Proposed (Issue #25; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

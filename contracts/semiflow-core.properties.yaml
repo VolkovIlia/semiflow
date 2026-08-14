@@ -6765,7 +6765,7 @@ properties:
   - name: G_DDIM
     cases: 4
     severity: RELEASE_BLOCKING
-    gate: "successive-difference OLS slope of sup|u_2n - u_n| finite AND in [-0.75, -0.45] at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,6}; ladder {32,64,128,256,512} (d=2,3) / {8,16,32,64} (d=4) / {4,8,16,32} (d=5) (order-1/2; ADR-0112 + AMENDMENT 1, RE-BASED by ADR-0190 AMENDMENT 3)"
+    gate: "successive-difference OLS slope of sup|u_2n - u_n| finite AND in [-0.75, -0.45] at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,6}; ladder {32,64,128,256,512} (d=2,3) / {8,16,32,64} (d=4) / {4,8,16,32} (d=5) (order-1/2; ADR-0112 + AMENDMENT 1, RE-BASED by ADR-0191 AMENDMENT 3)"
     purpose: |
       G_DDIM (d-D anisotropic shift Chernoff convergence — math.md §32.5,
       ADR-0081, CORRECTED by ADR-0112):
@@ -6798,7 +6798,7 @@ properties:
         - D=5 slope ≈ -0.9614 clears the -0.95 gate by a THIN margin (~1.5%);
           honest curse-of-dimensionality boundary at N=6 (see math §32.5).
 
-      v0.12.0 AMENDMENT 2 (ADR-0190 AMENDMENT 3, 2026-08-14,
+      v0.12.0 AMENDMENT 2 (ADR-0191 AMENDMENT 3, 2026-08-14,
       Gate-Change-Approved-By):
         - ESTIMATOR REPLACED. The self-convergence fit used n_ref = 512 against a
           sweep reaching n = 256 — only 2x finer — so its last point measured the
@@ -6817,7 +6817,7 @@ properties:
           caught rather than passing silently. Measured: D=2 -0.4676,
           D=3 -0.4766.
         - NOT A REGRESSION. The same reference-free probe on 0e6d25b shows no
-          clean power law and errors 10x larger; the ADR-0190 sampler fix made
+          clean power law and errors 10x larger; the ADR-0191 sampler fix made
           the kernel accurate enough for its order to be legible.
         - LADDER RE-SIZED for runnability. K^D sampling pushed D=4 to 8105 s and
           D=5 to an extrapolated ~85 h. D=4 now runs {8,16,32,64} (120 steps
@@ -6825,7 +6825,7 @@ properties:
           (N_AXIS 6 -> 5) was tried and REVERTED — the gate rejected it at
           -0.3595, and a D=2 probe showed the coarse grid contaminates the
           differences at every ladder position. Runtime was bought in the
-          sampler instead (ADR-0190 AMENDMENT 4): boundary resolution hoisted
+          sampler instead (ADR-0191 AMENDMENT 4): boundary resolution hoisted
           out of the collapse recursion, bit-identical, 1.32x.
 
       Resolution ladder N_AXIS(D) / n_ref(D) / n-sweep (NORMATIVE; math §32.5;
@@ -7774,11 +7774,15 @@ latency_gates:
                                   # Supersedes the v2.6 placeholder stub (the v2.6 entry
                                   # reserved the schema slot per ADR-0068; v2.7 populates).
     severity: RELEASE_BLOCKING    # v2.7.0-rc.1: advisory:true (warn). v2.7.0 final: advisory:false on i7-12700K.
-    bench_target: "crates/semiflow-core/examples/resolvent_perf.rs"  # Wave D engineer ships
+    bench_target: "crates/semiflow/examples/resolvent_perf.rs"  # Wave D engineer ships
+    # bench_invocation uses a small tick budget (200 ticks, 10 warmup) because a resolvent
+    # solve is inherently ms-scale (~320 ms/call: 32 Gauss-Laguerre nodes × n=64 Chernoff
+    # powers × N=256 grid applies). 200 samples suffice for an advisory percentile smoke;
+    # the ns-scale L_CEV_PTICK budget of 100 000 ticks would make this gate run ~44 h.
     bench_invocation: |
       cargo run --release --example resolvent_perf -- \
         --n 64 --lambda 1.0 --quadrature gauss-laguerre-32 \
-        --grid-n 256 --n-ticks 100000 --warmup-ticks 100 \
+        --grid-n 256 --n-ticks 200 --warmup-ticks 10 \
         --out-json target/lgate/L_RESOLVENT_N64_P99-rep{rep}.jsonl --rep {rep}
     measurement: "Per-call latency of LaplaceChernoffResolvent::eval_at_point (math.md §22.6 — Gauss-Laguerre 32-pt × n=64 = 2048 inner Chernoff steps per call)."
     canonical_input:
@@ -7787,8 +7791,8 @@ latency_gates:
       sha256: "TBD-rc.1"           # filled in v2.7.0-rc.1 from first calibration run
     replication:
       n_reps: 5
-      n_per_rep: 100000           # 100k point-evals per rep
-      warmup: 100                 # discarded before measurement window
+      n_per_rep: 200              # ms-scale op: 200 samples/rep suffice for advisory smoke
+      warmup: 10                  # discarded before measurement window
     percentile_budgets_ns:
       "i7-12700K":
         # v2.7.0-rc.1 baseline expected ~10-50 μs per call (32 quadrature points ×
@@ -9856,7 +9860,7 @@ implementation_notes:
     authority: ADR-0189
 
 # ---------------------------------------------------------------------------
-# v0.12.0 issue campaign #17 / #21 / #26 (ADR-0190, ADR-0191)
+# v0.12.0 issue campaign #17 / #21 / #26 (ADR-0191, ADR-0192)
 # ---------------------------------------------------------------------------
 
   - name: G_ASND_MOMENT
@@ -9865,7 +9869,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — A=I dVar=1.000000 at n_steps in {100,400,1600} (exact 1.0, flat); A=diag(1.0,0.5) dVar=(1.000000, 0.500000); A=[[1,.4],[.4,1]] dCov=0.400000"
     rationale: |
-      G_ASND_MOMENT (RELEASE_BLOCKING, ADR-0190 §32.9): the oracle whose absence
+      G_ASND_MOMENT (RELEASE_BLOCKING, ADR-0191 §32.9): the oracle whose absence
       let issue #17 ship. A Gaussian evolved by AnisotropicShiftChernoffND under a
       constant tensor must gain exactly 2·a_dd·t of variance per axis and 2·a_de·t
       of covariance, on a resolved 96² grid, to within 2% — and FLAT in n_steps.
@@ -9874,7 +9878,7 @@ implementation_notes:
       sampler that injects a fixed spurious variance per step, because such a
       sampler is the identity at tau=0, reproduces constants exactly, and
       self-converges to its own biased limit.
-      Non-vacuity: the pre-ADR-0190 multilinear sampler produced 1.2113 / 2.2449 /
+      Non-vacuity: the pre-ADR-0191 multilinear sampler produced 1.2113 / 2.2449 /
       4.4901 on the A=I datum against an exact 1.0, so the 2% band cannot be met by
       an implementation carrying an O(dx²) per-step interpolation floor. The three
       step counts span 16x, so a step-count dependence cannot hide inside the band.
@@ -9890,12 +9894,12 @@ implementation_notes:
       (plain #[ignore]; run by flagship-gates.yml via
       `--features slow-tests -- --ignored`). Fast-iteration coverage is kept by
       `asnd_moment_isotropic_smoke` (48² grid, n_steps=200, always on), which
-      asserts the same 2% band and additionally asserts that the pre-ADR-0190
+      asserts the same 2% band and additionally asserts that the pre-ADR-0191
       floor would have been >20% of the exact value on that datum — so the cheap
       variant cannot silently stop discriminating if the grid is ever retuned.
       The diagonal-tensor and off-diagonal sub-checks are also always on.
     introduced_in: issue-17-nd-sampler
-    authority: ADR-0190
+    authority: ADR-0191
 
   - name: G_CONS_DEGENERATE
     type: CONTRACT
@@ -9903,7 +9907,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — CIR/CEV k(0)=0 assemble with finite PSD quadratic form; Wright-Fisher adjacent zeros produce no NaN through cn_step/thomas_solve; single interior zero blocks flux (right mass < 1e-12) while the floored-k control transports mass; k<0 and non-finite k still DomainViolation"
     rationale: |
-      G_CONS_DEGENERATE (RELEASE_BLOCKING, ADR-0191 §56.8.bis): the conservative
+      G_CONS_DEGENERATE (RELEASE_BLOCKING, ADR-0192 §56.8.bis): the conservative
       assembler accepts k >= 0. Degenerate-at-the-boundary diffusions are the norm
       rather than an edge case — CEV k(S)=½σ²S^{2β} vanishes at S=0, Feller/CIR
       k(v)=½ξ²v vanishes at v=0, Wright-Fisher vanishes at both ends — and the
@@ -9922,7 +9926,7 @@ implementation_notes:
     test_file: "tests/conservative_degenerate.rs"
     feature_gate: none
     introduced_in: issue-26-degenerate-k
-    authority: ADR-0191
+    authority: ADR-0192
 
   - name: G_GRID1D_BATCH_ULP
     type: NUMERICAL
@@ -9930,7 +9934,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — bit-identical (to_bits equality) across n in {64,512,4096,8192} x n_cols in {1,2,3,5,8} x n_steps in {1,7}, serial and parallel builds"
     rationale: |
-      G_GRID1D_BATCH_ULP (RELEASE_BLOCKING, ADR-0193 §"0-ULP"): the batched 1-D
+      G_GRID1D_BATCH_ULP (RELEASE_BLOCKING, ADR-0194 §"0-ULP"): the batched 1-D
       grid evolve must be BIT-identical to n_cols sequential ChernoffSemigroup
       solves, not merely close. Every channel runs the identical apply_into
       sequence at the identical tau and there is no cross-channel reduction, so
@@ -9950,7 +9954,7 @@ implementation_notes:
     test_file: "tests/grid_batched_ulp.rs::g_grid1d_batch_ulp"
     feature_gate: none
     introduced_in: issue-19-grid-batched
-    authority: ADR-0193
+    authority: ADR-0194
 
   - name: G_GENOP_DENSE
     type: BACKWARD_ERROR
@@ -9958,20 +9962,20 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — sup_error=4.441e-16 (drifted Fokker-Planck, n=10, t=0.3, arg=7.02, selected (s,m)=(6,18))"
     rationale: |
-      G_GENOP_DENSE (RELEASE_BLOCKING, ADR-0194): upwinded drifted Fokker-Planck
+      G_GENOP_DENSE (RELEASE_BLOCKING, ADR-0195): upwinded drifted Fokker-Planck
       ∂_t p = ∂_x(D ∂_x p) − ∂_x(μ p) on n=10 — genuinely unequal off-diagonals,
       non-symmetric by construction rather than by rounding — evolved by
       CsrExpmvChernoff at t=0.3 against a dense series reference summed to f64
       convergence. The reference is independent of the path under test (different
       scaling, different truncation, different arithmetic ordering) and was
       cross-checked against a matrix-level scaling-and-squaring computation.
-      This gate is what caught the expmv::select_s_m finding recorded in ADR-0194:
+      This gate is what caught the expmv::select_s_m finding recorded in ADR-0195:
       at the tight ‖A‖_inf the shared selector returns (1,18), measuring 1.635e-4.
     gate: "sup_error <= 1e-10"
     test_file: "tests/general_operator_gates.rs::g_genop_dense"
     feature_gate: none
     introduced_in: issue-24-general-operator
-    authority: ADR-0194
+    authority: ADR-0195
 
   - name: G_GENOP_NONNORMAL
     type: BACKWARD_ERROR
@@ -9979,7 +9983,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — sup_error=0.000e0 (Cartea-Jaimungal inventory ladder, n=12, t=0.5, arg=0.70 -> (s,m)=(1,18))"
     rationale: |
-      G_GENOP_NONNORMAL (RELEASE_BLOCKING, ADR-0194): upper-bidiagonal
+      G_GENOP_NONNORMAL (RELEASE_BLOCKING, ADR-0195): upper-bidiagonal
       inventory-ladder generator — nilpotent plus diagonal, i.e. an
       ill-conditioned eigenvector basis — is the case Arnoldi handles worst and
       the reason the Taylor engine was chosen over it.
@@ -9987,12 +9991,12 @@ implementation_notes:
       Only the BACKWARD error is certified; for a severely non-normal A the
       forward error can exceed the backward radius by kappa(V), which is not
       estimated. This gate measures one instance and does not generalise — that
-      is the honest-limits statement of ADR-0194, made falsifiable.
+      is the honest-limits statement of ADR-0195, made falsifiable.
     gate: "sup_error <= 1e-9"
     test_file: "tests/general_operator_gates.rs::g_genop_nonnormal"
     feature_gate: none
     introduced_in: issue-24-general-operator
-    authority: ADR-0194
+    authority: ADR-0195
 
   - name: G_GENOP_ASYM_ACCEPTED
     type: NEGATIVE_CONTROL
@@ -10000,7 +10004,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — SymmetricOperator::from_csr rejects the datum; GeneralOperator::from_csr accepts it"
     rationale: |
-      G_GENOP_ASYM_ACCEPTED (RELEASE_BLOCKING, ADR-0194 TEETH gate): the SAME CSR
+      G_GENOP_ASYM_ACCEPTED (RELEASE_BLOCKING, ADR-0195 TEETH gate): the SAME CSR
       must be REJECTED by SymmetricOperator::from_csr and ACCEPTED by
       GeneralOperator::from_csr. Without it the new capability could be an
       accidental relaxation of an existing check rather than a genuinely new
@@ -10013,7 +10017,7 @@ implementation_notes:
     test_file: "tests/general_operator_gates.rs::g_genop_asym_accepted"
     feature_gate: none
     introduced_in: issue-24-general-operator
-    authority: ADR-0194
+    authority: ADR-0195
 
   - name: G_GENOP_COST_LINEAR
     type: INFORMATIONAL
@@ -10021,7 +10025,7 @@ implementation_notes:
     blocks_release: false
     pass_status: "PASS (advisory) — cost ratio ~2.0x per doubling of t, confirming Theta(t*norm) scaling"
     rationale: |
-      G_GENOP_COST_LINEAR (ADVISORY, ADR-0194): records s*m for t in {0.1,0.2,0.4}
+      G_GENOP_COST_LINEAR (ADVISORY, ADR-0195): records s*m for t in {0.1,0.2,0.4}
       and asserts each doubling costs 1.5-2.6x. This pins the ANTI-claim: the
       Taylor path is NOT depth-flat, and G_GRAPH_EXPMV_DEPTH_FLAT must never be
       extended to it. Stating that in prose is weaker than measuring it — if a
@@ -10031,7 +10035,7 @@ implementation_notes:
     test_file: "tests/general_operator_gates.rs::g_genop_cost_linear_advisory"
     feature_gate: none
     introduced_in: issue-24-general-operator
-    authority: ADR-0194
+    authority: ADR-0195
 
   - name: G_PENCIL_REDUCTION
     type: ACCURACY
@@ -10039,7 +10043,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — sup_error <= 1e-13 vs Strang2D on a_x=0.7, a_y=0.3 (asymmetric datum; axis swap verified to change the answer by > 1e-6)"
     rationale: |
-      G_PENCIL_REDUCTION (RELEASE_BLOCKING, ADR-0195 §60.4): when the coefficients
+      G_PENCIL_REDUCTION (RELEASE_BLOCKING, ADR-0196 §60.4): when the coefficients
       happen to be separable, Strang2DPencil must reproduce the shipped Strang2D.
       This is the cheap, sharp anchor — it proves the per-pencil dispatch and the
       palindromic leg ordering are right, independently of any convergence
@@ -10050,7 +10054,7 @@ implementation_notes:
     test_file: "tests/strang2d_pencil_gates.rs::g_pencil_reduction_matches_strang2d"
     feature_gate: none
     introduced_in: issue-21-pencil-coefficients
-    authority: ADR-0195
+    authority: ADR-0196
 
   - name: G_PENCIL_ORDER2
     type: NUMERICAL
@@ -10058,7 +10062,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — slope=1.913 at +/-30% transverse amplitude, t=0.02, n_steps in {20,40,80} (window [1.7, 2.3])"
     rationale: |
-      G_PENCIL_ORDER2 (RELEASE_BLOCKING, ADR-0195 §60.2/§60.5): reference-free
+      G_PENCIL_ORDER2 (RELEASE_BLOCKING, ADR-0196 §60.2/§60.5): reference-free
       Richardson self-convergence with a_x depending ONLY on y and a_y only on x —
       a field Strang2D cannot represent at all. Order 2 here rests on the
       classical symmetric-splitting BCH residue (60.2.a), NOT on [L_x, L_y] = 0,
@@ -10077,7 +10081,7 @@ implementation_notes:
     feature_gate: "slow-tests"
     pattern: B
     introduced_in: issue-21-pencil-coefficients
-    authority: ADR-0195
+    authority: ADR-0196
 
   - name: G_SHIFT1D_WEIGHTS_ORACLE
     type: NUMERICAL
@@ -10085,7 +10089,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — rel_err <= 1e-12 over {CubicHermite, SepticHermite, OctonicHermite} x {Reflect, ZeroExtend, Periodic, LinearExtrapolate} x n in {16,33}, swept far outside the domain"
     rationale: |
-      G_SHIFT1D_WEIGHTS_ORACLE (RELEASE_BLOCKING, ADR-0196 §61.3): the adjoint
+      G_SHIFT1D_WEIGHTS_ORACLE (RELEASE_BLOCKING, ADR-0197 §61.3): the adjoint
       scatters interpolation weight rows that are MEASURED from the sampler
       (w_j(y) = sample(e_j, y)) rather than hand-transposed. The assumption that
       carries risk is compact support — that the probe set covers every node the
@@ -10100,7 +10104,7 @@ implementation_notes:
     test_file: "tests/shift1d_vjp_gates.rs::g_shift1d_weights_oracle"
     feature_gate: none
     introduced_in: issue-25-coeff-vjp
-    authority: ADR-0196
+    authority: ADR-0197
 
   - name: G_SHIFT1D_TRANSPOSE_ID
     type: NUMERICAL
@@ -10108,7 +10112,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — rel_err <= 1e-11 for all four boundary policies, with variable a/b/c"
     rationale: |
-      G_SHIFT1D_TRANSPOSE_ID (RELEASE_BLOCKING, ADR-0196 §61.3): the adjoint
+      G_SHIFT1D_TRANSPOSE_ID (RELEASE_BLOCKING, ADR-0197 §61.3): the adjoint
       identity <S^T lam, u> == <lam, S u> at machine precision. S is a
       shift-and-interpolate gather and its transpose is the corresponding
       scatter; a sign or fold error there would show up in a gradient check only
@@ -10121,7 +10125,7 @@ implementation_notes:
     test_file: "tests/shift1d_vjp_gates.rs::g_shift1d_transpose_id"
     feature_gate: none
     introduced_in: issue-25-coeff-vjp
-    authority: ADR-0196
+    authority: ADR-0197
 
   - name: G_SHIFT1D_COEFF_FD
     type: NUMERICAL
@@ -10129,7 +10133,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — max|adjoint - fd| / max|fd| <= 1e-6 for each of a, b, c (n=24, n_steps=6, eps=1e-6)"
     rationale: |
-      G_SHIFT1D_COEFF_FD (RELEASE_BLOCKING, ADR-0196 §61.5): the adjoint gradient
+      G_SHIFT1D_COEFF_FD (RELEASE_BLOCKING, ADR-0197 §61.5): the adjoint gradient
       against central finite differences, per coefficient field, with
       J = 0.5*||u_n||^2 so the caller-supplied cotangent is u_n.
       The comparison is on VECTORS normalised by max|fd|, not per-component
@@ -10142,7 +10146,7 @@ implementation_notes:
     feature_gate: "slow-tests"
     pattern: B
     introduced_in: issue-25-coeff-vjp
-    authority: ADR-0196
+    authority: ADR-0197
 
   - name: G_THETA_M_TABLE
     type: NUMERICAL
@@ -10150,7 +10154,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — |T_m(±θ_m) − exp(±θ_m)| / |exp(±θ_m)| <= 1e-12 at all 22 degrees"
     rationale: |
-      G_THETA_M_TABLE (RELEASE_BLOCKING, ADR-0197 §45.2): every (m, θ_m) pair in
+      G_THETA_M_TABLE (RELEASE_BLOCKING, ADR-0198 §45.2): every (m, θ_m) pair in
       expmv.rs::THETA_M and its graph_krylov.rs mirror is a radius that degree m
       actually honours. The shipped table paired each degree with a radius from
       two to three rows further down Al-Mohy & Higham Table 3.1 — m=18 carried
@@ -10170,12 +10174,12 @@ implementation_notes:
       forward error is 3.8e-15, below the corrected table's own worst case. A
       forward-error gate is structurally blind to that entry; it is corrected on
       the strength of the exact-rational recomputation, not of this gate.
-    gate: "rel(T_m(±θ_m), exp(±θ_m)) <= 1e-12 for every table entry; and the five damaging pre-ADR-0197 radii must FAIL that bound"
+    gate: "rel(T_m(±θ_m), exp(±θ_m)) <= 1e-12 for every table entry; and the five damaging pre-ADR-0198 radii must FAIL that bound"
     test_file: "tests/theta_m_table.rs::g_theta_m_table"
     feature_gate: none
     pattern: A
     introduced_in: theta-m-correction
-    authority: ADR-0197
+    authority: ADR-0198
 
   - name: G_FROZEN_COEFF_NONDIV
     type: NUMERICAL
@@ -10183,7 +10187,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — |u - nondiv| = 6.8e-3 vs |u - div| = 7.4e-2 (references separated by 7.8e-2)"
     rationale: |
-      G_FROZEN_COEFF_NONDIV (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.B.bis):
+      G_FROZEN_COEFF_NONDIV (RELEASE_BLOCKING, ADR-0191 AMENDMENT 1, §9.2.3.B.bis):
       identifies WHICH PDE the zeroed-derivative DiffusionChernoff solves.
       Heat2DVarA/Heat3DVarA build each axis kernel with a' = a'' = 0 alongside a
       variable a; because DiffusionChernoff is the zeta-A discretisation of the
@@ -10203,7 +10207,7 @@ implementation_notes:
     feature_gate: "slow-tests"
     pattern: B
     introduced_in: heat2dvara-operator-resolution
-    authority: ADR-0190
+    authority: ADR-0191
 
   - name: G_FROZEN_COEFF_ORDER1
     type: NUMERICAL
@@ -10211,7 +10215,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — OLS slope -1.007 over n_steps in {80,160,320,640} vs a 40960-step reference"
     rationale: |
-      G_FROZEN_COEFF_ORDER1 (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.B.bis):
+      G_FROZEN_COEFF_ORDER1 (RELEASE_BLOCKING, ADR-0191 AMENDMENT 1, §9.2.3.B.bis):
       the frozen-coefficient stencil is consistency order 1, not 2, for variable
       a. S(tau)f = f + tau*a*f_xx + (tau^2/2)*a^2*f_xxxx + ... against
       exp(tau*a*d_xx)f = f + tau*a*f_xx + (tau^2/2)*a*(a*f_xx)_xx + ...; the
@@ -10226,4 +10230,4 @@ implementation_notes:
     feature_gate: "slow-tests"
     pattern: B
     introduced_in: heat2dvara-operator-resolution
-    authority: ADR-0190
+    authority: ADR-0191

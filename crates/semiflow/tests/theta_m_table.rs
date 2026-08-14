@@ -1,5 +1,5 @@
 //! `G_THETA_M_TABLE` — every `(m, θ_m)` pair is a radius that degree `m` actually
-//! honours (ADR-0197, §45.2).
+//! honours (ADR-0198, §45.2).
 //!
 //! `θ_m` is the largest argument at which a degree-`m` truncated Taylor
 //! exponential is accurate to double precision. `select_s_m` derives the substep
@@ -93,7 +93,7 @@ fn g_theta_m_table() {
 /// that argument is `3.8e-15` — below the corrected table's own worst case. A
 /// forward-error gate is structurally blind to it, so it is excluded here rather
 /// than papered over with a tolerance chosen to make it fail. That entry is
-/// corrected on the strength of the recomputation (ADR-0197), not of this gate.
+/// corrected on the strength of the recomputation (ADR-0198), not of this gate.
 #[test]
 fn g_theta_m_table_rejects_the_shipped_radii() {
     let wrong: &[(u32, f64)] = &[(5, 1.44e-1), (8, 1.44), (10, 2.74), (13, 4.74), (18, 8.84)];
@@ -101,7 +101,7 @@ fn g_theta_m_table_rejects_the_shipped_radii() {
         let rel = (taylor(-theta, m) - libm::exp(-theta)).abs() / libm::exp(-theta);
         assert!(
             rel > 1e-12,
-            "the pre-ADR-0197 pair (m={m}, theta={theta}) would pass the gate — \
+            "the pre-ADR-0198 pair (m={m}, theta={theta}) would pass the gate — \
              the gate has been weakened to the point of not detecting the defect \
              it exists for (measured rel={rel:.3e})"
         );

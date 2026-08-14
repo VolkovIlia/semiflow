@@ -1,4 +1,4 @@
-# ADR-0192 — Adaptive stepping and coefficient schedules over variable-coefficient `Shift1D`
+# ADR-0193 — Adaptive stepping and coefficient schedules over variable-coefficient `Shift1D`
 
 - **Status**: Proposed (Issues #22, #23; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

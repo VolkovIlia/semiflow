@@ -1,4 +1,4 @@
-//! `G_GENOP_*` — non-symmetric operator action (ADR-0194, Issue #24).
+//! `G_GENOP_*` — non-symmetric operator action (ADR-0195, Issue #24).
 //!
 //! `SymmetricOperator::from_csr` validates symmetry, closing the whole Krylov
 //! surface to non-self-adjoint generators. `GeneralOperator` opens it via the
@@ -131,7 +131,7 @@ fn g_genop_dense() {
 /// ill-conditioned eigenvector basis, so only the *backward* error is certified;
 /// the forward error can exceed the backward radius by `κ(V)`, which is not
 /// estimated. The gate measures one instance and does not generalise — that is
-/// the honest-limits statement in ADR-0194, made falsifiable.
+/// the honest-limits statement in ADR-0195, made falsifiable.
 #[test]
 fn g_genop_nonnormal() {
     let n = 12;

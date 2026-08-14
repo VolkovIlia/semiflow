@@ -1,7 +1,7 @@
 //! `G_DDIM` D=4 — d-D anisotropic shift self-convergence slope (`RELEASE_BLOCKING`).
 //!
 //! Gate: successive-difference OLS slope in `[-0.75, -0.45]` — order ½, not 1
-//! (ADR-0112 §Decision 2+3, RE-BASED by ADR-0190 AMENDMENT 3).
+//! (ADR-0112 §Decision 2+3, RE-BASED by ADR-0191 AMENDMENT 3).
 //!
 //! Method: reference-free convergence ladder calling the REAL
 //! `AnisotropicShiftChernoffND::apply_into`. Fixed spatial grid `N_AXIS = 8` per axis (8⁴ = 4096 nodes);
@@ -9,7 +9,7 @@
 //! The fitted quantity is `sup|u_2n − u_n|` over consecutive ladder entries,
 //! which needs no reference run and so cannot be contaminated by one.
 //!
-//! <details><summary>Superseded pre-ADR-0190 description (kept for provenance)</summary>
+//! <details><summary>Superseded pre-ADR-0191 description (kept for provenance)</summary>
 //!
 //! > Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
 //! >
@@ -22,7 +22,7 @@
 //!
 //! </details>
 //!
-//! ## Estimator re-based (ADR-0190 AMENDMENT 3, 2026-08-14)
+//! ## Estimator re-based (ADR-0191 AMENDMENT 3, 2026-08-14)
 //!
 //! This gate used to compare each swept `n` against a single reference run at
 //! `n_ref = 512`, which is only twice the largest swept `n`, so the last point
@@ -166,10 +166,10 @@ fn g_ddim_d4_slope() {
     let kernel = make_kernel_d4(N_AXIS);
     // Reference-free: successive differences over the ladder. `d_k = sup|u_2n - u_n|`
     // scales as `C * n^-p` for a scheme of order `p`, with no reference run to
-    // contaminate the fit (ADR-0190 AMENDMENT 3).
+    // contaminate the fit (ADR-0191 AMENDMENT 3).
     // Progress is printed per ladder entry: at D >= 4 this gate runs for hours,
     // and a run that emits nothing until it is finished cannot be distinguished
-    // from a hung one (ADR-0191 AMENDMENT 4).
+    // from a hung one (ADR-0192 AMENDMENT 4).
     let t_start = std::time::Instant::now();
     let us: Vec<_> = N_LADDER
         .iter()
@@ -205,6 +205,6 @@ fn g_ddim_d4_slope() {
         "G_DDIM D=4: slope {slope:.4} is steeper than {SLOPE_CEILING} — the kernel \
          appears to have gained an order. That is good news, but it means \
          `AnisotropicShiftChernoffND::order()` and this gate both need revisiting \
-         rather than silently passing (ADR-0190 AMENDMENT 3)."
+         rather than silently passing (ADR-0191 AMENDMENT 3)."
     );
 }

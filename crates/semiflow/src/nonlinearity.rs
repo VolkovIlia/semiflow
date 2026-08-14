@@ -75,7 +75,9 @@ impl<F: SemiflowFloat> AllenCahn<F> {
     /// Construct the Allen–Cahn nonlinearity.
     #[must_use]
     pub fn new() -> Self {
-        Self { _marker: core::marker::PhantomData }
+        Self {
+            _marker: core::marker::PhantomData,
+        }
     }
 }
 

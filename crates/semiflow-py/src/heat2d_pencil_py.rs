@@ -1,4 +1,4 @@
-//! Full-grid `a_x(x,y)` / `a_y(x,y)` for `Heat2DVarA` (#21, ADR-0195).
+//! Full-grid `a_x(x,y)` / `a_y(x,y)` for `Heat2DVarA` (#21, ADR-0196).
 //!
 //! `Heat2DVarA` takes `a_x(x)` and `a_y(y)` — each diagonal coefficient may vary
 //! only along **its own** axis, because `Strang2D` applies one shared kernel to

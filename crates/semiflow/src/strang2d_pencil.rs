@@ -1,5 +1,5 @@
 //! [`Strang2DPencil`] — palindromic Strang with **per-pencil** 1-D kernels
-//! (ADR-0195, Issue #21).
+//! (ADR-0196, Issue #21).
 //!
 //! [`crate::strang2d::Strang2D`] holds one `X` kernel and one `Y` kernel and
 //! applies the same `X` to every row (see `AxisLift`'s pencil loops in

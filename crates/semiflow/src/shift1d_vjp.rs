@@ -1,4 +1,4 @@
-//! Gradients w.r.t. `ShiftChernoff1D`'s coefficient **fields** (ADR-0196, Issue #25).
+//! Gradients w.r.t. `ShiftChernoff1D`'s coefficient **fields** (ADR-0197, Issue #25).
 //!
 //! `EvolverHeat1DGreeksV3` differentiates w.r.t. a single global diffusion scale
 //! θ of the unit-heat kernel — one model (Bachelier, via `θ = σ_N²/2`). What

@@ -55,7 +55,7 @@ use crate::{
 // ---------------------------------------------------------------------------
 // θ_m table — Al-Mohy & Higham (2011) Table 3.1, double-precision (tol = 2^-53).
 //
-// CORRECTED in ADR-0197: the shipped table paired each degree with a radius from
+// CORRECTED in ADR-0198: the shipped table paired each degree with a radius from
 // two to three rows further down the published table (m=18 carried θ≈8.84, the
 // radius of m≈51, where its own is 1.09), so `select_s_m` chose too few substeps
 // and the answer was silently wrong — 1.6e-4 where double precision was claimed.
@@ -64,7 +64,7 @@ use crate::{
 /// `(degree, θ_m)` — the largest argument at which a degree-`m` truncated Taylor
 /// exponential meets double-precision BACKWARD error.
 ///
-/// Recomputed from the definition rather than re-copied (ADR-0197): expand
+/// Recomputed from the definition rather than re-copied (ADR-0198): expand
 /// `log(e^{-x}·T_m(x))` in exact rational arithmetic, form
 /// `h_{m+1}(x) = Σ_{k>m}|c_k|x^k`, and solve `h_{m+1}(θ)/θ = 2^{-53}`. The result
 /// reproduces Table 3.1 to three significant figures at every degree.
@@ -100,7 +100,7 @@ pub(crate) const THETA_M: &[(u32, f64)] = &[
 
 /// Maximum Taylor degree.
 ///
-/// Raised 18 → 30 in ADR-0197. The old cap cited "above arg ≈ 9 a plain monomial
+/// Raised 18 → 30 in ADR-0198. The old cap cited "above arg ≈ 9 a plain monomial
 /// Horner loses precision" — a limit on the *argument*, which the mis-transcribed
 /// table was violating (it fed arg up to 8.84 into `m = 18`). With correct radii
 /// the per-substep argument is at most `θ_30 = 3.54`, well inside that limit,

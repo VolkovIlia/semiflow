@@ -1,4 +1,4 @@
-//! [`interp_stencil`] — node offsets and weights for a 1-D interpolant (ADR-0190).
+//! [`interp_stencil`] — node offsets and weights for a 1-D interpolant (ADR-0191).
 //!
 //! Every interpolant `SemiFlow` supports is **linear in the node values**: sampling
 //! at a cell-local fraction `s ∈ [0, 1)` is a fixed-offset weighted sum
@@ -15,7 +15,7 @@
 //! Catmull-Rom path (`crate::grid::catmull_rom_scalar_generic`) is expressed in
 //! terms of these weights, so the 1-D and N-D paths cannot drift apart.
 //!
-//! ## Scope (honest limits, ADR-0190)
+//! ## Scope (honest limits, ADR-0191)
 //!
 //! `CubicHermite` (K=4) and `Linear` (K=2) are covered. `SepticHermite`,
 //! `OctonicHermite` and `ChebyshevSpectralWithBC` are **not**: their nodal
@@ -23,7 +23,7 @@
 //! (§40.3) with the central-FD derivative stencils (§40.2), and extracting them
 //! would mean rewriting samplers that carry a release-blocking bit-equality
 //! contract (ADR-0018). They return [`SemiflowError::Unsupported`] from the
-//! N-D path. This is not a limitation in practice for the defect ADR-0190
+//! N-D path. This is not a limitation in practice for the defect ADR-0191
 //! fixes: Catmull-Rom already removes the accumulated interpolation variance
 //! entirely (residual ~1e-9, flat in the step count), whereas septic would cost
 //! `8^D` nodes per sample against Catmull-Rom's `4^D`.

@@ -1452,7 +1452,7 @@ constant α=0.5; ±50% otherwise per ADR-0008 Amendment 1 budget).
   correction. Mathematically straightforward; deferred behind
   cost-benefit analysis.
 
-##### 9.2.3.B.bis — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0190 AMENDMENT 1)
+##### 9.2.3.B.bis — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0191 AMENDMENT 1)
 
 `DiffusionChernoff` takes `a`, `a'`, `a''` as independent closures. Supplying a
 *variable* `a` together with `a' ≡ 0`, `a'' ≡ 0` — as `Heat2DVarA` / `Heat3DVarA`
@@ -8486,7 +8486,7 @@ within the order-1 self-convergence band.
 > dominates the interpolation floor. See "Why a COARSE grid is required" below
 > and ADR-0112 AMENDMENT 1.
 
-> **v0.12.0 AMENDMENT 2 (ADR-0190 AMENDMENT 3, 2026-08-14, `Gate-Change-Approved-By`).**
+> **v0.12.0 AMENDMENT 2 (ADR-0191 AMENDMENT 3, 2026-08-14, `Gate-Change-Approved-By`).**
 > Both the estimator and the order claim above are superseded.
 >
 > AMENDMENT 1's reasoning is correct about *why* the reference does not cancel —
@@ -8523,7 +8523,7 @@ within the order-1 self-convergence band.
 > `ChernoffFunction::order()` is a `u32` and cannot hold $\tfrac12$; truncation to
 > 0 would change adaptive step control. The honest statement lives here.
 >
-> The ladder is re-sized in the same amendment: ADR-0190 made a sample read
+> The ladder is re-sized in the same amendment: ADR-0191 made a sample read
 > $K^D$ nodes ($4^4 = 256$ at $D=4$ against multilinear's $16$), which pushed the
 > $D=4$ gate to **8105 s** and $D=5$ to an extrapolated $\approx 85$ h. The
 > reference-free ladder needs far fewer steps — $D=4$: $\{8,16,32,64\}$ (120 steps
@@ -8533,7 +8533,7 @@ within the order-1 self-convergence band.
 > contaminates the successive differences at *every* ladder position
 > ($-0.334 \ldots -0.443$ against a stable $-0.446 \ldots -0.468$ at
 > $N_{\text{AXIS}} = 8$). The spatial datum is what this estimator cannot trade
-> away; the runtime was bought in the sampler instead (ADR-0190 AMENDMENT 4).
+> away; the runtime was bought in the sampler instead (ADR-0191 AMENDMENT 4).
 
 **G_DDIM (RELEASE_BLOCKING — d-D anisotropic shift convergence slope, per-D sweeps)**:
 
@@ -8698,7 +8698,7 @@ The §32.6 future-extension bullets above are HISTORICAL (v6.0.0 deferral record
 
 - The **order-4 d-D ζ⁴** and **Monte-Carlo full-grid** bullets remain DEFERRED (ζ⁴ presupposes the now-GO ζ² lift landing first; MC awaits benchmark demand).
 
-### §32.9 — Off-grid sampling of the d-D state: the accumulated interpolation moment (v0.12.0, ADR-0190, NORMATIVE library)
+### §32.9 — Off-grid sampling of the d-D state: the accumulated interpolation moment (v0.12.0, ADR-0191, NORMATIVE library)
 
 Equation (32.3) evaluates $f$ at the shifted quadrature feet $y_q = x_k + \tau b(x_k) + 2\sqrt{\tau}\,\sigma \eta_q$, which are **off-grid**. The kernel is therefore the composition of the exact frozen-coefficient Gaussian average with the grid's sub-cell interpolation operator $\Pi$, and the Chernoff product applies that composition $n$ times. Whatever moment error $\Pi$ carries is applied $n$ times, not once.
 
@@ -8721,7 +8721,7 @@ i.e. the spurious term is **linear in the step count at fixed grid**. Refining $
 
 **Corollary 32.5.** For an interpolant of order $p$ (nodal error $O(dx^{p})$) the injected per-step moment is $O(dx^{p})$ and (32.9.c) becomes $2a_{dd}t + O(n\,dx^{p})$. Catmull-Rom ($p = 4$) reduces the $n = 1600$, $dx = 16/95$, $a = 1$, $t = 0.5$ datum from an excess of $+3.49$ to $< 10^{-8}$.
 
-**Consequence for the §32.5 gate protocol.** ADR-0112 AMENDMENT 1 diagnosed (32.9.c) from the outside — it is why `N_AXIS` was driven down to 8 "so the temporal-truncation signal dominates the interpolation floor" — and ADR-0112 AMENDMENT 2 restated it as the ceiling on the ζ² lift's global rate. Both diagnoses were correct about the symptom and wrong to treat it as inherent: the floor was $O(dx^2)$ only because `GridFnND::sample` used $\Pi_1$ while the 1-D family had used $O(dx^4)$–$O(dx^8)$ interpolants since v6.0. With ADR-0190 the N-D floor is $O(dx^4)$, and the coarse-grid ladder MUST be re-measured rather than inherited.
+**Consequence for the §32.5 gate protocol.** ADR-0112 AMENDMENT 1 diagnosed (32.9.c) from the outside — it is why `N_AXIS` was driven down to 8 "so the temporal-truncation signal dominates the interpolation floor" — and ADR-0112 AMENDMENT 2 restated it as the ceiling on the ζ² lift's global rate. Both diagnoses were correct about the symptom and wrong to treat it as inherent: the floor was $O(dx^2)$ only because `GridFnND::sample` used $\Pi_1$ while the 1-D family had used $O(dx^4)$–$O(dx^8)$ interpolants since v6.0. With ADR-0191 the N-D floor is $O(dx^4)$, and the coarse-grid ladder MUST be re-measured rather than inherited.
 
 **Normative requirement (`G_ASND_MOMENT`).** A kernel whose generator is $\sum_{ij} a_{ij}\partial^2_{ij}$ MUST reproduce the second-moment growth
 $$
@@ -8734,7 +8734,7 @@ on a resolved grid, to within 2% and **flat in $n_{\text{steps}}$**. The flatnes
 
 ---
 
-## §60 — Per-pencil 2-D Strang composition: the order argument for transverse-varying coefficients (v0.12.0, ADR-0195, NORMATIVE library; CITATION mathematics)
+## §60 — Per-pencil 2-D Strang composition: the order argument for transverse-varying coefficients (v0.12.0, ADR-0196, NORMATIVE library; CITATION mathematics)
 
 > Scope: what changes when the two split legs of a 2-D palindromic Strang composition carry coefficients that vary along the *other* axis. Adds no new discretisation; it replaces the **justification** for order 2, which §10 Theorem 7 supplies in a form that no longer applies.
 
@@ -8800,7 +8800,7 @@ At ±60% the ladder has not reached the asymptotic regime: the commutator term o
 
 ---
 
-## §61 — Coefficient-field sensitivity of the shift kernel (v0.12.0, ADR-0196, NORMATIVE library; CITATION mathematics)
+## §61 — Coefficient-field sensitivity of the shift kernel (v0.12.0, ADR-0197, NORMATIVE library; CITATION mathematics)
 
 > Scope: `∂J/∂θ_i` for the per-node coefficient arrays `a`, `b`, `c` of the §1–§2 shift kernel. Reuses the §43.4 adjoint-state recursion; what is new is the parameter derivative of a kernel whose coefficient sits **inside** the sampling position, and the resulting stencil structure.
 
@@ -11165,7 +11165,7 @@ Higham Code Fragment 3.1 guard). Total cost: $s\cdot m$ banded mat-vecs, each
 $O(K\!\cdot\!N)$; no LU, no $Q^{-1}$, no dense matrix; $O(1)$ work vectors $y, w$
 ($\texttt{no\_std + alloc}$ clean).
 
-### §45.2.bis — The θ_m table (NORMATIVE, ADR-0197)
+### §45.2.bis — The θ_m table (NORMATIVE, ADR-0198)
 
 $\theta_m$ is the largest argument at which the degree-$m$ truncated Taylor
 exponential $T_m$ meets double-precision **backward** error: writing
@@ -11178,7 +11178,7 @@ The selector takes $s = \lceil \tau\lVert A\rVert / \theta_m\rceil$, so a
 $\theta_m$ that is too large yields too few substeps and a silently inaccurate
 result — the failure has no runtime symptom.
 
-**Correction (ADR-0197).** The shipped table paired each degree with a radius
+**Correction (ADR-0198).** The shipped table paired each degree with a radius
 belonging to a degree two to three rows further down Al-Mohy & Higham Table 3.1:
 `(5, 1.44e-1)` carries $\theta_{10}$, `(8, 1.44)` carries $\theta_{20}$,
 `(13, 4.74)` carries $\theta_{35}$, and `(18, 8.84)` carries $\theta_{51}$
@@ -13285,7 +13285,7 @@ release; **no new sympy oracle**.
 
 ### §56.8 — Boundary and honest scope (NORMATIVE)
 
-- **`k ≥ 0` required** (AMENDMENT 1, v0.12.0, ADR-0191 — supersedes the original
+- **`k ≥ 0` required** (AMENDMENT 1, v0.12.0, ADR-0192 — supersedes the original
   "`k > 0` required"; negative or non-finite `k_i` ⇒ `DomainViolation`). See §56.8.bis
   for the degenerate-face derivation.
 - **Symmetric NSD by construction** — `A = −L_k` is PSD with `diag ≥ 0`; consumable by
@@ -13302,7 +13302,7 @@ release; **no new sympy oracle**.
 - **Discontinuous-`k` spatial order is 1 near the jump** (FV intrinsic), but the steady
   series network (56.4) is exact on aligned faces — documented, not hidden (§56.6).
 
-### §56.8.bis — Degenerate conductivity `k = 0` (AMENDMENT 1, v0.12.0, ADR-0191, NORMATIVE)
+### §56.8.bis — Degenerate conductivity `k = 0` (AMENDMENT 1, v0.12.0, ADR-0192, NORMATIVE)
 
 The original `k > 0` guard was stronger than the scheme requires. Degenerate-at-the-boundary diffusions are the generic case in several standard models rather than an edge case: CEV in price space has $k(S) = \tfrac12\sigma^2 S^{2\beta} \to 0$ as $S \to 0$; the Feller/CIR variance process has $k(v) = \tfrac12\xi^2 v \to 0$ as $v \to 0$ (the Heston volatility axis); Wright–Fisher-type bounded domains vanish at both ends.
 
@@ -13626,3 +13626,202 @@ oracle sanity-check.  `G_ETDRK4_ORDER` and `G_ETD_ADJOINT_FD` require no sympy.
 - §45 (`expmv` + `mat_exp_pade13` oracle), §54 (graph Krylov action + §54.5
   augmented Fréchet identity), §55 (`SymmetricLinearOp`), §43.6 (FD adjoint
   oracle); ADR-0189 (contract authority).
+
+## §59 — Implicit / shift-invert stiff action for the externally-assembled symmetric operator (ADR-0190, Issue #16, NORMATIVE library; CITATION mathematics)
+
+> **Scope.** A NORMATIVE implicit propagator for the §55 `SymmetricOperator` /
+> lumped `(M,K)` path, for **stiff** symmetric PSD sparse operators where the
+> explicit §54 action (cost `O(λ_max·t)`; sub-steps `s=⌈τλ_max/Z_SAFE⌉`) times out.
+> It is the **general sparse-CSR** sibling of §57.4 (whose A-stable CN is
+> **tridiagonal-only**, one Thomas pass). The linear core stays symmetric PSD
+> exactly as §55; only the propagator changes from Krylov-exact to backward-Euler
+> shift-invert. **Dependency-free** (ADR-0190): no Cholesky/LU crate; the shifted
+> SPD system is solved by preconditioned CG reusing the §55 matvec. Symmetric `Â`
+> only; the non-symmetric `M⁻¹A` is handled by the UNCHANGED §55.3 √μ congruence.
+
+### §59.1 — Backward-Euler action (NORMATIVE)
+
+Let `Â` be the symmetric PSD operator of §55 (the generic `L`, or the lumped
+congruence `Â = D^{−½}KD^{−½}` of §55.3, or the consistent `Â = R^{−T}KR^{−1}` of
+§55.2). For a re-entry interval `τ` split into `n_steps` equal sub-steps
+`Δt = τ / n_steps`, the backward-Euler (implicit Euler) recurrence approximates the
+exact semigroup `e^{−τÂ}` by the rational propagator (NORMATIVE):
+
+```text
+S := I + Δt·Â                        (the SHIFTED system operator),
+S · u_{k+1} = u_k ,  k = 0..n_steps−1,   u_0 = w_0,
+e^{−τÂ} w_0  ≈  u_{n_steps} = S^{−n_steps} w_0 = (I + Δt·Â)^{−n_steps} w_0 .   [§59.1.a]
+```
+
+Each sub-step is ONE solve of `S x = b` with `S` symmetric positive-definite
+(§59.3). The lumped/consistent pre-scale `w_0 = √μ ⊙ v` (or `w_0 = R v`) and
+post-scale `u = w ⊘ √μ` (or `u = R^{−1} w`) are the UNCHANGED §55.2/§55.3 wrappers;
+the implicit propagator replaces ONLY the inner `w = e^{−τÂ} w_0` action.
+
+### §59.2 — Reuse-one-factorization scheme, across sub-steps AND channels (NORMATIVE)
+
+`S = I + Δt·Â` is **identical for every sub-step** `k` (fixed `Δt`) and **every
+channel** `c` (same operator). The solve is preconditioned CG (§59.4) whose only
+setup is a **preconditioner** `P ≈ S`. NORMATIVE reuse:
+
+```text
+build P once from (Â, Δt)        →   reused ∀ k ∈ 1..n_steps  AND  ∀ c ∈ 1..n_channels,
+per sub-step / per channel        →   CG loop only; NO per-solve setup.        [§59.2.a]
+```
+
+`P` is the single "factorization" the implicit path owns. Two NORMATIVE choices,
+selectable without API change:
+
+- **Jacobi (v1 default):** `P = diag(S) = I + Δt·diag(Â)`. Setup `O(N)`, apply `O(N)`.
+- **IC(0) (stronger, optional):** incomplete Cholesky with **zero fill-in** — `P = L̃L̃ᵀ`
+  where `L̃` has EXACTLY the lower-triangular sparsity pattern of `S` (no new
+  nonzeros). Setup `O(nnz)`, apply = two triangular sweeps `O(nnz)`. Zero fill-in is
+  the reason IC(0) does not blow up on 3-D FEM (unlike a full sparse Cholesky). If any
+  pivot `L̃[i,i]² ≤ 0` is encountered (non-M-matrix `S`), the build FAILS LOUD and the
+  path falls back to Jacobi (NORMATIVE fallback; never surfaces an error).
+
+For the direct-factor variant (out of scope for v1, recorded for completeness) the
+single reused object would instead be the exact Cholesky factor of `S`.
+
+### §59.3 — SPD / definiteness conditions (NORMATIVE — the enabling lemma)
+
+**Lemma (the shift lifts the spectrum).** If `Â = Âᵀ` is positive-semidefinite,
+`σ(Â) ⊂ [0, λ_max]`, then for every `Δt > 0`:
+
+```text
+S = I + Δt·Â   is symmetric positive-DEFINITE,   σ(S) ⊂ [1, 1 + Δt·λ_max] ⊂ (0, ∞).
+```
+
+*Proof.* `Â` and `S` share eigenvectors; the scalar map `μ ↦ 1 + Δt·μ` sends
+`[0, λ_max]` into `[1, 1+Δt·λ_max]`, strictly positive. ∎ **Consequence
+(NORMATIVE):** `S` is SPD **even when `A` is singular** (a PSD FEM stiffness with a
+constant null vector, `σ_min(Â) = 0`), so CG (§59.4) is well-defined, cannot break
+down, and converges. This is the property that makes the dependency-free path sound.
+
+Definiteness caveats mirror §55.6: only the necessary check `Â[i,i] ≥ 0` is enforced
+upstream (§55.1); a symmetric **indefinite** `Â` (`σ_min < 0`) makes `S` indefinite
+whenever `Δt > 1/|σ_min|` — CG may then break down. NORMATIVE guard: the implicit
+path requires the §55.1 PSD precondition; on a non-PSD `Â` the caller owns the risk
+(same contract as §55.6), and a CG breakdown is reported as `ConvergenceFailed`.
+
+### §59.4 — Preconditioned CG inner solve (NORMATIVE)
+
+`S x = b` is solved by standard preconditioned Conjugate Gradient reusing the §55
+matvec `x ↦ Âx` (`SymmetricLinearOp::apply_into_slice`); `S x = x + Δt·(Âx)` needs
+no assembled `S`. NORMATIVE stopping and limits:
+
+```text
+converged  ⇔  ‖r_j‖₂ ≤ tol_cg · ‖b‖₂ ,   tol_cg := max(tol, 1e−12),
+max_iter   := min(N, max(MIN_CG_ITER=16, ceil( sqrt(1+Δt·λ_max) · ln(2/tol_cg) ))) ,
+warm start :  x_0 := b   (previous sub-step's u_k is a good initial guess).      [§59.4.a]
+```
+
+CG on an SPD system is exact in ≤ N steps and reaches `tol_cg` in
+`≈ ½·√κ(S)·ln(2/tol_cg)` iterations, `κ(S) = (1+Δt·λ_max)/(1+Δt·λ_min) ≤ 1+Δt·λ_max`.
+The implementation uses `safety=1.0` (not ½) so the cap is generous enough to never
+truncate a still-converging solve; a floor of `MIN_CG_ITER=16` prevents an absurdly low
+cap on very well-conditioned systems, and the leading `min(N,…)` provides the CG-exactness
+fallback (exact in ≤ N steps on SPD).  *Issue-#18 correction*: the pre-fix formula
+`ceil(4·√κ)` omitted the `ln(2/tol_cg)` factor and caused `ConvergenceFailed` on the
+library's own conservative operator.
+
+An optional escape hatch is available: passing `cg_max_iter: Some(m)` (Rust /
+`KrylovPath::ImplicitEuler { cg_max_iter: Some(m) }`) or `cg_max_iter=m` (Python
+`evolve_batched`) overrides the auto-computed cap with a user-supplied `m`.  `None` /
+default uses the formula above.  Useful when the Gershgorin `λ_max` bound is loose and
+the user knows fewer iterations suffice.
+
+Preconditioning replaces `κ(S)` by `κ(P^{−1}S) ≪ κ(S)`. If `max_iter` is hit without
+convergence → `SemiflowError::ConvergenceFailed` (errors-as-values; no partial write).
+
+### §59.5 — Cost model and accuracy order (NORMATIVE)
+
+**Cost (NORMATIVE).** Total matvecs `≈ n_steps · ½√(κ(P^{−1}S)) · ln(2/tol_cg)`. With
+Jacobi, `κ ≤ 1+Δt·λ_max` so per-step iterations scale as `√(Δt·λ_max)` and total as
+`√(n_steps · τ · λ_max)`; with IC(0) on an M-matrix-like FEM `S` the spectrum
+clusters and iterations are near-constant in practice. **Contrast with the explicit
+§54 path** (`O(τ·λ_max)` matvecs): the `λ_max` dependence drops from **linear** to
+**square-root** (Jacobi) or **near-constant** (IC(0)) — the cost is governed by the
+low modes / the accuracy-chosen `n_steps`, not by `λ_max`. This is the depth-vs-λ_max
+distinction that makes the stiff M5-bolt case (`τλ_max ≈ 5.14e7`) tractable: explicit
+≈ `10^7–10^9` matvecs (timeout) → implicit ≈ `10^3–10^5` matvecs.
+
+**Accuracy (NORMATIVE).** Backward-Euler is **order O(Δt) = O(τ/n_steps)**,
+**L-stable**: its stability function `R(z) = 1/(1+z)` satisfies `|R(z)| → 0` as
+`z → ∞`, so the stiff `λ_max` modes are **damped** (this is why backward-Euler, not
+A-stable Crank–Nicolson `R(z)=(1−z/2)/(1+z/2) → −1`, is chosen — CN would leave
+undamped `±` oscillations on the `λ_max` modes). v1 ships O(Δt). **Optional order-2
+(NORMATIVE-optional, deferred to keep v1 minimal):** a single-γ L-stable SDIRK2
+(γ = 1 − √2/2), each stage solving `(I + γΔt·Â)x = b` with the SAME γ, so the SAME
+preconditioner `P` (built on `I+γΔt·Â`) is reused across the two stages, all
+sub-steps, and all channels — O(Δt²) accuracy with no change to the solver
+infrastructure. If specified later it becomes `KrylovPath::ImplicitSdirk2 { n_steps }`.
+
+### §59.6 — Mass-matrix cases (NORMATIVE)
+
+- **Diagonal / lumped `M = D` (production path).** Solve on the sparse symmetric
+  congruence `Â = D^{−½}KD^{−½}` (§55.3) with pre-scale `w_0 = √μ ⊙ v`, post-scale
+  `u = w ⊘ √μ`. The implicit solver sees only the symmetric `Â`; identical wrapper to
+  the explicit `mass_lumped_evolve`. This is the Issue #16 primary path.
+- **Consistent `(M,K)`.** Solve on `Â = R^{−T}KR^{−1}` (§55.2) via the 3-stage matvec
+  chain (`R^{−1}`, `K`, `R^{−T}`); the caller supplies `R`. `S = I+Δt·Â` is still SPD
+  (§59.3), so PCG applies unchanged. Scoped as a follow-on (same `SymmetricLinearOp`).
+- **Never solve the non-symmetric `M⁻¹A`.** All implicit solves are on the symmetric
+  `Â`; the mass-weighting is purely the §55 √μ / R wrappers.
+
+### §59.7 — Acceptance gates (NORMATIVE)
+
+All RELEASE_BLOCKING, `feature_gate: slow-tests`, `introduced_in` the shipping
+release; non-vacuity asserted inside each. Oracles REUSE dense `mat_exp_pade13` (§45)
+and a test-local analytic spectral (DST-I) reference — **no new sympy**.
+
+| Gate | Definition | Threshold | Oracle |
+|------|-----------|-----------|--------|
+| `G_SYMOP_IMPLICIT_DENSE` | `path="implicit"` action `e^{−τL}v` vs dense `mat_exp_pade13(−τL)`, non-zero-row-sum Robin-BC symmetric PSD `L` (`N ≤ 12`), moderate stiffness, `n_steps` swept `{50,100,200}` | (a) `sup_error ≤ 1e-6` at `n_steps=200`; **and** (b) order-1 decay `err(n)/err(2n) ∈ [1.7, 2.3]` | dense `mat_exp_pade13` (REUSE §45/§55.5) |
+| `G_SYMOP_IMPLICIT_STIFF` (TEETH — the #16 capability) | `N = 400`, **singular Neumann** 1-D Laplacian scaled ×1e7 (boundary diag=S, interior diag=2S, off-diag=−S; row sums=0 → constant **1** is exact null eigenvector); `t = 1.0`, `path="implicit"`. All non-zero eigenvalues λ_k ≥ 617 underflow; only the λ=0 constant mode survives. Initial condition `v = linspace(1/N, 1, N)` has mean ≈ 0.501, so the oracle is an O(1) vector (not ≈ 0). | (a) COMPLETES within ≤ 5 s; **and** (b) `sup_error ≤ 1e-6` vs the **non-trivial surviving-mode oracle** `e^{−tA}v → (⟨1,v⟩/N)·1` (null-mode projection; oracle_inf ≈ 0.501 at N=400); **and** (c) real total `apply_into_slice` count (measured via `CountedOp` wrapper, capturing Jacobi setup + all CG iterates) is < explicit_mv_budget/100 ≈ 4×10⁵, proving ≥ 100× actual cost saving over the explicit Chebyshev path (⌈τ·λ_max⌉ ≈ 4×10⁷) | analytic null-mode projection `(⟨1,v⟩/N)·1` (closed form — backward-Euler preserves the null space exactly because `(I + Δt·0)^{−n} = I`) |
+| `G_SYMOP_IMPLICIT_PCG_SPD` (TEETH — the shift lemma) | PCG solves `S x = b` for a seeded PSD `Â` **including a singular case** (zero eigenvalue, constant null vector), `Δt > 0` | residual `‖Sx−b‖₂ ≤ tol_cg·‖b‖₂` reached in `≤ N` iters (proves the shift makes `S` SPD/solvable even when `A` is singular) | direct: assert `‖Sx−b‖` post-hoc |
+
+**Design note — why Neumann (singular) not Dirichlet for G_SYMOP_IMPLICIT_STIFF.**
+A pure Dirichlet Laplacian ×1e7 sends ALL modes to underflow at t=1 (λ_min·t ≈ 617,
+e^{−617} ≈ 0); both the DST-I oracle and the implicit solver return ≈ 0.  The assertion
+`sup_error ≤ 1e-6` is then vacuous (tells 4.4e-86 ≈ 0, which any method achieves).
+The Neumann Laplacian lifts this by providing one non-decaying mode (λ=0) that backward-
+Euler preserves **exactly** — making assertion (b) a genuine accuracy check, not a
+stability-only check.  The all-underflow Dirichlet regime remains valid as a *separate*
+L-stability observation (implicit correctly damps stiff modes to ≈ 0), but it cannot
+serve as the primary accuracy assertion for the RELEASE_BLOCKING gate.
+
+**Non-vacuity (NORMATIVE, asserted inside the gate).** `G_SYMOP_IMPLICIT_DENSE`
+asserts `∃ i : Σ_j L[i,j] ≠ 0` (Robin rows); `G_SYMOP_IMPLICIT_STIFF` asserts
+(i) `λ_max_bound ≥ 1e7` (still stiff, explicit times out), (ii) `λ_1_neumann > 100`
+(smallest non-zero mode underflows, so the surviving mode is the only signal), (iii) all
+row sums = 0 (null-space guarantee verified in-test), (iv) `oracle_inf > 0.1` (surviving
+mode is non-trivial); `G_SYMOP_IMPLICIT_PCG_SPD` asserts `σ_min(Â) = 0` (a genuine
+singular `A`, so the guarantee is the shift's, not `A`'s).
+
+### §59.8 — Boundary and honest scope (NORMATIVE)
+
+- **√κ, not strictly constant.** PCG cost is `O(√κ_eff)` per step, NOT the O(1)/step
+  of a true direct factorization. IC(0) approximates λ_max-independence in practice but
+  does not guarantee it in theory; strict λ_max-independence (a reused exact Cholesky
+  or an external sparse-direct crate) is a SEPARATE future ADR with the maintainer
+  governance sign-off recorded there (ADR-0190 §"Dependency decision").
+- **Symmetric PSD only** (§55.6 inherited). Indefinite `Â` with `Δt > 1/|σ_min|` makes
+  `S` indefinite → CG may break down → `ConvergenceFailed`.
+- **O(Δt) v1.** Order-2 SDIRK2 (§59.5) is NORMATIVE-optional and deferred.
+- **No new error kind.** CG non-convergence → `ConvergenceFailed`; IC(0) pivot failure
+  → silent Jacobi fallback. Reuses the existing §55 / `SemiflowError` taxonomy.
+
+### §59.9 — References
+
+- Y. Saad, *Iterative Methods for Sparse Linear Systems*, 2nd ed., SIAM 2003 —
+  CG, preconditioning, IC(0) zero-fill incomplete Cholesky.
+- G. H. Golub & C. F. Van Loan, *Matrix Computations*, 4th ed. — SPD CG convergence
+  `≈ ½√κ ln(2/ε)`; shifted-system conditioning.
+- E. Hairer & G. Wanner, *Solving Ordinary Differential Equations II: Stiff and
+  Differential-Algebraic Problems*, Springer 1996 — backward-Euler / SDIRK
+  L-stability; the `R(z)→0` stiff-mode damping argument.
+- §55 (`SymmetricOperator`, `SymmetricLinearOp`, √μ / R congruence — reused verbatim),
+  §57.4 (tridiagonal-only CN — the boundary this section extends), §45
+  (`mat_exp_pade13` dense oracle), §54 (the explicit action, left untouched).
+- ADR-0190 (contract authority), ADR-0186 (§55), ADR-0188 (§57), ADR-0185 (§54).

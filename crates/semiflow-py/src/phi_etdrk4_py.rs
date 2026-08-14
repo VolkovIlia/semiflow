@@ -23,7 +23,7 @@
     clippy::doc_markdown,
     clippy::needless_pass_by_value,
     clippy::too_many_arguments,
-    clippy::type_complexity,
+    clippy::type_complexity
 )]
 
 use std::sync::Arc;
@@ -31,8 +31,8 @@ use std::sync::Arc;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::{
-    AllenCahn, Etdrk4, NegLaplacianGenerator, ScratchPool, SymmetricOperator, phi_action,
-    phi_action_batched, PHI_MAX,
+    phi_action, phi_action_batched, AllenCahn, Etdrk4, NegLaplacianGenerator, ScratchPool,
+    SymmetricOperator, PHI_MAX,
 };
 
 use crate::{
@@ -165,7 +165,8 @@ pub fn phi_action_batched_py<'py>(
         let flat = result.map_err(|e| from_core(&e))?;
         // flat layout: out[k*n .. (k+1)*n] = φ_k(τA)v; reshape to (p+1, n)
         let arr = numpy::PyArray1::from_vec(py, flat);
-        arr.reshape([p + 1, n]).map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+        arr.reshape([p + 1, n])
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     })
 }
 
@@ -188,13 +189,7 @@ pub fn phi_action_batched_py<'py>(
 /// Build with :meth:`from_symmetric_op`.
 #[pyclass(name = "Etdrk4")]
 pub struct PyEtdrk4 {
-    driver: Arc<
-        Etdrk4<
-            f64,
-            NegLaplacianGenerator<f64, SymmetricOperator<f64>>,
-            AllenCahn<f64>,
-        >,
-    >,
+    driver: Arc<Etdrk4<f64, NegLaplacianGenerator<f64, SymmetricOperator<f64>>, AllenCahn<f64>>>,
     n: usize,
 }
 
@@ -214,11 +209,7 @@ impl PyEtdrk4 {
     /// Raises ``SemiflowError(OutOfDomain)`` for unknown nonlinearity or ``h <= 0``.
     #[staticmethod]
     #[pyo3(signature = (op, nonlinearity, h))]
-    fn from_symmetric_op(
-        op: &PySymmetricOperator,
-        nonlinearity: &str,
-        h: f64,
-    ) -> PyResult<Self> {
+    fn from_symmetric_op(op: &PySymmetricOperator, nonlinearity: &str, h: f64) -> PyResult<Self> {
         catch_panic_py!({
             let nl = parse_nonlinearity(nonlinearity)?;
             if !h.is_finite() || h <= 0.0 {
@@ -227,7 +218,10 @@ impl PyEtdrk4 {
             let n = op.op.n();
             let gen = NegLaplacianGenerator::new(op.op.as_ref().clone());
             let driver = Etdrk4::new(gen, nl, h).map_err(|e| from_core(&e))?;
-            Ok(Self { driver: Arc::new(driver), n })
+            Ok(Self {
+                driver: Arc::new(driver),
+                n,
+            })
         })
     }
 
@@ -323,9 +317,7 @@ fn parse_nonlinearity(s: &str) -> PyResult<AllenCahn<f64>> {
         "allen_cahn" => Ok(AllenCahn::new()),
         other => Err(new_pyerr(
             "OutOfDomain",
-            &format!(
-                "unknown nonlinearity '{other}'; valid choices: \"allen_cahn\""
-            ),
+            &format!("unknown nonlinearity '{other}'; valid choices: \"allen_cahn\""),
         )),
     }
 }

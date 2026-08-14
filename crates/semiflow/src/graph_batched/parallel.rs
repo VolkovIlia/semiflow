@@ -97,7 +97,9 @@ where
                 let mut scr = ScratchPool::<F>::new();
                 let mut a = GraphSignal::zeros(Arc::clone(&g));
                 let mut b = GraphSignal::zeros(g);
-                if let Err(e) = evolve_channel(func, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr) {
+                if let Err(e) =
+                    evolve_channel(func, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr)
+                {
                     store_err(&err_arc, e);
                 }
             });
@@ -163,7 +165,9 @@ pub(super) fn par_evolve_magnus6(
                 let mut scr = ScratchPool::<f64>::new();
                 let mut a = GraphSignal::zeros(Arc::clone(&g));
                 let mut b = GraphSignal::zeros(g);
-                evolve_magnus6_channel(l1, l2, l3, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr);
+                evolve_magnus6_channel(
+                    l1, l2, l3, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr,
+                );
             });
         }
     });
@@ -195,7 +199,9 @@ pub(super) fn par_evolve_vc<F: SemiflowFloat>(
                 let mut scr = ScratchPool::<F>::new();
                 let mut a = GraphSignal::zeros(Arc::clone(&g));
                 let mut b = GraphSignal::zeros(g);
-                evolve_vc_channel(l1, sqrt_a1, l2, sqrt_a2, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr);
+                evolve_vc_channel(
+                    l1, sqrt_a1, l2, sqrt_a2, tau, n_steps, src_c, dst_c, &mut a, &mut b, &mut scr,
+                );
             });
         }
     });
@@ -216,6 +222,7 @@ pub(super) fn par_evolve_vc<F: SemiflowFloat>(
 /// `MagnusGraphHeatChernoff<F>` is `Sync` by construction (its `lap_at_t`
 /// field is `Box<dyn Fn + Send + Sync>`), so no explicit bound is needed.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub(super) fn par_grad_batched<F, P>(
     mc: &MagnusGraphHeatChernoff<F>,
     u0_cols: &[F],
@@ -246,7 +253,16 @@ where
                 // accumulate_grad_channel zeros its internal tmp then ADDS into tmp_c.
                 // tmp_c starts at zero → effectively sets it to per-channel gradient.
                 if let Err(e) = accumulate_grad_channel(
-                    mc, u0_c, dj_c, &g, n_steps, tau, param_deriv, n_params, tmp_c, &mut scr,
+                    mc,
+                    u0_c,
+                    dj_c,
+                    &g,
+                    n_steps,
+                    tau,
+                    param_deriv,
+                    n_params,
+                    tmp_c,
+                    &mut scr,
                 ) {
                     store_err(&err_arc, e);
                 }

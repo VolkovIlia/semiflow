@@ -34,12 +34,8 @@
 //! - ADR-0189; `contracts/semiflow-core.math.md` §58.
 
 use crate::{
-    error::SemiflowError,
-    etdrk4_helpers::etdrk4_step as step_impl,
-    float::SemiflowFloat,
-    generator_action::GeneratorAction,
-    nonlinearity::Nonlinearity,
-    scratch::ScratchPool,
+    error::SemiflowError, etdrk4_helpers::etdrk4_step as step_impl, float::SemiflowFloat,
+    generator_action::GeneratorAction, nonlinearity::Nonlinearity, scratch::ScratchPool,
 };
 
 // ---------------------------------------------------------------------------

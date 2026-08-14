@@ -1,4 +1,4 @@
-# ADR-0194 — Non-symmetric operator action via the existing Taylor `expmv`
+# ADR-0195 — Non-symmetric operator action via the existing Taylor `expmv`
 
 - **Status**: Proposed (Issue #24; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-13

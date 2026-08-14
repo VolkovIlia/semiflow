@@ -95,7 +95,7 @@ thread_local! {
     pub static FORCE_THREADS_1D: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
-/// Pin THIS thread's 1-D node parallelism to 1 (ADR-0193).
+/// Pin THIS thread's 1-D node parallelism to 1 (ADR-0194).
 ///
 /// `FORCE_THREADS_1D` is thread-local, so a worker spawned by
 /// [`crate::grid_batched`] gets a fresh slot and setting it here cannot disturb

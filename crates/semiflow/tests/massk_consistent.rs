@@ -16,20 +16,20 @@ use semiflow::{
 fn path_n6_csr() -> (Vec<usize>, Vec<u32>, Vec<f64>) {
     let row_ptr = vec![0_usize, 2, 5, 8, 11, 14, 16];
     let col_idx = vec![
-        0u32, 1,       // row 0
-        0, 1, 2,       // row 1
-        1, 2, 3,       // row 2
-        2, 3, 4,       // row 3
-        3, 4, 5,       // row 4
-        4, 5,          // row 5
+        0u32, 1, // row 0
+        0, 1, 2, // row 1
+        1, 2, 3, // row 2
+        2, 3, 4, // row 3
+        3, 4, 5, // row 4
+        4, 5, // row 5
     ];
     let vals = vec![
-        1.0, -1.0,             // row 0
-        -1.0, 2.0, -1.0,      // row 1
-        -1.0, 2.0, -1.0,      // row 2
-        -1.0, 2.0, -1.0,      // row 3
-        -1.0, 2.0, -1.0,      // row 4
-        -1.0, 1.0,             // row 5
+        1.0, -1.0, // row 0
+        -1.0, 2.0, -1.0, // row 1
+        -1.0, 2.0, -1.0, // row 2
+        -1.0, 2.0, -1.0, // row 3
+        -1.0, 2.0, -1.0, // row 4
+        -1.0, 1.0, // row 5
     ];
     (row_ptr, col_idx, vals)
 }
@@ -73,8 +73,15 @@ fn g_massk_consistent() {
     let mut out_dense = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();
 
-    op.evolve(tau, &v, &mut out_krylov, KrylovPath::Chebyshev, tol, &mut scratch)
-        .expect("G_MASSK_CONSISTENT: Krylov evolve failed");
+    op.evolve(
+        tau,
+        &v,
+        &mut out_krylov,
+        KrylovPath::Chebyshev,
+        tol,
+        &mut scratch,
+    )
+    .expect("G_MASSK_CONSISTENT: Krylov evolve failed");
 
     dense_massk_expmv_ref(&op, tau, &v, &mut out_dense)
         .expect("G_MASSK_CONSISTENT: dense ref failed");

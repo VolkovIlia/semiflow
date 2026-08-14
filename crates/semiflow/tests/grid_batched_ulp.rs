@@ -1,4 +1,4 @@
-//! `G_GRID1D_BATCH_ULP` — batched 1-D grid evolve is 0-ULP vs sequential (ADR-0193).
+//! `G_GRID1D_BATCH_ULP` — batched 1-D grid evolve is 0-ULP vs sequential (ADR-0194).
 //!
 //! Batching is a **throughput** device, not an accuracy one. Every channel runs
 //! the identical `apply_into` sequence at the identical `tau`, and there is no

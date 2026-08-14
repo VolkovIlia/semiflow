@@ -1,4 +1,4 @@
-# ADR-0197 — The Al-Mohy–Higham θ_m table was mis-transcribed
+# ADR-0198 — The Al-Mohy–Higham θ_m table was mis-transcribed
 
 - **Status**: Proposed (found while implementing #24; branch `fix/issue-campaign-17-26`)
 - **Date**: 2026-08-14

@@ -49,7 +49,7 @@ pub struct ConservativeDiffusionChernoff<F: SemiflowFloat = f64> {
 impl<F: SemiflowFloat> ConservativeDiffusionChernoff<F> {
     /// Node-sampled conductivities (length `grid.n`).
     ///
-    /// `k_i = 0` is admitted (§56.8, ADR-0191): a degenerate node gets zero face
+    /// `k_i = 0` is admitted (§56.8, ADR-0192): a degenerate node gets zero face
     /// conductivity, so no flux crosses it and the boundary classifies itself.
     ///
     /// # Errors
@@ -72,7 +72,11 @@ impl<F: SemiflowFloat> ConservativeDiffusionChernoff<F> {
         }
         let dx = grid.dx();
         let faces_vec = build_faces(k_nodes, dx, r_contact)?;
-        Ok(Self { faces: faces_vec.into(), grid, boundary })
+        Ok(Self {
+            faces: faces_vec.into(),
+            grid,
+            boundary,
+        })
     }
 
     /// Sample `k(x)` at grid nodes and delegate to [`Self::from_k_array`].
@@ -163,10 +167,22 @@ fn cn_step<F: SemiflowFloat>(
     let mut sup_d: Vec<F> = vec![F::zero(); n];
 
     for i in 0..n {
-        let t_l = if i > 0 { cd.faces[i - 1] / dx } else { F::zero() };
-        let t_r = if i + 1 < n { cd.faces[i] / dx } else { F::zero() };
+        let t_l = if i > 0 {
+            cd.faces[i - 1] / dx
+        } else {
+            F::zero()
+        };
+        let t_r = if i + 1 < n {
+            cd.faces[i] / dx
+        } else {
+            F::zero()
+        };
         let src_l = if i > 0 { src.values[i - 1] } else { F::zero() };
-        let src_r = if i + 1 < n { src.values[i + 1] } else { F::zero() };
+        let src_r = if i + 1 < n {
+            src.values[i + 1]
+        } else {
+            F::zero()
+        };
         let lk_src = t_l * src_l - (t_l + t_r) * src.values[i] + t_r * src_r;
         rhs[i] = src.values[i] + half_tau * lk_src;
         sub_d[i] = -half_tau * t_l;
@@ -242,7 +258,7 @@ pub(crate) fn thomas_solve<F: SemiflowFloat>(
     // would slip through a bare zero test and poison the whole state vector
     // silently. This path has no other finiteness backstop — the sibling
     // `assemble_conservative_csr_1d` route is covered by `from_csr`'s
-    // `check_finite`, but the CN/Thomas route is not (ADR-0191).
+    // `check_finite`, but the CN/Thomas route is not (ADR-0192).
     if !diag[0].is_finite() || diag[0] == F::zero() {
         return Err(SemiflowError::DomainViolation {
             what: "thomas_solve: zero or non-finite pivot at row 0",

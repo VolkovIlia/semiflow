@@ -795,7 +795,7 @@ class Shift1D:
         u0_nc: NDArray[np.float64],
         n_steps: int = 100,
     ) -> NDArray[np.float64]:
-        """Evolve ``C`` channels under this kernel in one call (#19, ADR-0193).
+        """Evolve ``C`` channels under this kernel in one call (#19, ADR-0194).
 
         ``u0_nc`` is ``[N, C]`` float64; the return has the same shape. Pricing a
         strike strip, bumping for Greeks, or evolving a batch of Fokker-Planck
@@ -1539,6 +1539,138 @@ class NonSeparable2D:
 
     def __len__(self) -> int:
         """Return ``nx * ny`` (total number of state values)."""
+        ...
+
+
+@final
+class ReverseHeat1D:
+    """Reverse-mode AD evolver for constant-a 1-D heat (v9.0.0, math §51, ADR-0156).
+
+    Computes ``(J, ∂J/∂θ)`` where ``J(θ) = ‖(F_θ(τ))ⁿ u₀ − target‖²`` via
+    the K=1 forward-mode Dual path (§51.4; 0-ULP parity with forward AD by
+    construction).
+
+    **Narrow scope (§51.5)**: constant-a ``DiffusionChernoff`` only; θ is the
+    uniform diffusivity.  Variable-coefficient and nonlinear kernels are out of
+    scope for v9.0.0.
+
+    Parameters
+    ----------
+    theta : float
+        Diffusivity parameter θ > 0 (must be finite).
+    xmin : float
+        Left domain boundary.
+    xmax : float
+        Right domain boundary (must be > xmin).
+    n_grid : int
+        Number of grid nodes (must be >= 4).
+    n_steps : int
+        Number of Chernoff steps per ``value_and_grad`` call (must be >= 1).
+
+    Raises
+    ------
+    SemiflowError
+        kind='GridMismatch' — n_grid < 4 or xmin >= xmax.
+        kind='OutOfDomain' — theta <= 0 or not finite, or n_steps == 0.
+    """
+
+    def __init__(
+        self,
+        theta: float,
+        xmin: float,
+        xmax: float,
+        n_grid: int,
+        n_steps: int,
+    ) -> None: ...
+
+    def value_and_grad(
+        self,
+        tau: float,
+        u0: NDArray[np.float64],
+        target: NDArray[np.float64],
+    ) -> tuple[float, float]:
+        """Compute ``(J, ∂J/∂θ)`` for the scalar diffusivity parameter.
+
+        **K=1 path**: uses the forward-mode ``Dual<f64>`` pass (§51.4), which
+        guarantees **0-ULP parity** with the forward-mode reference.
+
+        Parameters
+        ----------
+        tau : float
+            Per-step time increment (must be > 0 and finite).
+        u0 : NDArray[np.float64]
+            Initial condition; 1-D float64 array of length ``n_grid``.
+        target : NDArray[np.float64]
+            Target state; 1-D float64 array of length ``n_grid``.
+
+        Returns
+        -------
+        (value, grad) : (float, float)
+            ``value`` is the L² loss ``‖(F_θ(τ))ⁿ u₀ − target‖²``.
+            ``grad`` is ``∂J/∂θ`` (scalar, forward-mode Dual, 0-ULP vs core).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — tau <= 0 or non-finite.
+            kind='GridMismatch' — u0/target length != n_grid.
+            kind='NanInf' — NaN/Inf in u0 or target.
+        """
+        ...
+
+    def value_and_grad_kvec(
+        self,
+        tau: float,
+        theta_vec: list[float],
+        u0: NDArray[np.float64],
+        target: NDArray[np.float64],
+    ) -> tuple[float, list[float]]:
+        """Compute ``(J, grad_vec)`` for a K-vector of parameters in ONE backward pass.
+
+        **K-vector path (§51.9, ADR-0156 Amendment 1)**: runs the genuine
+        cotangent backward sweep once, accumulating all K gradient components
+        ``∂J/∂θ_p`` in a single backward walk — O(1) trajectory passes
+        independent of K (vs O(K) for forward dual-AD).
+
+        For K=1, this method is byte-identical to ``value_and_grad`` (same
+        arithmetic path).
+
+        Parameters
+        ----------
+        tau : float
+            Per-step time increment (must be > 0 and finite).
+        theta_vec : list[float]
+            K diffusivity parameters; must be non-empty.
+        u0 : NDArray[np.float64]
+            Initial condition; 1-D float64 array of length ``n_grid``.
+        target : NDArray[np.float64]
+            Target state; 1-D float64 array of length ``n_grid``.
+
+        Returns
+        -------
+        (value, grad_vec) : (float, list[float])
+            ``value`` is the L² loss ``‖(F_θ(τ))ⁿ u₀ − target‖²``.
+            ``grad_vec`` is ``[∂J/∂θ_0, …, ∂J/∂θ_{K-1}]`` (length K).
+
+        Raises
+        ------
+        SemiflowError
+            kind='OutOfDomain' — tau <= 0, non-finite, or theta_vec empty.
+            kind='GridMismatch' — u0/target length != n_grid.
+            kind='NanInf' — NaN/Inf in u0, target, or theta_vec.
+        """
+        ...
+
+    def theta(self) -> float:
+        """Return the diffusivity parameter θ."""
+        ...
+
+    def n_steps(self) -> int:
+        """Return the number of Chernoff steps."""
+        ...
+
+    def n_grid(self) -> int:
+        """Return the number of grid nodes."""
         ...
 
 
@@ -4723,7 +4855,7 @@ class AnisotropicShiftND2:
     def values(self) -> NDArray[np.float64]: ...
 
     def values_2d(self) -> NDArray[np.float64]:
-        """Current state as a ``(nx, ny)`` array (ADR-0190)."""
+        """Current state as a ``(nx, ny)`` array (ADR-0191)."""
         ...
 
     def order(self) -> int: ...
@@ -4808,12 +4940,12 @@ class Heat2DVarA:
     ``order()`` reports **1**, not 2. The Strang composition is second-order,
     but each axis kernel freezes ``a`` at the node, which is order 1 wherever
     ``a`` varies along that axis (measured slope -1.007). Order 2 is recovered
-    only when ``a`` is constant along the swept axis. Corrected in ADR-0190
+    only when ``a`` is constant along the swept axis. Corrected in ADR-0191
     AMENDMENT 1; it previously reported 2.
 
     Use :meth:`with_grid_arrays` for full-grid coefficients ``a_x(x,y)``,
     ``a_y(x,y)`` — i.e. coefficients varying along the *other* axis, which the
-    per-axis constructor cannot express (#21, ADR-0195).
+    per-axis constructor cannot express (#21, ADR-0196).
     """
 
     @staticmethod
@@ -4829,7 +4961,7 @@ class Heat2DVarA:
         *,
         boundary: BoundaryLiteral = "reflect",
     ) -> "Heat2DVarA":
-        """Full-grid coefficients ``a_x(x,y)``, ``a_y(x,y)`` (#21, ADR-0195).
+        """Full-grid coefficients ``a_x(x,y)``, ``a_y(x,y)`` (#21, ADR-0196).
 
         Each array is flat, length ``nx*ny``, indexed ``values[j*nx + i]`` for
         the node ``(x_i, y_j)`` — the same x-fastest layout as
@@ -4853,7 +4985,7 @@ class Heat2DVarA:
         full-grid field. Verify the slope on your own coefficient field rather
         than assuming either number.
 
-        Serial only — the threaded X/Y passes are not reused (ADR-0195 D2).
+        Serial only — the threaded X/Y passes are not reused (ADR-0196 D2).
 
         Raises
         ------
@@ -4901,7 +5033,7 @@ class Heat3DVarA:
 
     Same operator and same order caveat as :class:`Heat2DVarA`: the
     non-divergence form, and ``order()`` reports 1 because the axis kernels
-    freeze ``a`` at the node (ADR-0190 AMENDMENT 1).
+    freeze ``a`` at the node (ADR-0191 AMENDMENT 1).
     """
 
     def __init__(
@@ -6292,8 +6424,14 @@ class SymmetricOperator:
         path: str = "chebyshev",
         tol: float = 1e-10,
         m_max: int = 18,
+        n_steps: int = 100,
     ) -> NDArray[np.float64]:
         """Apply ``e^{-t A}`` to batched input ``v_nc`` (shape ``[N, C]``).
+
+        Parameters
+        ----------
+        n_steps : int, optional
+            Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
         Returns ndarray of shape ``(N, C)``.
         """
@@ -6393,8 +6531,14 @@ class MassKOperator:
         path: str = "chebyshev",
         tol: float = 1e-10,
         m_max: int = 18,
+        n_steps: int = 100,
     ) -> NDArray[np.float64]:
         """Apply ``e^{-t M⁻¹ K}`` to vector ``v`` (shape ``(n,)``).
+
+        Parameters
+        ----------
+        n_steps : int, optional
+            Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
         Returns ndarray of shape ``(n,)``.
         """
@@ -6413,8 +6557,14 @@ def mass_lumped_evolve(
     path: str = "chebyshev",
     tol: float = 1e-10,
     m_max: int = 18,
+    n_steps: int = 100,
 ) -> NDArray[np.float64]:
     """Evolve ``e^{-t M⁻¹ K} V`` for diagonal mass matrix ``M = diag(m_diag)`` (§55.3).
+
+    Parameters
+    ----------
+    n_steps : int, optional
+        Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
     Returns ndarray of shape ``(N, C)``.
     """
@@ -6505,7 +6655,7 @@ class Etdrk4:
 
 @final
 class GeneralOperator:
-    """Externally-assembled **possibly non-symmetric** sparse operator (#24, ADR-0194).
+    """Externally-assembled **possibly non-symmetric** sparse operator (#24, ADR-0195).
 
     ``SymmetricOperator.from_csr`` validates symmetry, closing the Krylov surface
     to non-self-adjoint generators. This opens ``e^{-tA}v`` to drifted
@@ -6566,7 +6716,7 @@ def shift1d_coeff_grad(
     wrt: Literal["a", "b", "c"] = "a",
     boundary: BoundaryLiteral = "reflect",
 ) -> NDArray[np.float64]:
-    """``dJ/dtheta`` for one coefficient field of a ``Shift1D`` generator (#25, ADR-0196).
+    """``dJ/dtheta`` for one coefficient field of a ``Shift1D`` generator (#25, ADR-0197).
 
     ``EvolverHeat1DGreeksV3`` differentiates w.r.t. a single global diffusion
     scale; this differentiates w.r.t. the per-node arrays of
@@ -6577,7 +6727,7 @@ def shift1d_coeff_grad(
     pass ``u_n - target``.
 
     Cost is ``O(n_steps * n)`` — the same order as the forward solve — because the
-    parameter-to-output coupling is diagonal (ADR-0196 §61.2).
+    parameter-to-output coupling is diagonal (ADR-0197 §61.2).
 
     When to use what
     ----------------

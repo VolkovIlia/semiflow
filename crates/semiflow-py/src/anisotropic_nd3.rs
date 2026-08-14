@@ -61,7 +61,7 @@ use crate::{
 /// ------
 /// `SemiflowError`
 ///     kind='`GridMismatch`' / '`NanInf`' / '`OutOfDomain`'.
-/// Which composition backs a `Heat2DVarA` (ADR-0195).
+/// Which composition backs a `Heat2DVarA` (ADR-0196).
 pub(crate) enum Heat2DBackend {
     /// Per-axis profiles `a_x(x)`, `a_y(y)` — one shared kernel per axis.
     Separable(Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>),
@@ -154,7 +154,7 @@ impl PyHeat2DVarA {
         })
     }
 
-    /// Full-grid coefficients `a_x(x,y)`, `a_y(x,y)` (#21, ADR-0195).
+    /// Full-grid coefficients `a_x(x,y)`, `a_y(x,y)` (#21, ADR-0196).
     ///
     /// Each array is flat, length ``nx*ny``, indexed ``values[j*nx + i]`` for the
     /// node ``(x_i, y_j)`` — the same x-fastest layout as
@@ -200,7 +200,7 @@ impl PyHeat2DVarA {
         })
     }
 
-    /// Consistency order — **1**, not 2 (ADR-0190 AMENDMENT 1).
+    /// Consistency order — **1**, not 2 (ADR-0191 AMENDMENT 1).
     ///
     /// The palindromic Strang composition is second-order, but composition order
     /// is capped by its axis kernels, and each axis here is the gamma-A stencil
@@ -349,7 +349,7 @@ impl PyHeat3DVarA {
     }
 
     /// Consistency order — **1**, not 2; see `Heat2DVarA::order` and
-    /// ADR-0190 AMENDMENT 1. Same argument per axis.
+    /// ADR-0191 AMENDMENT 1. Same argument per axis.
     fn order(&self) -> u32 {
         1
     }
@@ -412,7 +412,7 @@ fn build_strang2d(
 
 /// Build a `DiffusionChernoff` with constant-zero drift/reaction from a tabulated `a_vals`.
 ///
-/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0190 AMENDMENT 1, math §9.2.3.B.bis
+/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0191 AMENDMENT 1, math §9.2.3.B.bis
 ///
 /// `DiffusionChernoff` is the zeta-A kernel for the **divergence** form
 /// `d_x(a(x) d_x)` and genuinely consumes `a'`/`a''`, so passing zeros alongside

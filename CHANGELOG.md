@@ -6,7 +6,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.12.0-beta] — 2026-08-14
+## [0.13.0-beta] — 2026-08-14
 
 Issue campaign #17 / #19 / #21–#26.
 
@@ -16,7 +16,7 @@ All eight issues closed.
 ### Fixed
 
 - **`GridFnND::sample` ignored interpolation order and boundary policy**
-  (#17, ADR-0190, math §32.9) — **this silently corrupted every `D > 1` kernel.**
+  (#17, ADR-0191, math §32.9) — **this silently corrupted every `D > 1` kernel.**
   The N-D sampler hard-coded multilinear interpolation with an index clamp,
   consulting neither the `InterpKind` nor the `BoundaryPolicy` each axis already
   carried. Because the Chernoff product resamples at off-grid quadrature feet
@@ -31,12 +31,12 @@ All eight issues closed.
   `G_ASND_MOMENT`. Affects `shift_nd`, `shift_nd_zeta2`, `shift_nd_adaptive`,
   `smolyak`, `obstacle`, `obstacle_nd`, `point_eval`, `carnot_complex`,
   `carnot_stepk`, `hormander_engel` and the ND FFI/WASM surfaces.
-- **`thomas_solve` accepted non-finite pivots** (ADR-0191). The guard tested
+- **`thomas_solve` accepted non-finite pivots** (ADR-0192). The guard tested
   `w == 0`, which is false for `NaN`, so a NaN pivot propagated into the state
   vector silently. This was the only path in the conservative subsystem without
   a finiteness backstop.
 
-- **`expmv`'s θ_m table was mis-transcribed** (ADR-0197, math §45.2.bis) —
+- **`expmv`'s θ_m table was mis-transcribed** (ADR-0198, math §45.2.bis) —
   **`expmv` and the Lanczos path were silently under-substepping by up to 8×.**
   `THETA_M` claimed to be Al-Mohy & Higham Table 3.1 but paired each degree with
   a radius from two to three rows further down it: `m = 18` carried `θ ≈ 8.84`,
@@ -52,7 +52,7 @@ All eight issues closed.
   loose norm bounds elsewhere had been masking. New gate `G_THETA_M_TABLE`;
   `expmv_div_form_action_accuracy` improves from 1.1e−15 to 2.2e−16.
 - **`Heat2DVarA` / `Heat3DVarA` claimed order 2 and are order 1**
-  (ADR-0190 AMENDMENT 1, math §9.2.3.B.bis). Their axis kernels freeze `a` at the
+  (ADR-0191 AMENDMENT 1, math §9.2.3.B.bis). Their axis kernels freeze `a` at the
   node, which agrees with `e^{τa∂ₓₓ}` at `O(τ)` and differs at `O(τ²)` by
   `(τ²/2)·a·(a''f'' + 2a'f''')` whenever `a` varies. Measured global order
   **1.007**. Corrected on the ADR-0112 precedent; `DiffusionChernoff::order() == 2`
@@ -67,7 +67,7 @@ All eight issues closed.
 
 ### Added
 
-- **`k ≥ 0` in conservative divergence-form diffusion** (#26, ADR-0191,
+- **`k ≥ 0` in conservative divergence-form diffusion** (#26, ADR-0192,
   math §56.8.bis). Degenerate-at-the-boundary conductivities are now accepted:
   CEV `k(S) = ½σ²S^{2β}` at `S = 0`, Feller/CIR `k(v) = ½ξ²v` at `v = 0`,
   Wright–Fisher at both ends. A degenerate face carries exactly zero flux, so
@@ -77,7 +77,7 @@ All eight issues closed.
 - **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
   secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
   now actually honoured by the sampler.
-- **`shift1d_coeff_grad`** (#25, ADR-0196, math §61) — gradients w.r.t. the
+- **`shift1d_coeff_grad`** (#25, ADR-0197, math §61) — gradients w.r.t. the
   per-node coefficient **fields** of `Shift1D.with_arrays`, i.e. local-vol Vega
   surfaces `∂V/∂σ(S_i)`. `EvolverHeat1DGreeksV3` differentiates only w.r.t. a
   single global diffusion scale. Mirrors `edge_weight_grad`'s contract: you
@@ -93,7 +93,7 @@ All eight issues closed.
   gradient's domain is strictly smaller than the forward kernel's;
   `O(n_steps · n)` trajectory memory with no checkpointing; order 1, matching
   the kernel.
-- **`Heat2DVarA.with_grid_arrays`** (#21, ADR-0195, math §60) — full-grid
+- **`Heat2DVarA.with_grid_arrays`** (#21, ADR-0196, math §60) — full-grid
   `a_x(x,y)` / `a_y(x,y)`. Each diagonal coefficient could previously vary only
   along its *own* axis, because `Strang2D` applies one shared kernel to every
   pencil — and the decorrelated Heston generator needs exactly the opposite
@@ -107,7 +107,7 @@ All eight issues closed.
   / 1.18 at ±10% / ±30% / ±60% transverse amplitude, with the ±60% ladder
   pre-asymptotic. Serial only, deliberately: reusing `Strang2D`'s threaded
   passes would put the ADR-0018 bit-equality contract in the blast radius.
-- **`GeneralOperator`** (#24, ADR-0194) — externally-assembled **non-symmetric**
+- **`GeneralOperator`** (#24, ADR-0195) — externally-assembled **non-symmetric**
   CSR operators and their `e^{−tA}v` action. `SymmetricOperator::from_csr`
   validates symmetry, closing the whole Krylov surface to non-self-adjoint
   generators; drifted Fokker–Planck `∂_t p = ∂_x(D∂_x p) − ∂_x(μp)` and
@@ -120,7 +120,7 @@ All eight issues closed.
   (advisory). Honest limits: cost is `Θ(t‖A‖_∞)` — **not** depth-flat; only the
   backward error is certified; Chebyshev and Lanczos remain structurally
   unavailable and there is deliberately no `path=` argument.
-- **`Shift1D.evolve_batched`** (#19, ADR-0193) — batched multi-channel evolve
+- **`Shift1D.evolve_batched`** (#19, ADR-0194) — batched multi-channel evolve
   for the 1-D grid family, `[N, C]` in and out. A strike strip, bump Greeks, or
   a batch of Fokker–Planck density anchors is `C` independent solves under the
   *same* generator with only `u0` differing; that was a Python loop paying
@@ -130,12 +130,12 @@ All eight issues closed.
   (gate `G_GRID1D_BATCH_ULP`, asserted on `f64` bit patterns). Channel-parallel
   and the pre-existing node-parallel path are mutually exclusive by
   construction, so nesting cannot oversubscribe.
-- **`AdaptivePI.with_arrays`** (#22, ADR-0192) — adaptive PI stepping over a
+- **`AdaptivePI.with_arrays`** (#22, ADR-0193) — adaptive PI stepping over a
   variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
   The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`
   arm hard-codes `a=0.5, b=0, c=0` — so Black-Scholes-type generators had no
   adaptive path and `n_steps` was hand-tuned per (grid, maturity, vol) triple.
-- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0192) — per-segment
+- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0193) — per-segment
   schedules for **all three** coefficients, each entry independently a scalar or
   a length-`n` array. Closes both gaps in `evolve_with_time_schedule`: no `b`/`c`
   schedules, and no space-varying coefficients inside a schedule (the
@@ -178,7 +178,7 @@ All eight issues closed.
   `g[3]` differing by a factor of 22. The index clamp had been breaking the
   reflection symmetry at the two ends.
 
-- **`shift1d_vjp` no longer costs the 1-D path 70%** (ADR-0196 AMENDMENT 1).
+- **`shift1d_vjp` no longer costs the 1-D path 70%** (ADR-0197 AMENDMENT 1).
   The regression recorded below in the previous revision was real but was not in
   that module: `boundary::bc_value` / `bc_index` / `reflect_index` flip between
   inlined and out-of-line with unrelated crate volume, and a septic sample
@@ -193,7 +193,7 @@ All eight issues closed.
   50.7 ms → 34.2 ms, Path 1 123.8 ms → 110.4 ms, speedup 2.4× → 3.2× against the
   same `0e6d25b` baseline re-measured on the same machine.
 - **`GridFnND::sample` resolves each axis's boundary policy once per sample**
-  (ADR-0190 AMENDMENT 4). It used to resolve inside the collapse recursion, which
+  (ADR-0191 AMENDMENT 4). It used to resolve inside the collapse recursion, which
   re-visits axis `d` once per combination of the axes above it: `1364` `bc_index`
   calls per sample at `D=5, K=4`, of which `20` are distinct. `bc_value_by` is
   split into `bc_index` + `bc_value_from_hit`; `AxisStencil` carries the resolved
@@ -211,7 +211,7 @@ All eight issues closed.
   table it was avoiding is correct; its own derived criterion is deleted.
 
 - **`G_DDIM` re-based: its estimator was contaminated and the kernel is order ½**
-  (ADR-0190 AMENDMENT 3, `Gate-Change-Approved-By: VolkovIlia`). The gate compared
+  (ADR-0191 AMENDMENT 3, `Gate-Change-Approved-By: VolkovIlia`). The gate compared
   each swept `n` against a single reference at `n_ref = 512` — only twice the
   largest swept `n`, so the last point measured the reference's own error.
   Holding the sweep and raising `n_ref` to 1024/2048/4096/8192 walked the reported
@@ -233,7 +233,7 @@ All eight issues closed.
 
 - **`shift_nd_zeta2`'s ζ² correction may lift the ND kernel's global order to 1.**
   `G_DDIM` was re-based this release after its estimator was found contaminated,
-  and the kernel's true order measured at **½** (ADR-0190 AMENDMENT 3). The ζ²
+  and the kernel's true order measured at **½** (ADR-0191 AMENDMENT 3). The ζ²
   correction exists to lift exactly this kernel, and `G_AS_ZETA2_TAU2` already
   confirms its magnitude scales as a genuine `O(τ²)` — but whether that makes the
   *global* order 1 has never been measured with an uncontaminated estimator. If
@@ -264,12 +264,62 @@ All eight issues closed.
   the feature to CI's clippy invocation — not both halfway.
 
 - **Boundary selection is absent from the C and WASM surfaces entirely**
-  (ADR-0190 AMENDMENT 2). Every FFI constructor hard-codes
+  (ADR-0191 AMENDMENT 2). Every FFI constructor hard-codes
   `BoundaryPolicy::Reflect` and `semiflow-wasm` never calls `with_boundary` at
   all; this predates the campaign (`Shift1D` has had `boundary=` in Python for
   longer). Mirroring the new ND `boundary=` kwarg into just those two
   constructors would create an inconsistency rather than fix one, so it is not
   done here — exposing boundary selection across both surfaces is its own change.
+
+## [0.12.1-beta] - 2026-07-15
+### Fixed
+- **docs(py):** de-stale the `semiflow-pde` PyPI README (long_description).
+  Fixed broken PyPI badge, removed false "not yet published" note, relabelled
+  obsolete internal "v9.0.0" markers to the public 0.9.0-beta scheme, and
+  corrected the false "Tt/Gridless are Rust-only, not exposed via PyO3" claim
+  (TtEvolver, TtState, TtCoupledEvolver, VarCoefTtEvolver, GridlessEvolver,
+  MeasureState are exposed — ADR-0171/ADR-0178; class-reference rows added).
+  Docs-only patch release to refresh the PyPI project page (9bac992).
+
+## [0.12.0-beta] - 2026-07-02
+
+### Added (#16)
+
+- **`path="implicit"` on `SymmetricOperator.evolve_batched`, `mass_lumped_evolve`,
+  and `MassKOperator.evolve`** (ADR-0190, math §59, branch
+  `feat/issue-16-implicit-symmetric-operator`): an implicit backward-Euler /
+  shift-invert action for the externally-assembled symmetric-operator path.
+  Computes `e^{−tA}v ≈ (I+Δt·A)^{−n_steps} v` via preconditioned Conjugate Gradient
+  (PCG) with Jacobi preconditioning, dependency-free (no new crate; governance budget
+  unchanged). The `+I` shift makes the per-step system `S = I + Δt·Â` symmetric
+  positive-definite for any `Δt > 0` — CG is always well-posed and converges (§59.3).
+  `n_steps` (default 100) is the number of backward-Euler sub-steps; accuracy is
+  O(Δt) = O(t/n_steps), so increase `n_steps` to tighten tolerance.
+
+  **When to use**: stiff FEM or Robin-BC operators where `λ_max ≳ 10⁵ /s` causes
+  the explicit `path="lanczos"` / `path="chebyshev"` to sub-step O(τλ_max) times
+  and time out. `scipy.sparse.linalg.expm_multiply` has the same cost ceiling.
+
+  **Cost caveat**: governed by `√κ` of the Jacobi-preconditioned `S`, not strictly
+  `λ_max`-independent. IC(0) (zero-fill incomplete Cholesky, drop-in stronger
+  preconditioner) is specified as §59.6 follow-on work and deferred.
+
+  Gates: `G_SYMOP_IMPLICIT_DENSE` ≤ 1e-9 (well-conditioned Poisson-like operator);
+  `G_SYMOP_IMPLICIT_STIFF` ≤ 1e-9 (Neumann N=400 ×1e7, surviving-mode reference);
+  `G_SYMOP_IMPLICIT_PCG_SPD` structural (CG non-breakdown proved by SPD shift).
+
+  Empirical (QA, stiff Neumann N=400 ×1e7): `path="implicit"` returns in ~4 ms at
+  sup_error 3.3e-12 vs the analytic surviving-mode reference; `path="lanczos"` takes
+  ~56 s; `scipy.sparse.linalg.expm_multiply` does not return within 90 s. In a
+  well-conditioned regime (`path="implicit"` matches `scipy.linalg.expm` to ~1.6e-9).
+  Memory ≈ 32 MB, ~2× below scipy's dense path.
+
+### Fixed (CI hardening)
+
+- **Flagship Gates**: Resolvent argument parsing and bounded `L_RESOLVENT` tick budget
+  enforcement turned green on main. Nightly miri scalar path (`src/scalar/`) validated.
+- **Nightly CI**: Bench-regression detection scoped to core benchmark families +
+  baseline guard to prevent false positives from external library version drift.
 
 ## [0.11.0-beta] — 2026-06-27
 

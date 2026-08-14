@@ -16,6 +16,7 @@ use crate::{
     graph::Laplacian,
     graph_signal::GraphSignal,
     matrix_pade::mat_exp_pade13,
+    pcg::implicit_euler_action,
     scratch::ScratchPool,
     state::State,
     symmetric_operator::SymmetricLinearOp,
@@ -40,7 +41,7 @@ const Z_SAFE: f64 = 200.0;
 /// truncated at `m = MAX_LANCZOS_DIM = 18` (a structural cap: the tridiagonal
 /// buffers are `[[F; 18]; 18]`).
 ///
-/// CORRECTED in ADR-0197 — the previous values were mis-paired with their
+/// CORRECTED in ADR-0198 — the previous values were mis-paired with their
 /// degrees, so `lanczos_select_s_m` under-substepped by up to 8×.
 #[rustfmt::skip]
 const THETA_M: &[(u32, f64)] = &[
@@ -62,6 +63,23 @@ pub enum KrylovPath {
     Lanczos {
         /// Maximum Krylov dimension per outer step. Must be ≤ `MAX_LANCZOS_DIM = 18`.
         m_max: usize,
+    },
+    /// Implicit backward-Euler shift-invert (§59, ADR-0190).
+    ///
+    /// Computes `e^{-τÂ}v ≈ (I + Δt·Â)^{-n_steps} v` where `Δt = τ/n_steps`.
+    /// Each sub-step solves `(I + Δt·Â) x = b` by preconditioned CG.
+    /// Cost is `O(n_steps · √κ · N)` vs `O(λ_max · τ · N)` for explicit paths.
+    /// L-stable — damps stiff modes unlike A-stable Crank–Nicolson.
+    ImplicitEuler {
+        /// Number of backward-Euler sub-steps. Must be ≥ 1.
+        n_steps: usize,
+        /// Optional CG iteration cap per sub-step.
+        ///
+        /// `None` (default) uses the theory-derived bound
+        /// `ceil(√κ(S)·ln(2/tol))` where `κ(S) ≤ 1 + Δt·λ_max` (§59.4, fix #18).
+        /// Set `Some(m)` to override, e.g. when `λ_max_bound` is a loose Gershgorin
+        /// estimate and a tighter user-known bound suffices.
+        cg_max_iter: Option<usize>,
     },
 }
 
@@ -99,7 +117,12 @@ impl<F: SemiflowFloat> GraphKrylovChernoff<F> {
             });
         }
         let lambda_max = laplacian.spectral_radius_bound();
-        Ok(Self { laplacian, lambda_max, path, tol })
+        Ok(Self {
+            laplacian,
+            lambda_max,
+            path,
+            tol,
+        })
     }
 
     /// Convenience constructor: Chebyshev path, tol = 1e-10.
@@ -139,12 +162,34 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
     ) -> Result<(), SemiflowError> {
         validate_tau(tau)?;
         match &self.path {
-            KrylovPath::Chebyshev => {
-                chebyshev_action(&*self.laplacian, src, dst, tau, self.lambda_max, self.tol, scratch)
-            }
-            KrylovPath::Lanczos { m_max } => {
-                lanczos_action(&*self.laplacian, src, dst, tau, self.lambda_max, *m_max, scratch)
-            }
+            KrylovPath::Chebyshev => chebyshev_action(
+                &*self.laplacian,
+                src,
+                dst,
+                tau,
+                self.lambda_max,
+                self.tol,
+                scratch,
+            ),
+            KrylovPath::Lanczos { m_max } => lanczos_action(
+                &*self.laplacian,
+                src,
+                dst,
+                tau,
+                self.lambda_max,
+                *m_max,
+                scratch,
+            ),
+            KrylovPath::ImplicitEuler { n_steps, cg_max_iter } => implicit_euler_gk_action(
+                &*self.laplacian,
+                src,
+                dst,
+                tau,
+                *n_steps,
+                self.tol,
+                *cg_max_iter,
+                scratch,
+            ),
         }
     }
 
@@ -192,6 +237,13 @@ pub fn graph_expmv_matvec_count<F: SemiflowFloat>(
             #[allow(clippy::cast_possible_truncation)]
             let m_max_u32 = *m_max as u32;
             (s, m.min(m_max_u32))
+        }
+        KrylovPath::ImplicitEuler { n_steps, .. } => {
+            // n_steps backward-Euler sub-steps; 0 = no Chebyshev/Lanczos degree (§59.4).
+            // n_steps bounded by u32::MAX above — cast is exact.
+            #[allow(clippy::cast_possible_truncation)]
+            let s = (*n_steps).min(u32::MAX as usize) as u32;
+            (s, 0)
         }
     }
 }
@@ -252,41 +304,6 @@ fn validate_tau<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
     Ok(())
 }
 
-// ── Modified Bessel I_k(z) — no_std power series ─────────────────────────────
-//
-// I_k(z) = Σ_{m=0}^∞ (z/2)^{2m+k} / (m! · (m+k)!)
-// Term recurrence: term_{m+1} = term_m · (z/2)² / ((m+1)(m+k+1))
-
-fn bessel_i_k<F: SemiflowFloat>(k: usize, z: F) -> F {
-    if z < F::from(1e-300_f64).unwrap() {
-        return if k == 0 { F::one() } else { F::zero() };
-    }
-    let hz = z / F::from(2.0_f64).unwrap();
-    let hz2 = hz * hz;
-    // Leading term (z/2)^k / k!
-    // Loop indices are Bessel series indices bounded by degree (≤ 200) — precision loss impossible.
-    #[allow(clippy::cast_precision_loss)]
-    let mut term = {
-        let mut t = F::one();
-        for i in 1..=(k as u64) {
-            t = t * hz / F::from(i as f64).unwrap();
-        }
-        t
-    };
-    let mut sum = term;
-    #[allow(clippy::cast_precision_loss)]
-    for m in 0u64..1000 {
-        term = term * hz2
-            / (F::from((m + 1) as f64).unwrap() * F::from((m + 1 + k as u64) as f64).unwrap());
-        let next = sum + term;
-        if next == sum {
-            break;
-        }
-        sum = next;
-    }
-    sum
-}
-
 // ── Chebyshev degree selection ────────────────────────────────────────────────
 
 /// Minimum degree m such that `e^{-z} · I_{m+1}(z) ≤ tol/4` (Bessel tail bound).
@@ -312,64 +329,27 @@ fn chebyshev_degree<F: SemiflowFloat>(z: F, tol: F) -> usize {
 // Private Chebyshev and Lanczos helpers — include! keeps them in module scope.
 include!("graph_krylov_helpers.rs");
 
-// 7 args by necessity — 4 op-state vars + tau/lambda_max/tol/scratch.
-#[allow(clippy::too_many_arguments)]
-fn chebyshev_action<F: SemiflowFloat>(
-    op: &impl SymmetricLinearOp<F>,
-    src: &GraphSignal<F>,
-    dst: &mut GraphSignal<F>,
-    tau: F,
-    lambda_max: F,
-    tol: F,
-    scratch: &mut ScratchPool<F>,
-) -> Result<(), SemiflowError> {
-    let n = src.len();
-    let z_total  = tau * lambda_max / F::from(2.0_f64).unwrap();
-    let s        = cheb_substep_count(z_total);
-    let step_tau = tau / F::from(f64::from(s)).unwrap(); // f64::from(u32) exact
-    let z_sub    = step_tau * lambda_max / F::from(2.0_f64).unwrap();
-    let m        = chebyshev_degree(z_sub, tol);
-    let em_z     = (-z_sub).exp();
-    let scale    = F::from(2.0_f64).unwrap() / lambda_max;
-    let two      = F::from(2.0_f64).unwrap();
-    let mut t_prev  = scratch.take_vec(n);
-    let mut t_curr  = scratch.take_vec(n);
-    let mut spmv    = scratch.take_vec(n);
-    let mut result  = scratch.take_vec(n);
-    let mut current = scratch.take_vec(n);
-    current.copy_from_slice(src.values());
-    for _ in 0..s {
-        chebyshev_step(
-            op, &current, &mut t_prev, &mut t_curr, &mut spmv, &mut result,
-            n, m, scale, two, z_sub, em_z, z_total,
-        )?;
-        core::mem::swap(&mut current, &mut result);
-    }
-    dst.zero_into();
-    dst.axpy_into_slice(F::one(), &current);
-    scratch.return_vec(t_prev);
-    scratch.return_vec(t_curr);
-    scratch.return_vec(spmv);
-    scratch.return_vec(result);
-    scratch.return_vec(current);
-    Ok(())
-}
-
 // ── Lanczos selection ─────────────────────────────────────────────────────────
 
 fn lanczos_select_s_m<F: SemiflowFloat>(lambda_max: F, tau: F) -> (u32, u32) {
     let arg = tau.to_f64().unwrap_or(1.0) * lambda_max.to_f64().unwrap_or(1.0);
     let mut best: Option<(u32, u32, u64)> = None;
     for &(m, theta) in THETA_M {
-        if m as usize > MAX_LANCZOS_DIM { break; }
+        if m as usize > MAX_LANCZOS_DIM {
+            break;
+        }
         let s_raw = (arg / theta).ceil();
-        if s_raw > 1.0e14 { continue; }
+        if s_raw > 1.0e14 {
+            continue;
+        }
         let s = if s_raw < 1.0 {
             1u32
         } else {
             // s_raw ≥ 1 (guarded above) and ≤ 1e14 — fits u32; ceil preserves sign.
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            { s_raw as u32 }
+            {
+                s_raw as u32
+            }
         };
         let cost = u64::from(s) * u64::from(m);
         if best.map_or(true, |(_, _, pc)| cost < pc) {
@@ -399,52 +379,6 @@ fn build_exp_tridiag<F: SemiflowFloat>(
     mat_exp_pade13::<F, MAX_LANCZOS_DIM>(&t_mat)
 }
 
-/// One Lanczos step: `dst ≈ e^{-tau·A} · src` using m Krylov iterations.
-fn lanczos_step_inner<F: SemiflowFloat>(
-    op: &impl SymmetricLinearOp<F>,
-    src: &[F],
-    dst: &mut [F],
-    tau: F,
-    m: usize,
-    scratch: &mut ScratchPool<F>,
-) -> Result<(), SemiflowError> {
-    let n = src.len();
-    let m = m.min(n).min(MAX_LANCZOS_DIM);
-    let v_norm = src.iter().map(|&x| x * x).fold(F::zero(), |a, x| a + x).sqrt();
-    if v_norm < F::from(1e-300_f64).unwrap() {
-        for x in dst.iter_mut() { *x = F::zero(); }
-        return Ok(());
-    }
-    let mut q_basis = scratch.take_vec(m * n);
-    let mut q_prev  = scratch.take_vec(n);
-    let mut q_curr  = scratch.take_vec(n);
-    let mut z_buf   = scratch.take_vec(n);
-    let mut alpha = [F::zero(); MAX_LANCZOS_DIM];
-    let mut beta  = [F::zero(); MAX_LANCZOS_DIM];
-
-    // q_1 = v / ‖v‖; store as first basis column
-    let inv_v = F::one() / v_norm;
-    for i in 0..n { q_curr[i] = src[i] * inv_v; }
-    q_basis[0..n].copy_from_slice(&q_curr);
-
-    let m_actual = lanczos_iterate(op, &mut q_curr, &mut q_prev, &mut z_buf, &mut q_basis, &mut alpha, &mut beta, n, m);
-
-    // Reconstruct dst = Q_m · e^{-τ T_m} · (‖v‖ e_1)
-    let exp_t = build_exp_tridiag(&alpha, &beta, tau, m_actual)?;
-    for x in dst.iter_mut() { *x = F::zero(); }
-    for k in 0..m_actual {
-        let coeff = v_norm * exp_t[k][0];
-        let qk = &q_basis[k * n..(k + 1) * n];
-        for i in 0..n { dst[i] += coeff * qk[i]; }
-    }
-
-    scratch.return_vec(q_basis);
-    scratch.return_vec(q_prev);
-    scratch.return_vec(q_curr);
-    scratch.return_vec(z_buf);
-    Ok(())
-}
-
 // 7 args by necessity — 4 LaplacianAction state vars + tau/lambda_max/m_max/scratch.
 #[allow(clippy::too_many_arguments)]
 fn lanczos_action<F: SemiflowFloat>(
@@ -463,7 +397,7 @@ fn lanczos_action<F: SemiflowFloat>(
     let n = src.len();
 
     let mut current = scratch.take_vec(n);
-    let mut next    = scratch.take_vec(n);
+    let mut next = scratch.take_vec(n);
     current.copy_from_slice(src.values());
 
     for _ in 0..s {

@@ -61,8 +61,9 @@ pub struct GraphKrylov {
 impl GraphKrylov {
     /// Construct from a symmetric ``Laplacian``.
     ///
-    /// Raises ``SemiflowError(OutOfDomain)`` if ``tol ≤ 0``, ``tol`` is not
-    /// finite, or ``path`` is neither ``"chebyshev"`` nor ``"lanczos"``.
+    /// Raises ``SemiflowError(OutOfDomain)`` if ``tol ≤ 0`` or ``tol`` is not finite.
+    /// Raises ``SemiflowError(Unsupported)`` if ``path`` is not ``"chebyshev"``
+    /// or ``"lanczos"`` (contract §3 — unknown path is `Unsupported`, not `OutOfDomain`).
     #[new]
     #[pyo3(signature = (laplacian, *, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
     fn new(laplacian: &PyLaplacian, path: &str, tol: f64, m_max: u32) -> PyResult<Self> {
@@ -70,8 +71,7 @@ impl GraphKrylov {
             let kpath = parse_krylov_path(path, m_max)?;
             let lap_arc = Arc::clone(&laplacian.inner);
             let n = lap_arc.n_nodes();
-            let gk =
-                GraphKrylovChernoff::new(lap_arc, kpath, tol).map_err(|e| from_core(&e))?;
+            let gk = GraphKrylovChernoff::new(lap_arc, kpath, tol).map_err(|e| from_core(&e))?;
             let dummy_graph = build_dummy_graph(n);
             Ok(GraphKrylov { gk, dummy_graph })
         })
@@ -144,6 +144,7 @@ impl GraphKrylov {
 #[pyfunction]
 #[pyo3(name = "graph_expmv_frechet", signature = (gk, u0, dj, *, t, params))]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub fn graph_expmv_frechet_py<'py>(
     py: Python<'py>,
     gk: &GraphKrylov,
@@ -174,10 +175,22 @@ pub fn graph_expmv_frechet_py<'py>(
         let dj_cn = gather_nc_to_cn(&dj.as_array(), n, c);
         let inner_gk = gk.gk.clone();
         let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(move || {
-            let sens = EdgeWeightSensitivity { params: edge_pairs, n_nodes };
+            let sens = EdgeWeightSensitivity {
+                params: edge_pairs,
+                n_nodes,
+            };
             let mut grad = vec![0.0_f64; n_params];
             let mut scratch = ScratchPool::new();
-            semiflow::graph_expmv_frechet(&inner_gk, &u0_cn, &dj_cn, c, t, &sens, &mut grad, &mut scratch)?;
+            semiflow::graph_expmv_frechet(
+                &inner_gk,
+                &u0_cn,
+                &dj_cn,
+                c,
+                t,
+                &sens,
+                &mut grad,
+                &mut scratch,
+            )?;
             Ok(grad)
         });
         let out = result.map_err(|e| from_core(&e))?;
@@ -190,12 +203,22 @@ pub fn graph_expmv_frechet_py<'py>(
 // ---------------------------------------------------------------------------
 
 /// Map ``"chebyshev"`` / ``"lanczos"`` string to [`KrylovPath`].
+///
+/// `"implicit"` is not supported on the graph-level API (use
+/// `SymmetricOperator.evolve_batched` instead) and returns `Unsupported`.
 fn parse_krylov_path(path: &str, m_max: u32) -> PyResult<KrylovPath> {
     match path {
         "chebyshev" => Ok(KrylovPath::Chebyshev),
-        "lanczos" => Ok(KrylovPath::Lanczos { m_max: m_max as usize }),
+        "lanczos" => Ok(KrylovPath::Lanczos {
+            m_max: m_max as usize,
+        }),
+        "implicit" => Err(new_pyerr(
+            "Unsupported",
+            "path='implicit' is not available on GraphKrylov; \
+             use SymmetricOperator.evolve_batched(path='implicit') instead",
+        )),
         other => Err(new_pyerr(
-            "OutOfDomain",
+            "Unsupported",
             &format!("path must be 'chebyshev' or 'lanczos', got '{other}'"),
         )),
     }
@@ -221,7 +244,10 @@ fn extract_explicit_edge_pairs(
         ));
     }
     let pairs = params.extract::<Vec<(usize, usize)>>().map_err(|_| {
-        new_pyerr("OutOfDomain", "graph_expmv_frechet: params must be list[(int, int)]")
+        new_pyerr(
+            "OutOfDomain",
+            "graph_expmv_frechet: params must be list[(int, int)]",
+        )
     })?;
     for &(i, j) in &pairs {
         if i >= n_nodes || j >= n_nodes {

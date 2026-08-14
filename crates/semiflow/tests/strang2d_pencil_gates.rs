@@ -1,4 +1,4 @@
-//! `G_PENCIL_*` — per-pencil 2-D Strang composition (ADR-0195, Issue #21).
+//! `G_PENCIL_*` — per-pencil 2-D Strang composition (ADR-0196, Issue #21).
 //!
 //! `Strang2D` applies one `X` kernel to every row, so a coefficient varying
 //! along the *transverse* axis is inexpressible. `Strang2DPencil` carries one

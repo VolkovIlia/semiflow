@@ -101,7 +101,7 @@ pub(crate) fn build_grid_2d(
 // Interpolation and indexing helpers
 // ---------------------------------------------------------------------------
 
-/// Extract an N-D state as a flat x-fastest `Vec<f64>` (ADR-0190 A3).
+/// Extract an N-D state as a flat x-fastest `Vec<f64>` (ADR-0191 A3).
 ///
 /// Accepts a flat length-`nx*ny` array (assumed already x-fastest) **or** a 2-D
 /// `(nx, ny)` array of any memory order, which is ravelled to x-fastest here.

@@ -18,16 +18,16 @@
     unsafe_code,
     clippy::doc_markdown,
     clippy::needless_pass_by_value,
-    clippy::too_many_arguments,
+    clippy::too_many_arguments
 )]
 
 use std::sync::Arc;
 
-use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
-use pyo3::prelude::*;
-use semiflow::{
-    graph_batched, MassKOperator, ScratchPool, SymmetricLinearOp, TriangularFactor,
+use numpy::{
+    PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray,
 };
+use pyo3::prelude::*;
+use semiflow::{graph_batched, MassKOperator, ScratchPool, SymmetricLinearOp, TriangularFactor};
 
 use crate::{
     error::{from_core, new_pyerr},
@@ -66,7 +66,7 @@ use crate::{
 /// Returns ndarray[float64, shape (N, C)].
 #[pyfunction]
 #[pyo3(name = "mass_lumped_evolve",
-       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
+       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
 pub fn mass_lumped_evolve_py<'py>(
     py: Python<'py>,
     k_op: &PySymmetricOperator,
@@ -76,10 +76,11 @@ pub fn mass_lumped_evolve_py<'py>(
     path: &str,
     tol: f64,
     m_max: u32,
+    n_steps: usize,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     catch_panic_py!({
         validate_t_final(t)?;
-        let kpath = krylov_path(path, m_max)?;
+        let kpath = krylov_path(path, m_max, n_steps, None)?;
         let n = k_op.op.n();
         let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
         let masses = extract_masses(&m_diag, n)?;
@@ -87,7 +88,9 @@ pub fn mass_lumped_evolve_py<'py>(
         let op_c = Arc::clone(&k_op.op);
         let dummy = no_edge_graph(n);
         let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(move || {
-            lumped_inner(&op_c, &masses, t, kpath, tol, &src_nc, &dummy, n_nodes, n_cols)
+            lumped_inner(
+                &op_c, &masses, t, kpath, tol, &src_nc, &dummy, n_nodes, n_cols,
+            )
         });
         let dst_cn = result.map_err(|e| from_core(&e))?;
         Ok(scatter_cn_to_nc(&dst_cn, n_nodes, n_cols, py))
@@ -190,7 +193,13 @@ impl PyMassKOperator {
             if flat.len() != n * n {
                 return Err(new_pyerr(
                     "GridMismatch",
-                    &format!("m_dense length {} != n*n = {}*{} = {}", flat.len(), n, n, n * n),
+                    &format!(
+                        "m_dense length {} != n*n = {}*{} = {}",
+                        flat.len(),
+                        n,
+                        n,
+                        n * n
+                    ),
                 ));
             }
             let r = TriangularFactor::dense_cholesky_spd(&flat, n).map_err(|e| from_core(&e))?;
@@ -216,7 +225,7 @@ impl PyMassKOperator {
     ///     Max Krylov dimension (Lanczos only; default ``18``).
     ///
     /// Returns ndarray[float64, shape (n,)].
-    #[pyo3(signature = (t, v, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32))]
+    #[pyo3(signature = (t, v, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
     fn evolve<'py>(
         &self,
         py: Python<'py>,
@@ -225,12 +234,14 @@ impl PyMassKOperator {
         path: &str,
         tol: f64,
         m_max: u32,
+        n_steps: usize,
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max)?;
+            let kpath = krylov_path(path, m_max, n_steps, None)?;
             let n = SymmetricLinearOp::n(self.op.as_ref());
-            let v_sl = v.as_slice()
+            let v_sl = v
+                .as_slice()
                 .map_err(|_| new_pyerr("GridMismatch", "v must be contiguous"))?
                 .to_vec();
             if v_sl.len() != n {

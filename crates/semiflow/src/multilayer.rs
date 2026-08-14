@@ -13,18 +13,18 @@ use crate::{
     conservative_assemble::{assemble_conservative_csr_1d, build_faces},
     error::SemiflowError,
     float::SemiflowFloat,
+    graph_krylov::KrylovPath,
     grid::Grid1D,
     grid_fn::GridFn1D,
-    graph_krylov::KrylovPath,
     mass_operator::mass_lumped_evolve,
     scratch::ScratchPool,
     symmetric_operator::SymmetricOperator,
 };
 
-/// One material layer (thickness `[m]`, k `[W/(m·K)]`, `rho_c` `[J/(m³·K)]`).
+/// One material layer (thickness \[m\], k \[W/(m·K)\], `rho_c` \[J/(m³·K)\]).
 #[derive(Debug, Clone, Copy)]
 pub struct Layer<F: SemiflowFloat = f64> {
-    /// Layer thickness in metres.
+    /// Layer thickness \[m\].
     pub thickness: F,
     /// Thermal conductivity [W/(m·K)].
     pub k: F,
@@ -62,7 +62,11 @@ impl<F: SemiflowFloat> MultilayerStack<F> {
         }
         let mut n_cells: Vec<usize> = Vec::with_capacity(layers.len());
         for lay in layers {
-            let c = (lay.thickness / target_dx).round().to_f64().unwrap_or(1.0_f64).max(1.0_f64);
+            let c = (lay.thickness / target_dx)
+                .round()
+                .to_f64()
+                .unwrap_or(1.0_f64)
+                .max(1.0_f64);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             n_cells.push(c as usize);
         }
@@ -77,11 +81,18 @@ impl<F: SemiflowFloat> MultilayerStack<F> {
         let mut k_nodes = Vec::with_capacity(n);
         let mut rho_c_nodes = Vec::with_capacity(n);
         for i in 0..n {
-            let idx = cumul.partition_point(|&c| c < i).saturating_sub(1).min(layers.len() - 1);
+            let idx = cumul
+                .partition_point(|&c| c < i)
+                .saturating_sub(1)
+                .min(layers.len() - 1);
             k_nodes.push(layers[idx].k);
             rho_c_nodes.push(layers[idx].rho_c);
         }
-        Ok(Self { grid, k_nodes, rho_c_nodes })
+        Ok(Self {
+            grid,
+            k_nodes,
+            rho_c_nodes,
+        })
     }
 
     /// Assemble `A = −L_k` and return `(A, rho_c_nodes)`.
@@ -136,7 +147,12 @@ impl<F: SemiflowFloat> MassWeightedConservativeChernoff<F> {
     pub fn from_stack(stack: &MultilayerStack<F>) -> Result<Self, SemiflowError> {
         let dx = stack.grid.dx();
         let faces = build_faces(&stack.k_nodes, dx, None)?;
-        Ok(Self { faces, rho_c: stack.rho_c_nodes.clone(), dx, grid: stack.grid })
+        Ok(Self {
+            faces,
+            rho_c: stack.rho_c_nodes.clone(),
+            dx,
+            grid: stack.grid,
+        })
     }
 }
 
@@ -144,10 +160,14 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for MassWeightedConservativeChernoff<
     type S = GridFn1D<F>;
 
     #[inline]
-    fn order(&self) -> u32 { 2 }
+    fn order(&self) -> u32 {
+        2
+    }
 
     #[inline]
-    fn growth(&self) -> Growth<F> { Growth::contraction() }
+    fn growth(&self) -> Growth<F> {
+        Growth::contraction()
+    }
 
     /// CN step `(M − ½τL_k) T^{n+1} = (M + ½τL_k) T^n` solved by Thomas.
     #[allow(clippy::similar_names)]
@@ -172,15 +192,28 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for MassWeightedConservativeChernoff<
         let mut sup_d = vec![F::zero(); n];
         let mut rhs = vec![F::zero(); n];
         for i in 0..n {
-            let t_l = if i > 0 { self.faces[i - 1] / dx } else { F::zero() };
-            let t_r = if i + 1 < n { self.faces[i] / dx } else { F::zero() };
+            let t_l = if i > 0 {
+                self.faces[i - 1] / dx
+            } else {
+                F::zero()
+            };
+            let t_r = if i + 1 < n {
+                self.faces[i] / dx
+            } else {
+                F::zero()
+            };
             let s_l = if i > 0 { src.values[i - 1] } else { F::zero() };
-            let s_r = if i + 1 < n { src.values[i + 1] } else { F::zero() };
+            let s_r = if i + 1 < n {
+                src.values[i + 1]
+            } else {
+                F::zero()
+            };
             sub_d[i] = -ht * t_l;
             diag[i] = self.rho_c[i] + ht * (t_l + t_r);
             sup_d[i] = -ht * t_r;
             rhs[i] = (self.rho_c[i] - ht * (t_l + t_r)) * src.values[i]
-                + ht * t_l * s_l + ht * t_r * s_r;
+                + ht * t_l * s_l
+                + ht * t_r * s_r;
         }
         dst.values.resize(n, F::zero());
         thomas_solve(n, &sub_d, &diag, &sup_d, &rhs, &mut dst.values)?;
