@@ -8486,6 +8486,51 @@ within the order-1 self-convergence band.
 > dominates the interpolation floor. See "Why a COARSE grid is required" below
 > and ADR-0112 AMENDMENT 1.
 
+> **v0.12.0 AMENDMENT 2 (ADR-0190 AMENDMENT 3, 2026-08-14, `Gate-Change-Approved-By`).**
+> Both the estimator and the order claim above are superseded.
+>
+> AMENDMENT 1's reasoning is correct about *why* the reference does not cancel —
+> per-step interpolation error accumulates at a different rate in the $n$-step
+> iterate and the $n_{\mathrm{ref}}$-step reference — but the remedy it chose
+> (a coarse grid) left a second contamination in place: $n_{\mathrm{ref}} = 512$
+> is only twice the largest swept $n = 256$, so the last point of the fit measures
+> the **reference's** remaining temporal error. Holding the sweep fixed and
+> raising $n_{\mathrm{ref}}$ to $1024/2048/4096/8192$ walks the reported slope
+> from $-0.92$ to $-0.54$; a converged estimator would be flat in
+> $n_{\mathrm{ref}}$.
+>
+> The gate now fits the OLS slope of the **successive differences**
+> $d_k = \lVert u_{2n_k} - u_{n_k}\rVert_\infty$, which need no reference and so
+> cannot be contaminated. Their ratio settles on $\sqrt2$ across
+> $n \in [32, 16384]$ and $N_{\text{AXIS}} \in \{8,16,32\}$, i.e.
+>
+> $$\text{global order} = \tfrac12,\qquad\text{not } 1.$$
+>
+> The mechanism is structural, not numerical. The Gauss–Hermite displacement is
+> $2\sqrt{a\tau}\,\eta$, and freezing $A$ at the node while sampling at the
+> shifted point mismatches by $A'\cdot 2\sqrt{a\tau}\,\eta$ — a relative
+> $O(\sqrt\tau)$ on the leading $O(\tau)$ term, hence local $O(\tau^{3/2})$ and
+> global $O(\tau^{1/2})$. ADR-0112 correctly demoted the order-2 claim to order-1
+> but accounted the variable-$A$ mismatch at $O(\tau^2)$; the $\sqrt\tau$ inside
+> the shift makes it $O(\tau^{3/2})$.
+>
+> Threshold: $-0.95 \to -0.45$, **two-sided** — a ceiling of $-0.75$ fails the
+> gate if the kernel ever becomes genuinely order-1, so the improvement is caught
+> rather than passing silently. Measured after re-basing: $D=2$: $-0.4676$,
+> $D=3$: $-0.4766$.
+>
+> `AnisotropicShiftChernoffND::order()` still returns 1, because
+> `ChernoffFunction::order()` is a `u32` and cannot hold $\tfrac12$; truncation to
+> 0 would change adaptive step control. The honest statement lives here.
+>
+> The ladder is re-sized in the same amendment: ADR-0190 made a sample read
+> $K^D$ nodes ($4^4 = 256$ at $D=4$ against multilinear's $16$), which pushed the
+> $D=4$ gate to **8105 s** and $D=5$ to an extrapolated $\approx 85$ h. The
+> reference-free ladder needs far fewer steps — $D=4$: $\{8,16,32,64\}$ (120 steps
+> against 752); $D=5$: $\{4,8,16,32\}$ — and $D=5$ additionally drops one node per
+> axis, $N_{\text{AXIS}}: 6 \to 5$. That last change is a genuine weakening of the
+> $D=5$ spatial datum.
+
 **G_DDIM (RELEASE_BLOCKING — d-D anisotropic shift convergence slope, per-D sweeps)**:
 
 **Resolution ladder $N_{\text{AXIS}}(D)$ / $n_{\mathrm{ref}}(D)$ (NORMATIVE — coarse grid required; ADR-0112 AMENDMENT 1).**

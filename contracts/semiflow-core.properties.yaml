@@ -6765,7 +6765,7 @@ properties:
   - name: G_DDIM
     cases: 4
     severity: RELEASE_BLOCKING
-    gate: "d-D anisotropic shift convergence slope finite AND ≤ -0.95 at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,6}, n_ref=512; sweep {32,64,128,256} (d=2,3) / {16,32,64,128} (d=4,5) (order-1; ADR-0112 + AMENDMENT 1)"
+    gate: "successive-difference OLS slope of sup|u_2n - u_n| finite AND in [-0.75, -0.45] at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,5}; ladder {32,64,128,256,512} (d=2,3) / {8,16,32,64} (d=4) / {4,8,16,32} (d=5) (order-1/2; ADR-0112 + AMENDMENT 1, RE-BASED by ADR-0190 AMENDMENT 3)"
     purpose: |
       G_DDIM (d-D anisotropic shift Chernoff convergence — math.md §32.5,
       ADR-0081, CORRECTED by ADR-0112):
@@ -6797,6 +6797,32 @@ properties:
           REQUIRED so the temporal-truncation signal dominates the floor.
         - D=5 slope ≈ -0.9614 clears the -0.95 gate by a THIN margin (~1.5%);
           honest curse-of-dimensionality boundary at N=6 (see math §32.5).
+
+      v0.12.0 AMENDMENT 2 (ADR-0190 AMENDMENT 3, 2026-08-14,
+      Gate-Change-Approved-By):
+        - ESTIMATOR REPLACED. The self-convergence fit used n_ref = 512 against a
+          sweep reaching n = 256 — only 2x finer — so its last point measured the
+          REFERENCE's remaining error. Holding the sweep and raising n_ref to
+          1024/2048/4096/8192 walks the slope from -0.92 to -0.54; a converged
+          estimator would be flat. Now fits the OLS slope of the reference-free
+          successive differences sup|u_2n - u_n|.
+        - ORDER CORRECTED to 1/2. The difference ratio settles on sqrt(2) across
+          n in [32, 16384] and N_AXIS in {8, 16, 32}. Mechanism: the
+          Gauss-Hermite displacement is 2*sqrt(a*tau)*eta, so freezing A at the
+          node mismatches by A'*2*sqrt(a*tau)*eta — relative O(sqrt(tau)) on the
+          leading O(tau) term, i.e. local O(tau^{3/2}), global O(tau^{1/2}).
+          ADR-0112 accounted that mismatch at O(tau^2).
+        - THRESHOLD -0.95 -> -0.45, TWO-SIDED. A ceiling of -0.75 fails the gate
+          if the kernel ever becomes genuinely order-1, so an improvement is
+          caught rather than passing silently. Measured: D=2 -0.4676,
+          D=3 -0.4766.
+        - NOT A REGRESSION. The same reference-free probe on 0e6d25b shows no
+          clean power law and errors 10x larger; the ADR-0190 sampler fix made
+          the kernel accurate enough for its order to be legible.
+        - LADDER RE-SIZED for runnability. K^D sampling pushed D=4 to 8105 s and
+          D=5 to an extrapolated ~85 h. D=4 now runs {8,16,32,64} (120 steps
+          against 752); D=5 runs {4,8,16,32} AND drops one node per axis
+          (N_AXIS 6 -> 5), which is a genuine weakening of the D=5 spatial datum.
 
       Resolution ladder N_AXIS(D) / n_ref(D) / n-sweep (NORMATIVE; math §32.5;
       matches the test files verbatim, verified 2026-05-30):

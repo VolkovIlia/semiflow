@@ -245,7 +245,143 @@ ABI decision about whether to extend existing entry points or add `_bc` variants
 
 ## AMENDMENT 3 (2026-08-14) — `G_DDIM` fails, and the reason is that its estimator was measuring the wrong thing
 
-**Status**: OPEN — needs an architect decision. The gate is left failing.
+**Status**: RESOLVED. The estimator is replaced, the threshold is re-based to
+the measured order, and the ladder is re-sized to be runnable. Approved by the
+architect; the commit carries `Gate-Change-Approved-By`.
+
+`G_DDIM D=2` (`RELEASE_BLOCKING`, `anisotropic_shift_nd_d2_slope.rs`) now reads
+`slope = −0.9249` against a `≤ −0.95` gate. It read `≈ −1.03` before this ADR.
+Nothing about the gate changed; what changed is the sampler underneath it. The
+investigation below says the gate was never measuring what it claimed, and the
+kernel's true temporal order on its own normative datum is **½**, not 1.
+
+### The estimator is contaminated
+
+The gate is a self-convergence test: reference at `n_ref = 512`, sweep
+`n ∈ {32, 64, 128, 256}`. The largest swept `n` is **half** the reference, so the
+last point's "error" is dominated by the reference's own remaining temporal
+error. Holding the sweep fixed and raising only `n_ref` shows it directly:
+
+| `n_ref` | 512 | 1024 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|---|
+| slope, `N_AXIS = 8` | −0.925 | −0.718 | −0.625 | −0.574 | −0.543 |
+| slope, `N_AXIS = 16` | −0.934 | −0.727 | −0.634 | −0.583 | −0.552 |
+
+A converged estimator would be flat in `n_ref`. This one drifts monotonically
+toward ≈ −0.55, i.e. the `−0.95` the gate used to see was an artefact of a
+reference only 2× finer than the datum.
+
+### The order is ½
+
+Successive differences `sup|u_{2n} − u_n|` need no reference and cannot be
+contaminated. Their ratio is the convergence factor per halving of τ:
+
+| `n → 2n` | 32→64 | 64→128 | 128→256 | 256→512 | 512→1k | 1k→2k | 2k→4k | 4k→8k | 8k→16k |
+|---|---|---|---|---|---|---|---|---|---|
+| ratio, `N_AXIS = 8` | — | 1.374 | 1.383 | 1.391 | 1.398 | 1.402 | 1.406 | 1.408 | 1.410 |
+| ratio, `N_AXIS = 16` | — | 1.397 | 1.398 | 1.401 | 1.404 | 1.407 | 1.409 | 1.410 | 1.411 |
+| ratio, `N_AXIS = 32` | — | 0.917 | 1.294 | 1.371 | 1.384 | 1.393 | 1.399 | 1.404 | 1.407 |
+
+The ratio settles on **√2 = 1.414**, stably across three grid resolutions and
+nine octaves of `n`. Order 2 would give 4, order 1 would give 2. This is
+`O(τ^{1/2})`.
+
+The mechanism is consistent with the kernel's own structure. The Gauss–Hermite
+shift is `2√(a τ)·η`, and for a *variable* `A` the coefficient is frozen at the
+node while the sample is taken at the shifted point, so the operator mismatch is
+`A′·2√(aτ)·η` — a relative `O(√τ)` on the leading `O(τ)` term, i.e. local
+`O(τ^{3/2})` and global `O(τ^{1/2})`. ADR-0112's "honest order-1" accounted for a
+variable-`A` per-step mismatch of `O(τ²)`; the `√τ` inside the shift makes it
+`O(τ^{3/2})`.
+
+### It is not a regression
+
+The same probe on the pre-campaign baseline (`0e6d25b`) gives ratios of
+1.28 / 1.35 / 1.45 / 1.66 / 1.90 / 1.73 — noisy, no clean power law — with
+absolute differences an order of magnitude larger (`1.9e−2` against `2.2e−3` at
+`n = 32→64`, `N_AXIS = 8`). So the order was never 1. What this ADR changed is
+that the kernel became ~10× more accurate and its convergence became clean
+enough to read.
+
+### Resolution
+
+**1. The estimator is replaced.** The gate no longer compares against a single
+reference run. It fits the OLS slope of the **successive differences**
+`sup|u_{2n} − u_n|`, which need no reference and therefore cannot be
+contaminated. This is strictly stronger than what it replaced — the old reading
+of ≈ −1.0 was an artefact of a reference only 2× finer than the datum.
+
+**2. The threshold is re-based to the measured order.** `−0.95 → −0.45`, with a
+two-sided band: a `SLOPE_CEILING` of `−0.75` fails the gate if the kernel ever
+becomes genuinely order-1, so the correction is caught rather than silently
+passing. Measured after re-basing: **D=2 −0.4676, D=3 −0.4766**, against the
+theoretical `−0.5` that the ladder approaches from above.
+
+**3. `order()` is left at 1 for now.** `ChernoffFunction::order()` returns `u32`
+and cannot express ½; truncating to 0 would change adaptive step control. The
+honest statement lives in the gate, in this ADR and in math §32.5 rather than in
+a value the type cannot hold. Whether `shift_nd_zeta2`'s ζ² correction lifts the
+*global* order to 1 — which would make `order() == 1` earned — is the follow-up,
+and must be measured with the uncontaminated estimator introduced here.
+
+### The ladder had also become unrunnable
+
+ADR-0190 made a sample read `K^D` nodes. At `D = 4` that is `4⁴ = 256` against
+multilinear's `2⁴ = 16`, and combined with the `5^D` Gauss–Hermite nodes the old
+`n_ref = 512` configuration measured **8105 s at D = 4** — up from ~6 min — and
+extrapolates to ~85 h at `D = 5`, past any runner limit.
+
+The reference-free ladder fixes most of that by needing far fewer steps:
+
+| D | old (sweep + n_ref) | new ladder | steps | grid |
+|---|---|---|---|---|
+| 2 | {32,64,128,256} + 512 | {32,64,128,256,512} | 992 | `N_AXIS = 8` |
+| 3 | {32,64,128,256} + 512 | {32,64,128,256,512} | 992 | `N_AXIS = 8` |
+| 4 | {16,32,64,128} + 512 | {8,16,32,64} | 120 | `N_AXIS = 8` |
+| 5 | {16,32,64,128} + 512 | {4,8,16,32} | 60 | `N_AXIS = 6 → 5` |
+
+`D = 5` additionally drops one node per axis (`6⁵ = 7776 → 5⁵ = 3125`, 2.5×),
+because the step reduction alone leaves it hours long. That is a genuine
+weakening of the `D = 5` spatial datum and is stated as such rather than buried:
+the gate still runs the real kernel on a real anisotropic `A`, but on a coarser
+grid than the `N(D)` ladder nominally specifies.
+
+The underlying cause is worth its own change: `GridFnND::sample` currently costs
+~16–21 ns per node read, because `collapse` recurses per axis through a closure
+and resolves every node through `bc_value_by`. For the index-mapping boundary
+policies (`Reflect`, `Periodic`, `ZeroExtend`) the per-axis stencils could be
+folded into flat offsets once and summed in a strided loop, which should be
+several times faster and would let `D = 5` keep its `N_AXIS = 6` datum. Not done
+here — it is a hot-path rewrite, and this ADR is already a correctness change.
+
+## AMENDMENT 2 (2026-08-14) — the FFI/WASM `boundary` mirror is not a parity gap
+
+The original plan called for mirroring the new `boundary=` kwarg on
+`AnisotropicShiftND2/3` into the C ABI and the WASM surface, per the bindings
+parity rule. That turned out to rest on a false premise, so it is **not** done,
+and the reason is recorded here rather than left as a silent omission.
+
+Neither surface exposes boundary selection **for any kernel**. Every FFI
+constructor hard-codes `.with_boundary(BoundaryPolicy::Reflect)` — `adaptive_ffi`,
+`cdr_ffi`, `diffusion_hi_zeta_ffi`, `expmv_ffi`, `drift_reaction_zeta4_ffi` and
+the rest — and `semiflow-wasm` never calls `with_boundary` at all, so every WASM
+kernel runs on the `Reflect` default. This predates the campaign: `Shift1D` has
+carried `boundary=` in Python since before it, against an FFI `Shift1D` that
+cannot express anything but `Reflect`.
+
+Adding the parameter to exactly the two ND constructors would therefore not
+restore parity; it would create a new inconsistency inside the C ABI, where one
+constructor of forty takes a boundary and the rest silently do not. Exposing
+boundary selection across the C and WASM surfaces is a coherent piece of work —
+one shared parser, one enum in the header, one sweep of the constructors, and an
+ABI decision about whether to extend existing entry points or add `_bc` variants
+— and it belongs in its own change, not as a two-function exception here.
+
+## AMENDMENT 3 (2026-08-14) — `G_DDIM` fails, and the reason is that its estimator was measuring the wrong thing
+
+**Status**: RESOLVED. The estimator is replaced, the threshold is re-based to
+the measured order, and the ladder is re-sized to be runnable. Approved by the
+architect; the commit carries `Gate-Change-Approved-By`.
 
 `G_DDIM D=2` (`RELEASE_BLOCKING`, `anisotropic_shift_nd_d2_slope.rs`) now reads
 `slope = −0.9249` against a `≤ −0.95` gate. It read `≈ −1.03` before this ADR.
