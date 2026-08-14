@@ -1,12 +1,26 @@
 //! `G_DDIM` D=4 — d-D anisotropic shift self-convergence slope (`RELEASE_BLOCKING`).
 //!
-//! Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! Gate: successive-difference OLS slope in `[-0.75, -0.45]` — order ½, not 1
+//! (ADR-0112 §Decision 2+3, RE-BASED by ADR-0190 AMENDMENT 3).
 //!
-//! Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
-//! Fixed spatial grid `N_AXIS=8` per axis (8⁴=4096 nodes); reference at `n_ref=512` steps.
-//! Sweep n ∈ {16,32,64,128}: iterate `apply_into` n times with tau=T/n.
-//! Error = sup-norm vs reference on the SAME grid (spatial error cancels common-mode).
-//! OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! Method: reference-free convergence ladder calling the REAL
+//! `AnisotropicShiftChernoffND::apply_into`. Fixed spatial grid `N_AXIS = 8` per axis (8⁴ = 4096 nodes);
+//! ladder `n ∈ {8, 16, 32, 64}`, each run `apply_into` `n` times with `tau = T/n`.
+//! The fitted quantity is `sup|u_2n − u_n|` over consecutive ladder entries,
+//! which needs no reference run and so cannot be contaminated by one.
+//!
+//! <details><summary>Superseded pre-ADR-0190 description (kept for provenance)</summary>
+//!
+//! > Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! >
+//! > Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
+//! > Fixed spatial grid `N_AXIS=8` per axis (8⁴=4096 nodes); reference at `n_ref=512` steps.
+//! > Sweep n ∈ {16,32,64,128}: iterate `apply_into` n times with tau=T/n.
+//! > Error = sup-norm vs reference on the SAME grid (spatial error cancels common-mode).
+//! > OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! >
+//!
+//! </details>
 //!
 //! ## Estimator re-based (ADR-0190 AMENDMENT 3, 2026-08-14)
 //!

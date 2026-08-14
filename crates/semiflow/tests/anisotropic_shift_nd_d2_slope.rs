@@ -1,26 +1,40 @@
 //! `G_DDIM` D=2 — d-D anisotropic shift self-convergence slope (`RELEASE_BLOCKING`).
 //!
-//! Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! Gate: successive-difference OLS slope in `[-0.75, -0.45]` — order ½, not 1
+//! (ADR-0112 §Decision 2+3, RE-BASED by ADR-0190 AMENDMENT 3).
 //!
-//! Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
-//! Fixed spatial grid `N_AXIS=8` per axis (8²=64 nodes); reference at `n_ref=512` steps.
-//! Sweep n ∈ {32,64,128,256}: iterate `apply_into` n times with tau=T/n.
-//! Error = sup-norm vs reference on the SAME grid (spatial error is common-mode).
-//! OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! Method: reference-free convergence ladder calling the REAL
+//! `AnisotropicShiftChernoffND::apply_into`. Fixed spatial grid `N_AXIS = 8` per axis (8² = 64 nodes);
+//! ladder `n ∈ {32, 64, 128, 256, 512}`, each run `apply_into` `n` times with `tau = T/n`.
+//! The fitted quantity is `sup|u_2n − u_n|` over consecutive ladder entries,
+//! which needs no reference run and so cannot be contaminated by one.
 //!
-//! `N_AXIS=8` chosen so grid spacing dx≈1.43 is comparable to the 5-pt GH node displacement
-//! `2√τ·σ_max·η_max` ≈ 0.35–1.4, ensuring the spatial interpolation floor does not dominate
-//! the temporal convergence signal.  Sweeping n∈{32,64,128,256} skips the pre-asymptotic
-//! n=16 region where the per-step τ² curvature bends the OLS slope above −0.95.
+//! <details><summary>Superseded pre-ADR-0190 description (kept for provenance)</summary>
 //!
-//! ADR-0112 §Decision 3 specifies `N_AXIS=128` for D=2 in the normative N(D) ladder, but
-//! empirical validation (QA run 2026-05-30) shows `N_AXIS=128` gives slope ≈ −0.05 (spatially
-//! floor-dominated, non-monotone) while `N_AXIS=8` gives slope ≈ −1.03 (clean).  The ADR
-//! "floor cancels common-mode" argument fails for this parameter range because `u_n` and `u_ref`
-//! accumulate interpolation error at different rates (O(n·dx^p) each), so the floor does NOT
-//! fully cancel in the difference |`u_n` − `u_ref`|.  The ADR N(D) ladder needs correction.
-//! FLAG for ai-solutions-architect: ADR-0112 §Decision 3 `N_AXIS(D=2)=128` is empirically wrong;
-//! should be `N_AXIS(D=2)=8`.  See adversarial QA probe 2026-05-30.
+//! > Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! >
+//! > Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
+//! > Fixed spatial grid `N_AXIS=8` per axis (8²=64 nodes); reference at `n_ref=512` steps.
+//! > Sweep n ∈ {32,64,128,256}: iterate `apply_into` n times with tau=T/n.
+//! > Error = sup-norm vs reference on the SAME grid (spatial error is common-mode).
+//! > OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! >
+//! > `N_AXIS=8` chosen so grid spacing dx≈1.43 is comparable to the 5-pt GH node displacement
+//! > `2√τ·σ_max·η_max` ≈ 0.35–1.4, ensuring the spatial interpolation floor does not dominate
+//! > the temporal convergence signal.  Sweeping n∈{32,64,128,256} skips the pre-asymptotic
+//! > n=16 region where the per-step τ² curvature bends the OLS slope above −0.95.
+//! >
+//! > ADR-0112 §Decision 3 specifies `N_AXIS=128` for D=2 in the normative N(D) ladder, but
+//! > empirical validation (QA run 2026-05-30) shows `N_AXIS=128` gives slope ≈ −0.05 (spatially
+//! > floor-dominated, non-monotone) while `N_AXIS=8` gives slope ≈ −1.03 (clean).  The ADR
+//! > "floor cancels common-mode" argument fails for this parameter range because `u_n` and `u_ref`
+//! > accumulate interpolation error at different rates (O(n·dx^p) each), so the floor does NOT
+//! > fully cancel in the difference |`u_n` − `u_ref`|.  The ADR N(D) ladder needs correction.
+//! > FLAG for ai-solutions-architect: ADR-0112 §Decision 3 `N_AXIS(D=2)=128` is empirically wrong;
+//! > should be `N_AXIS(D=2)=8`.  See adversarial QA probe 2026-05-30.
+//! >
+//!
+//! </details>
 //!
 //! ## Estimator re-based (ADR-0190 AMENDMENT 3, 2026-08-14)
 //!

@@ -10,8 +10,13 @@
 //! - Grid: `N = 64` on `[0, L]`, `L = 20.0`. Neumann BCs (mirrors PRE-FLIGHT harness).
 //! - τ chosen so `τ·‖A‖_est ≈ 40` (well into the blow-up regime that defeated the
 //!   Padé kernel at `τ‖A‖ ≈ 62`; PRE-FLIGHT used 62).
-//! - Reference: `expmv_action` at `(s_ref, m=18)` with per-step arg ≤ 1.0 (well inside
-//!   the `θ_18=8.84` radius; `T_18` at arg≤1 is sub-round-off accurate per PRE-FLIGHT (a)).
+//! - Reference: `expmv_action` at `(s_ref, m=18)` with per-step arg ≤ 1.0. That is
+//!   inside the CORRECT radius `θ_18 = 1.09` (ADR-0197), which is why the reference
+//!   was always sound even while the shipped table claimed `θ_18 = 8.84` — a radius
+//!   at which `T_18` has relative error `3.8e+04`. Note also why this gate could not
+//!   detect that: it measures ABSOLUTE sup-error on a strongly decaying symmetric
+//!   operator, where a large relative error hides inside a tiny absolute one.
+//!   `G_THETA_M_TABLE` tests the table directly instead.
 //!   This is the self-convergence reference pattern (mirrors `G_zeta8` §27.tris).
 //! - Tested kernel: `DiffusionExpmvChernoff::apply_into` with Algorithm-3.2
 //!   auto-selected `(s, m)`.

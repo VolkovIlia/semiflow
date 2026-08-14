@@ -1452,7 +1452,7 @@ constant α=0.5; ±50% otherwise per ADR-0008 Amendment 1 budget).
   correction. Mathematically straightforward; deferred behind
   cost-benefit analysis.
 
-#### §9.2.3.C — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0190 AMENDMENT 1)
+##### 9.2.3.B.bis — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0190 AMENDMENT 1)
 
 `DiffusionChernoff` takes `a`, `a'`, `a''` as independent closures. Supplying a
 *variable* `a` together with `a' ≡ 0`, `a'' ≡ 0` — as `Heat2DVarA` / `Heat3DVarA`

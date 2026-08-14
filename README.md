@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
-> **Status: `0.10.0-beta`** — active beta. The API is stabilizing toward
+> **Status: `0.12.0-beta`** — active beta. The API is stabilizing toward
 > `1.0`; minor versions may make breaking changes. Bug reports and feedback welcome.
 
 **SemiFlow is a `no_std` Rust library for solving evolution equations and PDEs
@@ -112,7 +112,7 @@ cargo add semiflow
 `no_std` users: disable default features:
 
 ```toml
-semiflow = { version = "0.10.0-beta", default-features = false }
+semiflow = { version = "0.12.0-beta", default-features = false }
 ```
 
 The `simd` (AVX2 / NEON) and `parallel` features require `std`.
@@ -122,7 +122,7 @@ The `simd` (AVX2 / NEON) and `parallel` features require `std`.
 | Language | How to install | Distribution |
 |----------|---------------|--------------|
 | Python | `pip install semiflow-pde` — `import semiflow` | PyPI (published per release) |
-| JavaScript / WASM | `npm install semiflow` | npm (published per release) |
+| JavaScript / WASM | `npm install @semiflow/wasm` | npm (published per release) |
 | C / C++ | Download a release artifact; see [`crates/semiflow-ffi/README.md`](crates/semiflow-ffi/README.md) | Header `semiflow.h` |
 
 ## Quickstart — heat equation in 30 seconds
@@ -280,7 +280,7 @@ repo) which reads [`CITATION.cff`](CITATION.cff), or use this BibTeX entry:
   author    = {Volkov, Ilia},
   title     = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year      = {2026},
-  version   = {0.10.0-beta},
+  version   = {0.12.0-beta},
   doi       = {10.5281/zenodo.20837851},
   url       = {https://doi.org/10.5281/zenodo.20837851}
 }

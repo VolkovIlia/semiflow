@@ -23,7 +23,7 @@ use crate::{
 // Trait
 // ---------------------------------------------------------------------------
 
-/// Thin generator interface consumed by [`crate::phi_action`].
+/// Thin generator interface consumed by [`mod@crate::phi_action`].
 ///
 /// `apply_generator(src, dst)` computes `dst ← A·src` where `A` is the PDE
 /// linear generator.  Both slices must have length `self.dim()`.

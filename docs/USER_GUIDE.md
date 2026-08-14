@@ -42,6 +42,39 @@ and split per axis with `Strang2D` / `Strang3D`.
 → Examples: [`heat_2d_demo.rs`](../crates/semiflow/examples/heat_2d_demo.rs),
 [`strang_advdiff_demo.rs`](../crates/semiflow/examples/strang_advdiff_demo.rs).
 
+## I want anisotropic diffusion in N dimensions
+
+`AnisotropicShiftChernoffND<F, D>` solves `∂ₜu = ∇·(A(x)∇u) + b(x)·∇u + c(x)u`
+for `D ∈ 2..5` with a full SPD matrix `A(x)`, via tensor-product Gauss–Hermite
+quadrature of the anisotropic Gaussian. From Python: `AnisotropicShiftND2` /
+`AnisotropicShiftND3`.
+
+**The flat layout is x-fastest, which is NOT numpy's default.** For a `(nx, ny)`
+field, `flat[i + j*nx] = u(x_i, y_j)` — that is `np.ravel(U, order="F")`, and
+`np.ravel(U)` (C order) will silently transpose your problem. The same applies to
+`a_values`, `b_values` and `c_values`. The Python binding accepts 2-D/3-D arrays
+directly, which is the safe way to avoid the question:
+
+```python
+k = semiflow.AnisotropicShiftND2(nx, ny, xmin, xmax, ymin, ymax, a_flat)
+k.set_state(U)                       # 2-D array — no ravel, no order argument
+k.evolve(t, n_steps)
+U_out = k.values_2d()                # back as (nx, ny)
+```
+
+Two things worth knowing before you trust the numbers:
+
+- **Order is 1, and globally it measures ½** on a variable `A` — the `√τ` inside
+  the Gauss–Hermite shift makes the frozen-coefficient mismatch `O(τ^{3/2})`
+  locally (`G_DDIM`, ADR-0190 AMENDMENT 3). Refining `n_steps` buys less than you
+  would expect from an order-1 method.
+- **Cost is `K^D` node reads per sample** (`4^D` with the default
+  `CubicHermite`). At `D = 5` that is 1024 reads per quadrature node, and there
+  are `5^D = 3125` of them per grid point per step. Budget accordingly, or select
+  `InterpKind::Linear` explicitly if you have *measured* that the interpolation
+  moment floor does not matter for your run — it is what ADR-0190 removed, and it
+  grows linearly in the step count.
+
 ## I want higher-order accuracy
 
 The ζ-ladder kernels raise the spatial order: `Diffusion4thZeta4Chernoff` (order 4),

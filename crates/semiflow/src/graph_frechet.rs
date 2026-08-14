@@ -1,7 +1,7 @@
 //! `graph_expmv_frechet` — VJP gradient via §54.5 augmented Fréchet (ADR-0185).
 //!
 //! Computes `∂J/∂w_k` for `J = Σ_c ⟨dj_c, e^{−tL} u0_c⟩` using the exact
-//! Duhamel integral via 8-point Gauss-Legendre quadrature on [0,1]:
+//! Duhamel integral via 8-point Gauss-Legendre quadrature on `[0, 1]`:
 //!
 //! ```text
 //! ∂J/∂w_k = −t ∫₀¹ ⟨e^{−(1−s)tL} dj, (∂L/∂w_k) e^{−stL} u0⟩ ds

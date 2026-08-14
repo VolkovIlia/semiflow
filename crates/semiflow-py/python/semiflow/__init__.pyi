@@ -1053,7 +1053,9 @@ class Heat2D:
     """2-D heat equation state with unit diffusion (a = 1).
 
     Solves du/dt = d^2u/dx^2 + d^2u/dy^2 on [xmin,xmax] x [ymin,ymax]
-    via palindromic Strang splitting.  Output is flat x-fastest row-major.
+    via palindromic Strang splitting.  Output is flat and x-fastest:
+    ``flat[i + j*nx] = u(x_i, y_j)``, i.e. ``np.ravel(U, order="F")`` for a
+    ``(nx, ny)`` array — NOT numpy's C order.
     """
 
     def __init__(
@@ -1088,7 +1090,8 @@ class Heat2D:
     ) -> NDArray[np.float64]:
         """Evolve u0 (flat, length nx*ny) by n_steps of size tau.
 
-        Returns flat x-fastest row-major array, shape (nx*ny,).
+        Returns a flat x-fastest array of shape ``(nx*ny,)``: ``flat[i + j*nx]``,
+        i.e. ``reshape(nx, ny, order="F")`` to recover the 2-D view.
         Raises SemiflowError on grid mismatch or invalid parameters.
         """
         ...

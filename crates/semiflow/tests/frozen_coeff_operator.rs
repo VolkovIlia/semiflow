@@ -1,5 +1,5 @@
 //! `G_FROZEN_COEFF_*` — which PDE the zeroed-derivative `DiffusionChernoff`
-//! solves, and at what order (ADR-0190 AMENDMENT 1, §9.2.3.C).
+//! solves, and at what order (ADR-0190 AMENDMENT 1, §9.2.3.B.bis).
 //!
 //! `Heat2DVarA`/`Heat3DVarA` build each axis kernel by handing
 //! `DiffusionChernoff::with_closure` a variable `a` together with `a' = 0` and

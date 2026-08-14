@@ -412,7 +412,7 @@ fn build_strang2d(
 
 /// Build a `DiffusionChernoff` with constant-zero drift/reaction from a tabulated `a_vals`.
 ///
-/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0190 AMENDMENT 1, math §9.2.3.C
+/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0190 AMENDMENT 1, math §9.2.3.B.bis
 ///
 /// `DiffusionChernoff` is the zeta-A kernel for the **divergence** form
 /// `d_x(a(x) d_x)` and genuinely consumes `a'`/`a''`, so passing zeros alongside

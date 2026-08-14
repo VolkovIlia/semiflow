@@ -3,7 +3,7 @@
 //! Generic over `F: SemiflowFloat` and `const D: usize` (dimension). Each axis
 //! is an independent [`Grid1D<F>`] with its own boundary policy and interp kind.
 //!
-//! Storage convention (row-major, fastest axis = axis 0):
+//! Storage convention (axis 0 fastest — Fortran order for a `(n₀, …, n_{D-1})` view, NOT numpy's C order):
 //! `idx(k₀, k₁, ..., k_{D-1}) = k_{D-1}·n_{D-2}·…·n₀ + … + k₁·n₀ + k₀`.
 //!
 //! This is the `GridFnND<F, D>` state type used by
@@ -268,7 +268,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
     /// per-axis nodal weights come from [`GridND::interp`] and out-of-range
     /// node indices are resolved through each axis's own
     /// [`crate::grid::BoundaryPolicy`] — the same
-    /// [`crate::boundary::bc_value_by`] resolver the 1-D samplers use, so the
+    /// `crate::boundary::bc_value_by` resolver the 1-D samplers use, so the
     /// two paths cannot disagree about boundary handling.
     ///
     /// Cost is `K^D` node reads per call (`K = 4` for the default

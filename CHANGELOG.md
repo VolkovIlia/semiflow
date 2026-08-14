@@ -52,7 +52,7 @@ All eight issues closed.
   loose norm bounds elsewhere had been masking. New gate `G_THETA_M_TABLE`;
   `expmv_div_form_action_accuracy` improves from 1.1e−15 to 2.2e−16.
 - **`Heat2DVarA` / `Heat3DVarA` claimed order 2 and are order 1**
-  (ADR-0190 AMENDMENT 1, math §9.2.3.C). Their axis kernels freeze `a` at the
+  (ADR-0190 AMENDMENT 1, math §9.2.3.B.bis). Their axis kernels freeze `a` at the
   node, which agrees with `e^{τa∂ₓₓ}` at `O(τ)` and differs at `O(τ²)` by
   `(τ²/2)·a·(a''f'' + 2a'f''')` whenever `a` varies. Measured global order
   **1.007**. Corrected on the ADR-0112 precedent; `DiffusionChernoff::order() == 2`

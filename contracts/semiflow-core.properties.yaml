@@ -8798,7 +8798,7 @@ latency_gates:
       Regime bound ‖τC/2‖ ≤ 10 documented in rustdoc; stiffer reaction
       requires more Chernoff sub-steps (smaller τ).
     gate: "rel-Frobenius error <= 1e-12 for M in {5, 6, 8}"
-    test_file: "tests/g_matrix_pade_m5.rs::g_matrix_pade_m5_accuracy"
+    test_file: "tests/g_matrix_pade_m5.rs::g_matrix_pade_m5"
     feature_gate: "slow-tests"
     introduced_in: v7.0.0
     authority: ADR-0125
@@ -8815,7 +8815,7 @@ latency_gates:
       CHECK B: τ¹ and τ² zero, τ³ nonzero). DISTINCT from KillingChernoff
       (hard absorbing wall, order-1 irreducibly; not changed).
     gate: "OLS self-convergence slope <= −1.95"
-    test_file: "tests/g_killing_order2.rs::g_killing_order2"
+    test_file: "tests/g_killing_order2.rs::g_killing_order2_slope"
     feature_gate: "slow-tests"
     introduced_in: v7.0.0
     authority: ADR-0126
@@ -10179,7 +10179,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — |u - nondiv| = 6.8e-3 vs |u - div| = 7.4e-2 (references separated by 7.8e-2)"
     rationale: |
-      G_FROZEN_COEFF_NONDIV (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.C):
+      G_FROZEN_COEFF_NONDIV (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.B.bis):
       identifies WHICH PDE the zeroed-derivative DiffusionChernoff solves.
       Heat2DVarA/Heat3DVarA build each axis kernel with a' = a'' = 0 alongside a
       variable a; because DiffusionChernoff is the zeta-A discretisation of the
@@ -10207,7 +10207,7 @@ implementation_notes:
     blocks_release: true
     pass_status: "PASS — OLS slope -1.007 over n_steps in {80,160,320,640} vs a 40960-step reference"
     rationale: |
-      G_FROZEN_COEFF_ORDER1 (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.C):
+      G_FROZEN_COEFF_ORDER1 (RELEASE_BLOCKING, ADR-0190 AMENDMENT 1, §9.2.3.B.bis):
       the frozen-coefficient stencil is consistency order 1, not 2, for variable
       a. S(tau)f = f + tau*a*f_xx + (tau^2/2)*a^2*f_xxxx + ... against
       exp(tau*a*d_xx)f = f + tau*a*f_xx + (tau^2/2)*a*(a*f_xx)_xx + ...; the

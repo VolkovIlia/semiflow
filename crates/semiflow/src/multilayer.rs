@@ -21,10 +21,10 @@ use crate::{
     symmetric_operator::SymmetricOperator,
 };
 
-/// One material layer (thickness [m], k [W/(m·K)], `rho_c` [J/(m³·K)]).
+/// One material layer (thickness `[m]`, k `[W/(m·K)]`, `rho_c` `[J/(m³·K)]`).
 #[derive(Debug, Clone, Copy)]
 pub struct Layer<F: SemiflowFloat = f64> {
-    /// Layer thickness [m].
+    /// Layer thickness in metres.
     pub thickness: F,
     /// Thermal conductivity [W/(m·K)].
     pub k: F,
@@ -132,7 +132,7 @@ impl<F: SemiflowFloat> MassWeightedConservativeChernoff<F> {
     /// Build from a `MultilayerStack` (Neumann BCs at both ends).
     ///
     /// # Errors
-    /// Propagates from [`build_faces`] (e.g. k ≤ 0).
+    /// Propagates from `build_faces` (e.g. k ≤ 0).
     pub fn from_stack(stack: &MultilayerStack<F>) -> Result<Self, SemiflowError> {
         let dx = stack.grid.dx();
         let faces = build_faces(&stack.k_nodes, dx, None)?;

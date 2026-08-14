@@ -1,25 +1,39 @@
 //! `G_DDIM` D=3 — d-D anisotropic shift self-convergence slope (`RELEASE_BLOCKING`).
 //!
-//! Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! Gate: successive-difference OLS slope in `[-0.75, -0.45]` — order ½, not 1
+//! (ADR-0112 §Decision 2+3, RE-BASED by ADR-0190 AMENDMENT 3).
 //!
-//! Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
-//! Fixed spatial grid `N_AXIS=8` per axis (8³=512 nodes); reference at `n_ref=512` steps.
-//! Sweep n ∈ {32,64,128,256}: iterate `apply_into` n times with tau=T/n.
-//! Error = sup-norm vs reference on the SAME grid (spatial error is common-mode).
-//! OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! Method: reference-free convergence ladder calling the REAL
+//! `AnisotropicShiftChernoffND::apply_into`. Fixed spatial grid `N_AXIS = 8` per axis (8³ = 512 nodes);
+//! ladder `n ∈ {32, 64, 128, 256, 512}`, each run `apply_into` `n` times with `tau = T/n`.
+//! The fitted quantity is `sup|u_2n − u_n|` over consecutive ladder entries,
+//! which needs no reference run and so cannot be contaminated by one.
 //!
-//! `N_AXIS=8` chosen so grid spacing dx≈1.43 is comparable to the 5-pt GH node displacement,
-//! suppressing the spatial interpolation floor that would otherwise dominate the convergence
-//! signal for finer grids (empirically validated 2026-05-30: `N_AXIS=32` gives slope ≈ −0.67
-//! vs `N_AXIS=8` slope ≈ −1.20; both measured at sweep {32,64,128,256} `N_REF=2048/512`).
-//! Sweep starts at n=32 to skip the pre-asymptotic region.
+//! <details><summary>Superseded pre-ADR-0190 description (kept for provenance)</summary>
 //!
-//! ADR-0112 §Decision 3 specifies `N_AXIS=32` for D=3 in the normative N(D) ladder, but
-//! the empirical measurement confirms `N_AXIS=32` is floor-polluted (slope −0.67, not −1).
-//! The "floor cancels common-mode" argument in the ADR fails in this regime because `u_n` and
-//! `u_ref` accumulate interpolation error at different rates.  `N_AXIS=8` is empirically correct.
-//! FLAG for ai-solutions-architect: ADR-0112 §Decision 3 `N_AXIS(D=3)=32` is empirically wrong;
-//! should be `N_AXIS(D=3)=8`.  See adversarial QA probe 2026-05-30.
+//! > Gate: slope ≤ -0.95 (order-1, ADR-0112 §Decision 2+3).
+//! >
+//! > Method: temporal self-convergence test calling the REAL `AnisotropicShiftChernoffND::apply_into`.
+//! > Fixed spatial grid `N_AXIS=8` per axis (8³=512 nodes); reference at `n_ref=512` steps.
+//! > Sweep n ∈ {32,64,128,256}: iterate `apply_into` n times with tau=T/n.
+//! > Error = sup-norm vs reference on the SAME grid (spatial error is common-mode).
+//! > OLS slope of log(err) vs log(n); gate `assert!(slope.is_finite()` && slope <= -0.95).
+//! >
+//! > `N_AXIS=8` chosen so grid spacing dx≈1.43 is comparable to the 5-pt GH node displacement,
+//! > suppressing the spatial interpolation floor that would otherwise dominate the convergence
+//! > signal for finer grids (empirically validated 2026-05-30: `N_AXIS=32` gives slope ≈ −0.67
+//! > vs `N_AXIS=8` slope ≈ −1.20; both measured at sweep {32,64,128,256} `N_REF=2048/512`).
+//! > Sweep starts at n=32 to skip the pre-asymptotic region.
+//! >
+//! > ADR-0112 §Decision 3 specifies `N_AXIS=32` for D=3 in the normative N(D) ladder, but
+//! > the empirical measurement confirms `N_AXIS=32` is floor-polluted (slope −0.67, not −1).
+//! > The "floor cancels common-mode" argument in the ADR fails in this regime because `u_n` and
+//! > `u_ref` accumulate interpolation error at different rates.  `N_AXIS=8` is empirically correct.
+//! > FLAG for ai-solutions-architect: ADR-0112 §Decision 3 `N_AXIS(D=3)=32` is empirically wrong;
+//! > should be `N_AXIS(D=3)=8`.  See adversarial QA probe 2026-05-30.
+//! >
+//!
+//! </details>
 //!
 //! ## Estimator re-based (ADR-0190 AMENDMENT 3, 2026-08-14)
 //!

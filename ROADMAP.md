@@ -38,7 +38,7 @@ grid resolutions. Left failing; needs an architect decision on `order()`, on the
 threshold, and on whether `shift_nd_zeta2` lifts it. See "Open" in CHANGELOG.
 
 **RESOLVED — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (ADR-0190 AMENDMENT 1,
-math §9.2.3.C).** Zeroing the closures looked like a bug, and the earlier
+math §9.2.3.B.bis).** Zeroing the closures looked like a bug, and the earlier
 self-convergence A/B could not discriminate because both candidates sit at the
 `O(τ¹)` ceiling. The missing analytic oracle was built: both candidate
 generators assembled densely and exponentiated, `7.8e−2` apart, with the zeroed
