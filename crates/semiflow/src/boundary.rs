@@ -412,10 +412,30 @@ pub(crate) fn bc_value_by<F: SemiflowFloat, G: Fn(usize) -> F>(
     idx: i64,
     dx: F,
 ) -> F {
+    bc_value_from_hit(bc_index(boundary, n, idx), boundary, get, n, dx)
+}
+
+/// The value half of [`bc_value_by`], with the index resolution already done.
+///
+/// Split out so a caller that resolves the same `(boundary, n, idx)` many times
+/// can call [`bc_index`] once and reuse the hit. `GridFnND::sample` does: its
+/// recursion re-visits each axis's stencil `K^(D-1)` times, so at `D = 5` the
+/// unsplit form performed 1364 index resolutions per sample against 20 here
+/// (ADR-0190 AMENDMENT 4).
+///
+/// The arithmetic is byte-for-byte the arithmetic that was inline in
+/// `bc_value_by`, in the same order, so results are bit-identical.
+pub(crate) fn bc_value_from_hit<F: SemiflowFloat, G: Fn(usize) -> F>(
+    hit: BoundaryHit<F>,
+    boundary: BoundaryPolicy<F>,
+    get: G,
+    n: usize,
+    dx: F,
+) -> F {
     let half = crate::float::half::<F>();
     let three = F::from(3.0_f64).unwrap_or_else(F::zero);
     let four = F::from(4.0_f64).unwrap_or_else(F::zero);
-    match bc_index(boundary, n, idx) {
+    match hit {
         BoundaryHit::Inside(i) => get(i),
         BoundaryHit::Zero => F::zero(),
         BoundaryHit::Dirichlet(v) => v,

@@ -8527,9 +8527,13 @@ within the order-1 self-convergence band.
 > $K^D$ nodes ($4^4 = 256$ at $D=4$ against multilinear's $16$), which pushed the
 > $D=4$ gate to **8105 s** and $D=5$ to an extrapolated $\approx 85$ h. The
 > reference-free ladder needs far fewer steps — $D=4$: $\{8,16,32,64\}$ (120 steps
-> against 752); $D=5$: $\{4,8,16,32\}$ — and $D=5$ additionally drops one node per
-> axis, $N_{\text{AXIS}}: 6 \to 5$. That last change is a genuine weakening of the
-> $D=5$ spatial datum.
+> against 752); $D=5$: $\{4,8,16,32\}$. Dropping one node per axis at $D=5$
+> ($N_{\text{AXIS}}: 6 \to 5$) was tried as well and **reverted**: the gate
+> rejected it at slope $-0.3595$, and a $D=2$ probe showed the coarse grid
+> contaminates the successive differences at *every* ladder position
+> ($-0.334 \ldots -0.443$ against a stable $-0.446 \ldots -0.468$ at
+> $N_{\text{AXIS}} = 8$). The spatial datum is what this estimator cannot trade
+> away; the runtime was bought in the sampler instead (ADR-0190 AMENDMENT 4).
 
 **G_DDIM (RELEASE_BLOCKING — d-D anisotropic shift convergence slope, per-D sweeps)**:
 

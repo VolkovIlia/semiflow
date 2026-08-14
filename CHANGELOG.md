@@ -192,6 +192,21 @@ All eight issues closed.
   bit-for-bit. The path is now **faster than before the campaign**: Path 2
   50.7 ms → 34.2 ms, Path 1 123.8 ms → 110.4 ms, speedup 2.4× → 3.2× against the
   same `0e6d25b` baseline re-measured on the same machine.
+- **`GridFnND::sample` resolves each axis's boundary policy once per sample**
+  (ADR-0190 AMENDMENT 4). It used to resolve inside the collapse recursion, which
+  re-visits axis `d` once per combination of the axes above it: `1364` `bc_index`
+  calls per sample at `D=5, K=4`, of which `20` are distinct. `bc_value_by` is
+  split into `bc_index` + `bc_value_from_hit`; `AxisStencil` carries the resolved
+  hits and the axis stride. Arithmetic and summation order untouched, so results
+  are bit-identical — `G_DDIM D=2`/`D=3` return exactly `−0.4676`/`−0.4766` and
+  `D=4`'s successive differences match digit for digit.
+  It bought **1.32×** (`D=4`: 1081 s → 820 s), not the 5× expected: the dominant
+  cost is the recursion itself, not the policy resolution that was removed. That
+  is enough to restore `D=5`'s `N_AXIS = 6` datum, which AMENDMENT 3 had lowered
+  to 5 and which the gate rejected at slope `−0.3595`. A `D=2` probe showed why:
+  on an adequate grid the slope is stable at every ladder position
+  (`−0.446…−0.468`), on the coarse one it reads shallow everywhere
+  (`−0.334…−0.443`) — the grid was contaminating the differences, not the ladder.
 - `general_operator` uses the shared `expmv::select_s_m` again, now that the θ
   table it was avoiding is correct; its own derived criterion is deleted.
 
@@ -211,8 +226,8 @@ All eight issues closed.
   errors 10× larger; the ND sampler fix made the order legible.
   The ladder is also re-sized: `K^D` sampling had pushed `D=4` to **8105 s** and
   `D=5` to an extrapolated ~85 h. `D=4` now runs `{8,16,32,64}` (120 steps against
-  752), and `D=5` runs `{4,8,16,32}` and drops one node per axis
-  (`N_AXIS 6 → 5`) — a real weakening of the `D=5` spatial datum, stated as such.
+  752) and `D=5` runs `{4,8,16,32}`. Dropping a node per axis at `D=5` was tried
+  and **reverted** — see the sampler entry below.
 
 ### Open
 
@@ -228,14 +243,26 @@ All eight issues closed.
   `u32`, and the ND anisotropic shift is order ½. `order()` is left at 1 with the
   honest statement in the gate, the ADR and math §32.5; truncating to 0 would
   change adaptive step control.
-- **`GridFnND::sample` costs ~16–21 ns per node read**, because `collapse`
-  recurses per axis through a closure and resolves every node through
-  `bc_value_by`. With `K^D` reads per sample that dominates the `D ≥ 4` gates —
-  `G_DDIM D=4` measured 8105 s before the ladder was re-sized, and `D=5` had to
-  drop a node per axis to stay runnable. For the index-mapping boundary policies
-  the per-axis stencils could be folded into flat offsets once and summed in a
-  strided loop; several times faster, and it would give `D=5` its `N_AXIS = 6`
-  datum back.
+- **`GridFnND::sample` is still recursion-bound.** Hoisting the boundary
+  resolution out of the collapse recursion (AMENDMENT 4) bought 1.32×, enough to
+  restore `D=5`'s datum but not enough to make the `D ≥ 4` gates comfortable —
+  `D=5` costs ≈ 4.3 h against a 6 h runner limit. The remaining cost is the
+  recursion itself: one closure call per stencil node per level plus `K^D` leaf
+  reads. Expanding the tensor stencil into `K^D` flat (offset, weight) pairs and
+  summing them in one loop removes it, but **changes the summation order**, so
+  every N-D gate's numbers move at ULP level and all of them need re-verification.
+  Deliberately not done in the same release as the correctness fix.
+- **`cargo clippy --features slow-tests` has a pre-existing backlog.** CI's gate
+  is `cargo clippy --workspace --all-targets -- -D warnings`, which is clean;
+  the `slow-tests`-gated integration tests are outside that surface and were
+  never linted. A pass over them found ~100 findings in ~10 files, mostly
+  `doc_markdown` / `similar_names` / `cast_*` on math prose, plus a handful of
+  real ones (`RangeInclusive::contains`, `vec![]` over push-after-new,
+  `#[ignore]` without reason). Blanket-allowing twelve lints per file was tried
+  and reverted: it suppresses rather than fixes, and it collided with the
+  targeted allows those files already carry. Either lint them properly or add
+  the feature to CI's clippy invocation — not both halfway.
+
 - **Boundary selection is absent from the C and WASM surfaces entirely**
   (ADR-0190 AMENDMENT 2). Every FFI constructor hard-codes
   `BoundaryPolicy::Reflect` and `semiflow-wasm` never calls `with_boundary` at

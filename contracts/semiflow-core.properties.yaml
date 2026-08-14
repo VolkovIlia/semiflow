@@ -6765,7 +6765,7 @@ properties:
   - name: G_DDIM
     cases: 4
     severity: RELEASE_BLOCKING
-    gate: "successive-difference OLS slope of sup|u_2n - u_n| finite AND in [-0.75, -0.45] at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,5}; ladder {32,64,128,256,512} (d=2,3) / {8,16,32,64} (d=4) / {4,8,16,32} (d=5) (order-1/2; ADR-0112 + AMENDMENT 1, RE-BASED by ADR-0190 AMENDMENT 3)"
+    gate: "successive-difference OLS slope of sup|u_2n - u_n| finite AND in [-0.75, -0.45] at T = 0.5 for d ∈ {2,3,4,5} on COARSE grid N_AXIS={8,8,8,6}; ladder {32,64,128,256,512} (d=2,3) / {8,16,32,64} (d=4) / {4,8,16,32} (d=5) (order-1/2; ADR-0112 + AMENDMENT 1, RE-BASED by ADR-0190 AMENDMENT 3)"
     purpose: |
       G_DDIM (d-D anisotropic shift Chernoff convergence — math.md §32.5,
       ADR-0081, CORRECTED by ADR-0112):
@@ -6821,8 +6821,12 @@ properties:
           the kernel accurate enough for its order to be legible.
         - LADDER RE-SIZED for runnability. K^D sampling pushed D=4 to 8105 s and
           D=5 to an extrapolated ~85 h. D=4 now runs {8,16,32,64} (120 steps
-          against 752); D=5 runs {4,8,16,32} AND drops one node per axis
-          (N_AXIS 6 -> 5), which is a genuine weakening of the D=5 spatial datum.
+          against 752); D=5 runs {4,8,16,32}. Dropping a node per axis at D=5
+          (N_AXIS 6 -> 5) was tried and REVERTED — the gate rejected it at
+          -0.3595, and a D=2 probe showed the coarse grid contaminates the
+          differences at every ladder position. Runtime was bought in the
+          sampler instead (ADR-0190 AMENDMENT 4): boundary resolution hoisted
+          out of the collapse recursion, bit-identical, 1.32x.
 
       Resolution ladder N_AXIS(D) / n_ref(D) / n-sweep (NORMATIVE; math §32.5;
       matches the test files verbatim, verified 2026-05-30):

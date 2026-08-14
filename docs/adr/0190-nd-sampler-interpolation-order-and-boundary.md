@@ -461,6 +461,62 @@ The gate is left **failing** so the decision is visible. `ADR-0112 §Decision 3`
 test's own header, are both downstream of the same contaminated measurement and
 should be revisited in the same pass.
 
+## AMENDMENT 4 (2026-08-14) — hoisting the boundary resolution out of the N-D sampler
+
+AMENDMENT 3 lowered the `D = 5` gate's grid from `N_AXIS = 6` to `5` to buy back
+the `K^D` sampling cost this ADR introduced. That was wrong, and the gate said
+so: it failed at slope `−0.3595` against a `−0.45` threshold.
+
+### Why the coarser grid failed
+
+A `D = 2` probe — 1.3 s, against the 3 h the `D = 5` run costs — separates the
+two candidate explanations. Successive-difference slope by ladder position:
+
+| grid | {4,8,16,32} | {8,16,32,64} | {16,32,64,128} | {32,…,256} | {32,…,512} |
+|---|---|---|---|---|---|
+| `N_AXIS = 8` | −0.4532 | −0.4459 | −0.4531 | −0.4631 | −0.4676 |
+| `N_AXIS = 5` | −0.3337 | −0.3749 | −0.4086 | −0.4341 | −0.4431 |
+
+On an adequate grid the slope is stable at every ladder position. On the coarse
+one it reads shallow *everywhere* and only creeps toward the right answer as the
+ladder rises. So the shallow reading is the **grid** contaminating the
+differences, not pre-asymptotic ladder placement — the spatial datum is exactly
+what a successive-difference estimator cannot afford to trade away. `D = 5` is
+restored to `N_AXIS = 6`.
+
+### Where the time actually went
+
+`GridFnND::sample` resolves each axis's boundary policy *inside* the collapse
+recursion, and the recursion re-visits axis `d` once per combination of the axes
+above it. At `D = 5, K = 4` that is `4 + 16 + 64 + 256 + 1024 = 1364` `bc_index`
+calls per sample, of which only `5 × 4 = 20` are distinct.
+
+`bc_value_by` is now split into `bc_index` + `bc_value_from_hit`, and
+`AxisStencil` carries the resolved `BoundaryHit`s and the axis stride, computed
+once per sample. The arithmetic and the summation order are untouched, so the
+result is bit-identical — confirmed: `G_DDIM D = 2` and `D = 3` return exactly
+`−0.4676` and `−0.4766`, and `D = 4`'s three successive differences
+(`2.0218e−3 / 1.4595e−3 / 1.0512e−3`) match digit for digit.
+
+### The honest part: it bought 1.32×, not 5×
+
+`D = 4` went 1081 s → 820 s. The mechanism was correctly identified but its
+*weight* was over-estimated: the dominant cost is the recursion itself — one
+closure call per stencil node per level, plus `K^D` leaf reads — not the policy
+resolution that was removed.
+
+`D = 5` at the restored `N_AXIS = 6` therefore costs ≈ 4.3 h (extrapolated from
+the measured `D = 4`: ×1.9 grid points, ×5 quadrature nodes, ×4 reads per
+sample, ×0.5 steps). That fits a 6 h runner, without much margin.
+
+Going faster means expanding the tensor stencil into `K^D` flat
+(offset, weight) pairs and summing them in one loop, which removes the recursion
+entirely. It also **changes the summation order**, so every N-D gate's numbers
+move at ULP level and all of them need re-verification. That is a deliberate
+non-goal here: this ADR is a correctness change, and re-baselining the whole N-D
+gate set on top of it would make the two indistinguishable if something went
+wrong.
+
 ## Honest limits
 
 - `SepticHermite` / `OctonicHermite` / `ChebyshevSpectralWithBC` are unavailable

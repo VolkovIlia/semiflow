@@ -5,7 +5,6 @@
 //!
 //! Storage convention (axis 0 fastest — Fortran order for a `(n₀, …, n_{D-1})` view, NOT numpy's C order):
 //! `idx(k₀, k₁, ..., k_{D-1}) = k_{D-1}·n_{D-2}·…·n₀ + … + k₁·n₀ + k₀`.
-//!
 //! This is the `GridFnND<F, D>` state type used by
 //! [`crate::shift_nd::AnisotropicShiftChernoffND<F, D>`] (math.md §32,
 //! ADR-0081) and [`crate::hormander::HypoellipticChernoff`] (future generic).
@@ -17,13 +16,12 @@
 //! axis's own [`crate::grid::BoundaryPolicy`]. Until ADR-0190 it hard-coded
 //! multilinear interpolation with an index clamp; because every Chernoff step
 //! resamples at off-grid quadrature feet, that injected ≈ `dx²/6` of spurious
-//! second moment **per step**, accumulating linearly in the step count. See
-//! math.md §32.7.
+//! second moment **per step**, growing linearly in the step count (math §32.7).
 
 use alloc::vec::Vec;
 
 use crate::{
-    boundary::bc_value_by,
+    boundary::{bc_index, bc_value_from_hit, BoundaryHit},
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     grid::{Grid1D, InterpKind},
@@ -39,10 +37,7 @@ use crate::{
 ///
 /// Each axis is a [`Grid1D<F>`] with independent geometry, boundary policy,
 /// and interpolation kind. Dimension `D` is a const generic parameter.
-///
-/// ## Storage convention
-///
-/// Values are stored row-major with axis 0 fastest:
+/// Values are stored axis-0-fastest:
 /// `flat_idx = k_{D-1}·n_{D-2}·…·n₀ + … + k₁·n₀ + k₀`.
 ///
 /// # Example
@@ -63,13 +58,13 @@ pub struct GridND<F: SemiflowFloat = f64, const D: usize = 2> {
     pub axes: [Grid1D<F>; D],
     /// Tensor-product interpolation kind used by [`GridFnND::sample`].
     ///
-    /// Default [`InterpKind::CubicHermite`] (ADR-0190). This is a single
-    /// grid-level knob rather than a per-axis one because `Grid1D::new`
-    /// already stamps every axis with `SepticHermite`, leaving no way to tell
-    /// a deliberate choice from an inherited default. `CubicHermite` removes
-    /// the accumulated per-step interpolation variance entirely at `4^D`
-    /// nodes per sample; `SepticHermite` would cost `8^D` for no measurable
-    /// gain on that failure mode and is not implemented for `D > 1`.
+    /// Default [`InterpKind::CubicHermite`] (ADR-0190). A single grid-level
+    /// knob rather than a per-axis one because `Grid1D::new` already stamps
+    /// every axis with `SepticHermite`, leaving no way to tell a deliberate
+    /// choice from an inherited default. `CubicHermite` removes the accumulated
+    /// per-step interpolation variance at `4^D` nodes per sample; `SepticHermite`
+    /// would cost `8^D` for no gain on that failure mode, and is not implemented
+    /// for `D > 1`.
     pub interp: InterpKind,
 }
 
@@ -105,8 +100,8 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
     ///
     /// Only [`InterpKind::CubicHermite`] and [`InterpKind::Linear`] are
     /// implemented for `D > 1`; the others make [`GridFnND::sample`] return
-    /// [`SemiflowError::Unsupported`]. `Linear` additionally requires the
-    /// `linear-interp` feature, matching the 1-D contract.
+    /// [`SemiflowError::Unsupported`]. `Linear` needs the `linear-interp`
+    /// feature, matching the 1-D contract.
     #[must_use]
     pub fn with_interp(mut self, interp: InterpKind) -> Self {
         self.interp = interp;
@@ -175,27 +170,32 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
 // AxisStencil — one axis's contribution to a tensor-product sample (ADR-0190)
 // ---------------------------------------------------------------------------
 
-/// Per-axis interpolation stencil: cell index, node offsets and nodal weights.
+/// Per-axis interpolation stencil, fully resolved once per sample.
+///
+/// `hits`/`stride` are hoisted out of the collapse recursion (ADR-0190 AM 4):
+/// the recursion re-visits axis `d` once per combination of the axes above it,
+/// so resolving the policy inside it cost 1364 [`bc_index`] calls per sample at
+/// `D = 5` against the 20 that are distinct.
 #[derive(Clone, Copy)]
 struct AxisStencil<F: SemiflowFloat> {
-    /// `floor((x − xmin)/dx)`; offsets are relative to this. May be out of range.
-    idx: i64,
-    /// Number of meaningful entries in `offsets` / `weights`.
+    /// Number of meaningful entries in `weights` / `hits`.
     k: usize,
-    /// Node offsets relative to `idx`.
-    offsets: [i64; K_MAX],
     /// Nodal weights; `Σ weights[..k] == 1`.
     weights: [F; K_MAX],
+    /// Boundary resolution of each stencil node, computed once.
+    hits: [BoundaryHit<F>; K_MAX],
+    /// Flat-index stride of this axis: `Π_{e<d} n_e`.
+    stride: usize,
 }
 
 impl<F: SemiflowFloat> AxisStencil<F> {
     /// Placeholder used to initialise the per-axis plan array before filling it.
     fn zeroed() -> Self {
         Self {
-            idx: 0,
             k: 1,
-            offsets: [0; K_MAX],
             weights: [F::zero(); K_MAX],
+            hits: [BoundaryHit::Inside(0); K_MAX],
+            stride: 1,
         }
     }
 }
@@ -300,7 +300,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
         Ok(self.collapse(D, &plan, 0))
     }
 
-    /// Node offsets/weights and the cell index for axis `d` at coordinate `xd`.
+    /// Weights, resolved boundary hits and stride for axis `d` at coordinate `xd`.
     fn axis_stencil(&self, d: usize, xd: F) -> Result<AxisStencil<F>, SemiflowError> {
         let ax = &self.grid.axes[d];
         let t_frac = (xd - ax.xmin) / ax.dx();
@@ -308,38 +308,40 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
         #[allow(clippy::cast_possible_truncation)]
         let idx = t_floor.to_f64().unwrap_or(0.0) as i64;
         let (k, offsets, weights) = interp_stencil::<F>(self.grid.interp, t_frac - t_floor)?;
+        let mut hits = [BoundaryHit::Inside(0); K_MAX];
+        for (j, hit) in hits.iter_mut().enumerate().take(k) {
+            *hit = bc_index(ax.boundary, ax.n, idx + offsets[j]);
+        }
         Ok(AxisStencil {
-            idx,
             k,
-            offsets,
             weights,
+            hits,
+            stride: self.axis_stride(d),
         })
     }
 
     /// Interpolate the `remaining` fastest axes (`0..remaining`), with every
     /// axis at or above `remaining` already pinned into `flat_hi`; `remaining
-    /// == 0` is the base case. The depth counts *axes still to resolve* rather
-    /// than the current axis index so the recursion terminates on `usize`.
+    /// == 0` is the base case. The depth counts *axes still to resolve* so the
+    /// recursion terminates on `usize`.
     ///
-    /// Each axis is resolved by [`bc_value_by`], so an out-of-range stencil node
-    /// folds through that axis's own [`crate::grid::BoundaryPolicy`] — including
-    /// the affine policies (`LinearExtrapolate`, `Dirichlet`, `Robin`), which a
-    /// flat index map could not express.
+    /// Out-of-range stencil nodes fold through each axis's own
+    /// [`crate::grid::BoundaryPolicy`] — including the affine ones
+    /// (`LinearExtrapolate`, `Dirichlet`, `Robin`), which a flat index map could
+    /// not express — via the hit resolved in [`Self::axis_stencil`].
     fn collapse(&self, remaining: usize, plan: &[AxisStencil<F>; D], flat_hi: usize) -> F {
         let Some(d) = remaining.checked_sub(1) else {
             return self.values[flat_hi];
         };
         let ax = &self.grid.axes[d];
-        let stride = self.axis_stride(d);
         let st = &plan[d];
         let mut acc = F::zero();
         for j in 0..st.k {
-            let node_idx = st.idx + st.offsets[j];
-            let v = bc_value_by(
+            let v = bc_value_from_hit(
+                st.hits[j],
                 ax.boundary,
-                |i| self.collapse(d, plan, flat_hi + i * stride),
+                |i| self.collapse(d, plan, flat_hi + i * st.stride),
                 ax.n,
-                node_idx,
                 ax.dx(),
             );
             acc += st.weights[j] * v;

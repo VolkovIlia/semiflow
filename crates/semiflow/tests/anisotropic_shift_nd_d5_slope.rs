@@ -59,16 +59,17 @@ use semiflow::{
 };
 
 const T: f64 = 0.5;
-/// Per-axis nodes. Lowered 6 -> 5 with the ADR-0190 AMENDMENT 3 re-basing.
+/// Per-axis nodes. Held at the normative 6 (ADR-0190 AMENDMENT 3 + 4).
 ///
-/// ADR-0190 made `GridFnND::sample` a genuine tensor-product interpolant, so a
-/// sample reads `4^D = 1024` nodes at `D = 5` against multilinear's `2^D = 32`.
-/// Together with the `5^D = 3125` Gauss-Hermite nodes that is `3.2e6` node reads
-/// per grid point per step: the old `N_AXIS = 6`, `n_ref = 512` configuration
-/// measured **8105 s at D = 4** and extrapolates to ~85 h at D = 5 — past any
-/// runner limit. `6^5 = 7776 -> 5^5 = 3125` grid points is 2.5x, and the shorter
-/// reference-free ladder another 12x.
-const N_AXIS: usize = 5;
+/// Lowering it to 5 was tried, to buy back the `K^D` sampling cost ADR-0190
+/// introduced, and it FAILED the gate at slope -0.3595. A D=2 probe isolated
+/// why: at `N_AXIS = 8` the successive-difference slope is stable at
+/// -0.446 .. -0.468 across every ladder position, while at `N_AXIS = 5` it
+/// drifts -0.334 -> -0.443 as the ladder rises. The shallow reading is the
+/// coarse grid contaminating the differences, not a ladder artefact — so the
+/// spatial datum is exactly what this estimator cannot afford to trade away.
+/// The runtime was bought back in the sampler instead (AMENDMENT 4).
+const N_AXIS: usize = 6;
 /// Reference-free ladder: the OLS slope of `sup|u_2n - u_n|` over these `n`.
 const N_LADDER: [u32; 4] = [4, 8, 16, 32];
 const SLOPE_GATE: f64 = -0.45;
