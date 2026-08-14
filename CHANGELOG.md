@@ -6,6 +6,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0-beta] — 2026-08-14
+
 Issue campaign #17 / #19 / #21–#26.
 
 Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24, #25.
@@ -193,26 +195,47 @@ All eight issues closed.
 - `general_operator` uses the shared `expmv::select_s_m` again, now that the θ
   table it was avoiding is correct; its own derived criterion is deleted.
 
+- **`G_DDIM` re-based: its estimator was contaminated and the kernel is order ½**
+  (ADR-0190 AMENDMENT 3, `Gate-Change-Approved-By: VolkovIlia`). The gate compared
+  each swept `n` against a single reference at `n_ref = 512` — only twice the
+  largest swept `n`, so the last point measured the reference's own error.
+  Holding the sweep and raising `n_ref` to 1024/2048/4096/8192 walked the reported
+  slope from −0.92 to −0.54; a converged estimator would have been flat. It now
+  fits the OLS slope of the reference-free successive differences
+  `sup|u_2n − u_n|`, whose ratio settles on **√2** across `n ∈ [32, 16384]` and
+  `N_AXIS ∈ {8, 16, 32}`: the global temporal order on the normative variable-`A`
+  datum is **½**, from the `√τ` inside the Gauss–Hermite shift. Threshold
+  `−0.95 → −0.45`, now two-sided (a `−0.75` ceiling fails loudly if the kernel
+  ever gains an order). Measured after re-basing: D=2 −0.4676, D=3 −0.4766.
+  Not a regression — the same probe on `0e6d25b` shows no clean power law and
+  errors 10× larger; the ND sampler fix made the order legible.
+  The ladder is also re-sized: `K^D` sampling had pushed `D=4` to **8105 s** and
+  `D=5` to an extrapolated ~85 h. `D=4` now runs `{8,16,32,64}` (120 steps against
+  752), and `D=5` runs `{4,8,16,32}` and drops one node per axis
+  (`N_AXIS 6 → 5`) — a real weakening of the `D=5` spatial datum, stated as such.
+
 ### Open
 
-- **`G_DDIM D=2` fails at slope −0.9249 (gate ≤ −0.95), and its estimator was
-  never sound** (ADR-0190 AMENDMENT 3). The gate is a self-convergence test whose
-  reference sits at `n_ref = 512` against a sweep reaching `n = 256` — only 2×
-  finer, so the last point measures the reference's own error. Holding the sweep
-  and raising `n_ref` to 1024 / 2048 / 4096 / 8192 walks the slope to
-  −0.72 / −0.63 / −0.57 / −0.54. Reference-free successive differences
-  `sup|u_{2n} − u_n|` settle on a ratio of **√2** across `n ∈ [32, 16384]` and
-  `N_AXIS ∈ {8, 16, 32}`: the kernel's global temporal order on its own normative
-  variable-`A` datum is **½**, not 1. The mechanism is the `√τ` inside the
-  Gauss–Hermite shift — freezing `A` at the node costs `A′·2√(aτ)η`, i.e. local
-  `O(τ^{3/2})`. Not a regression: the same probe on `0e6d25b` gives no clean
-  power law at all and errors 10× larger; the ND sampler fix made the kernel
-  accurate enough for its order to be legible. Left failing, because resolving it
-  means (a) deciding what `order()` should return when the answer is ½ and the
-  trait returns `u32`, (b) re-baselining a `RELEASE_BLOCKING` threshold, which
-  the gate-integrity rule reserves for the architect, and (c) first measuring
-  whether `shift_nd_zeta2`'s ζ² correction lifts the global order, with an
-  estimator that is not contaminated.
+- **`shift_nd_zeta2`'s ζ² correction may lift the ND kernel's global order to 1.**
+  `G_DDIM` was re-based this release after its estimator was found contaminated,
+  and the kernel's true order measured at **½** (ADR-0190 AMENDMENT 3). The ζ²
+  correction exists to lift exactly this kernel, and `G_AS_ZETA2_TAU2` already
+  confirms its magnitude scales as a genuine `O(τ²)` — but whether that makes the
+  *global* order 1 has never been measured with an uncontaminated estimator. If
+  it does, `AnisotropicShiftChernoffND::order() == 1` becomes earned rather than
+  inherited, and `G_DDIM`'s two-sided band will fail loudly to say so.
+- **`ChernoffFunction::order()` cannot express a fractional order.** It returns
+  `u32`, and the ND anisotropic shift is order ½. `order()` is left at 1 with the
+  honest statement in the gate, the ADR and math §32.5; truncating to 0 would
+  change adaptive step control.
+- **`GridFnND::sample` costs ~16–21 ns per node read**, because `collapse`
+  recurses per axis through a closure and resolves every node through
+  `bc_value_by`. With `K^D` reads per sample that dominates the `D ≥ 4` gates —
+  `G_DDIM D=4` measured 8105 s before the ladder was re-sized, and `D=5` had to
+  drop a node per axis to stay runnable. For the index-mapping boundary policies
+  the per-axis stencils could be folded into flat offsets once and summed in a
+  strided loop; several times faster, and it would give `D=5` its `N_AXIS = 6`
+  datum back.
 - **Boundary selection is absent from the C and WASM surfaces entirely**
   (ADR-0190 AMENDMENT 2). Every FFI constructor hard-codes
   `BoundaryPolicy::Reflect` and `semiflow-wasm` never calls `with_boundary` at
