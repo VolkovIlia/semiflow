@@ -167,7 +167,21 @@ fn g_ddim_d4_slope() {
     // Reference-free: successive differences over the ladder. `d_k = sup|u_2n - u_n|`
     // scales as `C * n^-p` for a scheme of order `p`, with no reference run to
     // contaminate the fit (ADR-0190 AMENDMENT 3).
-    let us: Vec<_> = N_LADDER.iter().map(|&n| run_steps(&kernel, n)).collect();
+    // Progress is printed per ladder entry: at D >= 4 this gate runs for hours,
+    // and a run that emits nothing until it is finished cannot be distinguished
+    // from a hung one (ADR-0191 AMENDMENT 4).
+    let t_start = std::time::Instant::now();
+    let us: Vec<_> = N_LADDER
+        .iter()
+        .map(|&n| {
+            let u = run_steps(&kernel, n);
+            println!(
+                "G_DDIM D=4: ladder n={n} done  (+{:.0} s cumulative)",
+                t_start.elapsed().as_secs_f64()
+            );
+            u
+        })
+        .collect();
     let diffs: Vec<f64> = (0..N_LADDER.len() - 1)
         .map(|k| sup_diff(&us[k], &us[k + 1]))
         .collect();

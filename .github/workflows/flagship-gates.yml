@@ -100,21 +100,23 @@ jobs:
   # These are #![cfg(feature="slow-tests")] at file level; no #[ignore].
   # ---------------------------------------------------------------------------
   anisotropic-ddim-gates:
-    name: d-D anisotropic slope gates (G_DDIM D=2-5)
+    name: d-D anisotropic slope gates (G_DDIM D=2-4)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run G_DDIM gates (D=2, D=3, D=4, D=5)
+      # D=5 is NOT here — it runs in nightly.yml. `K^D` sampling (ADR-0191)
+      # makes it a ~4.9 h single test at the normative `N_AXIS = 6`, which is
+      # most of a 6 h runner budget for one gate. D=2..4 together run in ~20 min.
+      - name: Run G_DDIM gates (D=2, D=3, D=4)
         run: |
           RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test anisotropic_shift_nd_d2_slope \
             --test anisotropic_shift_nd_d3_slope \
             --test anisotropic_shift_nd_d4_slope \
-            --test anisotropic_shift_nd_d5_slope \
             --no-fail-fast -- --nocapture
 
   # ---------------------------------------------------------------------------
