@@ -240,9 +240,9 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for AnisotropicShiftA
         let ns: [usize; D] = core::array::from_fn(|d| grid.axes[d].n);
         let total = src.values.len();
         let two_sqrt_tau = from_f64::<F>(2.0) * tau.sqrt();
-        #[allow(clippy::cast_precision_loss)]
-        let inv_pi_dhalf =
-            from_f64::<F>(core::f64::consts::PI).powf(from_f64::<F>(-(D as f64) / 2.0));
+        // Not `powf`: this normalisation multiplies every output, and `pow` is
+        // not correctly rounded (ADR-0191 AMENDMENT 5).
+        let inv_pi_dhalf = crate::float::inv_pi_pow_half::<F>(D);
 
         for flat in 0..total {
             let xk = flat_to_x::<F, D>(flat, &ns, grid);
