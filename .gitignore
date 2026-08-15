@@ -99,6 +99,10 @@ Thumbs.db
 
 # Rust / Cargo
 target/
+# Alternate target dirs: docs/release-process.md tells you to run the heavy
+# gates with CARGO_TARGET_DIR=target-flagship so they don't invalidate the
+# incremental `target/` cache. Same for any other ad-hoc split (target-ddim, …).
+target-*/
 
 # Local AI/dev tooling (not part of the public release)
 deadlion-studio/
