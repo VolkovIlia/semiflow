@@ -6,7 +6,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.13.0-beta] — 2026-08-14
+## [0.13.0-beta] — 2026-08-15
 
 Issue campaign #17 / #19 / #21–#26.
 
