@@ -476,12 +476,43 @@ is odd, one reciprocal. Multiplication, division and `sqrt` are correctly
 rounded by IEEE-754 §5.4.1 and §5.4.2 on every conforming platform, so the
 result is bit-identical everywhere by specification rather than by luck.
 
-Measured against the old expression: `D = 2, 4, 6` are bit-identical, `D = 3, 5`
-differ by 1 ULP in favour of the exactly rounded value. The parity golden is a
-`D = 6` vector and is therefore unchanged and still valid. The same substitution
-is applied at `shift_nd.rs:404` (`AnisotropicShiftChernoffND`, the kernel behind
-every `G_DDIM` gate) and at the `smolyak.rs:300` construction-time weight-sum
-validation.
+Measured against the old expression on this host (glibc x86-64), with the
+correctly rounded reference computed at 60 decimal digits:
+
+| `D` | old `powf` vs exact | new chain vs exact | old vs new |
+|-----|---------------------|--------------------|------------|
+| 2 | 0 ULP | 0 ULP | identical |
+| 3 | 0 ULP | +1 ULP | 1 ULP |
+| 4 | 0 ULP | 0 ULP | identical |
+| 5 | 0 ULP | +1 ULP | 1 ULP |
+| 6 | +1 ULP | +1 ULP | identical |
+
+**This substitution is not an accuracy improvement, and must not be described as
+one.** On this host `pow` happened to return the correctly rounded result for
+`D = 3, 5` and the multiplication chain is 1 ULP above it; at `D = 6` both are
+1 ULP above it. What changes is *which* value you get: the chain returns the
+same bits on every conforming platform because each of its operations is
+correctly rounded by IEEE-754 §5.4.1/§5.4.2, whereas `pow` returns whatever the
+local libm returns — correctly rounded here, 1 ULP off on the failing runner.
+Determinism is the deliverable; at ±1 ULP the accuracy is a wash. Any future
+claim that one is "more accurate" than the other needs a per-`D`, per-platform
+measurement of exactly this kind, not an appeal to operation count.
+
+The parity golden is a `D = 6` vector, where old and new agree, so it is
+unchanged and still valid. The substitution is applied at all three sites that
+carried the expression:
+
+| Site | Type | How it was found |
+|------|------|------------------|
+| `smolyak.rs` (apply + weight-sum check) | `SmolyakGridND` | the failing gate |
+| `shift_nd.rs` | `AnisotropicShiftChernoffND` (behind every `G_DDIM`) | inspection of the same formula |
+| `shift_nd_adaptive.rs` | `AnisotropicShiftAdaptiveQ` | grep for `PI.powf`, after the first two were fixed |
+
+The third is worth naming explicitly: **no gate would have caught it.** The
+adaptive N-D kernel has no parity gate, so it could have kept the non-portable
+prefactor indefinitely while `G_BINDING_SMOLYAK_PARITY` stayed green. When a
+defect class is found by a gate, the gate proves the instance, not the class —
+the class has to be swept by hand.
 
 **Honest limits.** This makes the *normalisation* portable, not the whole
 library. Any kernel whose formula genuinely needs `exp`, `pow`, `sin` or `cos`
@@ -489,3 +520,9 @@ of a data-dependent argument remains subject to the platform's libm, and the
 0-ULP contract (ADR-0018) is claimed only for the specific kernels that carry a
 parity gate. What this amendment establishes is that a gate promising bit
 equality must not have a transcendental in its scaling path.
+
+Two deliberate non-changes, recorded so a later sweep does not re-litigate them:
+`controller.rs`'s `powf` is a documented ≤2-ULP deviation with a trajectory-level
+proof that it changes no accept/reject decision (ADR-0044,
+`adaptive_classical_bit_equal.rs`), and `dual_helpers.rs`'s `powf` must track
+the user's own `powf` to be a correct derivative. Neither is a scaling prefactor.

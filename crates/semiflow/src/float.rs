@@ -126,9 +126,14 @@ pub(crate) fn from_f64<F: SemiflowFloat>(v: f64) -> F {
 ///
 /// Every operation here is IEEE-754 correctly rounded — multiplication, `sqrt`
 /// and division are all required to be — so the result is reproducible across
-/// platforms and libm versions. At `D = 6` it is bit-identical to what `powf`
-/// returned; at odd `D` it differs by 1 ULP, which is the correctly-rounded
-/// value rather than `pow`'s.
+/// platforms and libm versions.
+///
+/// Reproducibility is the whole claim; accuracy is NOT. Measured against a
+/// 60-digit reference on glibc x86-64: at `D = 2, 4, 6` this and `powf` agree
+/// bit-for-bit, and at `D = 3, 5` they differ by 1 ULP with `powf` on the
+/// correctly rounded side. A future reader tempted to call this "more accurate"
+/// should re-measure per `D` per platform first — the point is that this one
+/// gives the same bits everywhere, not that it gives better ones.
 pub(crate) fn inv_pi_pow_half<F: SemiflowFloat>(d: usize) -> F {
     let pi = core::f64::consts::PI;
     let mut acc = 1.0_f64;

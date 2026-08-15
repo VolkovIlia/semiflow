@@ -296,7 +296,6 @@ impl<F: SemiflowFloat, const D: usize> SmolyakGridND<F, D> {
         }
         // Verify F(0)=I unit witness: Σ weights = π^{D/2}.
         let wsum: f64 = nw.iter().map(|(_, w)| *w).sum();
-        #[allow(clippy::cast_precision_loss)]
         let pi_dhalf = 1.0_f64 / crate::float::inv_pi_pow_half::<f64>(D);
         let rel_err = (wsum - pi_dhalf).abs() / pi_dhalf;
         if rel_err > 1e-10 {
