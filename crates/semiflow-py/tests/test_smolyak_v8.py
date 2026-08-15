@@ -331,20 +331,28 @@ def test_ic_reconstruction_matches_rust_checksum() -> None:
 
 
 def test_ic_table_is_the_documented_gaussian() -> None:
-    """The pinned constants really are exp(-Σx²), to within libm's slack.
+    """The pinned constants really are exp(-Σx²), not arbitrary numbers.
 
-    Deliberately a tolerance check, not a bit check. Its job is to keep the
-    pinned table honest against the canonical parameters (§1.3) — if someone
-    edits a constant, this fails. It must NOT demand bit equality with
-    ``np.exp``: that demand is exactly what made the parity gate
-    non-deterministic (ADR-0191 AMENDMENT 6), and re-introducing it here would
-    reintroduce the flake one test to the left.
+    Division of labour with the checksum test above, which matters more than it
+    looks: that one is the bit-exact correctness guard, and it is deterministic
+    everywhere because it compares pinned data against a pinned constant. This
+    one is a *sanity* guard tying the pinned data back to the canonical §1.3
+    parameters, and it is the only assertion in this file that evaluates
+    ``np.exp`` — so its tolerance must be loose enough that no libm on any
+    platform can trip it.
+
+    Hence a relative tolerance of 1e-12 (~4500 ULP of headroom) rather than a
+    few ULP. A tight ULP bound here would be the same mistake this file was
+    just fixed for (ADR-0191 AMENDMENT 6): betting that two independent ``exp``
+    implementations agree to the last few bits on every CI runner. Real drift —
+    an edited constant, a changed domain, a changed grid size — moves values by
+    orders of magnitude, not by 1e-12, so nothing is given up.
     """
     recomputed = np.exp(_IC_EXPONENT)
-    ulp = np.abs(U0.view(np.int64) - recomputed.view(np.int64))
-    assert int(ulp.max()) <= 4, (
-        f"pinned IC disagrees with exp(-sum x^2) by {int(ulp.max())} ULP — "
-        f"either the table is wrong or the canonical params changed"
+    rel = np.abs(U0 - recomputed) / np.abs(recomputed)
+    assert float(rel.max()) <= 1e-12, (
+        f"pinned IC disagrees with exp(-sum x^2) by relative {float(rel.max()):.3e} "
+        f"— either the table is wrong or the canonical params changed"
     )
 
 
