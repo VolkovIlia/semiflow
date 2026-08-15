@@ -4,7 +4,20 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.1-beta] — 2026-08-15
+
+Patch release over `0.13.0-beta`. Two defects shipped in that release (a
+non-portable `π^{-D/2}`, and an ADR left self-contradictory by the merge); a
+third — `xtask py-smoke` reusing a cached virtualenv — has been latent since
+`0.9.0-beta` and only became reachable once CI cached `target/` across a
+multi-version matrix. Fixing them ran into a pre-existing deadlock between two
+project gates, resolved here rather than deferred again.
+
+No public API change. Numerically, only the N-D sampler normalisation moves, and
+only for odd `D`: `D = 3` and `D = 5` shift by 1 ULP on this platform;
+`D = 2, 4, 6` are bit-identical to `0.13.0-beta`. The shift is a change of
+*which* value you get, not an accuracy improvement — see the per-`D` table in
+ADR-0191 AMENDMENT 5.
 
 ### Fixed
 
@@ -18,10 +31,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `float::inv_pi_pow_half` — `⌊D/2⌋` multiplications, one `sqrt` for odd `D`,
   one reciprocal, all correctly rounded by IEEE-754 §5.4 and therefore
   bit-identical across platforms by specification. `D = 2, 4, 6` are unchanged;
-  `D = 3, 5` move 1 ULP toward the exactly rounded value. Applied in
-  `SmolyakGridND` and in `AnisotropicShiftChernoffND` (the kernel behind every
-  `G_DDIM` gate). NumPy was ruled out first by measurement, not by argument: the
-  input hashes identically with all SIMD tiers disabled.
+  `D = 3, 5` move 1 ULP. Determinism is the deliverable, not accuracy: measured
+  against a 60-digit reference, the old `powf` was the correctly rounded result
+  for `D = 3, 5` *on this host* and the new chain is 1 ULP above it, while at
+  `D = 6` both are 1 ULP above it. Applied at all three call sites:
+  `SmolyakGridND`, `AnisotropicShiftChernoffND` (the kernel behind every
+  `G_DDIM` gate), and `AnisotropicShiftAdaptiveQ` — the third was found by
+  grepping for the pattern rather than by a failing gate, since no parity gate
+  covers the adaptive N-D kernel. NumPy was ruled out first by measurement, not
+  by argument: the input hashes identically with all SIMD tiers disabled.
 - **`xtask py-smoke` reused a cached virtualenv across Python versions** — all
   six `py-smoke` matrix cells and `py-test-fast` failed with
   `Command '[...target/py-smoke-venv/bin/python3', '-m', 'ensurepip', ...]'
@@ -43,14 +61,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `cargo fmt --all` applied across the workspace (33 files). `fmt` had been red
+- `cargo fmt --all` applied across the workspace (30 files). `fmt` had been red
   in CI since 2026-07-15 because two project gates were mutually unsatisfiable:
   rustfmt expands the packed `pub mod a; pub mod b;` lines that `check-lints`'
   500-line file budget was being kept under by packing them. Resolved by
-  shrinking `lib.rs` prose (506 → 498 lines) and splitting two functions that
-  crossed the 50-line budget once reformatted (`shift1d_coeff_grad`,
+  shrinking `lib.rs` prose (506 → 498 lines) and splitting the three functions
+  that crossed the 50-line budget once reformatted (`shift1d_coeff_grad`,
   `diag_const_coeff_slope_control`, `g_shift1d_coeff_fd`) rather than by
-  relaxing either gate.
+  relaxing either gate. The other 27 files are mechanical reformatting with no
+  semantic change.
+- `.gitignore` now covers `target-*/`. `docs/release-process.md` instructs
+  running the heavy gates under `CARGO_TARGET_DIR=target-flagship`, so following
+  the documented procedure left an untracked multi-hundred-MB directory in
+  `git status`.
 
 ## [0.13.0-beta] — 2026-08-15
 
