@@ -122,7 +122,13 @@ fn run_case(n: usize, dense: &[f64], t: f64, tol: f64, label: &str) {
 #[test]
 fn g_genop_dense() {
     let n = 10;
-    run_case(n, &drifted_fokker_planck(n), 0.3, 1e-10, "drifted Fokker-Planck");
+    run_case(
+        n,
+        &drifted_fokker_planck(n),
+        0.3,
+        1e-10,
+        "drifted Fokker-Planck",
+    );
 }
 
 /// `G_GENOP_NONNORMAL` — the inventory ladder (nilpotent + diagonal) matches.
@@ -150,10 +156,8 @@ fn g_genop_asym_accepted() {
     let (rp, ci, va) = to_csr(n, &dense);
 
     assert!(
-        semiflow::symmetric_operator::SymmetricOperator::<f64>::from_csr(
-            n, &rp, &ci, &va, 1e-10
-        )
-        .is_err(),
+        semiflow::symmetric_operator::SymmetricOperator::<f64>::from_csr(n, &rp, &ci, &va, 1e-10)
+            .is_err(),
         "the datum is not actually asymmetric — the teeth check is vacuous"
     );
     assert!(GeneralOperator::<f64>::from_csr(n, &rp, &ci, &va).is_ok());
@@ -187,7 +191,9 @@ fn genop_transpose_is_exact() {
     let mut ax = vec![0.0; n];
     op.apply_into_slice(&x, &mut ax);
     assert!(
-        atx.iter().zip(ax.iter()).any(|(a, b)| (a - b).abs() > 1e-12),
+        atx.iter()
+            .zip(ax.iter())
+            .any(|(a, b)| (a - b).abs() > 1e-12),
         "datum is symmetric — the transpose check proves nothing"
     );
 }

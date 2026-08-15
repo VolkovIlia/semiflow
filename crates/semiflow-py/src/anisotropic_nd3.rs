@@ -147,7 +147,9 @@ impl PyHeat2DVarA {
                 }
                 Heat2DBackend::Pencil(p) => {
                     let p = p.clone();
-                    py.detach(|| crate::heat2d_pencil_py::evolve_pencil_2d(&p, grid, input, tau, n_steps))
+                    py.detach(|| {
+                        crate::heat2d_pencil_py::evolve_pencil_2d(&p, grid, input, tau, n_steps)
+                    })
                 }
             };
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))

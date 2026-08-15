@@ -22,8 +22,8 @@
 use std::sync::Arc;
 
 use semiflow::{
-    strang2d_pencil::Strang2DPencil, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D,
-    GridFn2D, ScratchPool,
+    strang2d_pencil::Strang2DPencil, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, GridFn2D,
+    ScratchPool,
 };
 
 use crate::{anisotropic_nd_helpers::interp_1d, error::new_pyerr};
@@ -40,9 +40,13 @@ pub(crate) type PencilStrang2D =
 /// the open question recorded at `anisotropic_nd3.rs::build_axis_diff`. This
 /// entry point changes *which coefficients are expressible*, not which operator
 /// is being discretised; mixing the two would confound them.
-fn pencil_kernel(profile: Vec<f64>, amin: f64, amax: f64, n: usize, g: Grid1D<f64>)
-    -> DiffusionChernoff<f64>
-{
+fn pencil_kernel(
+    profile: Vec<f64>,
+    amin: f64,
+    amax: f64,
+    n: usize,
+    g: Grid1D<f64>,
+) -> DiffusionChernoff<f64> {
     let norm = profile.iter().copied().fold(0.0_f64, f64::max);
     let arc = Arc::new(profile);
     DiffusionChernoff::with_closure(
@@ -67,7 +71,10 @@ fn validate_grid_coeff(v: &[f64], nx: usize, ny: usize, name: &str) -> PyResult<
             return Err(new_pyerr("NanInf", &format!("{name} contains NaN or Inf")));
         }
         if x <= 0.0 {
-            return Err(new_pyerr("OutOfDomain", &format!("{name} must be > 0 everywhere")));
+            return Err(new_pyerr(
+                "OutOfDomain",
+                &format!("{name} must be > 0 everywhere"),
+            ));
         }
     }
     Ok(())
@@ -116,8 +123,8 @@ pub(crate) fn build_pencil_strang2d(
         })
         .collect();
 
-    let strang = Strang2DPencil::new(x_kernels, y_kernels, grid)
-        .map_err(|e| crate::error::from_core(&e))?;
+    let strang =
+        Strang2DPencil::new(x_kernels, y_kernels, grid).map_err(|e| crate::error::from_core(&e))?;
     Ok((strang, grid))
 }
 pub(crate) fn evolve_pencil_2d(
@@ -136,4 +143,3 @@ pub(crate) fn evolve_pencil_2d(
     }
     Ok(state.values)
 }
-

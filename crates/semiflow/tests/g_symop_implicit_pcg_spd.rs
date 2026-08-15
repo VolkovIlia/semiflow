@@ -102,7 +102,10 @@ fn g_symop_implicit_pcg_spd() {
     let tol_cg = 1e-10_f64;
 
     // One sub-step of backward-Euler ≡ one PCG solve.
-    let path = KrylovPath::ImplicitEuler { n_steps: 1, cg_max_iter: None };
+    let path = KrylovPath::ImplicitEuler {
+        n_steps: 1,
+        cg_max_iter: None,
+    };
     let mut x = vec![0.0_f64; n];
     let tau = dt; // Δt = τ / n_steps = dt / 1 = dt
     let mut scratch = ScratchPool::new();

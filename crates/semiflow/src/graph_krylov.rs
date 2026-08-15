@@ -180,7 +180,10 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
                 *m_max,
                 scratch,
             ),
-            KrylovPath::ImplicitEuler { n_steps, cg_max_iter } => implicit_euler_gk_action(
+            KrylovPath::ImplicitEuler {
+                n_steps,
+                cg_max_iter,
+            } => implicit_euler_gk_action(
                 &*self.laplacian,
                 src,
                 dst,

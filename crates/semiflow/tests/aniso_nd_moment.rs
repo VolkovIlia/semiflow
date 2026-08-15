@@ -91,7 +91,9 @@ fn run_on(nx: usize, a: [f64; 4], n_steps: usize) -> (f64, f64, f64) {
     let mut scratch = ScratchPool::<f64>::new();
     let tau = T_FINAL / n_steps as f64;
     for _ in 0..n_steps {
-        kernel.apply_into(tau, &src, &mut dst, &mut scratch).unwrap();
+        kernel
+            .apply_into(tau, &src, &mut dst, &mut scratch)
+            .unwrap();
         core::mem::swap(&mut src, &mut dst);
     }
     let (vx, vy, cxy) = moments(&src.values, nx);
@@ -149,7 +151,10 @@ fn g_asnd_moment_isotropic_is_step_count_flat() {
                 "n_steps={n_steps} axis={axis}: dVar={got:.6}, exact={exact:.6}, rel={rel:.3e}"
             );
         }
-        assert!(cxy.abs() <= 2e-2, "n_steps={n_steps}: dCov={cxy:.6} should vanish");
+        assert!(
+            cxy.abs() <= 2e-2,
+            "n_steps={n_steps}: dCov={cxy:.6} should vanish"
+        );
     }
 }
 
@@ -185,7 +190,9 @@ fn g_asnd_moment_diagonal_tensor_does_not_mix_axes() {
 fn asnd_moment_table() {
     for n_steps in [100_usize, 400, 1600] {
         let (dvx, dvy, cxy) = run([1.0, 0.0, 0.0, 1.0], n_steps);
-        println!("A=I      n_steps={n_steps:5}  dVar=({dvx:.6}, {dvy:.6})  dCov={cxy:.3e}  exact=1.0");
+        println!(
+            "A=I      n_steps={n_steps:5}  dVar=({dvx:.6}, {dvy:.6})  dCov={cxy:.3e}  exact=1.0"
+        );
     }
     let (dvx, dvy, _) = run([1.0, 0.0, 0.0, 0.5], 400);
     println!("A=diag   n_steps=  400  dVar=({dvx:.6}, {dvy:.6})  exact=(1.0, 0.5)");

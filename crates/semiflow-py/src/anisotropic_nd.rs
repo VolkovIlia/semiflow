@@ -168,9 +168,8 @@ impl PyAnisotropicShiftND2 {
     /// See :ref:`the layout note <nd2-layout>`.
     fn set_state(&mut self, u0: &Bound<'_, PyAny>) -> PyResult<()> {
         catch_panic_py!({
-            self.current = crate::anisotropic_nd_helpers::extract_nd_state_2d(
-                u0, self.nx, self.ny, "u0",
-            )?;
+            self.current =
+                crate::anisotropic_nd_helpers::extract_nd_state_2d(u0, self.nx, self.ny, "u0")?;
             Ok(())
         })
     }

@@ -309,7 +309,10 @@ fn compute_max_iter<F: SemiflowFloat>(
     let dt_f = dt.to_f64().unwrap_or(0.0);
     // Clamp tol to a reasonable range: [1e-15, 1.0).  tol=0 or tol<0 never occurs
     // (caller uses tol_cg = user_tol.max(1e-12)), but guard for safety.
-    let tol_f = tol.to_f64().unwrap_or(1e-10).clamp(1e-15, 1.0 - f64::EPSILON);
+    let tol_f = tol
+        .to_f64()
+        .unwrap_or(1e-10)
+        .clamp(1e-15, 1.0 - f64::EPSILON);
     let kappa_sqrt = (1.0_f64 + dt_f * lam).sqrt();
     let ln_factor = (2.0_f64 / tol_f).ln().max(1.0);
     // ceil() ≥ 0 (both factors ≥ 1); value bounded by n < usize::MAX in practice.

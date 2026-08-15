@@ -444,11 +444,7 @@ pub fn shift1d_forward(
 ///
 /// # Errors
 /// Propagates from the grid's interpolation kind.
-pub fn weight_row_dot(
-    grid: &Grid1D<f64>,
-    y: f64,
-    values: &[f64],
-) -> Result<f64, SemiflowError> {
+pub fn weight_row_dot(grid: &Grid1D<f64>, y: f64, values: &[f64]) -> Result<f64, SemiflowError> {
     let mut probe = vec![0.0_f64; grid.n];
     let mut idx = [0_usize; MAX_ROW];
     let mut w = [0.0_f64; MAX_ROW];

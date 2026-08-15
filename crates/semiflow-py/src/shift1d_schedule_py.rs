@@ -77,7 +77,10 @@ fn parse_entry(obj: &Bound<'_, PyAny>, n: usize, name: &str) -> PyResult<Segment
         ));
     }
     if vals.iter().any(|v| !v.is_finite()) {
-        return Err(new_pyerr("NanInf", &format!("{name} entry contains NaN or Inf")));
+        return Err(new_pyerr(
+            "NanInf",
+            &format!("{name} entry contains NaN or Inf"),
+        ));
     }
     Ok(SegmentCoeff::Array(Arc::new(vals)))
 }
@@ -180,7 +183,10 @@ pub(crate) fn evolve_batched_impl<'py>(
     }
     let n_cols = shape[1];
     if n_cols == 0 {
-        return Err(new_pyerr("GridMismatch", "u0_nc must have at least 1 channel"));
+        return Err(new_pyerr(
+            "GridMismatch",
+            "u0_nc must have at least 1 channel",
+        ));
     }
     let src_cn = crate::graph_py::gather_nc_to_cn(&view, n, n_cols);
     if src_cn.iter().any(|v| !v.is_finite()) {
@@ -205,10 +211,8 @@ pub(crate) fn evolve_batched_impl<'py>(
 pub(crate) fn semigroup_from_segment(
     grid: semiflow::Grid1D<f64>,
     tail: &(SegmentCoeff, SegmentCoeff, SegmentCoeff),
-) -> Result<
-    semiflow::ChernoffSemigroup<ShiftChernoff1D<f64>, GridFn1D<f64>>,
-    semiflow::SemiflowError,
-> {
+) -> Result<semiflow::ChernoffSemigroup<ShiftChernoff1D<f64>, GridFn1D<f64>>, semiflow::SemiflowError>
+{
     let (xmin, dx) = (grid.xmin, grid.dx());
     let norm = tail.0.norm() + tail.1.norm() + tail.2.norm();
     let kernel = ShiftChernoff1D::with_closure(
@@ -222,10 +226,7 @@ pub(crate) fn semigroup_from_segment(
 }
 
 /// Parse `a_schedule` without knowing `n_segments` up front — it defines it.
-pub(crate) fn count_then_parse(
-    obj: &Bound<'_, PyAny>,
-    n: usize,
-) -> PyResult<Vec<SegmentCoeff>> {
+pub(crate) fn count_then_parse(obj: &Bound<'_, PyAny>, n: usize) -> PyResult<Vec<SegmentCoeff>> {
     let items: Vec<Bound<'_, PyAny>> = obj
         .try_iter()
         .map_err(|_| new_pyerr("GridMismatch", "a_schedule must be a sequence"))?

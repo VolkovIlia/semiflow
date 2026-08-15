@@ -1,30 +1,26 @@
-//! # `semiflow-core` — Chernoff approximations of operator semigroups
+//! # `semiflow` — Chernoff approximations of operator semigroups
 //!
-//! Implements formula (6) of Theorem 6 from
-//! I. D. Remizov, *Vladikavkaz Math. J.* **27**(4) (2025) 124–135,
-//! [DOI 10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q),
-//! [arXiv:2301.06765](https://arxiv.org/abs/2301.06765).
+//! Implements formula (6) of Theorem 6 from I. D. Remizov, *Vladikavkaz Math. J.*
+//! **27**(4) (2025) 124–135, [DOI 10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q)
+//! / [arXiv:2301.06765](https://arxiv.org/abs/2301.06765).
 //!
-//! The library is `no_std`-compatible (requires `alloc`). Feature flags:
-//! `std` (error trait), `simd` (AVX2/NEON; default-on), `parallel` (multi-thread
-//! `Strang2D`), `linear-interp` (linear boundary interpolation).
+//! `no_std`-compatible (requires `alloc`). Features: `std` (error trait), `simd`
+//! (AVX2/NEON, default-on), `parallel` (multi-thread `Strang2D`), `linear-interp`.
 //!
 //! ## Quickstart
 //!
-//! See [`crates/semiflow-core/README.md`](https://docs.rs/semiflow-core) for a
-//! fuller introduction and a worked advection-diffusion example.
+//! See the [crate README](https://docs.rs/semiflow) for a fuller introduction
+//! and a worked advection-diffusion example.
 //!
 //! ## Exports
-//!
 //! ### v0.1.0
 //!
 //! - **Formula (6)** via [`ShiftChernoff1D`]: the four-term Chernoff function
 //!   for `L = a(x)∂²_x + b(x)∂_x + c(x)`.
 //! - **Chernoff iteration** via [`ChernoffSemigroup`]: `(S(t/n))^n f`.
-//! - **Heat-kernel oracle** (G1-legacy/G2-legacy regression tests): use
-//!   `ShiftChernoff1D { a: |_| 0.5, b: |_| 0.0, c: |_| 0.0 }` with
-//!   initial datum `exp(-x²)` and oracle `(1+2t)^{-1/2} exp(-x²/(1+2t))`.
-//!
+//! - **Heat-kernel oracle** (G1/G2-legacy regression tests):
+//!   `ShiftChernoff1D { a: |_| 0.5, b: |_| 0.0, c: |_| 0.0 }`, datum `exp(-x²)`,
+//!   oracle `(1+2t)^{-1/2} exp(-x²/(1+2t))`.
 //! ### v0.2.0 — operator splitting `L = A + B` (ADR-0006)
 //!
 //! - **Diffusion Chernoff** via [`DiffusionChernoff`]: 5-point order-2 formula
@@ -33,9 +29,8 @@
 //!   characteristic-flow formula for `B = b(x)∂_x + c(x)`.
 //! - **Strang composition** via [`StrangSplit`]: `Φ(τ) = D(τ/2) ∘ R(τ) ∘ D(τ/2)`,
 //!   global order 2 (G3-strang gate: slope ≤ −1.95).
-//! - **Advection-diffusion oracle** (G1/G2/G3-strang acceptance tests):
-//!   `∂_t u = ½ ∂_xx u + ½ ∂_x u`, oracle `u(1,x) = 3^{-1/2} exp(-(x+0.5)²/3)`.
-//!
+//! - **Advection-diffusion oracle** (G1/G2/G3-strang): `∂_t u = ½∂_xx u + ½∂_x u`,
+//!   oracle `u(1,x) = 3^{-1/2} exp(-(x+0.5)²/3)`.
 //! ### v0.5.0 — 2D tensor-product (ADR-0012)
 //!
 //! - Tensor geometry [`Grid2D`] (row-major, x fast axis).
@@ -47,7 +42,6 @@
 //!
 //! See `contracts/semiflow-core.math.md` §10 (Theorem 7), `tensor.yaml`,
 //! and `docs/adr/0012-tensor-product-2d.md`.
-//!
 //! ### v0.9.0 — 3D tensor-product, generic-over-float, non-separable 2D (ADR-0024, ADR-0023, ADR-0025)
 //!
 //! - 3D tensor geometry [`Grid3D`] (x-fastest, `idx(i,j,k) = k·nx·ny + j·nx + i`).
@@ -61,7 +55,6 @@
 //! - All grid and Chernoff types are now generic over [`SemiflowFloat`] (`f32`/`f64`).
 //!
 //! See `contracts/semiflow-core.math.md` §10.7-ter, §10.8; `docs/adr/0024-tensor-3d.md`.
-//!
 //! ### v9.0.0 — third S-curve: reverse AD, tensor-train carrier, gridless particle
 //!
 //! - **Shift B — [`ReverseChernoff`] + [`CheckpointSchedule`]** (§51, ADR-0156):
@@ -78,7 +71,6 @@
 //!   — documented negative; high-d is research-track (ADR-0155 Amendment 1).
 //!
 //! See `contracts/semiflow-core.math.md` §50–52; `docs/adr/0155`, `0156`, `0159`.
-//!
 //! ### v9.2.0 — S³ honest-scope public API (ADR-0169, `s3-poc` feature)
 //!
 //! Promotes the five S³ POC evolvers from `pub(crate)` to a curated public surface
@@ -131,7 +123,8 @@ pub mod adjoint;
 pub mod adjoint_fp;
 pub mod approximation;
 pub mod axis;
-pub mod boundary; pub(crate) mod boundary_value;
+pub mod boundary;
+pub(crate) mod boundary_value;
 pub mod carnot_complex;
 pub(crate) mod carnot_complex_helpers;
 pub mod carnot_stepk;
@@ -160,10 +153,11 @@ pub(crate) mod etdrk4_helpers;
 pub mod expmv;
 pub mod float;
 pub(crate) mod gen_quadrature;
+pub mod general_operator;
 pub mod generator_action;
 pub mod graph;
 pub mod graph_adjoint_presampled;
-pub mod graph_batched; pub mod general_operator; pub mod grid_batched;
+pub mod graph_batched;
 mod graph_batched_tests;
 pub mod graph_frechet;
 pub mod graph_heat;
@@ -179,6 +173,7 @@ pub mod graph_var_coef;
 pub mod grid;
 pub mod grid2d;
 pub mod grid3d;
+pub mod grid_batched;
 pub(crate) mod grid_chebyshev;
 pub(crate) mod grid_chebyshev_nodes;
 pub(crate) mod grid_chebyshev_octonic;
@@ -193,10 +188,11 @@ pub(crate) mod gridless_reduce;
 pub mod hdr;
 pub mod heisenberg_kernel;
 pub mod hormander;
-pub mod hormander_engel; pub(crate) mod interp_stencil;
+pub mod hormander_engel;
 pub(crate) mod hormander_engel_helpers;
 pub(crate) mod hormander_heisenberg;
 pub mod howland;
+pub(crate) mod interp_stencil;
 pub mod killed_dirichlet;
 pub mod killing;
 pub mod killing_order2;
@@ -265,7 +261,8 @@ pub mod schrodinger;
 pub mod schrodinger_complex;
 pub(crate) mod schrodinger_complex_state;
 pub mod scratch;
-pub mod shift1d; pub mod shift1d_vjp;
+pub mod shift1d;
+pub mod shift1d_vjp;
 pub mod shift_nd;
 pub mod shift_nd_adaptive;
 pub(crate) mod shift_nd_gauss;
@@ -277,11 +274,12 @@ pub mod simd;
 pub mod smolyak;
 pub mod state;
 pub mod strang;
-pub mod strang2d; pub mod strang2d_pencil;
+pub mod strang2d;
 #[cfg(feature = "parallel")]
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 #[doc(hidden)]
 pub mod strang2d_parallel;
+pub mod strang2d_pencil;
 pub mod strang3d;
 pub mod strang3d_axislift;
 #[cfg(feature = "parallel")]

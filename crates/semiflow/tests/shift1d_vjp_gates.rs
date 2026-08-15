@@ -110,7 +110,11 @@ fn g_shift1d_transpose_id() {
         let n = 48;
         let grid = Grid1D::new(XMIN, XMAX, n).unwrap().with_boundary(policy);
         let (a, b, c) = coeffs(n);
-        let co = ShiftCoeffs { a: &a, b: &b, c: &c };
+        let co = ShiftCoeffs {
+            a: &a,
+            b: &b,
+            c: &c,
+        };
         let u = smooth(n, 1.1);
         let lam = smooth(n, 2.3);
         let tau = 0.01;
@@ -143,15 +147,19 @@ struct Fields<'a> {
 /// `J` as a function of the three coefficient fields.
 type LossFn<'a> = dyn Fn(&[f64], &[f64], &[f64]) -> f64 + 'a;
 
+/// Largest absolute component-wise difference between two gradients.
+fn max_abs_diff(a: &[f64], b: &[f64]) -> f64 {
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0_f64, f64::max)
+}
+
 /// Central-difference gradient of `loss` w.r.t. every node of one field.
 ///
 /// `eps = 1e-6` sits between the `O(eps²)` truncation term and the
 /// `O(machine-eps · |J| / eps)` roundoff term for a loss of order 1.
-fn fd_gradient(
-    field: ShiftCoeffField,
-    fields: Fields<'_>,
-    loss: &LossFn<'_>,
-) -> Vec<f64> {
+fn fd_gradient(field: ShiftCoeffField, fields: Fields<'_>, loss: &LossFn<'_>) -> Vec<f64> {
     let (a, b, c) = (fields.a, fields.b, fields.c);
     let eps = 1e-6;
     let mut out = vec![0.0_f64; a.len()];
@@ -194,10 +202,19 @@ fn g_shift1d_coeff_fd() {
         0.5 * un.iter().map(|v| v * v).sum::<f64>()
     };
 
+    let fields = Fields {
+        a: &a,
+        b: &b,
+        c: &c,
+    };
     for field in [ShiftCoeffField::A, ShiftCoeffField::B, ShiftCoeffField::C] {
         let p = Shift1DProblem {
             grid: &grid,
-            coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+            coeffs: ShiftCoeffs {
+                a: &a,
+                b: &b,
+                c: &c,
+            },
             tau,
             n_steps,
         };
@@ -208,15 +225,13 @@ fn g_shift1d_coeff_fd() {
         // Vector comparison, not per-component relative error: components of a
         // gradient can legitimately be ~0, where a per-component ratio is
         // dominated by the FD floor rather than by any error in the adjoint.
-        let fd_grad = fd_gradient(field, Fields { a: &a, b: &b, c: &c }, &loss);
+        let fd_grad = fd_gradient(field, fields, &loss);
         let scale = fd_grad.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
-        assert!(scale > 1e-6, "field={field:?}: FD gradient is identically zero");
-        let worst = grad
-            .iter()
-            .zip(fd_grad.iter())
-            .map(|(g, f)| (g - f).abs())
-            .fold(0.0_f64, f64::max)
-            / scale;
+        assert!(
+            scale > 1e-6,
+            "field={field:?}: FD gradient is identically zero"
+        );
+        let worst = max_abs_diff(&grad, &fd_grad) / scale;
         assert!(
             worst <= 1e-6,
             "field={field:?}: max|adjoint - fd| / max|fd| = {worst:.3e}\n adjoint={grad:?}\n      fd={fd_grad:?}"
@@ -233,7 +248,11 @@ fn shift1d_vjp_rejects_degenerate_a() {
     a[4] = 0.0;
     let p = Shift1DProblem {
         grid: &grid,
-        coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+        coeffs: ShiftCoeffs {
+            a: &a,
+            b: &b,
+            c: &c,
+        },
         tau: 0.01,
         n_steps: 2,
     };

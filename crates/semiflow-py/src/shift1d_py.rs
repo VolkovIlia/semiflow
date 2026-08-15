@@ -318,18 +318,11 @@ impl Shift1D {
             );
             let input: Vec<f64> = self.inner.current.values.clone();
             let result: Result<Vec<f64>, _> = py.detach(|| {
-                run_coefficient_schedule(
-                    grid,
-                    input,
-                    t_final,
-                    n_steps_per_segment,
-                    (a_s, b_s, c_s),
-                )
+                run_coefficient_schedule(grid, input, t_final, n_steps_per_segment, (a_s, b_s, c_s))
             });
             self.inner.current.values = result.map_err(|e| from_core(&e))?;
-            self.inner.semigroup =
-                crate::shift1d_schedule_py::semigroup_from_segment(grid, &tail)
-                    .map_err(|e| from_core(&e))?;
+            self.inner.semigroup = crate::shift1d_schedule_py::semigroup_from_segment(grid, &tail)
+                .map_err(|e| from_core(&e))?;
             Ok(())
         })
     }

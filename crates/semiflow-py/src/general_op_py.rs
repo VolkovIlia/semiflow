@@ -56,12 +56,7 @@ impl PyGeneralOperator {
     ///     non-finite entry.
     #[staticmethod]
     #[pyo3(signature = (n, indptr, indices, data))]
-    fn from_csr(
-        n: usize,
-        indptr: Vec<usize>,
-        indices: Vec<u32>,
-        data: Vec<f64>,
-    ) -> PyResult<Self> {
+    fn from_csr(n: usize, indptr: Vec<usize>, indices: Vec<u32>, data: Vec<f64>) -> PyResult<Self> {
         catch_panic_py!({
             let inner = GeneralOperator::<f64>::from_csr(n, &indptr, &indices, &data)
                 .map_err(|e| from_core(&e))?;

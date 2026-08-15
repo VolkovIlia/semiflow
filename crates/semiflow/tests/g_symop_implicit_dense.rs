@@ -79,7 +79,10 @@ fn implicit_expmv(
 ) -> Vec<f64> {
     let op =
         SymmetricOperator::from_csr(n, row_ptr, col_idx, vals, 1e-10).expect("implicit: CSR build");
-    let path = KrylovPath::ImplicitEuler { n_steps, cg_max_iter: None };
+    let path = KrylovPath::ImplicitEuler {
+        n_steps,
+        cg_max_iter: None,
+    };
     let tol = 1e-12_f64;
     let mut out = vec![0.0_f64; n];
     let mut scratch = ScratchPool::new();

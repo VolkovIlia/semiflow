@@ -134,7 +134,9 @@ fn parse_pre(pre: &str) -> (u32, u32) {
     }
     let pre_lower = pre.to_lowercase();
     let (tag, rest) = if pre_lower.starts_with("alpha") || pre_lower.starts_with('a') {
-        let rest = pre_lower.trim_start_matches("alpha").trim_start_matches('a');
+        let rest = pre_lower
+            .trim_start_matches("alpha")
+            .trim_start_matches('a');
         (0u32, rest)
     } else if pre_lower.starts_with("beta") || pre_lower.starts_with('b') {
         let rest = pre_lower.trim_start_matches("beta").trim_start_matches('b');

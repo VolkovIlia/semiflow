@@ -264,12 +264,7 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
     ///
     /// # Errors
     /// `DomainViolation` on a length mismatch or a non-finite result.
-    pub fn action_into_slice(
-        &self,
-        tau: F,
-        src: &[F],
-        dst: &mut [F],
-    ) -> Result<(), SemiflowError> {
+    pub fn action_into_slice(&self, tau: F, src: &[F], dst: &mut [F]) -> Result<(), SemiflowError> {
         let n = self.op.n;
         if src.len() != n || dst.len() != n {
             #[allow(clippy::cast_precision_loss)]

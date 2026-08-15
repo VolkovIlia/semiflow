@@ -52,8 +52,8 @@
 #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 
 use semiflow::{
-    assemble_conservative_csr_1d, graph_expmv_krylov, scratch::ScratchPool, BoundaryPolicy,
-    Grid1D, KrylovPath,
+    assemble_conservative_csr_1d, graph_expmv_krylov, scratch::ScratchPool, BoundaryPolicy, Grid1D,
+    KrylovPath,
 };
 
 // ── Operator builder ──────────────────────────────────────────────────────────
@@ -164,7 +164,10 @@ fn run_implicit_case(
         tau,
         v,
         &mut out,
-        KrylovPath::ImplicitEuler { n_steps, cg_max_iter: None },
+        KrylovPath::ImplicitEuler {
+            n_steps,
+            cg_max_iter: None,
+        },
         tol,
         &mut scratch,
     )?;
@@ -209,9 +212,7 @@ fn g_symop_implicit_pcg_cap() {
                      sup_err={sup:.3e}  max_allowed={max_err:.3e}  PASS"
                 );
                 if sup > max_err {
-                    eprintln!(
-                        "  FAIL: sup_err={sup:.3e} > max_allowed={max_err:.3e}"
-                    );
+                    eprintln!("  FAIL: sup_err={sup:.3e} > max_allowed={max_err:.3e}");
                     all_pass = false;
                 }
             }

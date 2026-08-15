@@ -193,7 +193,14 @@ where
         let src_c = &src_cols[c * n..(c + 1) * n];
         let dst_c = &mut dst_cols[c * n..(c + 1) * n];
         evolve_channel(
-            func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch,
+            func,
+            tau,
+            n_steps,
+            src_c,
+            dst_c,
+            &mut buf_a,
+            &mut buf_b,
+            &mut scratch,
         )?;
     }
     Ok(())
@@ -276,7 +283,14 @@ where
     let mut buf_a = GridFn1D::<F>::new_generic(grid, vec![F::zero(); n])?;
     let mut buf_b = GridFn1D::<F>::new_generic(grid, vec![F::zero(); n])?;
     evolve_channel(
-        func, tau, n_steps, src_c, dst_c, &mut buf_a, &mut buf_b, &mut scratch,
+        func,
+        tau,
+        n_steps,
+        src_c,
+        dst_c,
+        &mut buf_a,
+        &mut buf_b,
+        &mut scratch,
     )
 }
 

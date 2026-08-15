@@ -62,10 +62,9 @@ fn read_workspace_version(root: &std::path::Path) -> Result<String> {
     let cargo_toml = root.join("Cargo.toml");
     let src = fs::read_to_string(&cargo_toml)
         .map_err(|e| anyhow::anyhow!("changelog-check: cannot read Cargo.toml: {e}"))?;
-    parse_workspace_version(&src)
-        .ok_or_else(|| anyhow::anyhow!(
-            "changelog-check: [workspace.package] version not found in Cargo.toml"
-        ))
+    parse_workspace_version(&src).ok_or_else(|| {
+        anyhow::anyhow!("changelog-check: [workspace.package] version not found in Cargo.toml")
+    })
 }
 
 /// Parse `version = "X.Y.Z"` that follows `[workspace.package]`.
@@ -195,10 +194,7 @@ edition = "2021"
     #[test]
     fn test_section_found_em_dash_separator() {
         let log = "## [1.0.0] — 2026-01-01\nSome content here\n";
-        assert_eq!(
-            find_version_section(log, "1.0.0"),
-            SectionResult::NonEmpty
-        );
+        assert_eq!(find_version_section(log, "1.0.0"), SectionResult::NonEmpty);
     }
 
     #[test]

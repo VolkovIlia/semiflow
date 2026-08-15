@@ -97,7 +97,10 @@ fn g_pencil_reduction_matches_strang2d() {
         .zip(want.iter())
         .map(|(g, w)| (g - w).abs())
         .fold(0.0_f64, f64::max);
-    assert!(diff > 1e-6, "datum is axis-symmetric; the gate proves nothing");
+    assert!(
+        diff > 1e-6,
+        "datum is axis-symmetric; the gate proves nothing"
+    );
 }
 
 /// Transverse-variation amplitude of the gate datum.
@@ -157,9 +160,7 @@ fn transverse_y(gy: Grid1D<f64>) -> Vec<DiffusionChernoff<f64>> {
 #[ignore = "G_PENCIL_ORDER2 — self-convergence sweep; Pattern B slow gate"]
 fn g_pencil_order2_transverse() {
     let (gx, gy, grid) = grids();
-    let build = || {
-        Strang2DPencil::new(transverse_x(gx), transverse_y(gy), grid).unwrap()
-    };
+    let build = || Strang2DPencil::new(transverse_x(gx), transverse_y(gy), grid).unwrap();
     let t = 0.02;
     // Reference-free Richardson: |u(n) - u(2n)| / |u(2n) - u(4n)| -> 2^p.
     // A fixed reference at 640 steps carries its own O(tau^2) error, which
@@ -229,34 +230,73 @@ fn transverse_field_is_not_expressible_as_separable() {
 }
 
 /// Diagnostic control: the SAME estimator on a constant-coefficient datum,
+/// Sup-norm of the difference, shared by the diagnostics below.
+///
+/// A free function rather than a local closure: the diagnostic that used it is a
+/// three-way comparison whose body is already at the 50-line cap.
+fn sup_diff(a: &[f64], b: &[f64]) -> f64 {
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0_f64, f64::max)
+}
+
 /// through both `Strang2D` and `Strang2DPencil`.
 #[test]
 #[ignore = "diagnostic"]
 fn diag_const_coeff_slope_control() {
     let (gx, gy, grid) = grids();
-    let sup_diff = |a: &[f64], b: &[f64]| {
-        a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
-    };
     let t = 0.02;
     let plain = Strang2D::new(const_kernel(1.0, gx), const_kernel(1.0, gy));
-    let (p1, p2, p4) = (evolve(&plain, grid, 20, t), evolve(&plain, grid, 40, t), evolve(&plain, grid, 80, t));
-    println!("Strang2D  const-a slope = {:.3}", (sup_diff(&p1,&p2)/sup_diff(&p2,&p4)).log2());
+    let (p1, p2, p4) = (
+        evolve(&plain, grid, 20, t),
+        evolve(&plain, grid, 40, t),
+        evolve(&plain, grid, 80, t),
+    );
+    println!(
+        "Strang2D  const-a slope = {:.3}",
+        (sup_diff(&p1, &p2) / sup_diff(&p2, &p4)).log2()
+    );
 
     let pen = Strang2DPencil::new(
         (0..N).map(|_| const_kernel(1.0, gx)).collect(),
-        (0..N).map(|_| const_kernel(1.0, gy)).collect(), grid).unwrap();
-    let (q1, q2, q4) = (evolve(&pen, grid, 20, t), evolve(&pen, grid, 40, t), evolve(&pen, grid, 80, t));
-    println!("Pencil    const-a slope = {:.3}", (sup_diff(&q1,&q2)/sup_diff(&q2,&q4)).log2());
+        (0..N).map(|_| const_kernel(1.0, gy)).collect(),
+        grid,
+    )
+    .unwrap();
+    let (q1, q2, q4) = (
+        evolve(&pen, grid, 20, t),
+        evolve(&pen, grid, 40, t),
+        evolve(&pen, grid, 80, t),
+    );
+    println!(
+        "Pencil    const-a slope = {:.3}",
+        (sup_diff(&q1, &q2) / sup_diff(&q2, &q4)).log2()
+    );
 
     // Separable-but-varying: a_x(x), a_y(y) — expressible by Strang2D too.
-    let sep_x: Vec<_> = (0..N).map(|_| DiffusionChernoff::with_closure(
-        |x: f64| 1.0 + 0.6*(2.0*core::f64::consts::PI*x).sin(),
-        |_| 0.0, |_| 0.0, 1.6, gx)).collect();
+    let sep_x: Vec<_> = (0..N)
+        .map(|_| {
+            DiffusionChernoff::with_closure(
+                |x: f64| 1.0 + 0.6 * (2.0 * core::f64::consts::PI * x).sin(),
+                |_| 0.0,
+                |_| 0.0,
+                1.6,
+                gx,
+            )
+        })
+        .collect();
     let sep_y: Vec<_> = (0..N).map(|_| const_kernel(1.0, gy)).collect();
     let sp = Strang2DPencil::new(sep_x, sep_y, grid).unwrap();
-    let (r1, r2, r4) = (evolve(&sp, grid, 20, t), evolve(&sp, grid, 40, t), evolve(&sp, grid, 80, t));
-    println!("Pencil  a_x(x) slope    = {:.3}  (a'=0 passed, so this is the a'=0 regime)",
-             (sup_diff(&r1,&r2)/sup_diff(&r2,&r4)).log2());
+    let (r1, r2, r4) = (
+        evolve(&sp, grid, 20, t),
+        evolve(&sp, grid, 40, t),
+        evolve(&sp, grid, 80, t),
+    );
+    println!(
+        "Pencil  a_x(x) slope    = {:.3}  (a'=0 passed, so this is the a'=0 regime)",
+        (sup_diff(&r1, &r2) / sup_diff(&r2, &r4)).log2()
+    );
 }
 
 /// Diagnostic sweep: how the transverse slope depends on amplitude, grid and t.
@@ -264,24 +304,37 @@ fn diag_const_coeff_slope_control() {
 #[ignore = "diagnostic"]
 fn diag_transverse_sweep() {
     let sup_diff = |a: &[f64], b: &[f64]| {
-        a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
+        a.iter()
+            .zip(b.iter())
+            .map(|(x, y)| (x - y).abs())
+            .fold(0.0_f64, f64::max)
     };
     for amp in [0.1_f64, 0.3, 0.6] {
         for t in [0.005_f64, 0.02] {
             let (gx, gy, grid) = grids();
-            let xs: Vec<_> = (0..N).map(|j| {
-                let y = (j as f64) / ((N - 1) as f64);
-                const_kernel(1.0 + amp * (2.0 * core::f64::consts::PI * y).sin(), gx)
-            }).collect();
-            let ys: Vec<_> = (0..N).map(|i| {
-                let x = (i as f64) / ((N - 1) as f64);
-                const_kernel(1.0 + amp * (2.0 * core::f64::consts::PI * x).cos(), gy)
-            }).collect();
+            let xs: Vec<_> = (0..N)
+                .map(|j| {
+                    let y = (j as f64) / ((N - 1) as f64);
+                    const_kernel(1.0 + amp * (2.0 * core::f64::consts::PI * y).sin(), gx)
+                })
+                .collect();
+            let ys: Vec<_> = (0..N)
+                .map(|i| {
+                    let x = (i as f64) / ((N - 1) as f64);
+                    const_kernel(1.0 + amp * (2.0 * core::f64::consts::PI * x).cos(), gy)
+                })
+                .collect();
             let k = Strang2DPencil::new(xs, ys, grid).unwrap();
-            let (a, b, c) = (evolve(&k, grid, 20, t), evolve(&k, grid, 40, t), evolve(&k, grid, 80, t));
+            let (a, b, c) = (
+                evolve(&k, grid, 20, t),
+                evolve(&k, grid, 40, t),
+                evolve(&k, grid, 80, t),
+            );
             let (d1, d2) = (sup_diff(&a, &b), sup_diff(&b, &c));
-            println!("amp={amp:.1} t={t:.3}  slope={:.3}  d1={d1:.2e} d2={d2:.2e}",
-                     (d1 / d2).log2());
+            println!(
+                "amp={amp:.1} t={t:.3}  slope={:.3}  d1={d1:.2e} d2={d2:.2e}",
+                (d1 / d2).log2()
+            );
         }
     }
 }

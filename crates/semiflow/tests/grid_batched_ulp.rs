@@ -137,7 +137,10 @@ fn grid_batch_channels_are_independent() {
         if c == 2 {
             assert!(!same, "perturbed channel 2 should have changed");
         } else {
-            assert!(same, "channel {c} changed when only channel 2 was perturbed");
+            assert!(
+                same,
+                "channel {c} changed when only channel 2 was perturbed"
+            );
         }
     }
 }

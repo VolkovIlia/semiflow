@@ -66,11 +66,7 @@ pub(crate) fn interp_stencil<F: SemiflowFloat>(
         }
         InterpKind::Linear => {
             let zero = F::zero();
-            Ok((
-                2,
-                [0, 1, 0, 0],
-                [F::one() - s, s, zero, zero],
-            ))
+            Ok((2, [0, 1, 0, 0], [F::one() - s, s, zero, zero]))
         }
         InterpKind::SepticHermite => Err(SemiflowError::Unsupported {
             feature: "SepticHermite in GridFnND::sample (use InterpKind::CubicHermite)",

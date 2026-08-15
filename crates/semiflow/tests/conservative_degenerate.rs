@@ -19,13 +19,14 @@
 
 use semiflow::{
     conservative::ConservativeDiffusionChernoff,
-    conservative_assemble::assemble_conservative_csr_1d,
-    symmetric_operator::SymmetricLinearOp,
+    conservative_assemble::assemble_conservative_csr_1d, symmetric_operator::SymmetricLinearOp,
     BoundaryPolicy, ChernoffFunction, Grid1D, GridFn1D, ScratchPool,
 };
 
 fn grid(n: usize, lo: f64, hi: f64) -> Grid1D<f64> {
-    Grid1D::new(lo, hi, n).unwrap().with_boundary(BoundaryPolicy::Neumann)
+    Grid1D::new(lo, hi, n)
+        .unwrap()
+        .with_boundary(BoundaryPolicy::Neumann)
 }
 
 /// Feller/CIR variance conductivity `k(v) = ½ξ²v`, degenerate at `v = 0`.
@@ -130,8 +131,8 @@ fn g_cons_degenerate_zero_face_blocks_flux() {
     let mut k = vec![1.0_f64; n];
     k[mid] = 0.0; // single insulating node splits the domain in two
 
-    let cd = ConservativeDiffusionChernoff::from_k_array(g, &k, None, BoundaryPolicy::Neumann)
-        .unwrap();
+    let cd =
+        ConservativeDiffusionChernoff::from_k_array(g, &k, None, BoundaryPolicy::Neumann).unwrap();
     // All mass on the left half.
     let mut u0 = vec![0.0_f64; n];
     for u in u0.iter_mut().take(mid) {
@@ -141,7 +142,8 @@ fn g_cons_degenerate_zero_face_blocks_flux() {
     let mut dst = GridFn1D::new(g, vec![0.0; n]).unwrap();
     let mut pool = ScratchPool::<f64>::new();
     for _ in 0..200 {
-        cd.apply_into(1e-3, &src.clone(), &mut dst, &mut pool).unwrap();
+        cd.apply_into(1e-3, &src.clone(), &mut dst, &mut pool)
+            .unwrap();
     }
     let right_mass: f64 = dst.values[mid + 1..].iter().sum();
     assert!(

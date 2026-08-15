@@ -54,7 +54,9 @@ pub(crate) struct Violation {
 
 impl Violation {
     fn new(msg: impl Into<String>) -> Self {
-        Self { message: msg.into() }
+        Self {
+            message: msg.into(),
+        }
     }
 }
 
@@ -228,7 +230,11 @@ fn find_internal_version_token(line: &str) -> Option<String> {
         if let Some((tok, end)) = parse_version_token(&bytes[i + 1..]) {
             // N must be ≥ 2 (§ L1.3: v1.0.0 is the legitimate API-freeze reference).
             if tok.starts_with('v') {
-                let major_str: String = tok.chars().skip(1).take_while(|c| c.is_ascii_digit()).collect();
+                let major_str: String = tok
+                    .chars()
+                    .skip(1)
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
                 if major_str.parse::<u64>().unwrap_or(0) >= 2 {
                     // Word boundary after token.
                     let abs_end = i + 1 + end;
@@ -326,7 +332,8 @@ fn extract_readme_classes(src: &str) -> HashSet<String> {
             continue;
         }
         // Table separator row — skip
-        if trimmed.starts_with("|---") || trimmed.starts_with("| --") || trimmed.starts_with("|:--") {
+        if trimmed.starts_with("|---") || trimmed.starts_with("| --") || trimmed.starts_with("|:--")
+        {
             continue;
         }
         // A new non-table header resets class-table mode
@@ -361,10 +368,17 @@ fn extract_class_cell(row: &str) -> Option<String> {
     }
     let inner = cell.trim_matches('`');
     // Extract identifier up to first non-identifier char: '(', '.', ' ', '`'
-    let ident: String = inner.chars()
+    let ident: String = inner
+        .chars()
         .take_while(|c| c.is_alphanumeric() || *c == '_')
         .collect();
-    if ident.is_empty() || !ident.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+    if ident.is_empty()
+        || !ident
+            .chars()
+            .next()
+            .map(|c| c.is_uppercase())
+            .unwrap_or(false)
+    {
         return None;
     }
     Some(ident)
@@ -410,7 +424,9 @@ fn extract_pyclass_from_source(src: &str, names: &mut HashSet<String>) {
 /// Given a slice starting at `pyclass`, extract the `name = "X"` value if present.
 fn parse_pyclass_name_attr(slice: &[u8]) -> Option<String> {
     // Find '(' within 64 bytes
-    let paren = slice[..slice.len().min(64)].iter().position(|&b| b == b'(')?;
+    let paren = slice[..slice.len().min(64)]
+        .iter()
+        .position(|&b| b == b'(')?;
     // Find 'name' after '('
     let after_paren = &slice[paren + 1..];
     let attr_str = std::str::from_utf8(&after_paren[..after_paren.len().min(256)]).ok()?;
@@ -438,7 +454,8 @@ fn extract_stub_classes(root: &Path) -> Result<HashSet<String>> {
     let mut names = HashSet::new();
     for line in src.lines() {
         if let Some(rest) = line.strip_prefix("class ") {
-            let ident: String = rest.chars()
+            let ident: String = rest
+                .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
                 .collect();
             if !ident.is_empty() {
@@ -451,7 +468,8 @@ fn extract_stub_classes(root: &Path) -> Result<HashSet<String>> {
 
 /// Check 2a: README ⊆ pyclass names.
 fn check_2a(readme: &HashSet<String>, pyclass: &HashSet<String>, violations: &mut Vec<Violation>) {
-    let mut missing: Vec<&str> = readme.iter()
+    let mut missing: Vec<&str> = readme
+        .iter()
         .filter(|n| !pyclass.contains(*n))
         .map(|s| s.as_str())
         .collect();
@@ -469,7 +487,8 @@ fn check_2b(readme: &HashSet<String>, stub: &HashSet<String>, violations: &mut V
     if stub.is_empty() {
         return; // stub file not present; skip silently
     }
-    let mut missing: Vec<&str> = readme.iter()
+    let mut missing: Vec<&str> = readme
+        .iter()
         .filter(|n| !stub.contains(*n))
         .map(|s| s.as_str())
         .collect();
@@ -489,8 +508,7 @@ fn check_2b(readme: &HashSet<String>, stub: &HashSet<String>, violations: &mut V
 fn check_2c(readme_src: &str, pyclass: &HashSet<String>, violations: &mut Vec<Violation>) {
     let lower_src = readme_src.to_lowercase();
 
-    for (line_no, (orig_line, lower_line)) in
-        readme_src.lines().zip(lower_src.lines()).enumerate()
+    for (line_no, (orig_line, lower_line)) in readme_src.lines().zip(lower_src.lines()).enumerate()
     {
         for phrase in DENIAL_PHRASES {
             let Some(phrase_pos) = lower_line.find(phrase) else {
@@ -498,9 +516,9 @@ fn check_2c(readme_src: &str, pyclass: &HashSet<String>, violations: &mut Vec<Vi
             };
             // Check for past-tense qualifier near the phrase (within 80 chars after).
             let after = &lower_line[phrase_pos..];
-            let guarded = PAST_QUALIFIERS.iter().any(|q| {
-                after[..after.len().min(80)].contains(q)
-            });
+            let guarded = PAST_QUALIFIERS
+                .iter()
+                .any(|q| after[..after.len().min(80)].contains(q));
             if guarded {
                 continue;
             }
@@ -526,10 +544,17 @@ fn extract_backtick_idents(line: &str) -> Vec<String> {
         if c == '`' {
             let ident: String = chars.by_ref().take_while(|c| *c != '`').collect();
             // Accept identifiers starting with uppercase (class names).
-            let base: String = ident.chars()
+            let base: String = ident
+                .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
                 .collect();
-            if !base.is_empty() && base.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            if !base.is_empty()
+                && base
+                    .chars()
+                    .next()
+                    .map(|c| c.is_uppercase())
+                    .unwrap_or(false)
+            {
                 result.push(base);
             }
         }
@@ -539,7 +564,8 @@ fn extract_backtick_idents(line: &str) -> Vec<String> {
 
 /// Check 2d (advisory): registered classes absent from README.
 fn check_2d(pyclass: &HashSet<String>, readme: &HashSet<String>, warnings: &mut Vec<String>) {
-    let mut undoc: Vec<&str> = pyclass.iter()
+    let mut undoc: Vec<&str> = pyclass
+        .iter()
         .filter(|n| !readme.contains(*n))
         .map(|s| s.as_str())
         .collect();
@@ -561,9 +587,19 @@ const FFI_HEADER: &str = "crates/semiflow-ffi/include/semiflow.h";
 /// Family stems to check in denial phrases (Check 3b).
 /// A denial naming a stem is a violation if the header exports any `smf_{stem}*` symbol.
 const FFI_FAMILY_STEMS: &[&str] = &[
-    "diffusion", "graph", "manifold", "hypoelliptic", "adjoint",
-    "resolvent", "killing", "reflected", "obstacle", "schrodinger",
-    "tt", "gridless", "howland",
+    "diffusion",
+    "graph",
+    "manifold",
+    "hypoelliptic",
+    "adjoint",
+    "resolvent",
+    "killing",
+    "reflected",
+    "obstacle",
+    "schrodinger",
+    "tt",
+    "gridless",
+    "howland",
 ];
 
 /// Check 3: FFI README ↔ header surface.
@@ -594,10 +630,12 @@ fn extract_smf_symbols(src: &str) -> HashSet<String> {
     let mut i = 0;
     while i + 4 < bytes.len() {
         if &bytes[i..i + 4] == b"smf_" {
-            let end = i + 4 + bytes[i + 4..]
-                .iter()
-                .take_while(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || **b == b'_')
-                .count();
+            let end = i
+                + 4
+                + bytes[i + 4..]
+                    .iter()
+                    .take_while(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || **b == b'_')
+                    .count();
             if end > i + 4 {
                 if let Ok(sym) = std::str::from_utf8(&bytes[i..end]) {
                     syms.insert(sym.to_owned());
@@ -633,9 +671,7 @@ fn check_3b(readme_src: &str, header_syms: &HashSet<String>, violations: &mut Ve
     // Line-number offset so error lines stay relative to full file.
     let skipped = readme_src.lines().count() - body.lines().count();
     let lower_src = body.to_lowercase();
-    for (rel_no, (orig_line, lower_line)) in
-        body.lines().zip(lower_src.lines()).enumerate()
-    {
+    for (rel_no, (orig_line, lower_line)) in body.lines().zip(lower_src.lines()).enumerate() {
         let line_no = rel_no + skipped;
         if !has_denial_phrase(lower_line) {
             continue;
@@ -774,10 +810,15 @@ fn extract_js_name(attr_line: &str) -> Option<String> {
 /// Extract the struct name from a `pub struct X` or `pub struct X(` line.
 fn extract_pub_struct_name(line: &str) -> Option<String> {
     let rest = line.trim().strip_prefix("pub struct ")?;
-    let name: String = rest.chars()
+    let name: String = rest
+        .chars()
         .take_while(|c| c.is_alphanumeric() || *c == '_')
         .collect();
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 /// Extract class names from the `| Class |` table in the WASM README.
@@ -813,12 +854,9 @@ fn extract_wasm_readme_classes(src: &str) -> HashSet<String> {
 }
 
 /// Check 4a: README class table ⊆ wasm exports (no phantom classes).
-fn check_4a(
-    readme: &HashSet<String>,
-    wasm: &HashSet<String>,
-    violations: &mut Vec<Violation>,
-) {
-    let mut phantoms: Vec<&str> = readme.iter()
+fn check_4a(readme: &HashSet<String>, wasm: &HashSet<String>, violations: &mut Vec<Violation>) {
+    let mut phantoms: Vec<&str> = readme
+        .iter()
         .filter(|n| !wasm.contains(*n))
         .map(|s| s.as_str())
         .collect();
@@ -848,8 +886,7 @@ fn check_4b(readme_src: &str, wasm: &HashSet<String>, violations: &mut Vec<Viola
         "rust-only",
     ];
     let lower_src = readme_src.to_lowercase();
-    for (line_no, (orig_line, lower_line)) in
-        readme_src.lines().zip(lower_src.lines()).enumerate()
+    for (line_no, (orig_line, lower_line)) in readme_src.lines().zip(lower_src.lines()).enumerate()
     {
         let has_denial = WASM_DENIAL.iter().any(|p| lower_line.contains(p));
         if !has_denial {
@@ -866,8 +903,7 @@ fn check_4b(readme_src: &str, wasm: &HashSet<String>, violations: &mut Vec<Viola
             let lower_name = name.to_lowercase();
             let name_pos = lower_line.find(lower_name.as_str()).unwrap_or(0);
             let clause = &lower_line[name_pos..];
-            let ffi_handle_qualified = clause[..clause.len().min(120)]
-                .contains("handle");
+            let ffi_handle_qualified = clause[..clause.len().min(120)].contains("handle");
             if ffi_handle_qualified {
                 continue;
             }
@@ -887,11 +923,7 @@ fn check_4b(readme_src: &str, wasm: &HashSet<String>, violations: &mut Vec<Viola
 /// per-export advisory warning for every unlisted class (50+) is an unmaintainable
 /// maintenance trap — consistent with Check 3c (FFI) which also suppresses per-symbol
 /// completeness warnings and points to `include/semiflow.h` instead.
-fn check_4c(
-    _wasm: &HashSet<String>,
-    _readme: &HashSet<String>,
-    _warnings: &mut Vec<String>,
-) {
+fn check_4c(_wasm: &HashSet<String>, _readme: &HashSet<String>, _warnings: &mut Vec<String>) {
     // Intentional no-op — see doc comment above.
 }
 
@@ -926,12 +958,13 @@ fn strip_front_matter(src: &str) -> &str {
     // If first line is `---`, look for closing `---`.
     if lines.next().map(|l| l.trim() == "---").unwrap_or(false) {
         // Find the byte position of the second `---\n` or `---` at EOL.
-        let after_first = src[src.find('\n').map(|p| p + 1).unwrap_or(src.len())..].trim_start_matches('\n');
+        let after_first =
+            src[src.find('\n').map(|p| p + 1).unwrap_or(src.len())..].trim_start_matches('\n');
         let base = src.len() - after_first.len();
         if let Some(close_rel) = after_first.find("\n---") {
             // Return everything after the closing `---` line.
             let close_abs = base + close_rel + 1; // points to `---`
-            let past_close = close_abs + 3;       // skip `---`
+            let past_close = close_abs + 3; // skip `---`
             let rest = &src[past_close..];
             return rest.trim_start_matches('\n');
         }

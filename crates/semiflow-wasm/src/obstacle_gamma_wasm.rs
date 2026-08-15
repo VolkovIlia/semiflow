@@ -353,8 +353,8 @@ impl ObstacleND2Wasm {
         }
         let mut v_buf = vec![0.0f64; n];
         v.copy_to(&mut v_buf);
-        let result = run_nd2_step(&self.grid_nd, &v_buf, self.level, tau)
-            .map_err(|e| err_to_js(&e))?;
+        let result =
+            run_nd2_step(&self.grid_nd, &v_buf, self.level, tau).map_err(|e| err_to_js(&e))?;
         #[allow(clippy::cast_possible_truncation)]
         let out = Float64Array::new_with_length(n as u32);
         out.copy_from(&result);

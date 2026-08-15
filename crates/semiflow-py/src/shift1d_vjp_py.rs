@@ -17,9 +17,7 @@
 
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
-use semiflow::shift1d_vjp::{
-    shift1d_coeff_gradient, Shift1DProblem, ShiftCoeffField, ShiftCoeffs,
-};
+use semiflow::shift1d_vjp::{shift1d_coeff_gradient, Shift1DProblem, ShiftCoeffField, ShiftCoeffs};
 
 use crate::{
     boundary::parse_boundary,
@@ -78,19 +76,26 @@ pub fn shift1d_coeff_grad<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     catch_panic_py!({
         let field = parse_field(wrt)?;
-        validate_inputs(n, n_steps, t, &[("a", &a), ("b", &b), ("c", &c),
-                                         ("u0", &u0), ("dj_du_n", &dj_du_n)])?;
-        let policy = parse_boundary(boundary)?;
-        let grid = semiflow::Grid1D::new(xmin, xmax, n)
-            .map_err(|e| from_core(&e))?
-            .with_boundary(policy);
+        let named = [
+            ("a", &a),
+            ("b", &b),
+            ("c", &c),
+            ("u0", &u0),
+            ("dj_du_n", &dj_du_n),
+        ];
+        validate_inputs(n, n_steps, t, &named)?;
+        let grid = build_grid(xmin, xmax, n, boundary)?;
         #[allow(clippy::cast_precision_loss)]
         let tau = t / n_steps as f64;
         let mut grad = vec![0.0_f64; n];
         let result = py.detach(|| {
             let problem = Shift1DProblem {
                 grid: &grid,
-                coeffs: ShiftCoeffs { a: &a, b: &b, c: &c },
+                coeffs: ShiftCoeffs {
+                    a: &a,
+                    b: &b,
+                    c: &c,
+                },
                 tau,
                 n_steps,
             };
@@ -99,6 +104,14 @@ pub fn shift1d_coeff_grad<'py>(
         result.map_err(|e| from_core(&e))?;
         Ok(grad.as_slice().to_pyarray(py))
     })
+}
+
+/// Build the grid with the requested boundary policy.
+fn build_grid(xmin: f64, xmax: f64, n: usize, boundary: &str) -> PyResult<semiflow::Grid1D<f64>> {
+    let policy = parse_boundary(boundary)?;
+    Ok(semiflow::Grid1D::new(xmin, xmax, n)
+        .map_err(|e| from_core(&e))?
+        .with_boundary(policy))
 }
 
 /// Map the `wrt=` string to a field selector.
@@ -115,12 +128,7 @@ fn parse_field(wrt: &str) -> PyResult<ShiftCoeffField> {
 }
 
 /// Shared length / finiteness / domain checks.
-fn validate_inputs(
-    n: usize,
-    n_steps: usize,
-    t: f64,
-    arrays: &[(&str, &Vec<f64>)],
-) -> PyResult<()> {
+fn validate_inputs(n: usize, n_steps: usize, t: f64, arrays: &[(&str, &Vec<f64>)]) -> PyResult<()> {
     if n_steps == 0 {
         return Err(new_pyerr("OutOfDomain", "n_steps must be >= 1"));
     }
