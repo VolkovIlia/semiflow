@@ -49,9 +49,12 @@ pub struct ConservativeDiffusionChernoff<F: SemiflowFloat = f64> {
 impl<F: SemiflowFloat> ConservativeDiffusionChernoff<F> {
     /// Node-sampled conductivities (length `grid.n`).
     ///
+    /// `k_i = 0` is admitted (§56.8, ADR-0192): a degenerate node gets zero face
+    /// conductivity, so no flux crosses it and the boundary classifies itself.
+    ///
     /// # Errors
     ///
-    /// `DomainViolation` if any `k_i ≤ 0`, length mismatch, non-finite entry,
+    /// `DomainViolation` if any `k_i < 0`, length mismatch, non-finite entry,
     /// or invalid `r_contact`.
     pub fn from_k_array(
         grid: Grid1D<F>,
@@ -251,20 +254,25 @@ pub(crate) fn thomas_solve<F: SemiflowFloat>(
 ) -> Result<(), SemiflowError> {
     let mut c_prime: Vec<F> = vec![F::zero(); n];
     let mut d_prime: Vec<F> = vec![F::zero(); n];
-    if diag[0] == F::zero() {
+    // Non-finite is checked alongside zero: `NaN == 0` is false, so a NaN pivot
+    // would slip through a bare zero test and poison the whole state vector
+    // silently. This path has no other finiteness backstop — the sibling
+    // `assemble_conservative_csr_1d` route is covered by `from_csr`'s
+    // `check_finite`, but the CN/Thomas route is not (ADR-0192).
+    if !diag[0].is_finite() || diag[0] == F::zero() {
         return Err(SemiflowError::DomainViolation {
-            what: "thomas_solve: zero pivot at row 0",
-            value: 0.0,
+            what: "thomas_solve: zero or non-finite pivot at row 0",
+            value: diag[0].to_f64().unwrap_or(f64::NAN),
         });
     }
     c_prime[0] = sup[0] / diag[0];
     d_prime[0] = rhs[0] / diag[0];
     for i in 1..n {
         let w = diag[i] - sub[i] * c_prime[i - 1];
-        if w == F::zero() {
+        if !w.is_finite() || w == F::zero() {
             #[allow(clippy::cast_precision_loss)]
             return Err(SemiflowError::DomainViolation {
-                what: "thomas_solve: zero pivot",
+                what: "thomas_solve: zero or non-finite pivot",
                 value: i as f64,
             });
         }

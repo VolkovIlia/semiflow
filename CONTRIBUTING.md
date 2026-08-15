@@ -1,6 +1,8 @@
-# Contributing to semiflow-core
+# Contributing to SemiFlow
 
-Thank you for contributing. This guide covers the full workflow for the semiflow-core workspace.
+Thank you for contributing. This guide covers the full workflow for the SemiFlow
+workspace (repository directory `remizovcore`; the crates were renamed
+`remizov-*` -> `semiflow-*`, and the core crate is `semiflow`).
 
 ## Repository Layout
 
@@ -8,17 +10,17 @@ Four-crate workspace:
 
 | Crate | Kind | Purpose |
 |-------|------|---------|
-| `crates/semiflow-core` | `rlib` | Core math: Chernoff operator semigroup approximations |
+| `crates/semiflow` | `rlib` | Core math: Chernoff operator semigroup approximations |
 | `crates/semiflow-ffi` | `cdylib` (C ABI) | C-facing bindings; design in ADR-0028 |
 | `crates/semiflow-py` | PyO3 wheel | Python bindings via maturin |
 | `crates/semiflow-wasm` | wasm-bindgen | WebAssembly bindings |
 
 Key directories:
 
-- `docs/adr/` — 155 Architecture Decision Records. To add one: copy
+- `docs/adr/` — 200 Architecture Decision Records. To add one: copy
   `docs/adr/0000-template.md`, increment the number, keep rationale ≤1 paragraph.
 - `contracts/semiflow-core.math.md` — normative mathematical specification
-  (4554 lines). Updates require a companion ADR.
+  (~13 600 lines). Updates require a companion ADR.
 - `xtask/` — workspace task runner (replaces Make/shell scripts).
 
 ## MSRV & Toolchain
@@ -125,18 +127,19 @@ add new grandfather exceptions without an ADR.
 
 `unsafe` code is only permitted in:
 
-- `crates/remizov-{ffi,py,wasm}/src/**`
-- `crates/semiflow-core/src/simd/**`
+- `crates/semiflow-{ffi,py,wasm}/src/**`
+- `crates/semiflow/src/simd/**`
 
 Scope is enforced by `cargo run -p xtask -- check-unsafe-scope` (ADR-0019).
 New `unsafe` outside these paths requires an ADR.
 
 ## Adding a New ChernoffFunction Type
 
-1. Add a module file: `crates/semiflow-core/src/<name>.rs`.
-2. Implement `ChernoffFunction<F: SemiflowFloat = f64>` — methods `apply`,
-   `order`, `growth`.
-3. Re-export from `crates/semiflow-core/src/lib.rs`.
+1. Add a module file: `crates/semiflow/src/<name>.rs`.
+2. Implement `ChernoffFunction<F: SemiflowFloat = f64>` — methods `apply_into`,
+   `order`, `growth`. (`apply` was removed at v3.0, ADR-0074; `order` has been
+   required since the same wave.)
+3. Re-export from `crates/semiflow/src/lib.rs`.
 4. Add a unit test in the same file (≤50 LoC).
 5. If order > 2 or the type introduces 2D/3D coupling: write an ADR and add a
    derivation in `contracts/semiflow-core.math.md` §X.Y.
@@ -147,12 +150,18 @@ New `unsafe` outside these paths requires an ADR.
 New mathematical content lives in `contracts/semiflow-core.math.md`. Pull
 requests must link the relevant section in the PR description.
 
-Since v0.5.0 every PDE family has a sympy gate under
-`crates/semiflow-core/sympy/T*N_*.py`. The gate must pass before merge:
+Since v0.5.0 every PDE family has a sympy oracle under `scripts/` — 55
+`verify_*.py` gates plus 24 `*_kit.py` / `*_preflight.py` derivation scripts.
+The relevant gate must pass before merge:
 
 ```bash
-python crates/semiflow-core/sympy/<gate>.py
+python scripts/verify_<family>_sympy.py
 ```
+
+These are run by hand, not by CI: they need `sympy`, and several take minutes.
+The CI-enforced counterpart is the gate registry in
+`contracts/semiflow-core.properties.yaml`, whose `test_file` entries point at
+Rust gates that DO run.
 
 For audit reference, see `docs/audit-findings-v0_10_0.md` and
 `docs/audit-findings-v0_9_0.md` for the v0.11.0 audit pattern.

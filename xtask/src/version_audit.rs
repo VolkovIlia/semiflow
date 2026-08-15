@@ -191,9 +191,8 @@ fn extract_scalar(json: &str, key: &str) -> Option<String> {
     let after_key = &json[pos + needle.len()..];
     // Skip optional whitespace and ':'
     let after_colon = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if after_colon.starts_with('"') {
+    if let Some(inner) = after_colon.strip_prefix('"') {
         // String value: read until the closing quote (skip escaped quotes)
-        let inner = &after_colon[1..];
         let end = inner.find('"')?;
         return Some(inner[..end].to_owned());
     }
@@ -227,7 +226,7 @@ fn workspace_version() -> Result<String> {
     for line in cargo.lines() {
         let t = line.trim();
         if t.starts_with("version") && t.contains('=') {
-            if let Some(rhs) = t.splitn(2, '=').nth(1) {
+            if let Some((_, rhs)) = t.split_once('=') {
                 let v = rhs.trim().trim_matches('"').to_owned();
                 if !v.is_empty() {
                     return Ok(v);

@@ -61,9 +61,17 @@ use crate::{
 /// ------
 /// `SemiflowError`
 ///     kind='`GridMismatch`' / '`NanInf`' / '`OutOfDomain`'.
+/// Which composition backs a `Heat2DVarA` (ADR-0196).
+pub(crate) enum Heat2DBackend {
+    /// Per-axis profiles `a_x(x)`, `a_y(y)` — one shared kernel per axis.
+    Separable(Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>),
+    /// Full-grid `a_x(x,y)`, `a_y(x,y)` — one kernel per pencil (#21).
+    Pencil(crate::heat2d_pencil_py::PencilStrang2D),
+}
+
 #[pyclass(name = "Heat2DVarA")]
 pub struct PyHeat2DVarA {
-    strang: Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>,
+    backend: Heat2DBackend,
     grid: Grid2D<f64>,
     nx: usize,
     ny: usize,
@@ -93,7 +101,7 @@ impl PyHeat2DVarA {
                 build_strang2d(xmin, xmax, nx, ymin, ymax, ny, ax_vals, ay_vals, policy)
                     .map_err(|e| from_core(&e))?;
             Ok(Self {
-                strang,
+                backend: Heat2DBackend::Separable(strang),
                 grid,
                 nx,
                 ny,
@@ -131,17 +139,80 @@ impl PyHeat2DVarA {
                     return Err(new_pyerr("NanInf", "u0 contains NaN or Inf"));
                 }
             }
-            let strang = self.strang.clone();
             let grid = self.grid;
-            let result: Result<Vec<f64>, _> =
-                py.detach(|| evolve_strang_2d(strang, grid, input, tau, n_steps));
+            let result: Result<Vec<f64>, _> = match &self.backend {
+                Heat2DBackend::Separable(s) => {
+                    let s = s.clone();
+                    py.detach(|| evolve_strang_2d(s, grid, input, tau, n_steps))
+                }
+                Heat2DBackend::Pencil(p) => {
+                    let p = p.clone();
+                    py.detach(|| crate::heat2d_pencil_py::evolve_pencil_2d(&p, grid, input, tau, n_steps))
+                }
+            };
             Ok(result.map_err(|e| from_core(&e))?.as_slice().to_pyarray(py))
         })
     }
 
-    /// Return approximation order (2 — palindromic Strang).
+    /// Full-grid coefficients `a_x(x,y)`, `a_y(x,y)` (#21, ADR-0196).
+    ///
+    /// Each array is flat, length ``nx*ny``, indexed ``values[j*nx + i]`` for the
+    /// node ``(x_i, y_j)`` — the same x-fastest layout as
+    /// ``NonSeparable2D.with_beta_array``. This lifts the restriction that each
+    /// diagonal coefficient vary only along its own axis, which is what the
+    /// decorrelated Heston generator needs (both coefficients depend on ``v``).
+    ///
+    /// Order 2 still holds, but by the classical symmetric-splitting argument
+    /// rather than by ``[L_x, L_y] = 0``, which is false here. The error
+    /// *constant* grows with the transverse variation; verify the slope on your
+    /// own coefficient field rather than assuming it.
+    ///
+    /// Raises
+    /// ------
+    /// `SemiflowError`
+    ///     ``kind='GridMismatch'`` on a wrong length; ``kind='NanInf'`` /
+    ///     ``kind='OutOfDomain'`` on non-finite or non-positive entries.
+    #[staticmethod]
+    #[pyo3(signature = (xmin, xmax, nx, ymin, ymax, ny, a_x, a_y, *, boundary = "reflect"))]
+    #[allow(clippy::too_many_arguments)]
+    fn with_grid_arrays(
+        xmin: f64,
+        xmax: f64,
+        nx: usize,
+        ymin: f64,
+        ymax: f64,
+        ny: usize,
+        a_x: Vec<f64>,
+        a_y: Vec<f64>,
+        boundary: &str,
+    ) -> PyResult<Self> {
+        catch_panic_py!({
+            let policy = parse_boundary(boundary)?;
+            let (strang, grid) = crate::heat2d_pencil_py::build_pencil_strang2d(
+                xmin, xmax, nx, ymin, ymax, ny, &a_x, &a_y, policy,
+            )?;
+            Ok(Self {
+                backend: Heat2DBackend::Pencil(strang),
+                grid,
+                nx,
+                ny,
+            })
+        })
+    }
+
+    /// Consistency order — **1**, not 2 (ADR-0191 AMENDMENT 1).
+    ///
+    /// The palindromic Strang composition is second-order, but composition order
+    /// is capped by its axis kernels, and each axis here is the gamma-A stencil
+    /// with its coefficient derivatives zeroed (see `build_axis_diff`). That
+    /// stencil freezes `a` at the node, which agrees with `exp(tau*a*d_xx)` at
+    /// `O(tau)` and differs at `O(tau^2)` by `(tau^2/2)*a*(a''*f_xx +
+    /// 2*a'*f_xxx)` whenever `a` varies. Measured global order **1.007**
+    /// (`G_FROZEN_COEFF_ORDER1`); reporting 2 was an unearned claim, corrected
+    /// on the ADR-0112 precedent. `DiffusionChernoff::order() == 2` is
+    /// unaffected — that is earned when `a'`/`a''` are actually supplied.
     fn order(&self) -> u32 {
-        2
+        1
     }
 
     /// Number of X-axis nodes.
@@ -161,25 +232,8 @@ impl PyHeat2DVarA {
     }
 
     fn __repr__(&self) -> String {
-        format!("Heat2DVarA(nx={}, ny={}, order=2)", self.nx, self.ny)
+        format!("Heat2DVarA(nx={}, ny={}, order=1)", self.nx, self.ny)
     }
-}
-
-fn evolve_strang_2d(
-    strang: Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>,
-    grid: Grid2D<f64>,
-    input: Vec<f64>,
-    tau: f64,
-    n_steps: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    let mut state = GridFn2D::new(grid, input)?;
-    let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()])?;
-    let mut scratch = ScratchPool::<f64>::new();
-    for _ in 0..n_steps {
-        strang.apply_into(tau, &state, &mut dst, &mut scratch)?;
-        core::mem::swap(&mut state, &mut dst);
-    }
-    Ok(state.values)
 }
 
 // ===========================================================================
@@ -294,9 +348,10 @@ impl PyHeat3DVarA {
         })
     }
 
-    /// Return approximation order (2 — palindromic Strang).
+    /// Consistency order — **1**, not 2; see `Heat2DVarA::order` and
+    /// ADR-0191 AMENDMENT 1. Same argument per axis.
     fn order(&self) -> u32 {
-        2
+        1
     }
 
     fn __len__(&self) -> usize {
@@ -305,7 +360,7 @@ impl PyHeat3DVarA {
 
     fn __repr__(&self) -> String {
         format!(
-            "Heat3DVarA(nx={}, ny={}, nz={}, order=2)",
+            "Heat3DVarA(nx={}, ny={}, nz={}, order=1)",
             self.nx, self.ny, self.nz,
         )
     }
@@ -355,8 +410,26 @@ fn build_strang2d(
     Ok((Strang2D::new(dx, dy), grid))
 }
 
-/// Build a `Strang3D` from pre-sampled 1D diffusion coefficient arrays.
 /// Build a `DiffusionChernoff` with constant-zero drift/reaction from a tabulated `a_vals`.
+///
+/// # Why `a' = 0` and `a'' = 0` — resolved, ADR-0191 AMENDMENT 1, math §9.2.3.B.bis
+///
+/// `DiffusionChernoff` is the zeta-A kernel for the **divergence** form
+/// `d_x(a(x) d_x)` and genuinely consumes `a'`/`a''`, so passing zeros alongside
+/// a *variable* `a` reads as a bug. It is not one. Zeroing them collapses the
+/// kernel to the frozen-coefficient stencil (the inner-Strang shift becomes the
+/// identity and every zeta-A term carries a factor `a'` or `a''`), which is a
+/// consistent discretisation of the **non-divergence** operator
+/// `d_t u = a_x(x) u_xx + a_y(y) u_yy` — the operator all three binding surfaces
+/// advertise (this file, `semiflow-ffi/src/strang_nd_2d_ffi.rs`,
+/// `semiflow-wasm/src/strang_nd_wasm.rs`).
+///
+/// Verified rather than argued: both candidate generators assembled densely on a
+/// periodic grid and exponentiated differ by `7.8e-2`, and this kernel lands
+/// `6.8e-3` from the non-divergence reference against `7.4e-2` from the
+/// divergence one, while the FD-derivative path lands the other way round
+/// (`G_FROZEN_COEFF_NONDIV`). The consequence for the order claim is handled in
+/// `order()`: the frozen-coefficient stencil is consistency order 1.
 fn build_axis_diff(
     a_vals: Vec<f64>,
     amin: f64,
@@ -405,4 +478,21 @@ fn build_strang3d(
     let dy = build_axis_diff(ay_vals, ymin, ymax, ny, gy);
     let dz = build_axis_diff(az_vals, zmin, zmax, nz, gz);
     Ok((Strang3D::new(dx, dy, dz), grid))
+}
+
+fn evolve_strang_2d(
+    strang: Strang2D<DiffusionChernoff<f64>, DiffusionChernoff<f64>>,
+    grid: Grid2D<f64>,
+    input: Vec<f64>,
+    tau: f64,
+    n_steps: usize,
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    let mut state = GridFn2D::new(grid, input)?;
+    let mut dst = GridFn2D::new(grid, vec![0.0; state.values.len()])?;
+    let mut scratch = ScratchPool::<f64>::new();
+    for _ in 0..n_steps {
+        strang.apply_into(tau, &state, &mut dst, &mut scratch)?;
+        core::mem::swap(&mut state, &mut dst);
+    }
+    Ok(state.values)
 }

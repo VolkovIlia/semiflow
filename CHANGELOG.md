@@ -4,6 +4,273 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.13.0-beta] — 2026-08-15
+
+Issue campaign #17 / #19 / #21–#26.
+
+Wave A (correctness): #17 + #26. Wave B (capability): #19, #21, #22, #23, #24, #25.
+All eight issues closed.
+
+### Fixed
+
+- **`GridFnND::sample` ignored interpolation order and boundary policy**
+  (#17, ADR-0191, math §32.9) — **this silently corrupted every `D > 1` kernel.**
+  The N-D sampler hard-coded multilinear interpolation with an index clamp,
+  consulting neither the `InterpKind` nor the `BoundaryPolicy` each axis already
+  carried. Because the Chernoff product resamples at off-grid quadrature feet
+  every step, linear interpolation injected ≈ `dx²/6` of spurious second moment
+  **per step**, accumulating *linearly in the step count* — so refining
+  `n_steps`, the one knob users turn for accuracy, made the answer worse. On the
+  issue's datum (`A = I`, `t = 0.5`, 96² grid) the variance gain read
+  `1.2113 / 2.2449 / 4.4901` at `n_steps = 100 / 400 / 1600` against an exact
+  `1.0`; it now reads `1.000000` at all three. `A = diag(1.0, 0.5)` gives
+  `(1.000000, 0.500000)` and an off-diagonal `0.4` gives `dCov = 0.400000`.
+  `GridND` gains `interp` (default `CubicHermite`) and `with_interp`. Gate
+  `G_ASND_MOMENT`. Affects `shift_nd`, `shift_nd_zeta2`, `shift_nd_adaptive`,
+  `smolyak`, `obstacle`, `obstacle_nd`, `point_eval`, `carnot_complex`,
+  `carnot_stepk`, `hormander_engel` and the ND FFI/WASM surfaces.
+- **`thomas_solve` accepted non-finite pivots** (ADR-0192). The guard tested
+  `w == 0`, which is false for `NaN`, so a NaN pivot propagated into the state
+  vector silently. This was the only path in the conservative subsystem without
+  a finiteness backstop.
+
+- **`expmv`'s θ_m table was mis-transcribed** (ADR-0198, math §45.2.bis) —
+  **`expmv` and the Lanczos path were silently under-substepping by up to 8×.**
+  `THETA_M` claimed to be Al-Mohy & Higham Table 3.1 but paired each degree with
+  a radius from two to three rows further down it: `m = 18` carried `θ ≈ 8.84`,
+  whose real owner is `m ≈ 51`, against its own `θ_18 = 1.09`. Since
+  `select_s_m` takes `s = ⌈τ‖A‖/θ_m⌉`, too large a θ means too few substeps and
+  a wrong answer with no runtime symptom. Forward relative error of `T_18` at
+  the claimed radius: **3.8e+04**; at the correct one, 5.0e−16. The replacement
+  values were recomputed from the definition in exact rational arithmetic rather
+  than re-copied, and reproduce Table 3.1 at every degree. `M_MAX` raised 18 → 30
+  (the old cap protected the Horner *argument*, which the wrong table was itself
+  violating). `graph_krylov`'s mirror corrected in place, keeping its structural
+  `m ≤ 18` cap. Found while building #24 — the tight `‖A‖_∞` there exposed what
+  loose norm bounds elsewhere had been masking. New gate `G_THETA_M_TABLE`;
+  `expmv_div_form_action_accuracy` improves from 1.1e−15 to 2.2e−16.
+- **`Heat2DVarA` / `Heat3DVarA` claimed order 2 and are order 1**
+  (ADR-0191 AMENDMENT 1, math §9.2.3.B.bis). Their axis kernels freeze `a` at the
+  node, which agrees with `e^{τa∂ₓₓ}` at `O(τ)` and differs at `O(τ²)` by
+  `(τ²/2)·a·(a''f'' + 2a'f''')` whenever `a` varies. Measured global order
+  **1.007**. Corrected on the ADR-0112 precedent; `DiffusionChernoff::order() == 2`
+  is untouched and still earned, because that path supplies `a'`/`a''`.
+- **The WASM crate's `full` feature never compiled.** `graph_magnus_wasm.rs`
+  declared `mod graph_magnus_wasm_helpers;` at a path that has never existed
+  (Rust 2018 resolves a nested `mod` in a non-`mod.rs` file to a subdirectory),
+  and `graph_adjoint_wasm.rs` carried five non-snake-case methods. No build path
+  enables `full` — not `xtask wasm-build`, not CI — so ~20 gated modules,
+  including the whole Magnus graph surface, had been dead and unbuildable.
+  Fixed, and CI now type-checks `--features full` so it cannot rot again.
+
+### Added
+
+- **`k ≥ 0` in conservative divergence-form diffusion** (#26, ADR-0192,
+  math §56.8.bis). Degenerate-at-the-boundary conductivities are now accepted:
+  CEV `k(S) = ½σ²S^{2β}` at `S = 0`, Feller/CIR `k(v) = ½ξ²v` at `v = 0`,
+  Wright–Fisher at both ends. A degenerate face carries exactly zero flux, so
+  the boundary classifies itself and the operator stays symmetric PSD; the
+  `max(k, ε)` floor callers were forced into is no longer needed. `k < 0` and
+  non-finite `k` remain `DomainViolation`. Gate `G_CONS_DEGENERATE`.
+- **`boundary=` on `AnisotropicShiftND2` / `AnisotropicShiftND3`** (#17
+  secondary) — `"reflect"` (default), `"periodic"`, `"zero"`, `"linear"`,
+  now actually honoured by the sampler.
+- **`shift1d_coeff_grad`** (#25, ADR-0197, math §61) — gradients w.r.t. the
+  per-node coefficient **fields** of `Shift1D.with_arrays`, i.e. local-vol Vega
+  surfaces `∂V/∂σ(S_i)`. `EvolverHeat1DGreeksV3` differentiates only w.r.t. a
+  single global diffusion scale. Mirrors `edge_weight_grad`'s contract: you
+  supply the cotangent, the loss stays outside the library. Costs
+  `O(n_steps · n)` — the same order as the forward solve — because the
+  parameter→output coupling is diagonal, which is why `GeneratorSensitivity`
+  (one parameter per call, `O(n_steps · n²)`) is deliberately not implemented.
+  The adjoint's interpolation weight rows are **measured** from the sampler
+  rather than hand-transposed, so they are correct for every `InterpKind` and
+  `BoundaryPolicy` by construction. Gates `G_SHIFT1D_WEIGHTS_ORACLE`,
+  `G_SHIFT1D_TRANSPOSE_ID`, `G_SHIFT1D_COEFF_FD`. Honest limits: `wrt='a'`
+  requires `a_i > 0` strictly (the `√(τ/a)` chain factor diverges), so the
+  gradient's domain is strictly smaller than the forward kernel's;
+  `O(n_steps · n)` trajectory memory with no checkpointing; order 1, matching
+  the kernel.
+- **`Heat2DVarA.with_grid_arrays`** (#21, ADR-0196, math §60) — full-grid
+  `a_x(x,y)` / `a_y(x,y)`. Each diagonal coefficient could previously vary only
+  along its *own* axis, because `Strang2D` applies one shared kernel to every
+  pencil — and the decorrelated Heston generator needs exactly the opposite
+  (both coefficients depend on `v`). New core type
+  `semiflow::strang2d_pencil::Strang2DPencil` carries one 1-D kernel per pencil.
+  Gates `G_PENCIL_REDUCTION` (separable input reproduces `Strang2D` to 1e-13)
+  and `G_PENCIL_ORDER2`. §60 replaces the *justification* for order 2: `Strang2D`
+  argues from `[L_x, L_y] = 0`, which is false here, so order 2 now rests on the
+  classical symmetric-splitting BCH residue instead. The slope survives; the
+  error **constant** carries the double commutators — measured slope 2.05 / 1.91
+  / 1.18 at ±10% / ±30% / ±60% transverse amplitude, with the ±60% ladder
+  pre-asymptotic. Serial only, deliberately: reusing `Strang2D`'s threaded
+  passes would put the ADR-0018 bit-equality contract in the blast radius.
+- **`GeneralOperator`** (#24, ADR-0195) — externally-assembled **non-symmetric**
+  CSR operators and their `e^{−tA}v` action. `SymmetricOperator::from_csr`
+  validates symmetry, closing the whole Krylov surface to non-self-adjoint
+  generators; drifted Fokker–Planck `∂_t p = ∂_x(D∂_x p) − ∂_x(μp)` and
+  Cartea–Jaimungal inventory ladders were both shut out. Routed to the
+  **existing** symmetry-agnostic scaled-truncated-Taylor engine rather than to
+  new Arnoldi code — which is also the safer choice for the nilpotent-plus-
+  diagonal ladder, where Arnoldi's residual-based stopping is least reliable.
+  Arnoldi stays deferred, now with a reason. Gates `G_GENOP_DENSE`,
+  `G_GENOP_NONNORMAL`, `G_GENOP_ASYM_ACCEPTED` (teeth), `G_GENOP_COST_LINEAR`
+  (advisory). Honest limits: cost is `Θ(t‖A‖_∞)` — **not** depth-flat; only the
+  backward error is certified; Chebyshev and Lanczos remain structurally
+  unavailable and there is deliberately no `path=` argument.
+- **`Shift1D.evolve_batched`** (#19, ADR-0194) — batched multi-channel evolve
+  for the 1-D grid family, `[N, C]` in and out. A strike strip, bump Greeks, or
+  a batch of Fokker–Planck density anchors is `C` independent solves under the
+  *same* generator with only `u0` differing; that was a Python loop paying
+  object construction and a GIL round-trip per column. Core entry point
+  `semiflow::grid_batched::evolve_batched_1d`, generic over any
+  `ChernoffFunction<F, S = GridFn1D<F>>`. Bit-identical to `C` sequential solves
+  (gate `G_GRID1D_BATCH_ULP`, asserted on `f64` bit patterns). Channel-parallel
+  and the pre-existing node-parallel path are mutually exclusive by
+  construction, so nesting cannot oversubscribe.
+- **`AdaptivePI.with_arrays`** (#22, ADR-0193) — adaptive PI stepping over a
+  variable-coefficient `Shift1D` generator, `du/dt = a(x)u_xx + b(x)u_x + c(x)u`.
+  The `kernel=` menu only reached constant-coefficient kernels — its `"shift"`
+  arm hard-codes `a=0.5, b=0, c=0` — so Black-Scholes-type generators had no
+  adaptive path and `n_steps` was hand-tuned per (grid, maturity, vol) triple.
+- **`Shift1D.evolve_with_coefficient_schedule`** (#23, ADR-0193) — per-segment
+  schedules for **all three** coefficients, each entry independently a scalar or
+  a length-`n` array. Closes both gaps in `evolve_with_time_schedule`: no `b`/`c`
+  schedules, and no space-varying coefficients inside a schedule (the
+  Almgren–Chriss killing term `−γν(t)(p − ην(t))` needs both). Runs the whole
+  walk in one GIL release with the state kept in Rust, ping-pongs instead of
+  cloning the state per step, and leaves the object's coefficients at the final
+  segment so a subsequent `evolve` continues instead of reverting.
+  `evolve_with_time_schedule` is unchanged; its revert-on-next-evolve behaviour
+  is now documented rather than altered.
+- **`AnisotropicShiftND2.set_state` accepts a `(nx, ny)` array**, and
+  **`values_2d()`** returns one. The library's flat layout is x-fastest
+  (`flat[i + j*nx]` — Fortran order for shape `(nx, ny)`), and a reflexive
+  C-order `ravel()` transposes the axes; this is what issue #17 reported as
+  "axis mixing". Passing the 2-D array directly removes the trap.
+
+### Changed
+
+- **BREAKING (0.x)**: `GridND` gains a public `interp` field, so
+  `GridND { axes }` struct literals no longer compile. Use `GridND::new`.
+- `InterpKind::{SepticHermite, OctonicHermite, ChebyshevSpectralWithBC}` return
+  `Unsupported` for `D > 1` (checked once in `GridFnND::new`). The N-D spatial
+  floor is `O(dx⁴)`, not the 1-D family's `O(dx⁸)` — an honest limit, not a
+  temporary one.
+- The N-D tensor-product interpolant is not positivity-preserving, where
+  multilinear was. Undershoot is `O(dx⁴)` and converges away (measured
+  `min/peak`: `−1.8e−3` at n=8, `−3.5e−10` at n=32, `+3.9e−21` at n=64).
+  `apply_into_smoke_d2` now asserts that convergence rather than strict
+  non-negativity.
+- `AdaptivePI`'s documented error kind for exceeding `max_substeps` corrected
+  from `'CflViolated'` to `'ConvergenceFailed'` in both the rustdoc and the
+  `.pyi`. The core returns `AdaptiveStepRejected` from that path and never
+  `CflViolated`, so a caller following the docs caught the wrong kind.
+- The `G_DDIM` D=2…5 order ladder (`N_AXIS = 8`, ADR-0112 AMENDMENT 1) was
+  calibrated *around* the interpolation floor this release removes and must be
+  re-measured on production hardware before tagging.
+- `G_BINDING_SMOLYAK_PARITY`'s recorded golden values were regenerated — the
+  sampler change moves them legitimately. Worth noting *how*: the new golden is
+  symmetric (`[a, b, b, a, …]`) as the symmetric Gaussian IC on a symmetric
+  domain requires, where the old one read `[a, b, c, c, …]` with `g[0]` and
+  `g[3]` differing by a factor of 22. The index clamp had been breaking the
+  reflection symmetry at the two ends.
+
+- **`shift1d_vjp` no longer costs the 1-D path 70%** (ADR-0197 AMENDMENT 1).
+  The regression recorded below in the previous revision was real but was not in
+  that module: `boundary::bc_value` / `bc_index` / `reflect_index` flip between
+  inlined and out-of-line with unrelated crate volume, and a septic sample
+  resolves eight nodes through `bc_value` while `DiffusionChernoff` takes eleven
+  samples per grid node — ~88 calls per node, ~2.2 M per `evolve(0.1, 100)`.
+  Marking the three `#[inline(always)]` removes the fragility. Ten other
+  interventions (`inline(always)` on `Grid1D::interp`, on `GridFn1D::sample`,
+  outlining the samplers, hot-arm-first dispatch, resolving the coefficient
+  `Storage` variant once per node, `codegen-units = 16`, `lto = "off"`, …) were
+  each built and timed, changed nothing, and were reverted. Results are unchanged
+  bit-for-bit. The path is now **faster than before the campaign**: Path 2
+  50.7 ms → 34.2 ms, Path 1 123.8 ms → 110.4 ms, speedup 2.4× → 3.2× against the
+  same `0e6d25b` baseline re-measured on the same machine.
+- **`GridFnND::sample` resolves each axis's boundary policy once per sample**
+  (ADR-0191 AMENDMENT 4). It used to resolve inside the collapse recursion, which
+  re-visits axis `d` once per combination of the axes above it: `1364` `bc_index`
+  calls per sample at `D=5, K=4`, of which `20` are distinct. `bc_value_by` is
+  split into `bc_index` + `bc_value_from_hit`; `AxisStencil` carries the resolved
+  hits and the axis stride. Arithmetic and summation order untouched, so results
+  are bit-identical — `G_DDIM D=2`/`D=3` return exactly `−0.4676`/`−0.4766` and
+  `D=4`'s successive differences match digit for digit.
+  It bought **1.32×** (`D=4`: 1081 s → 820 s), not the 5× expected: the dominant
+  cost is the recursion itself, not the policy resolution that was removed. That
+  is enough to restore `D=5`'s `N_AXIS = 6` datum, which AMENDMENT 3 had lowered
+  to 5 and which the gate rejected at slope `−0.3595`. A `D=2` probe showed why:
+  on an adequate grid the slope is stable at every ladder position
+  (`−0.446…−0.468`), on the coarse one it reads shallow everywhere
+  (`−0.334…−0.443`) — the grid was contaminating the differences, not the ladder.
+- `general_operator` uses the shared `expmv::select_s_m` again, now that the θ
+  table it was avoiding is correct; its own derived criterion is deleted.
+
+- **`G_DDIM` re-based: its estimator was contaminated and the kernel is order ½**
+  (ADR-0191 AMENDMENT 3, `Gate-Change-Approved-By: VolkovIlia`). The gate compared
+  each swept `n` against a single reference at `n_ref = 512` — only twice the
+  largest swept `n`, so the last point measured the reference's own error.
+  Holding the sweep and raising `n_ref` to 1024/2048/4096/8192 walked the reported
+  slope from −0.92 to −0.54; a converged estimator would have been flat. It now
+  fits the OLS slope of the reference-free successive differences
+  `sup|u_2n − u_n|`, whose ratio settles on **√2** across `n ∈ [32, 16384]` and
+  `N_AXIS ∈ {8, 16, 32}`: the global temporal order on the normative variable-`A`
+  datum is **½**, from the `√τ` inside the Gauss–Hermite shift. Threshold
+  `−0.95 → −0.45`, now two-sided (a `−0.75` ceiling fails loudly if the kernel
+  ever gains an order). Measured after re-basing: D=2 −0.4676, D=3 −0.4766.
+  Not a regression — the same probe on `0e6d25b` shows no clean power law and
+  errors 10× larger; the ND sampler fix made the order legible.
+  The ladder is also re-sized: `K^D` sampling had pushed `D=4` to **8105 s** and
+  `D=5` to an extrapolated ~85 h. `D=4` now runs `{8,16,32,64}` (120 steps against
+  752) and `D=5` runs `{4,8,16,32}`. Dropping a node per axis at `D=5` was tried
+  and **reverted** — see the sampler entry below.
+
+### Open
+
+- **`shift_nd_zeta2`'s ζ² correction may lift the ND kernel's global order to 1.**
+  `G_DDIM` was re-based this release after its estimator was found contaminated,
+  and the kernel's true order measured at **½** (ADR-0191 AMENDMENT 3). The ζ²
+  correction exists to lift exactly this kernel, and `G_AS_ZETA2_TAU2` already
+  confirms its magnitude scales as a genuine `O(τ²)` — but whether that makes the
+  *global* order 1 has never been measured with an uncontaminated estimator. If
+  it does, `AnisotropicShiftChernoffND::order() == 1` becomes earned rather than
+  inherited, and `G_DDIM`'s two-sided band will fail loudly to say so.
+- **`ChernoffFunction::order()` cannot express a fractional order.** It returns
+  `u32`, and the ND anisotropic shift is order ½. `order()` is left at 1 with the
+  honest statement in the gate, the ADR and math §32.5; truncating to 0 would
+  change adaptive step control.
+- **`GridFnND::sample` is still recursion-bound.** Hoisting the boundary
+  resolution out of the collapse recursion (AMENDMENT 4) bought 1.32×, enough to
+  restore `D=5`'s datum but not enough to make the `D ≥ 4` gates comfortable —
+  `D=5` costs ≈ 4.3 h against a 6 h runner limit. The remaining cost is the
+  recursion itself: one closure call per stencil node per level plus `K^D` leaf
+  reads. Expanding the tensor stencil into `K^D` flat (offset, weight) pairs and
+  summing them in one loop removes it, but **changes the summation order**, so
+  every N-D gate's numbers move at ULP level and all of them need re-verification.
+  Deliberately not done in the same release as the correctness fix.
+- **`cargo clippy --features slow-tests` has a pre-existing backlog.** CI's gate
+  is `cargo clippy --workspace --all-targets -- -D warnings`, which is clean;
+  the `slow-tests`-gated integration tests are outside that surface and were
+  never linted. A pass over them found ~100 findings in ~10 files, mostly
+  `doc_markdown` / `similar_names` / `cast_*` on math prose, plus a handful of
+  real ones (`RangeInclusive::contains`, `vec![]` over push-after-new,
+  `#[ignore]` without reason). Blanket-allowing twelve lints per file was tried
+  and reverted: it suppresses rather than fixes, and it collided with the
+  targeted allows those files already carry. Either lint them properly or add
+  the feature to CI's clippy invocation — not both halfway.
+
+- **Boundary selection is absent from the C and WASM surfaces entirely**
+  (ADR-0191 AMENDMENT 2). Every FFI constructor hard-codes
+  `BoundaryPolicy::Reflect` and `semiflow-wasm` never calls `with_boundary` at
+  all; this predates the campaign (`Shift1D` has had `boundary=` in Python for
+  longer). Mirroring the new ND `boundary=` kwarg into just those two
+  constructors would create an inconsistency rather than fix one, so it is not
+  done here — exposing boundary selection across both surfaces is its own change.
+
 ## [0.12.1-beta] - 2026-07-15
 ### Fixed
 - **docs(py):** de-stale the `semiflow-pde` PyPI README (long_description).

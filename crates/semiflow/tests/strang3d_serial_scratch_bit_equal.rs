@@ -16,7 +16,7 @@
 //!
 //! Gate: `STRANG3D_SERIAL_SCRATCH_BIT_EQUAL` — **RELEASE-BLOCKING**.
 //!
-//! See `docs/adr/0022-scratch-pool.md` Amendment 1 and
+//! See `docs/adr/0022-parallel-tile-scratch.md` Amendment 1 and
 //! `src/strang3d.rs` `apply_serial`.
 
 use semiflow::{chernoff::ApplyChernoffExt, DiffusionChernoff, Grid1D, Grid3D, GridFn3D, Strang3D};

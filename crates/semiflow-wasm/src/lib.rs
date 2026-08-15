@@ -138,6 +138,8 @@ mod graph_heat_extra_wasm;
 #[cfg(feature = "full")]
 mod graph_magnus_wasm;
 #[cfg(feature = "full")]
+mod graph_magnus_wasm_helpers;
+#[cfg(feature = "full")]
 mod howland_wasm;
 #[cfg(feature = "full")]
 mod hypoelliptic_wasm;

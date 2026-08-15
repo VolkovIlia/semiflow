@@ -95,6 +95,18 @@ thread_local! {
     pub static FORCE_THREADS_1D: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
+/// Pin THIS thread's 1-D node parallelism to 1 (ADR-0194).
+///
+/// `FORCE_THREADS_1D` is thread-local, so a worker spawned by
+/// [`crate::grid_batched`] gets a fresh slot and setting it here cannot disturb
+/// the caller — including a test harness that has set it for its own thread.
+/// Channel-parallel workers call this so that nesting is impossible even if the
+/// node-parallel threshold is later retuned.
+#[cfg(feature = "parallel")]
+pub(crate) fn pin_single_thread_1d() {
+    FORCE_THREADS_1D.with(|c| c.set(Some(1)));
+}
+
 #[cfg(feature = "parallel")]
 pub(crate) fn available_parallelism_cached() -> usize {
     use std::sync::atomic::{AtomicUsize, Ordering};

@@ -6,17 +6,17 @@ dependencies:
   - docs/adr/0028-ffi-pyo3-wasm-v0_10.md
   - docs/adr/0033-nonseparable2d-deprecation-policy.md
   - docs/adr/0034-with-closure-api.md
-  - docs/adr/0035-breaking-window-policy.md
-  - docs/adr/0098-robin-bc.md
+  - docs/adr/0035-v1_0_0-api-stability.md
+  - docs/adr/0098-robin-bc-partial-additive.md
   - docs/adr/0100-ladder-rung-trait.md
-  - docs/adr/0103-subordinated-chernoff.md
-  - docs/adr/0104-chebyshev-breaking-redesign.md
-  - docs/adr/0106-g-zeta4-gr2025-prefactor.md
-  - docs/adr/0154-binding-parity-v9.md
-  - docs/adr/0155-gridless-chernoff.md
-  - docs/adr/0156-reverse-ad.md
-  - docs/adr/0159-tt-chernoff.md
-  - docs/adr/0162-tt-coupled-spectral.md
+  - docs/adr/0103-subordinated-chernoff-butko-2018.md
+  - docs/adr/0104-b3-chebyshev-reopened-diagnostic-and-breaking-redesign.md
+  - docs/adr/0106-thm3-prefactor-harness-galkin-remizov-2025.md
+  - docs/adr/0154-v9-third-scurve-gridless-umbrella.md
+  - docs/adr/0155-gridless-high-dim-chernoff.md
+  - docs/adr/0156-reverse-mode-ad-chernoff-layer.md
+  - docs/adr/0159-tensor-train-chernoff.md
+  - docs/adr/0162-band-split-tt-coupling-resolved.md
   - docs/adr/0169-s3-honest-scope-public-api-promotion.md
   - Cargo.toml
   - crates/semiflow/src/lib.rs

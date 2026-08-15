@@ -270,11 +270,17 @@ pub enum InterpKind {
     },
 }
 
+// Accessor-based value resolution lives in `boundary_value.rs` (500-line cap);
+// re-exported here so `crate::boundary::bc_value_by` keeps resolving.
+pub(crate) use crate::boundary_value::{bc_value_by, bc_value_from_hit};
+
 // ---------------------------------------------------------------------------
 // reflect_index (moved verbatim from grid.rs)
 // ---------------------------------------------------------------------------
 
 /// Reflect a signed index into `[0, n)`.
+#[inline(always)]
+#[allow(clippy::inline_always)] // see bc_value
 pub(crate) fn reflect_index(n: usize, idx: i64) -> usize {
     #[allow(clippy::cast_possible_wrap)]
     let n_i = n as i64;
@@ -298,6 +304,8 @@ pub(crate) fn reflect_index(n: usize, idx: i64) -> usize {
 /// **Total** (never errors) for all six policies and all valid `n >= 2`.
 /// In-range fast-path → `Inside(idx as usize)` (I5). v2.6 additions:
 /// `Dirichlet` → `Dirichlet(value)` out-of-range; `Neumann`/`Robin` → clamp/skew.
+#[inline(always)]
+#[allow(clippy::inline_always)] // see bc_value
 pub(crate) fn bc_index<F: SemiflowFloat>(
     boundary: BoundaryPolicy<F>,
     n: usize,
@@ -377,6 +385,13 @@ fn robin_skew_hit<F: crate::float::SemiflowFloat>(
 /// Resolve `bc_index(idx)` and compute the corresponding value (f64-specific).
 /// `Dirichlet(v)` → `v`; `RobinSkew` → `exp(-2(α/β)·depth·dx)·values[reflected]`
 /// (v6.2.3, math §3.5.tris). `dx` used only for `RobinSkew`.
+///
+/// `#[inline(always)]`: a septic sample resolves eight nodes through this
+/// function and `DiffusionChernoff` takes eleven samples per grid node — ~88
+/// calls per node. Whether the cost model inlined it moved the 1-D kernel by
+/// ~70% across unrelated edits (ADR-0197 AM 1).
+#[inline(always)]
+#[allow(clippy::inline_always)] // ~88 calls per grid node; see the note above
 pub(crate) fn bc_value(
     boundary: BoundaryPolicy<f64>,
     values: &[f64],
@@ -427,42 +442,7 @@ pub(crate) fn bc_value_generic<F: SemiflowFloat>(
     idx: i64,
     dx: F,
 ) -> F {
-    let half = crate::float::half::<F>();
-    let three = F::from(3.0_f64).unwrap_or_else(F::zero);
-    let four = F::from(4.0_f64).unwrap_or_else(F::zero);
-    match bc_index(boundary, n, idx) {
-        BoundaryHit::Inside(i) => values[i],
-        BoundaryHit::Zero => F::zero(),
-        BoundaryHit::Dirichlet(v) => v,
-        BoundaryHit::OutsideLeft(d) => {
-            let f0 = values[0];
-            let f1 = values[1];
-            let f2 = values[2];
-            let slope_combo = -three * f0 + four * f1 - f2;
-            let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            f0 - d_f * half * slope_combo
-        }
-        BoundaryHit::OutsideRight(d) => {
-            let fnm1 = values[n - 1];
-            let fnm2 = values[n - 2];
-            let fnm3 = values[n - 3];
-            let slope_combo = three * fnm1 - four * fnm2 + fnm3;
-            let d_f = F::from(f64::from(d)).unwrap_or_else(F::zero);
-            fnm1 + d_f * half * slope_combo
-        }
-        BoundaryHit::RobinSkew { reflected, depth } => {
-            let BoundaryPolicy::Robin { alpha, beta } = boundary else {
-                // Unreachable: RobinSkew is only produced by Robin policy.
-                return values[reflected]; // even-reflect fallback, no panic
-            };
-            let two = F::from(2.0_f64).unwrap_or_else(F::zero);
-            let d_f = F::from(f64::from(depth)).unwrap_or_else(F::zero);
-            let exponent = -(two * (alpha / beta) * d_f * dx);
-            exponent.exp() * values[reflected]
-        }
-        // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
-        BoundaryHit::OddReflected { reflected } => F::zero() - values[reflected],
-    }
+    bc_value_by(boundary, |i| values[i], n, idx, dx)
 }
 
 // ---------------------------------------------------------------------------

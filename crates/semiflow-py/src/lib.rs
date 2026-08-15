@@ -97,6 +97,7 @@ mod graph_adjoint;
 mod graph_extra;
 mod graph_extra_heat;
 mod graph_heat_f32;
+mod general_op_py;
 mod graph_krylov_py;
 mod graph_py;
 mod graph_sensitivity_py;
@@ -104,6 +105,7 @@ mod graph_v2_4;
 mod greeks_py;
 mod gridless_py;
 mod handle;
+mod heat2d_pencil_py;
 mod hormander_py;
 mod killing_soft_py;
 mod laplacian_introspect;
@@ -125,6 +127,8 @@ mod schrodinger_complex_py;
 mod schrodinger_helpers;
 mod send_assertions;
 mod shift1d_py;
+mod shift1d_schedule_py;
+mod shift1d_vjp_py;
 mod smolyak_py;
 mod state;
 mod state_1d_chunked;
@@ -244,7 +248,11 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     conservative_py::register(py, m)?;
     mass_op_py::register(py, m)?;
     phi_etdrk4_py::register(py, m)?;
-    symmetric_op_py::register(py, m)
+    symmetric_op_py::register(py, m)?;
+    // Issue #24: non-symmetric CSR operator action
+    general_op_py::register(py, m)?;
+    // Issue #25: coefficient-field gradients
+    shift1d_vjp_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------

@@ -174,7 +174,8 @@ fn eval_at_rust(
 /// Parameters
 /// ----------
 /// values : array-like
-///     Flat float64 array of length ``nx * ny`` (row-major, x-axis fast).
+///     Flat float64 array of length ``nx * ny``, x-fastest:
+///     ``flat[i + j*nx]``, i.e. ``np.ravel(U, order="F")``.
 ///     Raises ``SemiflowError(GridMismatch)`` if length != nx * ny.
 /// x0min, x0max : float
 ///     x-axis (axis-0) boundaries.

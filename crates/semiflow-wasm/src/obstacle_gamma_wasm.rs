@@ -261,16 +261,16 @@ impl ObstacleGammaV8Wasm {
         let gamma_arr = Float64Array::new_with_length(n as u32);
         gamma_arr.copy_from(&gamma_fn.values);
         // Build defined Uint8Array.
-        let defined_u8: Vec<u8> = defined_bool.iter().map(|&b| b as u8).collect();
+        let defined_u8: Vec<u8> = defined_bool.iter().map(|&b| u8::from(b)).collect();
         #[allow(clippy::cast_possible_truncation)]
         let defined_arr = Uint8Array::new_with_length(n as u32);
         defined_arr.copy_from(&defined_u8);
         // Return { gamma, defined, count }.
         let obj = Object::new();
-        Reflect::set(&obj, &"gamma".into(), &gamma_arr.into()).map_err(|e| e)?;
-        Reflect::set(&obj, &"defined".into(), &defined_arr.into()).map_err(|e| e)?;
+        Reflect::set(&obj, &"gamma".into(), &gamma_arr.into())?;
+        Reflect::set(&obj, &"defined".into(), &defined_arr.into())?;
         #[allow(clippy::cast_precision_loss)]
-        Reflect::set(&obj, &"count".into(), &(count as f64).into()).map_err(|e| e)?;
+        Reflect::set(&obj, &"count".into(), &(count as f64).into())?;
         Ok(obj.into())
     }
 }
@@ -353,7 +353,7 @@ impl ObstacleND2Wasm {
         }
         let mut v_buf = vec![0.0f64; n];
         v.copy_to(&mut v_buf);
-        let result = run_nd2_step(self.grid_nd.clone(), &v_buf, self.level, tau)
+        let result = run_nd2_step(&self.grid_nd, &v_buf, self.level, tau)
             .map_err(|e| err_to_js(&e))?;
         #[allow(clippy::cast_possible_truncation)]
         let out = Float64Array::new_with_length(n as u32);
@@ -367,7 +367,7 @@ impl ObstacleND2Wasm {
 // ---------------------------------------------------------------------------
 
 fn run_nd2_step(
-    grid_nd: GridND<f64, 2>,
+    grid_nd: &GridND<f64, 2>,
     v_vals: &[f64],
     level: f64,
     tau: f64,

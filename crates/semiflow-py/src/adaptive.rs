@@ -123,7 +123,10 @@ impl AdaptiveVariant {
 ///     ``kind='GridMismatch'`` for invalid grid or IC-length mismatches.
 ///     ``kind='NanInf'`` if `u0` contains NaN or Inf.
 ///     ``kind='OutOfDomain'`` if `t <= 0` or non-finite.
-///     ``kind='CflViolated'`` if the adaptive integrator exceeds `max_substeps`.
+///     ``kind='ConvergenceFailed'`` if the adaptive integrator exceeds
+///     `max_substeps`. (Previously documented as ``'CflViolated'``, which the
+///     core never emits from this path — it returns `AdaptiveStepRejected`,
+///     and `classify_core_error` maps that to ``'ConvergenceFailed'``.)
 #[pyclass(name = "AdaptivePI")]
 pub struct AdaptivePI {
     /// Concrete adaptive integrator variant.
@@ -186,6 +189,69 @@ impl AdaptivePI {
             let outcome = result.map_err(|e| from_core(&e))?;
             self.current = outcome.final_state.clone();
             Ok(outcome.final_state.values.as_slice().to_pyarray(py))
+        })
+    }
+
+    /// Adaptive stepping over a **variable-coefficient** shift kernel (#22).
+    ///
+    /// The `kernel=` menu on `__init__` only reaches constant-coefficient
+    /// kernels — its ``"shift"`` arm hard-codes ``a=0.5, b=0, c=0`` — so
+    /// Black-Scholes-type generators ``½σ²S²·u_SS + rS·u_S − r·u`` had no
+    /// adaptivity at all and users hand-tuned ``n_steps`` per
+    /// (grid, maturity, vol) triple.
+    ///
+    /// Solves ``∂_t u = a(x)·u_xx + b(x)·u_x + c(x)·u`` with the same PI
+    /// controller and error estimator as every other variant; the underlying
+    /// integrator type is identical to the ``"shift"`` arm, only the
+    /// coefficients differ.
+    ///
+    /// Parameters
+    /// ----------
+    /// a, b, c : numpy.ndarray[float64]
+    ///     Pre-sampled coefficients on the grid; length ``n`` each.
+    /// `c_norm_bound` : float
+    ///     ``‖c‖_∞`` bound used for the growth estimate.
+    ///
+    /// Raises
+    /// ------
+    /// `SemiflowError`
+    ///     ``kind='GridMismatch'`` on length mismatch, ``kind='NanInf'`` on
+    ///     non-finite entries.
+    #[staticmethod]
+    #[pyo3(signature = (xmin, xmax, n, a, b, c, c_norm_bound, u0, *,
+                        tol_abs = 1e-6, tol_rel = 1e-4, boundary = "reflect"))]
+    #[allow(clippy::too_many_arguments)]
+    fn with_arrays(
+        xmin: f64,
+        xmax: f64,
+        n: usize,
+        a: &Bound<'_, PyAny>,
+        b: &Bound<'_, PyAny>,
+        c: &Bound<'_, PyAny>,
+        c_norm_bound: f64,
+        u0: &Bound<'_, PyAny>,
+        tol_abs: f64,
+        tol_rel: f64,
+        boundary: &str,
+    ) -> PyResult<Self> {
+        catch_panic_py!({
+            let policy = crate::boundary::parse_boundary(boundary)?;
+            let u0_vals: Vec<f64> = u0
+                .extract::<Vec<f64>>()
+                .map_err(|_| new_pyerr("GridMismatch", "u0 must be numpy.ndarray[float64]"))?;
+            let grid_fn =
+                build_initial(xmin, xmax, n, &u0_vals, policy).map_err(|e| from_core(&e))?;
+            let a_fn = crate::coeff::closure_from_array(a, xmin, xmax, n)?;
+            let b_fn = crate::coeff::closure_from_array(b, xmin, xmax, n)?;
+            let c_fn = crate::coeff::closure_from_array(c, xmin, xmax, n)?;
+            let kernel =
+                ShiftChernoff1D::with_closure(a_fn, b_fn, c_fn, c_norm_bound, grid_fn.grid);
+            let mut iv = AdaptiveVariant::Shift(CoreAdaptivePI::new(kernel));
+            iv.set_tolerance(tol_abs, tol_rel);
+            Ok(AdaptivePI {
+                integrator: iv,
+                current: grid_fn,
+            })
         })
     }
 

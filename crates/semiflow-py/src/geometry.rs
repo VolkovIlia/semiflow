@@ -179,7 +179,8 @@ struct Manifold2DInner {
 /// ny : int
 ///     Number of nodes on axis 1 (must be >= 4).
 /// u0 : array-like
-///     Initial condition; float64 array of length nx*ny (row-major).
+///     Initial condition; float64 array of length nx*ny, x-fastest
+///     (``flat[i + j*nx]``, i.e. ``np.ravel(U, order="F")``).
 /// manifold : str, optional
 ///     Backend: ``"torus"`` (default), ``"sphere2"``, or ``"hyperbolic2"``.
 /// radius : float, optional
@@ -267,7 +268,8 @@ impl PyManifold2D {
 
     /// Return current chart values as ``numpy.ndarray[float64]`` (copy).
     ///
-    /// Length is ``nx * ny``, row-major (axis 0 fast).
+    /// Length is ``nx * ny``, x-fastest: ``flat[i + j*nx]``, i.e.
+    /// ``reshape(nx, ny, order="F")``. Axis 0 is the fastest-varying one.
     fn values<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         catch_panic_py!({ Ok(self.inner.current.values.as_slice().to_pyarray(py)) })
     }

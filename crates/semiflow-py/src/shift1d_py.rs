@@ -240,6 +240,99 @@ impl Shift1D {
             Ok(())
         })
     }
+
+    /// Evolve `C` channels under this kernel in one call (#19, ADR-0194).
+    ///
+    /// ``u0_nc`` is ``[N, C]``; the return has the same shape. Functional — does
+    /// not mutate this object. Bit-identical to `C` sequential :meth:`evolve`
+    /// calls (`G_GRID1D_BATCH_ULP`). Full prose in the `.pyi` stub.
+    ///
+    /// # Errors
+    /// `GridMismatch` if `u0_nc` is not 2-D with `shape[0] == n`; `NanInf` on
+    /// non-finite entries.
+    #[pyo3(signature = (t, u0_nc, n_steps = 100))]
+    fn evolve_batched<'py>(
+        &self,
+        py: Python<'py>,
+        t: f64,
+        u0_nc: numpy::PyReadonlyArray2<'py, f64>,
+        n_steps: usize,
+    ) -> PyResult<Bound<'py, numpy::PyArray2<f64>>> {
+        catch_panic_py!({
+            validate_evolve_params(t, n_steps)?;
+            crate::shift1d_schedule_py::evolve_batched_impl(
+                py,
+                &self.inner.semigroup.func,
+                self.inner.current.grid,
+                t,
+                n_steps,
+                u0_nc,
+            )
+        })
+    }
+
+    /// Piecewise-constant-in-time schedules for **all three** coefficients (#23).
+    ///
+    /// Each of `a_schedule` / `b_schedule` / `c_schedule` is a per-segment
+    /// sequence whose entries are independently a float or a length-`n` array.
+    /// `a_schedule` fixes the segment count; `b`/`c` default to zero. Unlike
+    /// `evolve_with_time_schedule` this supports time-dependent drift and
+    /// killing and space-varying coefficients inside a schedule, runs the whole
+    /// walk in one GIL release, and leaves the object's coefficients at the
+    /// final segment so a later `evolve` continues instead of reverting.
+    /// Full prose in the `.pyi` stub.
+    ///
+    /// # Errors
+    /// `GridMismatch` on schedule/array length mismatch; `NanInf` on non-finite
+    /// entries.
+    #[pyo3(signature = (t_final, n_steps_per_segment, a_schedule, *,
+                        b_schedule = None, c_schedule = None))]
+    fn evolve_with_coefficient_schedule(
+        &mut self,
+        py: Python<'_>,
+        t_final: f64,
+        n_steps_per_segment: usize,
+        a_schedule: &Bound<'_, PyAny>,
+        b_schedule: Option<&Bound<'_, PyAny>>,
+        c_schedule: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        catch_panic_py!({
+            use crate::shift1d_schedule_py::{parse_schedule, run_coefficient_schedule};
+            validate_evolve_params(t_final, n_steps_per_segment)?;
+            let grid = self.inner.current.grid;
+            let n = self.inner.current.values.len();
+            // `a_schedule` defines n_segments; b/c must then match it.
+            let a_s = crate::shift1d_schedule_py::count_then_parse(a_schedule, n)?;
+            let n_segments = a_s.len();
+            if n_segments == 0 {
+                return Err(new_pyerr("OutOfDomain", "a_schedule must be non-empty"));
+            }
+            let b_s = parse_schedule(b_schedule, n_segments, n, 0.0, "b_schedule")?;
+            let c_s = parse_schedule(c_schedule, n_segments, n, 0.0, "c_schedule")?;
+            // Keep the last segment so the object's own kernel can be left
+            // consistent with where the walk ended (see the doc note above).
+            let tail = (
+                a_s[n_segments - 1].clone(),
+                b_s[n_segments - 1].clone(),
+                c_s[n_segments - 1].clone(),
+            );
+            let input: Vec<f64> = self.inner.current.values.clone();
+            let result: Result<Vec<f64>, _> = py.detach(|| {
+                run_coefficient_schedule(
+                    grid,
+                    input,
+                    t_final,
+                    n_steps_per_segment,
+                    (a_s, b_s, c_s),
+                )
+            });
+            self.inner.current.values = result.map_err(|e| from_core(&e))?;
+            self.inner.semigroup =
+                crate::shift1d_schedule_py::semigroup_from_segment(grid, &tail)
+                    .map_err(|e| from_core(&e))?;
+            Ok(())
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

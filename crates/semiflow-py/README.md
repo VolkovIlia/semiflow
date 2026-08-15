@@ -255,8 +255,8 @@ Classes are grouped by kernel family. All stateful classes expose at least
 |-------|--------|-------|-------|
 | `Heat2D` | `Strang2D` | 2 | Unit diffusion on 2D grid; flat x-fastest output |
 | `Heat3D` | `Strang3D` | 2 | Unit diffusion on 3D grid; flat x-fastest output |
-| `Heat2DVarA` | `Strang2D` + variable-a | 2 | `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays |
-| `Heat3DVarA` | `Strang3D` + variable-a | 2 | `a_x u_xx + a_y u_yy + a_z u_zz`; pass `a_x`, `a_y`, `a_z` arrays |
+| `Heat2DVarA` | `Strang2D` + variable-a | 1 | **Non-divergence** `a_x(x) u_xx + a_y(y) u_yy`; pass `a_x`, `a_y` arrays. Order 1, not 2: the axis kernels freeze `a` at the node (ADR-0191 AM1) |
+| `Heat3DVarA` | `Strang3D` + variable-a | 1 | **Non-divergence** `a_x u_xx + a_y u_yy + a_z u_zz`; same order caveat as `Heat2DVarA` |
 | `NonSeparable2D` | 5-leg palindromic | 2 | `∂²_x + ∂²_y + c·∂_x ∂_y`; scalar or `.with_beta_array` |
 | `NonSeparable2DAniso` | 5-leg + position-dep. β | 2 | `∂²_x + ∂²_y + β(x,y)·∂_x ∂_y`; requires `beta_values` array |
 
@@ -492,6 +492,7 @@ Python boundary.
 |-------|-------------|-------------|-------|
 | `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55) |
 | `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
+| `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, n_steps) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv`. Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects. Cost is `Θ(t‖A‖_∞)` matvecs — linear in the horizon, NOT depth-flat like Lanczos (§57, ADR-0195) |
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
 | `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 

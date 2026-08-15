@@ -27,7 +27,7 @@ C ABI bindings for [`semiflow`](../../crates/semiflow): Chernoff
 approximations of operator semigroups. Exposes an opaque-handle C API backed
 by a `catch_unwind` panic boundary and a status-code enum for all error paths.
 
-Built on the `semiflow` core crate (current public version: 0.12.1-beta). The
+Built on the `semiflow` core crate (current public version: 0.13.0-beta). The
 initial 1D heat entry points shipped in 0.10.0-beta; the FFI surface has since
 expanded to a broad C surface across the kernel families: 1D/2D/3D diffusion,
 graph kernels, manifold, hypoelliptic, adjoint, resolvent, killing,
@@ -139,7 +139,7 @@ cl.exe heat.c /I crates\semiflow-ffi\include \
 heat.exe
 ```
 
-Example output: `sup_error=1.460e-6  version=0.12.1-beta`
+Example output: `sup_error=1.460e-6  version=0.13.0-beta`
 
 A fully-annotated smoke program lives in
 [`examples/heat.c`](examples/heat.c).
@@ -178,7 +178,7 @@ All functions return `SemiflowStatus` except `smf_state_free`,
 | `smf_state_values` | `(state, out_buf, out_buf_len) → Status` | Copy grid values into caller buffer. |
 | `smf_state_size` | `(state) → usize` | Number of grid nodes (0 if null). |
 | `smf_status_str` | `(status) → const char *` | Static string for status code. Do not free. |
-| `smf_version` | `() → const char *` | Crate version string, e.g. `"0.12.1-beta"`. Do not free. |
+| `smf_version` | `() → const char *` | Crate version string, e.g. `"0.13.0-beta"`. Do not free. |
 
 Full signatures are in [`include/semiflow.h`](include/semiflow.h).
 

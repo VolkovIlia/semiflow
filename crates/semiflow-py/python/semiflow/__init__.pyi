@@ -4,7 +4,7 @@ These stubs mirror the actual #[pymethods] signatures defined in
 crates/semiflow-py/src/state.rs / src/error.rs / src/lib.rs.
 """
 
-from typing import Any, Callable, Literal, Union, final
+from typing import Any, Callable, Literal, Sequence, Union, final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -779,6 +779,81 @@ class Shift1D:
         ------
         SemiflowError
             kind='OutOfDomain' on invalid parameters or empty schedule.
+
+        Note
+        ----
+        This method updates only the state; the object's coefficients stay at
+        their construction-time values, so a subsequent :meth:`evolve` reverts
+        to the original ``a``. Use :meth:`evolve_with_coefficient_schedule`,
+        which leaves the object consistent with where the walk ended.
+        """
+        ...
+
+    def evolve_batched(
+        self,
+        t: float,
+        u0_nc: NDArray[np.float64],
+        n_steps: int = 100,
+    ) -> NDArray[np.float64]:
+        """Evolve ``C`` channels under this kernel in one call (#19, ADR-0194).
+
+        ``u0_nc`` is ``[N, C]`` float64; the return has the same shape. Pricing a
+        strike strip, bumping for Greeks, or evolving a batch of Fokker-Planck
+        density anchors is ``C`` independent solves under the *same* generator
+        with only ``u0`` differing — previously a Python loop paying object
+        construction and a GIL round-trip per column.
+
+        **Functional**: does NOT mutate this object's own state, and uses the
+        coefficients and boundary policy it was built with.
+
+        Bit-identical to ``C`` sequential :meth:`evolve` calls (gate
+        ``G_GRID1D_BATCH_ULP``) — batching is a throughput device, not an
+        accuracy one. Above 2 channels the work is spread across threads when
+        the grid is small enough that node-level parallelism is not already
+        engaged; the two regimes are mutually exclusive by construction.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if ``u0_nc`` is not 2-D with ``shape[0] == n``;
+            kind='NanInf' on non-finite entries.
+        """
+        ...
+
+    def evolve_with_coefficient_schedule(
+        self,
+        t_final: float,
+        n_steps_per_segment: int,
+        a_schedule: Sequence[Union[float, NDArray[np.float64]]],
+        *,
+        b_schedule: Sequence[Union[float, NDArray[np.float64]]] | None = None,
+        c_schedule: Sequence[Union[float, NDArray[np.float64]]] | None = None,
+    ) -> None:
+        """Piecewise-constant-in-time schedules for **all three** coefficients (#23).
+
+        Each schedule is a sequence of ``n_segments`` entries; each entry is
+        independently either a float (spatially constant over that segment) or a
+        length-``n`` array (interpolated with Catmull-Rom, as
+        :meth:`with_arrays` does). ``b_schedule`` and ``c_schedule`` default to
+        zero. ``a_schedule`` defines ``n_segments``; the others must match it.
+
+        Closes two gaps in :meth:`evolve_with_time_schedule`: no ``b``/``c``
+        schedules, and no space-varying coefficients inside a schedule. The
+        motivating case is optimal-execution policy evaluation
+        ``du/dtau = ½σ²·u_pp − γν(t)(p − ην(t))·u``, whose killing term is
+        linear in ``p`` with a time-varying slope — previously a fresh
+        ``Shift1D`` plus re-sampled arrays per macro-segment, with the state
+        round-tripping through numpy in between.
+
+        The whole walk runs in one GIL release with the state kept in Rust, and
+        the object's coefficients are left at the final segment's values so a
+        subsequent :meth:`evolve` continues rather than reverting.
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' if the schedules differ in length or an array
+            entry has the wrong length; kind='NanInf' on non-finite entries.
         """
         ...
 
@@ -978,7 +1053,9 @@ class Heat2D:
     """2-D heat equation state with unit diffusion (a = 1).
 
     Solves du/dt = d^2u/dx^2 + d^2u/dy^2 on [xmin,xmax] x [ymin,ymax]
-    via palindromic Strang splitting.  Output is flat x-fastest row-major.
+    via palindromic Strang splitting.  Output is flat and x-fastest:
+    ``flat[i + j*nx] = u(x_i, y_j)``, i.e. ``np.ravel(U, order="F")`` for a
+    ``(nx, ny)`` array — NOT numpy's C order.
     """
 
     def __init__(
@@ -1013,7 +1090,8 @@ class Heat2D:
     ) -> NDArray[np.float64]:
         """Evolve u0 (flat, length nx*ny) by n_steps of size tau.
 
-        Returns flat x-fastest row-major array, shape (nx*ny,).
+        Returns a flat x-fastest array of shape ``(nx*ny,)``: ``flat[i + j*nx]``,
+        i.e. ``reshape(nx, ny, order="F")`` to recover the 2-D view.
         Raises SemiflowError on grid mismatch or invalid parameters.
         """
         ...
@@ -2625,7 +2703,10 @@ class AdaptivePI:
         ``kind='GridMismatch'`` for invalid grid or IC-length mismatches.
         ``kind='NanInf'`` if ``u0`` contains NaN or Inf.
         ``kind='OutOfDomain'`` if ``t <= 0`` or non-finite.
-        ``kind='CflViolated'`` if adaptive integration exceeds ``max_substeps``.
+        ``kind='ConvergenceFailed'`` if adaptive integration exceeds
+        ``max_substeps``.  (Previously documented as ``'CflViolated'``; the core
+        returns ``AdaptiveStepRejected`` from this path, which maps to
+        ``'ConvergenceFailed'``.)
     """
 
     def __new__(
@@ -2640,6 +2721,38 @@ class AdaptivePI:
         tol_rel: float = 1e-4,
         boundary: BoundaryLiteral = "reflect",
     ) -> "AdaptivePI": ...
+
+    @staticmethod
+    def with_arrays(
+        xmin: float,
+        xmax: float,
+        n: int,
+        a: NDArray[np.float64],
+        b: NDArray[np.float64],
+        c: NDArray[np.float64],
+        c_norm_bound: float,
+        u0: NDArray[np.float64],
+        *,
+        tol_abs: float = 1e-6,
+        tol_rel: float = 1e-4,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> "AdaptivePI":
+        """Adaptive stepping over a variable-coefficient shift kernel (#22).
+
+        Solves ``du/dt = a(x)*u_xx + b(x)*u_x + c(x)*u`` with the same PI
+        controller as the ``kernel=`` variants. The ``kernel="shift"`` arm of
+        ``__init__`` hard-codes ``a=0.5, b=0, c=0``, so Black-Scholes-type
+        generators previously had no adaptive path and required hand-tuning
+        ``n_steps`` per (grid, maturity, vol) triple.
+
+        Parameters
+        ----------
+        a, b, c : NDArray[np.float64]
+            Pre-sampled coefficients on the grid; length ``n`` each.
+        c_norm_bound : float
+            ``sup|c|`` bound used for the growth estimate.
+        """
+        ...
 
     def evolve(
         self,
@@ -4703,6 +4816,20 @@ class AnisotropicShiftND2:
 
     Solves du/dt = A(x)∇²u + b(x)·∇u + c(x)u where A(x) is a 2×2 SPD tensor.
     Order 1 (honest, ADR-0112). F(0)=I guaranteed by π^{-D/2} normalization.
+
+    Flat array layout — x is the FASTEST axis
+    -----------------------------------------
+    Every flat array here (state, ``a_values``, ``b_values``, ``c_values``) is
+    indexed ``flat[i + j*nx]`` for the node ``(x_i, y_j)``. For a numpy array
+    ``U`` of shape ``(nx, ny)`` that is **Fortran** order::
+
+        k.set_state(U)                                    # recommended
+        k.set_state(np.ravel(U, order="F"))               # equivalent
+        U_out = k.values_2d()                             # -> (nx, ny)
+
+    A plain ``U.ravel()`` (C order) transposes the axes and silently applies
+    ``a11`` and ``a22`` to the wrong coordinates. Pass the 2-D array directly
+    and the binding ravels it correctly.
     """
 
     def __init__(
@@ -4717,11 +4844,20 @@ class AnisotropicShiftND2:
         *,
         b_values: Union[NDArray[np.float64], None] = None,
         c_values: Union[NDArray[np.float64], None] = None,
+        boundary: BoundaryLiteral = "reflect",
     ) -> None: ...
 
-    def set_state(self, u0: NDArray[np.float64]) -> None: ...
+    def set_state(self, u0: NDArray[np.float64]) -> None:
+        """Set the state from a flat length-``nx*ny`` array or a ``(nx, ny)`` array."""
+        ...
+
     def evolve(self, t: float, n_steps: int = 100) -> None: ...
     def values(self) -> NDArray[np.float64]: ...
+
+    def values_2d(self) -> NDArray[np.float64]:
+        """Current state as a ``(nx, ny)`` array (ADR-0191)."""
+        ...
+
     def order(self) -> int: ...
     def __len__(self) -> int: ...
 
@@ -4730,7 +4866,9 @@ class AnisotropicShiftND2:
 class AnisotropicShiftND3:
     """Anisotropic shift Chernoff on 3-D tensor-product grid (M19, D=3, order 1).
 
-    Same contract as AnisotropicShiftND2 but for 3 spatial dimensions.
+    Same contract as AnisotropicShiftND2 but for 3 spatial dimensions, including
+    the x-fastest flat layout: ``flat[i + j*nx + k*nx*ny]`` for ``(x_i, y_j, z_k)``,
+    i.e. ``np.ravel(U, order="F")`` for a ``(nx, ny, nz)`` array.
     """
 
     def __init__(
@@ -4748,6 +4886,7 @@ class AnisotropicShiftND3:
         *,
         b_values: Union[NDArray[np.float64], None] = None,
         c_values: Union[NDArray[np.float64], None] = None,
+        boundary: BoundaryLiteral = "reflect",
     ) -> None: ...
 
     def set_state(self, u0: NDArray[np.float64]) -> None: ...
@@ -4789,11 +4928,72 @@ class NonSeparable2DAniso:
 
 @final
 class Heat2DVarA:
-    """Variable-coefficient 2D heat Chernoff (M21, order 2).
+    """Variable-coefficient 2D heat Chernoff (M21, order 1).
 
     Solves du/dt = a_x(x)·u_xx + a_y(y)·u_yy via palindromic Strang splitting.
     Additive sibling of Heat2D for non-unit diffusion.
+
+    Note the operator: this is the **non-divergence** form ``a(x)·u_xx``, not
+    ``d_x(a(x) d_x u)``. The two differ whenever ``a`` varies; if you want the
+    conservative form use :class:`ConservativeDiffusion1D` per axis.
+
+    ``order()`` reports **1**, not 2. The Strang composition is second-order,
+    but each axis kernel freezes ``a`` at the node, which is order 1 wherever
+    ``a`` varies along that axis (measured slope -1.007). Order 2 is recovered
+    only when ``a`` is constant along the swept axis. Corrected in ADR-0191
+    AMENDMENT 1; it previously reported 2.
+
+    Use :meth:`with_grid_arrays` for full-grid coefficients ``a_x(x,y)``,
+    ``a_y(x,y)`` — i.e. coefficients varying along the *other* axis, which the
+    per-axis constructor cannot express (#21, ADR-0196).
     """
+
+    @staticmethod
+    def with_grid_arrays(
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        a_x: NDArray[np.float64],
+        a_y: NDArray[np.float64],
+        *,
+        boundary: BoundaryLiteral = "reflect",
+    ) -> "Heat2DVarA":
+        """Full-grid coefficients ``a_x(x,y)``, ``a_y(x,y)`` (#21, ADR-0196).
+
+        Each array is flat, length ``nx*ny``, indexed ``values[j*nx + i]`` for
+        the node ``(x_i, y_j)`` — the same x-fastest layout as
+        ``NonSeparable2D.with_beta_array``.
+
+        This lifts the restriction that each diagonal coefficient vary only
+        along its own axis. The decorrelated Heston generator needs exactly
+        that: after ``z = x - (rho/xi) v`` it is cross-term-free but BOTH
+        diagonal coefficients depend on ``v``.
+
+        The *splitting* stays second-order by the classical symmetric-splitting
+        argument rather than by ``[L_x, L_y] = 0``, which is false here. The
+        error *constant* carries the double commutators and grows with the
+        transverse variation: measured slope 2.05 at +/-10% amplitude, 1.91 at
+        +/-30%, and 1.18 at +/-60% on an ``n_steps in {20,40,80}`` ladder at
+        ``t = 0.02`` — with ``a`` constant *along* each pencil, which is what
+        that gate varies.
+
+        Overall order is still capped by the axis kernels, so it is 1 as soon as
+        a coefficient varies along the axis it acts on — the usual case for a
+        full-grid field. Verify the slope on your own coefficient field rather
+        than assuming either number.
+
+        Serial only — the threaded X/Y passes are not reused (ADR-0196 D2).
+
+        Raises
+        ------
+        SemiflowError
+            kind='GridMismatch' on a wrong length; kind='NanInf' or
+            kind='OutOfDomain' on non-finite or non-positive entries.
+        """
+        ...
 
     def __init__(
         self,
@@ -4826,10 +5026,14 @@ class Heat2DVarA:
 
 @final
 class Heat3DVarA:
-    """Variable-coefficient 3D heat Chernoff (M21, order 2).
+    """Variable-coefficient 3D heat Chernoff (M21, order 1).
 
     Solves du/dt = a_x(x)·u_xx + a_y(y)·u_yy + a_z(z)·u_zz via Strang3D.
     Additive sibling of Heat3D for non-unit diffusion.
+
+    Same operator and same order caveat as :class:`Heat2DVarA`: the
+    non-divergence form, and ``order()`` reports 1 because the axis kernels
+    freeze ``a`` at the node (ADR-0191 AMENDMENT 1).
     """
 
     def __init__(
@@ -6442,3 +6646,106 @@ class Etdrk4:
         Returns ndarray of shape ``(n,)``.
         """
         ...
+
+
+# ---------------------------------------------------------------------------
+# Issue #24 / #25 — non-symmetric operator action, coefficient-field gradients
+# ---------------------------------------------------------------------------
+
+
+@final
+class GeneralOperator:
+    """Externally-assembled **possibly non-symmetric** sparse operator (#24, ADR-0195).
+
+    ``SymmetricOperator.from_csr`` validates symmetry, closing the Krylov surface
+    to non-self-adjoint generators. This opens ``e^{-tA}v`` to drifted
+    Fokker-Planck ``d_t p = d_x(D d_x p) - d_x(mu p)`` and to Cartea-Jaimungal
+    inventory ladders, via the symmetry-agnostic scaled-truncated-Taylor engine.
+
+    Honest limits
+    -------------
+    - Cost is ``Theta(t * ||A||_inf)`` matvecs — **linear in the depth, not
+      flat**. ``GraphKrylov``'s depth-independence does NOT transfer here.
+    - Only the **backward** error is certified. For a severely non-normal ``A``
+      the forward error can exceed the backward radius by ``kappa(V)``, which is
+      not estimated.
+    - No ``path=`` argument: Chebyshev needs a real spectrum in ``[0, lam_max]``
+      and Lanczos is structurally symmetric-only, so both are unavailable by
+      construction rather than by tolerance.
+    - No conservation claim: discrete mass conservation holds only if the
+      caller's ``A`` has exactly zero column sums.
+    """
+
+    @staticmethod
+    def from_csr(
+        n: int,
+        indptr: Sequence[int],
+        indices: Sequence[int],
+        data: Sequence[float],
+    ) -> "GeneralOperator": ...
+
+    def n(self) -> int: ...
+
+    def norm_inf_bound(self) -> float:
+        """Row-sum bound ``||A||_inf`` — a NORM bound, not a spectral interval."""
+        ...
+
+    def evolve_batched(
+        self, t: float, v_nc: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """``e^{-tA}v`` for C right-hand sides. ``v_nc`` is ``[N, C]``; result too."""
+        ...
+
+    def apply_transpose(self, v: Sequence[float]) -> NDArray[np.float64]:
+        """``A^T v`` — a real transpose, not the self-adjoint shortcut."""
+        ...
+
+
+def shift1d_coeff_grad(
+    xmin: float,
+    xmax: float,
+    n: int,
+    a: NDArray[np.float64],
+    b: NDArray[np.float64],
+    c: NDArray[np.float64],
+    u0: NDArray[np.float64],
+    dj_du_n: NDArray[np.float64],
+    t: float,
+    n_steps: int,
+    *,
+    wrt: Literal["a", "b", "c"] = "a",
+    boundary: BoundaryLiteral = "reflect",
+) -> NDArray[np.float64]:
+    """``dJ/dtheta`` for one coefficient field of a ``Shift1D`` generator (#25, ADR-0197).
+
+    ``EvolverHeat1DGreeksV3`` differentiates w.r.t. a single global diffusion
+    scale; this differentiates w.r.t. the per-node arrays of
+    ``Shift1D.with_arrays`` — local-vol Vega surfaces, ``dV/dsigma(S_i)``.
+
+    You supply the **cotangent** ``dj_du_n = dJ/du_n``; the loss ``J`` stays
+    outside the library (the ADR-0115 boundary). For ``J = 0.5*||u_n - target||^2``
+    pass ``u_n - target``.
+
+    Cost is ``O(n_steps * n)`` — the same order as the forward solve — because the
+    parameter-to-output coupling is diagonal (ADR-0197 §61.2).
+
+    When to use what
+    ----------------
+    - ``K <~ 10`` scalar parameters: bump-and-revalue is asymptotically optimal.
+    - Per-node coefficient fields (``K = n``): this function; reverse mode costs
+      ~2 forward solves for ALL parameters.
+    - Genuine second derivatives (gamma, vanna): ``EvolverHeat1DGreeksV3``.
+
+    Honest limits
+    -------------
+    - ``wrt='a'`` requires ``a_i > 0`` strictly: ``d h_i/d a_i = sqrt(tau/a_i)``
+      diverges at a degenerate node, so the gradient's domain is strictly smaller
+      than the forward kernel's (which admits ``a_i >= 0``).
+    - The gradient is of the **discrete** kernel as implemented — interpolation
+      and boundary folding included — not of the continuous solution operator.
+    - ``ShiftChernoff1D`` is order 1, so this is a first-order-accurate gradient
+      of a first-order-accurate solve.
+    - Trajectory memory is ``O(n_steps * n)``; no checkpointing.
+    - One field per call; f64 only.
+    """
+    ...

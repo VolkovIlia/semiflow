@@ -53,31 +53,59 @@ use crate::{
 };
 
 // ---------------------------------------------------------------------------
-// θ_m table — Al-Mohy & Higham (2011) Table 3.1, double-precision subset.
-// Values are backward-error radii for T_m at unit round-off (tol = 2^-53).
-// Degree cap M_MAX = 18: above arg ≈ 9 a plain monomial Horner loses precision;
-// remaining argument is traded into s (Code Fragment 3.1 guard).
+// θ_m table — Al-Mohy & Higham (2011) Table 3.1, double-precision (tol = 2^-53).
+//
+// CORRECTED in ADR-0198: the shipped table paired each degree with a radius from
+// two to three rows further down the published table (m=18 carried θ≈8.84, the
+// radius of m≈51, where its own is 1.09), so `select_s_m` chose too few substeps
+// and the answer was silently wrong — 1.6e-4 where double precision was claimed.
 // ---------------------------------------------------------------------------
 
-/// `(degree, θ_m)` pairs from Al-Mohy & Higham (2011) Table 3.1.
+/// `(degree, θ_m)` — the largest argument at which a degree-`m` truncated Taylor
+/// exponential meets double-precision BACKWARD error.
 ///
-/// Only the double-precision subset used by Algorithm 3.2 is included.
-/// Degree is capped at 18 (`M_MAX`); higher degrees exceed the safe Horner arg.
+/// Recomputed from the definition rather than re-copied (ADR-0198): expand
+/// `log(e^{-x}·T_m(x))` in exact rational arithmetic, form
+/// `h_{m+1}(x) = Σ_{k>m}|c_k|x^k`, and solve `h_{m+1}(θ)/θ = 2^{-53}`. The result
+/// reproduces Table 3.1 to three significant figures at every degree.
+///
+/// Denser than the old sparse subset because `select_s_m` minimises `s·m` over
+/// the table: more entries is strictly cheaper as well as correct.
 ///
 /// Re-used by [`crate::phi_action`] for the augmented-matrix φ-action.
 pub(crate) const THETA_M: &[(u32, f64)] = &[
-    (1, 2.29e-16),
-    (2, 2.58e-8),
-    (4, 3.40e-3),
-    (5, 1.44e-1),
-    (8, 1.44),
-    (10, 2.74),
-    (13, 4.74),
-    (18, 8.84),
+    (1, 2.220e-16),
+    (2, 2.581e-8),
+    (3, 1.386e-5),
+    (4, 3.397e-4),
+    (5, 2.401e-3),
+    (6, 9.066e-3),
+    (7, 2.384e-2),
+    (8, 4.991e-2),
+    (9, 8.958e-2),
+    (10, 1.442e-1),
+    (11, 2.142e-1),
+    (12, 2.996e-1),
+    (13, 3.998e-1),
+    (14, 5.139e-1),
+    (15, 6.411e-1),
+    (16, 7.803e-1),
+    (17, 9.305e-1),
+    (18, 1.091),
+    (19, 1.260),
+    (20, 1.438),
+    (25, 2.429),
+    (30, 3.540),
 ];
 
-/// Maximum Taylor degree (Code Fragment 3.1 cap; above this arg ≈ 9 loses precision).
-pub(crate) const M_MAX: u32 = 18;
+/// Maximum Taylor degree.
+///
+/// Raised 18 → 30 in ADR-0198. The old cap cited "above arg ≈ 9 a plain monomial
+/// Horner loses precision" — a limit on the *argument*, which the mis-transcribed
+/// table was violating (it fed arg up to 8.84 into `m = 18`). With correct radii
+/// the per-substep argument is at most `θ_30 = 3.54`, well inside that limit,
+/// and capping at 18 would cost `s = 7` substeps where `s = 2` suffices.
+pub(crate) const M_MAX: u32 = 30;
 
 // ---------------------------------------------------------------------------
 // (s, m) selector — Al-Mohy & Higham Algorithm 3.2 (conservative norm bound).

@@ -1452,6 +1452,45 @@ constant α=0.5; ±50% otherwise per ADR-0008 Amendment 1 budget).
   correction. Mathematically straightforward; deferred behind
   cost-benefit analysis.
 
+##### 9.2.3.B.bis — The frozen-coefficient reduction: `a' ≡ 0` with variable `a` (NORMATIVE, ADR-0191 AMENDMENT 1)
+
+`DiffusionChernoff` takes `a`, `a'`, `a''` as independent closures. Supplying a
+*variable* `a` together with `a' ≡ 0`, `a'' ≡ 0` — as `Heat2DVarA` / `Heat3DVarA`
+do for each axis — is not an inconsistency; it selects a different operator.
+
+**Reduction.** With `a' ≡ 0` the inner-Strang shift is the identity
+(`x_pre = x + (τ/2)·a'(x) = x`, the §9.2.3 reduction lemma), and every term of
+the ζ-A correction `τ²(a a' f''' + (a a''/2) f'' + (a' a''/4) f')` carries a
+factor `a'` or `a''` and vanishes identically. What remains is the five-node
+Gauss–Hermite stencil with `a` **frozen at the evaluation node**:
+
+$$ (S_{\text{frozen}}(\tau)f)(x) \;=\; W_0 f(x) + W_1\big[f(x + h) + f(x-h)\big] + W_2\big[f(x + h_3) + f(x - h_3)\big], $$
+
+with $h = 2\sqrt{a(x)\tau}$, $h_3 = 2\sqrt{3a(x)\tau}$ and the moment weights
+$(W_0, W_1, W_2) = (7/12,\, 3/16,\, 1/48)$, exact through the fourth Gaussian
+moment.
+
+**Which operator.** Expanding at fixed `x`,
+
+$$ S_{\text{frozen}}(\tau)f = f + \tau\, a(x) f'' + \tfrac{\tau^2}{2} a(x)^2 f'''' + O(\tau^3), $$
+
+so $S_{\text{frozen}}(0) = I$ and $S'_{\text{frozen}}(0) = a(x)\partial_{xx}$:
+the Chernoff generator is the **non-divergence** operator $a(x)\,\partial_{xx}$,
+not $\partial_x(a\,\partial_x)$. This is verified against dense references rather
+than only argued — `G_FROZEN_COEFF_NONDIV`.
+
+**Order.** Against $e^{\tau a \partial_{xx}} f = f + \tau a f'' + \tfrac{\tau^2}{2} a\,(a f'')'' + O(\tau^3)$
+the $\tau^2$ terms differ by $\tfrac{\tau^2}{2}\,a\,(a'' f'' + 2 a' f''')$, which
+is non-zero wherever `a` varies. Consistency order is therefore **1**, and the
+`τ³` commutator cancellation that lifts the Strang composition to global
+$O(\tau^2)$ (previous subsection) does not apply, because the factors are only
+local-$O(\tau^2)$. Measured global order: **1.007** (`G_FROZEN_COEFF_ORDER1`).
+
+Consequence for the public surface: `Heat2DVarA::order()` and
+`Heat3DVarA::order()` report 1. Order 2 is recovered exactly when `a` is constant
+along the axis being swept, where `a' ≡ 0` is *true* rather than imposed and the
+reduction lemma makes the kernel bit-identical to the constant-`a` formula.
+
 #### Strang-composition order preservation (cross-ref §9.4 / §9.7)
 
 `StrangSplit<DiffusionChernoff, DriftReactionChernoff>` order analysis
@@ -8447,6 +8486,55 @@ within the order-1 self-convergence band.
 > dominates the interpolation floor. See "Why a COARSE grid is required" below
 > and ADR-0112 AMENDMENT 1.
 
+> **v0.12.0 AMENDMENT 2 (ADR-0191 AMENDMENT 3, 2026-08-14, `Gate-Change-Approved-By`).**
+> Both the estimator and the order claim above are superseded.
+>
+> AMENDMENT 1's reasoning is correct about *why* the reference does not cancel —
+> per-step interpolation error accumulates at a different rate in the $n$-step
+> iterate and the $n_{\mathrm{ref}}$-step reference — but the remedy it chose
+> (a coarse grid) left a second contamination in place: $n_{\mathrm{ref}} = 512$
+> is only twice the largest swept $n = 256$, so the last point of the fit measures
+> the **reference's** remaining temporal error. Holding the sweep fixed and
+> raising $n_{\mathrm{ref}}$ to $1024/2048/4096/8192$ walks the reported slope
+> from $-0.92$ to $-0.54$; a converged estimator would be flat in
+> $n_{\mathrm{ref}}$.
+>
+> The gate now fits the OLS slope of the **successive differences**
+> $d_k = \lVert u_{2n_k} - u_{n_k}\rVert_\infty$, which need no reference and so
+> cannot be contaminated. Their ratio settles on $\sqrt2$ across
+> $n \in [32, 16384]$ and $N_{\text{AXIS}} \in \{8,16,32\}$, i.e.
+>
+> $$\text{global order} = \tfrac12,\qquad\text{not } 1.$$
+>
+> The mechanism is structural, not numerical. The Gauss–Hermite displacement is
+> $2\sqrt{a\tau}\,\eta$, and freezing $A$ at the node while sampling at the
+> shifted point mismatches by $A'\cdot 2\sqrt{a\tau}\,\eta$ — a relative
+> $O(\sqrt\tau)$ on the leading $O(\tau)$ term, hence local $O(\tau^{3/2})$ and
+> global $O(\tau^{1/2})$. ADR-0112 correctly demoted the order-2 claim to order-1
+> but accounted the variable-$A$ mismatch at $O(\tau^2)$; the $\sqrt\tau$ inside
+> the shift makes it $O(\tau^{3/2})$.
+>
+> Threshold: $-0.95 \to -0.45$, **two-sided** — a ceiling of $-0.75$ fails the
+> gate if the kernel ever becomes genuinely order-1, so the improvement is caught
+> rather than passing silently. Measured after re-basing: $D=2$: $-0.4676$,
+> $D=3$: $-0.4766$.
+>
+> `AnisotropicShiftChernoffND::order()` still returns 1, because
+> `ChernoffFunction::order()` is a `u32` and cannot hold $\tfrac12$; truncation to
+> 0 would change adaptive step control. The honest statement lives here.
+>
+> The ladder is re-sized in the same amendment: ADR-0191 made a sample read
+> $K^D$ nodes ($4^4 = 256$ at $D=4$ against multilinear's $16$), which pushed the
+> $D=4$ gate to **8105 s** and $D=5$ to an extrapolated $\approx 85$ h. The
+> reference-free ladder needs far fewer steps — $D=4$: $\{8,16,32,64\}$ (120 steps
+> against 752); $D=5$: $\{4,8,16,32\}$. Dropping one node per axis at $D=5$
+> ($N_{\text{AXIS}}: 6 \to 5$) was tried as well and **reverted**: the gate
+> rejected it at slope $-0.3595$, and a $D=2$ probe showed the coarse grid
+> contaminates the successive differences at *every* ladder position
+> ($-0.334 \ldots -0.443$ against a stable $-0.446 \ldots -0.468$ at
+> $N_{\text{AXIS}} = 8$). The spatial datum is what this estimator cannot trade
+> away; the runtime was bought in the sampler instead (ADR-0191 AMENDMENT 4).
+
 **G_DDIM (RELEASE_BLOCKING — d-D anisotropic shift convergence slope, per-D sweeps)**:
 
 **Resolution ladder $N_{\text{AXIS}}(D)$ / $n_{\mathrm{ref}}(D)$ (NORMATIVE — coarse grid required; ADR-0112 AMENDMENT 1).**
@@ -8609,6 +8697,189 @@ The §32.6 future-extension bullets above are HISTORICAL (v6.0.0 deferral record
 - **$D \ge 6$ via Smolyak sparse grids → IN-SCOPE for v8.0.0 (ADR-0123 AMENDMENT 1, Phase-4 item C1)**. The §32.6 "$D \ge 6$ … deferred to v4.1+" bullet above is SUPERSEDED: D≥6 was deferred ONLY for CI budget, NOT for math. The shipped `SmolyakGridND<F, const D>` and its `build_smolyak<D>` / `enumerate_multi_index<D>` / `add_tensor_product<D>` pipeline are ALREADY fully generic over `const D`; the $D \ge 6$ surface is the SAME type instantiated at $D = 6$, gated by `G_SMOLYAK_D6`. PRE-FLIGHT `scripts/verify_smolyak_sparse.py` D=6 sweep (2026-06-07): at the default $\ell = D + 3 = 9$ the sparse grid is **533 nodes** vs the full tensor $6^6 = 46656$ — an **87.5× reduction**; the unit witness $\sum w = \pi^{D/2} = \pi^3 = 31.00628$ holds to $\le 10^{-13}$ at every level $\ell \in \{6,7,8,9,10\}$ (nodes $\{1,13,97,533,2381\}$). The nested GH ladder depth (max level 5, rules $\{1,3,5,7,9\}$-pt) suffices: the deepest 1-D rule used at $\ell = 9, D = 6$ is level $\ell - D + 1 = 4 \le 5$. **Structural prerequisite (engineer caveat):** `SquareMatrix<F, D>` stores its $D \times D$ flat data in a fixed `[F; 25]` oversized-static (sized for $D \le 5$, since $5 \times 5 = 25$); at $D = 6$, $D \cdot D = 36 > 25$ and `set(i, j)` writes index $i + jD$ up to $5 + 5 \cdot 6 = 35$, out of bounds. The widening `[F; 25] → [F; 36]` (covering $D \le 6$) is the ONLY blocker; it is an internal-storage change (no public-API break — the array length is an implementation detail per the field's own rustdoc "first D*D slots used"). The order-1 reality (slope ≤ −0.95) and the SIGN-carrying weights caveat transfer verbatim from D=5.
 
 - The **order-4 d-D ζ⁴** and **Monte-Carlo full-grid** bullets remain DEFERRED (ζ⁴ presupposes the now-GO ζ² lift landing first; MC awaits benchmark demand).
+
+### §32.9 — Off-grid sampling of the d-D state: the accumulated interpolation moment (v0.12.0, ADR-0191, NORMATIVE library)
+
+Equation (32.3) evaluates $f$ at the shifted quadrature feet $y_q = x_k + \tau b(x_k) + 2\sqrt{\tau}\,\sigma \eta_q$, which are **off-grid**. The kernel is therefore the composition of the exact frozen-coefficient Gaussian average with the grid's sub-cell interpolation operator $\Pi$, and the Chernoff product applies that composition $n$ times. Whatever moment error $\Pi$ carries is applied $n$ times, not once.
+
+**Proposition 32.4 (interpolation moment injection, NORMATIVE).** Let $\Pi_1$ be piecewise-linear interpolation on a uniform grid of spacing $dx$. Evaluating $\Pi_1 f$ at a point lying a fraction $s \in [0,1)$ into a cell replaces a unit point mass by masses $1-s$ and $s$ at the two enclosing nodes, whose second central moment about the evaluation point is
+$$
+s(1-s)\,dx^2 .
+\tag{32.9.a}
+$$
+Averaged over feet equidistributed in the cell, $\int_0^1 s(1-s)\,ds = \tfrac{1}{6}$, so each application of $(F_A(\tau)\Pi_1)$ adds
+$$
+\Delta \mathrm{Var} \;\approx\; \tfrac{1}{6}\,dx^2
+\tag{32.9.b}
+$$
+per axis, **independently of $\tau$**. After $n$ steps the state carries
+$$
+\mathrm{Var}_n \;=\; \underbrace{2\,a_{dd}\,t}_{\text{generator}} \;+\; \underbrace{\tfrac{n}{6}\,dx^2}_{\text{interpolation}} \;+\; O(\tau),
+\tag{32.9.c}
+$$
+i.e. the spurious term is **linear in the step count at fixed grid**. Refining $n \to \infty$ at fixed $dx$ therefore drives the discrete evolution *away* from the semigroup it approximates. This is a property of the sampler, not of formula (32.3).
+
+**Corollary 32.5.** For an interpolant of order $p$ (nodal error $O(dx^{p})$) the injected per-step moment is $O(dx^{p})$ and (32.9.c) becomes $2a_{dd}t + O(n\,dx^{p})$. Catmull-Rom ($p = 4$) reduces the $n = 1600$, $dx = 16/95$, $a = 1$, $t = 0.5$ datum from an excess of $+3.49$ to $< 10^{-8}$.
+
+**Consequence for the §32.5 gate protocol.** ADR-0112 AMENDMENT 1 diagnosed (32.9.c) from the outside — it is why `N_AXIS` was driven down to 8 "so the temporal-truncation signal dominates the interpolation floor" — and ADR-0112 AMENDMENT 2 restated it as the ceiling on the ζ² lift's global rate. Both diagnoses were correct about the symptom and wrong to treat it as inherent: the floor was $O(dx^2)$ only because `GridFnND::sample` used $\Pi_1$ while the 1-D family had used $O(dx^4)$–$O(dx^8)$ interpolants since v6.0. With ADR-0191 the N-D floor is $O(dx^4)$, and the coarse-grid ladder MUST be re-measured rather than inherited.
+
+**Normative requirement (`G_ASND_MOMENT`).** A kernel whose generator is $\sum_{ij} a_{ij}\partial^2_{ij}$ MUST reproduce the second-moment growth
+$$
+\Delta \mathrm{Var}_d \;=\; 2\,a_{dd}\,t, \qquad \Delta \mathrm{Cov}_{de} \;=\; 2\,a_{de}\,t
+\tag{32.9.d}
+$$
+on a resolved grid, to within 2% and **flat in $n_{\text{steps}}$**. The flatness requirement is the load-bearing half: `F(0) = I`, constant-preservation and temporal self-convergence are all satisfied by a kernel obeying (32.9.c), because $\Pi_1$ is exact at $\tau = 0$, reproduces constants exactly (weights sum to 1), and the scheme self-converges to its own biased limit.
+
+**Honest limit.** The tensor-product interpolant is not positivity-preserving; $\Pi_1$ was. Undershoot is $O(dx^{p})$ and vanishes with resolution (measured $\min/\text{peak}$ on the §32 smoke datum: $-1.8\cdot10^{-3}$ at $n{=}8$, $-3.5\cdot10^{-10}$ at $n{=}32$, $+3.9\cdot10^{-21}$ at $n{=}64$), but a caller requiring a strictly non-negative state in an under-resolved region must select `InterpKind::Linear` explicitly and accept (32.9.c).
+
+---
+
+## §60 — Per-pencil 2-D Strang composition: the order argument for transverse-varying coefficients (v0.12.0, ADR-0196, NORMATIVE library; CITATION mathematics)
+
+> Scope: what changes when the two split legs of a 2-D palindromic Strang composition carry coefficients that vary along the *other* axis. Adds no new discretisation; it replaces the **justification** for order 2, which §10 Theorem 7 supplies in a form that no longer applies.
+
+### §60.1 — The premise §10 uses, and why it fails here
+
+§10 (Theorem 7) justifies `Φ²ᴰ(τ) = X(τ/2) ∘ Y(τ) ∘ X(τ/2)` at order 2 via the commutator identity
+$$
+[L_x \otimes I,\; I \otimes L_y] \;=\; 0,
+\tag{60.1.a}
+$$
+which holds for a **separable** generator and makes palindromic Strang exact at the BCH level. With `a_x = a_x(x,y)` and `a_y = a_y(x,y)`, i.e. each diagonal coefficient varying along the transverse axis, the two lifted operators
+$$
+L_x = a_x(x,y)\,\partial_{xx} + \dots, \qquad L_y = a_y(x,y)\,\partial_{yy} + \dots
+$$
+**do not commute**, and (60.1.a) is simply false. The conclusion survives; the proof does not.
+
+### §60.2 — Order 2 by symmetric splitting (NORMATIVE)
+
+**Proposition 60.1.** For arbitrary (non-commuting) generators `A`, `B` the palindromic product satisfies
+$$
+e^{\tau A/2} e^{\tau B} e^{\tau A/2}
+= e^{\tau(A+B) \;+\; \frac{\tau^3}{24}\left([B,[B,A]] - 2[A,[A,B]]\right) \;+\; O(\tau^4)},
+\tag{60.2.a}
+$$
+i.e. the `τ²` term of the BCH expansion vanishes **identically**, without any commutation assumption. The local error is therefore `O(τ³)` and the global error `O(τ²)`.
+
+**Consequence (NORMATIVE).** `Strang2DPencil` is order 2 for transverse-varying coefficients. The *slope* is what (60.2.a) preserves; the error **constant** is not — it now carries the double commutators, which grow with `‖∂_y a_x‖` and `‖∂_x a_y‖`. §10's error constant vanishes identically for a separable generator; this one does not.
+
+### §60.3 — Pencil discretisation (NORMATIVE)
+
+For the X-legs the transverse coordinate `y_j` is **frozen**, giving an exact 1-D operator per pencil; likewise `x_i` for the Y-leg. This introduces no approximation beyond the splitting itself — freezing the transverse coordinate is precisely what operator splitting already does.
+
+`order()` is `min` over all pencils, capped at 2: a per-pencil kernel of order 4 does not lift the composition above the τ² of (60.2.a). `growth()` is the **sup** over pencils — `(max M, max ω)` — since a growth bound must hold for the worst pencil.
+
+### §60.4 — Acceptance gates
+
+| Gate | Definition | Threshold | Oracle |
+|---|---|---|---|
+| `G_PENCIL_REDUCTION` | separable coefficients reproduce `Strang2D` | `sup_err ≤ 1e-13` | the shipped `Strang2D`, no sympy |
+| `G_PENCIL_ORDER2` | reference-free Richardson `log₂(‖u_n−u_{2n}‖/‖u_{2n}−u_{4n}‖)` | `∈ [1.7, 2.3]` | self-convergence, no sympy |
+
+**Non-vacuity.** `G_PENCIL_REDUCTION` uses `a_x = 0.7 ≠ a_y = 0.3` so the legs are distinguishable, and asserts separately that swapping the axes *does* change the answer. A companion test asserts that the transverse field differs from its best separable stand-in by `> 1e-4` — if it did not, `Strang2D` could express the datum and this section would be unnecessary.
+
+### §60.5 — Pre-asymptotic calibration (NORMATIVE — the gate datum is chosen, not assumed)
+
+Measured slope, `n_steps ∈ {20, 40, 80}`, `N = 33`:
+
+| transverse amplitude | `t = 0.005` | `t = 0.02` |
+|---|---|---|
+| 0.1 | 2.871 | **2.053** |
+| 0.3 | 2.723 | **1.913** |
+| 0.6 | 1.774 | 1.175 |
+
+At ±60% the ladder has not reached the asymptotic regime: the commutator term of (60.2.a) still dominates at `τ = 2.5·10⁻⁴`. This is §60.2's error-constant statement made quantitative, and the same pre-asymptotic phenomenon §41 / ADR-0110 formalised. `G_PENCIL_ORDER2` gates the ±30% datum; the full table is published so the boundary of usable τ is visible rather than implied.
+
+### §60.6 — Honest limits
+
+- **Serial only.** The threaded X/Y passes of `strang2d_parallel.rs` are not reused; doing so would put the ADR-0018 bit-equality contract in the blast radius of a feature addition.
+- **No mixed derivative.** `∂_x∂_y` must be removed by a decorrelation transform before this composition applies; the transform is the caller's.
+- **The τ range narrows with transverse variation** (§60.5). Verify the slope on the actual coefficient field.
+- **3-D is out of scope**: the Z-axis pencil count becomes `nx·ny` and the memory argument must be re-derived.
+- **No positivity or maximum-principle guarantee** is added; the splitting is unchanged.
+
+---
+
+## §61 — Coefficient-field sensitivity of the shift kernel (v0.12.0, ADR-0197, NORMATIVE library; CITATION mathematics)
+
+> Scope: `∂J/∂θ_i` for the per-node coefficient arrays `a`, `b`, `c` of the §1–§2 shift kernel. Reuses the §43.4 adjoint-state recursion; what is new is the parameter derivative of a kernel whose coefficient sits **inside** the sampling position, and the resulting stencil structure.
+
+### §61.1 — The parameter derivatives (NORMATIVE)
+
+With `h_i = 2\sqrt{a_i \tau}` and `g_i = 2 b_i \tau`, the shipped node formula is
+$$
+(S(\tau)u)_i = \tfrac14 \tilde u(x_i + h_i) + \tfrac14 \tilde u(x_i - h_i) + \tfrac12 \tilde u(x_i + g_i) + \tau c_i u_i,
+\tag{61.1.a}
+$$
+where `\tilde u` is the **interpolant** of `u`. Since `\partial h_i/\partial a_i = \sqrt{\tau/a_i}` and `\partial g_i/\partial b_i = 2\tau`,
+$$
+\frac{\partial (Su)_i}{\partial a_i} = \tfrac14 \sqrt{\tfrac{\tau}{a_i}}\Bigl[\tilde u'(x_i + h_i) - \tilde u'(x_i - h_i)\Bigr],
+\qquad
+\frac{\partial (Su)_i}{\partial b_i} = \tau\, \tilde u'(x_i + g_i),
+\qquad
+\frac{\partial (Su)_i}{\partial c_i} = \tau\, u_i .
+\tag{61.1.b}
+$$
+
+**Domain (NORMATIVE).** The factor `\sqrt{\tau/a_i}` diverges as `a_i \to 0^+`: `\partial/\partial a` is **undefined** at a degenerate node. The gradient therefore requires `a_i > 0` strictly, while the forward kernel admits `a_i \ge 0` — the gradient's domain is strictly smaller than the forward one, and the implementation returns `DomainViolation` rather than an infinity.
+
+### §61.2 — Stencil structure: diagonal in the output, wide in the input (NORMATIVE)
+
+**Proposition 61.1.** The coefficients enter (61.1.a) only through their values at `x_i = ` `grid.x_at(i)`. Hence
+$$
+\frac{\partial (S u)_p}{\partial \theta_i} = 0 \quad \text{for } p \ne i ,
+\tag{61.2.a}
+$$
+i.e. the parameter→**output** coupling is diagonal. The parameter→**input** coupling is not: each entry of (61.1.b) is a linear functional of `u` supported on the interpolation stencil around the two feet (4 nodes each for Catmull-Rom, up to ~14 for septic through its embedded FD stencils), plus boundary folding onto ≤3 nodes at each end. `\partial(Su)_i/\partial c_i = \tau u_i` is a 1-point stencil with no interpolation at all.
+
+**Corollary 61.2 (cost).** By (61.2.a) all `n` parameter derivatives of a field are obtained in **one** `O(n)` pass, so the adjoint-state driver costs `O(n_\text{steps} \cdot n)` — the same order as the forward solve, times a small constant. A per-parameter formulation (the `GeneratorSensitivity` shape of §43) would cost `O(n_\text{steps} \cdot n^2)`; at `n = 1024`, `n_\text{steps} = 1000` that is `10^9` against `10^6`.
+
+### §61.3 — The transpose, and how its weights are obtained (NORMATIVE)
+
+`S` is a shift-and-interpolate **gather**; writing `w(y)` for the interpolation weight row at `y`, its exact transpose is the corresponding **scatter**
+$$
+S^{\top}\lambda \;=\; \sum_i \lambda_i \Bigl[\tfrac14 w(x_i + h_i) + \tfrac14 w(x_i - h_i) + \tfrac12 w(x_i + g_i)\Bigr] \;+\; \tau\,(c \odot \lambda).
+\tag{61.3.a}
+$$
+`S` is **not** self-adjoint for variable coefficients — the drift foot is one-sided — so (61.3.a) must be computed, never assumed.
+
+**Weight rows are measured, not derived (NORMATIVE implementation constraint).** Every interpolant in this library is linear in the node values, so
+$$
+w_j(y) \;=\; \operatorname{sample}(e_j,\; y),
+\tag{61.3.b}
+$$
+with `e_j` the `j`-th unit basis vector. The row is obtained by probing the sampler over its compact support. This is exact for every `InterpKind` and every `BoundaryPolicy` by construction, and avoids hand-transposing the septic Birkhoff–Garabedian–Lorentz polynomials composed with their central-FD stencils across seven boundary policies — the single most error-prone derivation this section could otherwise require.
+
+**The support set must be resolved through the boundary policy, not around the cell index.** Under `Reflect` or `Periodic` a query several cells outside the domain folds onto interior nodes arbitrarily far from the raw index. A raw-index window silently omits them; `G_SHIFT1D_WEIGHTS_ORACLE` measured exactly this (sampler `2.297` vs weights `0.840`) before the resolution was corrected to use the same `bc_index` mapping the sampler applies.
+
+### §61.4 — Adjoint-state recursion
+
+As §43.4: store the forward trajectory `u_0 … u_{n_\text{steps}}`, initialise `\lambda \leftarrow \partial J/\partial u_n` (caller-supplied — `J` lives outside the library), and sweep backward accumulating
+$$
+\frac{\partial J}{\partial \theta} \;{+}{=}\; \bigl\langle \lambda_{k+1},\; (\partial S_k/\partial\theta)\, u_k \bigr\rangle,
+\qquad \lambda_k = S^{\top}\lambda_{k+1},
+\tag{61.4.a}
+$$
+which (61.2.a) reduces to an elementwise product.
+
+### §61.5 — Acceptance gates
+
+| Gate | Definition | Threshold | Oracle |
+|---|---|---|---|
+| `G_SHIFT1D_WEIGHTS_ORACLE` | `Σ_j w_j·u_j` vs `sample(u, y)` over 3 interp kinds × 4 policies, in- and out-of-domain | `≤ 1e-12` rel | the sampler itself |
+| `G_SHIFT1D_TRANSPOSE_ID` | `⟨Sᵀλ, u⟩ = ⟨λ, Su⟩`, variable `a`,`b`,`c` | `≤ 1e-11` rel | adjoint identity |
+| `G_SHIFT1D_COEFF_FD` | gradient vs central FD, per field | `max‖Δ‖/max‖fd‖ ≤ 1e-6` | central differences |
+
+**Non-vacuity.** `G_SHIFT1D_TRANSPOSE_ID` separately asserts `Sᵀλ ≠ Sλ`, so it cannot pass on a datum where `S` happens to be self-adjoint. `G_SHIFT1D_COEFF_FD` compares **vectors** normalised by `max|fd|` rather than per-component ratios: individual gradient components are legitimately `~0`, where a per-component ratio is dominated by the FD floor rather than by any error in the adjoint.
+
+### §61.6 — Honest limits
+
+- `\partial/\partial a` undefined at `a_i = 0` (§61.1); gradient domain ⊊ forward domain.
+- Gradients are of the **discrete** kernel as implemented — interpolation and boundary folding included — not of the continuous solution operator.
+- `ShiftChernoff1D` has consistency order 1, so this is a first-order-accurate gradient of a first-order-accurate solve.
+- Trajectory memory `O(n_\text{steps}\cdot n)`; binomial checkpointing (§51.3) would give `O(\sqrt{n_\text{steps}}\cdot n)` at ~2× forward cost and is not wired up.
+- One field per call; a fused three-field variant sharing the trajectory is possible and not shipped.
+- `f64` only; `ChebyshevSpectralWithBC` unsupported.
 
 ---
 
@@ -10894,6 +11165,51 @@ Higham Code Fragment 3.1 guard). Total cost: $s\cdot m$ banded mat-vecs, each
 $O(K\!\cdot\!N)$; no LU, no $Q^{-1}$, no dense matrix; $O(1)$ work vectors $y, w$
 ($\texttt{no\_std + alloc}$ clean).
 
+### §45.2.bis — The θ_m table (NORMATIVE, ADR-0198)
+
+$\theta_m$ is the largest argument at which the degree-$m$ truncated Taylor
+exponential $T_m$ meets double-precision **backward** error: writing
+$e^{-x}T_m(x) = \exp\!\big(\sum_{k>m} c_k x^k\big)$ and
+$h_{m+1}(x) = \sum_{k>m} |c_k| x^k$,
+
+$$\theta_m \;=\; \max\{\theta > 0 \;:\; h_{m+1}(\theta)/\theta \le u\},\qquad u = 2^{-53}.$$
+
+The selector takes $s = \lceil \tau\lVert A\rVert / \theta_m\rceil$, so a
+$\theta_m$ that is too large yields too few substeps and a silently inaccurate
+result — the failure has no runtime symptom.
+
+**Correction (ADR-0198).** The shipped table paired each degree with a radius
+belonging to a degree two to three rows further down Al-Mohy & Higham Table 3.1:
+`(5, 1.44e-1)` carries $\theta_{10}$, `(8, 1.44)` carries $\theta_{20}$,
+`(13, 4.74)` carries $\theta_{35}$, and `(18, 8.84)` carries $\theta_{51}$
+against its own $\theta_{18} = 1.09$. Only the first two entries were right.
+Measured consequence, forward relative error of $T_m(-x)$ against $e^{-x}$:
+`3.8e+04` at the old $(18, 8.84)$, `2.9e+00` at $(13, 4.74)$, against `5.0e-16`
+at the correct $(18, 1.09)$.
+
+The replacement values were **recomputed from the definition above** in exact
+rational arithmetic rather than re-copied, and reproduce Table 3.1 to three
+significant figures at every degree:
+
+| $m$ | $\theta_m$ | $m$ | $\theta_m$ | $m$ | $\theta_m$ |
+|---|---|---|---|---|---|
+| 1 | 2.220e−16 | 9 | 8.958e−2 | 17 | 9.305e−1 |
+| 2 | 2.581e−8 | 10 | 1.442e−1 | 18 | 1.091 |
+| 3 | 1.386e−5 | 11 | 2.142e−1 | 19 | 1.260 |
+| 4 | 3.397e−4 | 12 | 2.996e−1 | 20 | 1.438 |
+| 5 | 2.401e−3 | 13 | 3.998e−1 | 25 | 2.429 |
+| 6 | 9.066e−3 | 14 | 5.139e−1 | 30 | 3.540 |
+| 7 | 2.384e−2 | 15 | 6.411e−1 | | |
+| 8 | 4.991e−2 | 16 | 7.803e−1 | | |
+
+`M_MAX` is raised $18 \to 30$: the previous cap protected the *argument* of a
+monomial Horner evaluation ("above arg ≈ 9"), a limit the wrong table was itself
+violating, and with correct radii the per-substep argument never exceeds
+$\theta_{30} = 3.54$. `graph_krylov`'s mirror keeps $m \le 18$, a structural cap
+from its $[[F;18];18]$ tridiagonal buffers.
+
+Gate: `G_THETA_M_TABLE`.
+
 ### §45.2 — Why this is NOT the closed Padé path (structural bypass; CITATION)
 
 ADR-0101 (§27.quart AMENDMENT 3) terminally deferred the operator-level Padé kernel
@@ -12969,8 +13285,9 @@ release; **no new sympy oracle**.
 
 ### §56.8 — Boundary and honest scope (NORMATIVE)
 
-- **`k > 0` required** — the harmonic mean (56.1.a) and PSD property assume strictly
-  positive conductivity; non-positive or non-finite `k_i` ⇒ `DomainViolation`.
+- **`k ≥ 0` required** (AMENDMENT 1, v0.12.0, ADR-0192 — supersedes the original
+  "`k > 0` required"; negative or non-finite `k_i` ⇒ `DomainViolation`). See §56.8.bis
+  for the degenerate-face derivation.
 - **Symmetric NSD by construction** — `A = −L_k` is PSD with `diag ≥ 0`; consumable by
   §55 and the §54 Krylov contraction. No indefinite/advective term is added.
 - **Interface-on-face invariant** — material interfaces MUST lie on faces (between
@@ -12984,6 +13301,36 @@ release; **no new sympy oracle**.
   RHS) for the steady solve, reusing `BoundaryPolicy`.
 - **Discontinuous-`k` spatial order is 1 near the jump** (FV intrinsic), but the steady
   series network (56.4) is exact on aligned faces — documented, not hidden (§56.6).
+
+### §56.8.bis — Degenerate conductivity `k = 0` (AMENDMENT 1, v0.12.0, ADR-0192, NORMATIVE)
+
+The original `k > 0` guard was stronger than the scheme requires. Degenerate-at-the-boundary diffusions are the generic case in several standard models rather than an edge case: CEV in price space has $k(S) = \tfrac12\sigma^2 S^{2\beta} \to 0$ as $S \to 0$; the Feller/CIR variance process has $k(v) = \tfrac12\xi^2 v \to 0$ as $v \to 0$ (the Heston volatility axis); Wright–Fisher-type bounded domains vanish at both ends.
+
+**Proposition 56.9 (degenerate face is an insulator, NORMATIVE).** Let $k_i \ge 0$ for all $i$. Define the face conductivity by (56.1.a) extended by continuity,
+$$
+k_{i+\frac12} \;=\;
+\begin{cases}
+\dfrac{2 k_i k_{i+1}}{k_i + k_{i+1}}, & k_i > 0 \ \text{and}\ k_{i+1} > 0,\\[2mm]
+0, & \text{otherwise},
+\end{cases}
+\tag{56.9.a}
+$$
+and the transmissibility by (56.1.b) extended by $T_{i+\frac12} = 0$ whenever $k_{i+\frac12} = 0$. Then:
+
+1. **The extension is the continuous limit.** For $k_i \to 0^+$ at fixed $k_{i+1} > 0$, $2k_ik_{i+1}/(k_i+k_{i+1}) \to 0$ and $T = 1/(dx/k_{\text{harm}} + R_c) \to 0$. Definition (56.9.a) assigns exactly that limit, so no discontinuity is introduced at $k = 0$.
+2. **Zero flux crosses a degenerate face**, since the discrete flux is $q_{i+\frac12} = T_{i+\frac12}(u_i - u_{i+1})$. The degenerate end therefore *classifies itself* — the discrete analogue of the Feller boundary classification — and requires no separate boundary condition.
+3. **PSD is preserved.** The energy identity $\langle u, L_k u\rangle = -\sum_i T_{i+\frac12}(u_{i+1}-u_i)^2$ of §56.2 needs only $T \ge 0$, which (56.9.a) satisfies with equality on degenerate faces. $A = -L_k$ remains symmetric PSD with $\mathrm{diag} \ge 0$, so the §55 carrier and the §54 Krylov contraction bound are unaffected.
+
+**Why the branch in (56.9.a) is normative rather than an implementation detail.** For a single degenerate node IEEE arithmetic already produces the right answer: $0 \cdot k_r/(0+k_r) = 0$, then $dx/0 = +\infty$ and $1/(\infty + R_c) = 0$. For **two adjacent** degenerate nodes it does not: $0\cdot 0/(0+0)$ is $0/0 = \mathrm{NaN}$. Adjacent zeros are exactly the Wright–Fisher case, and on the `ConservativeDiffusionChernoff → cn_step → thomas_solve` path there is no finiteness backstop (the sibling `assemble_conservative_csr_1d` route is covered by `SymmetricOperator::from_csr`'s `check_finite`), so the state vector would go silently NaN. The explicit branch costs one comparison and makes the degenerate case total.
+
+**`k < 0` remains rejected.** This is not residual conservatism. A negative conductivity yields negative $T$, which flips the sign of a term in the §56.2 energy sum and destroys the PSD property that the Krylov contraction bound and `Growth::contraction()` depend on — and none of `from_csr`'s three checks (finiteness, `diag ≥ 0`, symmetry) would catch it, because the assembled diagonal $(T_{i-\frac12}+T_{i+\frac12})/dx$ can remain non-negative while individual faces are negative.
+
+**Honest limits.**
+- **Order degrades at a degenerate end.** The scheme stays consistent and conservative, but $k \to 0$ makes the operator degenerate-parabolic there; the interior order claim of §56.6 does not extend to the degenerate node, and no order gate is asserted for it.
+- **No positivity guarantee is added.** Zero flux across the degenerate face prevents mass *leaking through* it; it does not make the scheme positivity-preserving in general.
+- **The prior workaround is now a modelling choice, not a requirement.** Flooring $k$ at $\varepsilon > 0$ remains available, but it is an artificial change to the model that moves quantiles measurably when density mass sits near the degenerate end — which is why the guard was worth relaxing rather than documenting around.
+
+**Gate `G_CONS_DEGENERATE`** — CIR/Feller and CEV data with $k(0) = 0$ assemble and stay finite and PSD; a Wright–Fisher datum with adjacent zeros at both ends produces no NaN through the CN/Thomas path; a single interior zero blocks flux to $< 10^{-12}$ while the floored-$k$ control transports mass (teeth); $k < 0$ and non-finite $k$ still raise `DomainViolation`.
 - **Contact resistance is purely resistive** (no interfacial capacitance).
 - **Full-tensor non-separable** `∂_x(k ∂_y u)` is OUT OF SCOPE (separable axes only).
 - **Bit-stable** — deterministic f64 assembly + tridiagonal Thomas / Krylov (no

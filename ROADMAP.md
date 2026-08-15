@@ -12,6 +12,75 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Issue campaign #17/#19/#21–#26 — DONE (ADRs 0190–0197)
+
+Eight issues filed against 0.11.0-beta from a quant-finance showcase. One is a
+correctness bug (#17); exploration surfaced a second of the same class that had
+not been reported. The campaign splits into a correctness wave (landing first)
+and a capability wave.
+
+**#17 — `GridFnND::sample` ignored `InterpKind` and `BoundaryPolicy` (ADR-0191,
+math §32.9).** The N-D sampler hard-coded multilinear interpolation with an index
+clamp. Since the Chernoff product resamples at off-grid quadrature feet every
+step, that injected ≈ `dx²/6` of spurious second moment **per step**, growing
+*linearly in the step count*: the reported `dVar = 1.2113 / 2.2449 / 4.4901` at
+`n_steps = 100 / 400 / 1600` against an exact `1.0`. Now `1.000000` at all three.
+The reported "axis mixing" was not a kernel defect but a C-order `ravel()` against
+the library's x-fastest layout — addressed by accepting 2-D arrays directly and
+documenting the layout precisely. Gate `G_ASND_MOMENT` (the oracle whose absence
+let this ship). Honest limits: septic/octonic/Chebyshev have no `D > 1` stencil,
+so the N-D spatial floor is `O(dx⁴)`; the interpolant is no longer
+positivity-preserving. **The `G_DDIM` ladder was re-measured (ADR-0191 AMENDMENT 3) and the gate now
+FAILS at −0.9249.** The cause is not the sampler fix: the gate's reference sits
+only 2× finer than its datum, and a reference-free successive-difference probe
+puts the kernel's true global order at **½** across `n ∈ [32, 16384]` and three
+grid resolutions. Left failing; needs an architect decision on `order()`, on the
+threshold, and on whether `shift_nd_zeta2` lifts it. See "Open" in CHANGELOG.
+
+**RESOLVED — Heat2DVarA/3D pass `a' ≡ 0`, `a'' ≡ 0` (ADR-0191 AMENDMENT 1,
+math §9.2.3.B.bis).** Zeroing the closures looked like a bug, and the earlier
+self-convergence A/B could not discriminate because both candidates sit at the
+`O(τ¹)` ceiling. The missing analytic oracle was built: both candidate
+generators assembled densely and exponentiated, `7.8e−2` apart, with the zeroed
+kernel landing `6.8e−3` from the **non-divergence** reference and `7.4e−2` from
+the divergence one (and the FD-derivative path the other way round). The closures
+are correct and produce exactly the operator all three binding surfaces
+advertise. What *was* wrong is the order claim: the frozen-coefficient stencil is
+consistency order 1, measured **1.007**, so `Heat2DVarA::order()` and
+`Heat3DVarA::order()` now report 1 rather than 2. Gates `G_FROZEN_COEFF_NONDIV`,
+`G_FROZEN_COEFF_ORDER1`.
+
+**Found in passing — the θ_m table was mis-transcribed (ADR-0198, math
+§45.2.bis).** `expmv::THETA_M` and its `graph_krylov` mirror paired each Taylor
+degree with a backward-error radius belonging to a degree two to three rows
+further down Al-Mohy & Higham Table 3.1, so `select_s_m` under-substepped by up
+to 8× (`T_18` at the claimed `θ ≈ 8.84` has relative error `3.8e+04`). Recomputed
+from the definition in exact rational arithmetic; `M_MAX` 18 → 30. Gate
+`G_THETA_M_TABLE`.
+
+**Found in passing — the WASM `full` feature never compiled.** ~20 gated modules,
+including the whole Magnus graph surface, were dead and unbuildable behind a
+feature no build path enables. Fixed; CI now type-checks it.
+
+**#26 — conservative diffusion admits `k ≥ 0` (ADR-0192, math §56.8.bis).**
+CEV, Feller/CIR and Wright–Fisher are degenerate at the boundary by construction;
+the harmonic-mean face already handles it (zero conductivity ⇒ zero flux ⇒ the
+boundary classifies itself). Supersedes the "#11 honest limit: `k > 0`" below.
+`k < 0` stays rejected — it breaks §56.2 PSD and no `from_csr` check catches it.
+Gate `G_CONS_DEGENERATE` with a floored-`k` teeth control.
+
+### Wave B (capability) — DONE
+
+#19 batched multi-channel evolve for 1-D grid kernels; #21 full-grid
+`a_x(x,y)`/`a_y(x,y)` (needs a per-pencil composition — `Strang2D`/`AxisLift`
+share one kernel across pencils, so transverse-varying coefficients are currently
+inexpressible); #22 `AdaptivePI` over `Shift1D.with_arrays`; #23 `b`/`c` and
+array coefficients in `evolve_with_time_schedule`; #24 non-symmetric operators
+via the existing symmetry-agnostic `expmv` Taylor engine rather than new Arnoldi;
+#25 VJP w.r.t. `Shift1D` coefficient fields.
+
+---
+
 ## Issue #16 — Implicit / shift-invert stiff mode for `SymmetricOperator` (ADR-0190, math §59) — IN PROGRESS (branch `feat/issue-16-implicit-symmetric-operator`)
 
 Single-issue additive feature. No breaking changes to any existing kernel, gate,

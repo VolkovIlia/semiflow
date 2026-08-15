@@ -73,6 +73,9 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     GraphAdjointPresampled,
     edge_weight_grad,
     edge_weight_grad_batched,
+    # Issue #24/#25 — non-symmetric operator action, coefficient-field gradients
+    GeneralOperator,
+    shift1d_coeff_grad,
     # v6.3.0 — obstacle / variational-inequality Chernoff (math §44)
     ObstacleChernoff,
     # v8.0.0 F1 — Dual-AD Greeks (ADR-0133 A3)
@@ -199,6 +202,8 @@ __all__ = [
     "GraphAdjointPresampled",
     "edge_weight_grad",
     "edge_weight_grad_batched",
+    "GeneralOperator",
+    "shift1d_coeff_grad",
     # v6.3.0 — obstacle / variational-inequality Chernoff (math §44)
     "ObstacleChernoff",
     # v8.0.0 F1 — Dual-AD Greeks (ADR-0133 A3)

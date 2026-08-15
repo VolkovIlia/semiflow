@@ -4,7 +4,7 @@
 //! [`crate::BoundaryPolicy`] and [`crate::InterpKind`] independently
 //! (per-axis BC principle, mirroring ADR-0012 for 2D).
 //!
-//! Storage convention (I-T1-3D): x-fastest row-major,
+//! Storage convention (I-T1-3D): x-fastest (Fortran order for a `(nx, ny, nz)` view),
 //! `idx(i, j, k) = k * nx * ny + j * nx + i`.
 //! Strides: x → 1, y → nx, z → nx*ny.
 //!
@@ -30,7 +30,7 @@ use crate::{error::SemiflowError, float::SemiflowFloat, grid::Grid1D};
 ///
 /// `Grid3D` does NOT own values; values live in [`crate::GridFn3D`].
 ///
-/// Storage convention (I-T1-3D): x-fastest row-major,
+/// Storage convention (I-T1-3D): x-fastest (Fortran order for a `(nx, ny, nz)` view),
 /// `idx(i, j, k) = k * nx * ny + j * nx + i`.
 /// Strides: x → 1, y → nx, z → nx*ny. Total cell count is `nx * ny * nz`.
 ///

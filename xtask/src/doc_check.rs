@@ -5,7 +5,7 @@
 //! 1. **Version / status truth** (all `crates/*/README.md` + root `README.md`):
 //!    - 1a. False "unpublished" claims (denylist; escape: `<!-- doc-check: allow-unpublished -->`).
 //!    - 1b. Internal-scheme version tokens `vN.M.K` with N≥2 leaked into user-facing READMEs
-//!          (N≥2: `v1.0.0` API-freeze references are allowed; escape: `<!-- doc-check: allow-vref -->`).
+//!      (N≥2: `v1.0.0` API-freeze references are allowed; escape: `<!-- doc-check: allow-vref -->`).
 //!
 //! 2. **Exposed-class truth** (`crates/semiflow-py/README.md` only):
 //!    - 2a. README lists a class absent from `#[pyclass(name=…)]` registrations.
@@ -21,11 +21,11 @@
 //! 4. **WASM surface truth** (`crates/semiflow-wasm/README.md` ↔ `#[wasm_bindgen]` exports):
 //!    - 4a. README class table documents a class absent from `#[wasm_bindgen]` exports (phantom).
 //!    - 4b. README denies that a class is wired to WASM, but it IS exported (incident rule).
-//!          Exception: denial qualified by "FFI handle" scopes the deferral to the S³ handle,
-//!          not the class itself — this is a legit distinction, not gate-weakening.
+//!      Exception: denial qualified by "FFI handle" scopes the deferral to the S³ handle,
+//!      not the class itself — this is a legit distinction, not gate-weakening.
 //!    - 4c. (no-op) Per-export completeness warnings are intentionally suppressed — the
-//!          authoritative, exhaustive class list is the wasm-pack-generated `semiflow_wasm.d.ts`
-//!          (mirroring Check 3c / FFI policy; enumerating 50+ classes in prose is unmaintainable).
+//!      authoritative, exhaustive class list is the wasm-pack-generated `semiflow_wasm.d.ts`
+//!      (mirroring Check 3c / FFI policy; enumerating 50+ classes in prose is unmaintainable).
 //!
 //! ## Fragility ledger
 //!
@@ -688,7 +688,7 @@ fn check_3c(header_syms: &HashSet<String>, warnings: &mut Vec<String>) {
 const WASM_README: &str = "crates/semiflow-wasm/README.md";
 const WASM_SRC_DIR: &str = "crates/semiflow-wasm/src";
 
-/// Check 4: WASM README ↔ #[wasm_bindgen] exports.
+/// Check 4: WASM README ↔ `#[wasm_bindgen]` exports.
 pub(crate) fn check_wasm_surface(
     root: &Path,
     violations: &mut Vec<Violation>,
@@ -922,7 +922,7 @@ fn is_past_qualified(context: &str) -> bool {
 /// Strip a YAML front-matter block (content between the first two `---` lines)
 /// from a README string so denial-phrase scanners don't trip on changelog entries.
 fn strip_front_matter(src: &str) -> &str {
-    let mut lines = src.splitn(3, |c| c == '\n');
+    let mut lines = src.splitn(3, '\n');
     // If first line is `---`, look for closing `---`.
     if lines.next().map(|l| l.trim() == "---").unwrap_or(false) {
         // Find the byte position of the second `---\n` or `---` at EOL.

@@ -1,7 +1,7 @@
 //! [`GridFn3D`] — a function sampled on a [`Grid3D`], implementing [`State`].
 //!
 //! Holds a single `Vec<F>` of length `nx * ny * nz`, indexed by
-//! `idx(i, j, k) = k * nx * ny + j * nx + i` (I-T1-3D, x-fastest row-major).
+//! `idx(i, j, k) = k * nx * ny + j * nx + i` (I-T1-3D, x-fastest (Fortran order for a `(nx, ny, nz)` view)).
 //!
 //! All [`State`] operations (`axpy`, `scale`, `norm_sup`, `zeroed_like`)
 //! operate on the flat `Vec<F>` — O(nx * ny * nz) with no branching on (i, j, k).
@@ -27,7 +27,7 @@ use crate::{
 
 /// A function sampled on a 3D tensor-product grid.
 ///
-/// Flat x-fastest row-major storage: `values[k*nx*ny + j*nx + i] ≈ f(x_i, y_j, z_k)`.
+/// Flat x-fastest (Fortran order for a `(nx, ny, nz)` view) storage: `values[k*nx*ny + j*nx + i] ≈ f(x_i, y_j, z_k)`.
 /// Single `Vec<F>` allocation (no nested `Vec` — mirrors ADR-0012 for 2D).
 ///
 /// Implements [`State<F>`] for use in the Chernoff iteration via [`crate::Strang3D`].

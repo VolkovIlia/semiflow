@@ -165,6 +165,6 @@ through `py.detach` and is mapped by the existing `error.rs::from_core`.
 ## 5. Cross-references
 
 - Math: `contracts/semiflow-core.math.md` §59 (NORMATIVE algorithm, gates §59.7).
-- Decision/governance: `docs/adr/0190-implicit-stiff-symmetric-operator.md`.
+- Decision/governance: `docs/adr/0191-implicit-stiff-symmetric-operator.md`.
 - Reused: §55 (`SymmetricOperator`, `SymmetricLinearOp`, congruence), ADR-0031
   (3-phase GIL batching), `crates/semiflow-py/src/error.rs` (kind mapping).

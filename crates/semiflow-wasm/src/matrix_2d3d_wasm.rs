@@ -196,6 +196,7 @@ impl MatrixDiffusion2D {
     ///
     /// # Errors
     /// Throws JS `Error` with `.kind`.
+    #[allow(clippy::too_many_arguments)] // JS constructor: grid geometry + coefficients
     #[wasm_bindgen(constructor)]
     pub fn new(
         xmin: f64,
@@ -308,6 +309,7 @@ impl MatrixDiffusion3D {
     ///
     /// # Errors
     /// Throws JS `Error` with `.kind`.
+    #[allow(clippy::too_many_arguments)] // JS constructor: grid geometry + coefficients
     #[wasm_bindgen(constructor)]
     pub fn new(
         xmin: f64,

@@ -16,7 +16,7 @@ use crate::error::make_js_error;
 ///
 /// `wasm32-unknown-unknown` is single-threaded by spec — no OS threads share
 /// WASM linear memory.  `Send` and `Sync` are vacuously safe (ADR-0034).
-pub(super) struct JsLapCb(pub(super) js_sys::Function);
+pub(crate) struct JsLapCb(pub(crate) js_sys::Function);
 
 // Safety: wasm32-unknown-unknown is single-threaded (ADR-0034).
 unsafe impl Send for JsLapCb {}
@@ -24,7 +24,7 @@ unsafe impl Sync for JsLapCb {}
 
 impl JsLapCb {
     /// Call JS callback with one `f64` argument → `Float64Array` or `None`.
-    pub(super) fn call_arr(&self, t: f64) -> Option<Vec<f64>> {
+    pub(crate) fn call_arr(&self, t: f64) -> Option<Vec<f64>> {
         let arg = JsValue::from_f64(t);
         let ret = self.0.call1(&JsValue::NULL, &arg).ok()?;
         if !ret.is_instance_of::<Float64Array>() {
@@ -38,13 +38,13 @@ impl JsLapCb {
 }
 
 /// Unit-weight fallback Laplacian for a path graph with `n_nodes` nodes.
-pub(super) fn unit_lap(n_nodes: usize) -> Arc<Laplacian<f64>> {
+pub(crate) fn unit_lap(n_nodes: usize) -> Arc<Laplacian<f64>> {
     let g = Graph::<f64>::path(n_nodes);
     Arc::new(Laplacian::assemble_combinatorial(&g))
 }
 
 /// Build `LaplacianAtTime<f64>` from a JS callback + stored graph topology.
-pub(super) fn make_lap_at_t(cb: JsLapCb, base_graph: &Graph<f64>) -> LaplacianAtTime<f64> {
+pub(crate) fn make_lap_at_t(cb: JsLapCb, base_graph: &Graph<f64>) -> LaplacianAtTime<f64> {
     let n_nodes = base_graph.n_nodes();
     let row_ptr = base_graph.row_ptr().to_vec();
     let col_idx = base_graph.col_idx().to_vec();
@@ -83,7 +83,7 @@ pub(super) fn make_lap_at_t(cb: JsLapCb, base_graph: &Graph<f64>) -> LaplacianAt
 }
 
 /// Build `WeightAtTime<f64>` from a JS callback returning a `Float64Array`.
-pub(super) fn make_a_at_t(cb: JsLapCb, n_nodes: usize) -> WeightAtTime<f64> {
+pub(crate) fn make_a_at_t(cb: JsLapCb, n_nodes: usize) -> WeightAtTime<f64> {
     Box::new(move |t: f64| -> Vec<f64> {
         let fallback = vec![1.0_f64; n_nodes];
         let Some(weights) = cb.call_arr(t) else {
@@ -102,7 +102,7 @@ pub(super) fn make_a_at_t(cb: JsLapCb, n_nodes: usize) -> WeightAtTime<f64> {
 }
 
 /// Validate common evolve parameters.
-pub(super) fn validate_evolve(
+pub(crate) fn validate_evolve(
     f0: &[f64],
     n_nodes: usize,
     t_final: f64,

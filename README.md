@@ -111,7 +111,7 @@ cargo add semiflow
 `no_std` users: disable default features:
 
 ```toml
-semiflow = { version = "0.12.0-beta", default-features = false }
+semiflow = { version = "0.13.0-beta", default-features = false }
 ```
 
 The `simd` (AVX2 / NEON) and `parallel` features require `std`.
@@ -311,7 +311,7 @@ repo) which reads [`CITATION.cff`](CITATION.cff), or use this BibTeX entry:
   author    = {Volkov, Ilia},
   title     = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year      = {2026},
-  version   = {0.12.0-beta},
+  version   = {0.13.0-beta},
   doi       = {10.5281/zenodo.20837851},
   url       = {https://doi.org/10.5281/zenodo.20837851}
 }

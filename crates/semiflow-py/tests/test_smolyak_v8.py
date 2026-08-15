@@ -223,26 +223,41 @@ def test_size() -> None:
 # golden.  A spot-check on the first 8 and last 4 entries verifies the
 # canonical values printed by the core golden test.
 
+# Regenerated at ADR-0191 (issue #17): `GridFnND::sample` became a genuine
+# tensor-product interpolant honouring each axis's BoundaryPolicy, instead of
+# multilinear-with-index-clamp, so the canonical output legitimately changed.
+# Reprinted by `cargo test -p semiflow --release --features slow-tests \
+#   --test binding_smolyak_parity -- --nocapture`.
+#
+# Worth noting what the change looks like here. The IC `exp(-Σx²)` is symmetric
+# on the symmetric domain [-2,2], and entries 0..3 traverse x0 ∈ {-2, -2/3, +2/3,
+# +2} at fixed other axes — so the output must satisfy `g[0] == g[3]` and
+# `g[1] == g[2]`. The NEW golden does: `[a, b, b, a, ...]`. The OLD golden did
+# NOT — it read `[1.98e-9, 4.26e-8, 4.34e-8, 4.34e-8, ...]`, i.e. `a, b, c, c`,
+# with `g[0]` differing from `g[3]` by a factor of 22. That broken reflection
+# symmetry was the index clamp overriding the axes' `Reflect` policy asymmetrically
+# at the two ends. The regeneration is not merely a churn update; it restores a
+# symmetry the values had lost.
 _GOLDEN_FIRST8 = np.array(
     [
-        1.9811742744066938e-09,
-        4.2640521108968764e-08,
-        4.3382453863501875e-08,
-        4.3382453863501875e-08,
-        4.264052110896883e-08,
-        8.479792249826666e-07,
-        8.658852989063938e-07,
-        8.658852989063938e-07,
+        1.1135489538169915e-09,
+        2.4645994657186092e-08,
+        2.4645994657186105e-08,
+        1.11354895381699e-09,
+        2.4645994657186085e-08,
+        5.132235735928101e-07,
+        5.132235735928105e-07,
+        2.464599465718608e-08,
     ],
     dtype=np.float64,
 )
 
 _GOLDEN_LAST4 = np.array(
     [
-        0.0045052679079117235,
-        0.06696301289530794,
-        0.06948345122280135,
-        0.06948345122280135,
+        1.1135489538169857e-09,
+        2.464599465718599e-08,
+        2.464599465718615e-08,
+        1.1135489538169873e-09,
     ],
     dtype=np.float64,
 )

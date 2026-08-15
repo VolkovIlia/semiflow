@@ -14,6 +14,24 @@ jobs:
       - run: pip install scipy numpy
       - run: cargo test --release -p semiflow --features diff-scipy --test diff_scipy
 
+  ddim-d5:
+    name: G_DDIM D=5 (RELEASE_BLOCKING, ~5 h)
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Moved out of flagship-gates.yml: at the normative `N_AXIS = 6` this one
+      # test costs ~4.9 h, most of a 6 h runner budget. The gate itself is
+      # unchanged and still RELEASE_BLOCKING — it just cannot share a job with
+      # gates that need to answer in minutes. See ADR-0191 AMENDMENT 5.
+      - name: Run G_DDIM D=5
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test anisotropic_shift_nd_d5_slope -- --nocapture
+
   miri:
     runs-on: ubuntu-latest
     steps:
