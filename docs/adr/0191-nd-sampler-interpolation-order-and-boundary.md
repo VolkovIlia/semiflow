@@ -571,6 +571,16 @@ few corner points, the perturbation propagates and the gate fails. The observed
 history — fail, fail, pass, fail, with no relevant code change — is what a
 coin-flip looks like, not what a regression looks like.
 
+The amplification is measured, not assumed: perturbing every entry of the input
+by exactly 1 ULP moves the output by **up to 25 ULP**. A 1-ULP disagreement on a
+handful of points is therefore more than sufficient to produce the observed
+2-ULP drift, and the kernel does not need to be doing anything wrong for it to
+happen — 533 Smolyak weights, some negative, summed per output point is simply a
+conditioning that turns last-bit input noise into several bits of output noise.
+That number also establishes the gate is not vacuous: it does detect a 1-ULP
+change in what crosses the boundary, which is exactly the marshalling defect it
+exists to catch.
+
 Note the shape of the original mistake, since it is the more useful lesson: the
 "NumPy ruled out" measurement in AMENDMENT 5 was taken on a machine where the
 gate *passes*. A hypothesis about why a failure occurs cannot be tested on a
@@ -578,20 +588,44 @@ configuration that does not exhibit the failure. That inference was invalid
 independently of the conclusion, and it is what let a contradicted diagnosis
 (fact 2) survive.
 
-### Status
+### Resolution
 
-**OPEN.** No fix is proposed here, because fixing it means changing a
-`RELEASE_BLOCKING` gate, which needs architect sign-off
-(`Gate-Change-Approved-By:`) rather than a unilateral edit by whoever tripped
-over it.
+**RESOLVED.** Approved by the maintainer (`Gate-Change-Approved-By: ilia-volkov`)
+after the diagnosis above was presented; not self-approved by the agent that
+tripped over it.
 
-The obvious repair is to remove the second `exp` implementation from the
-comparison — embed the golden *input* bits in the Python test (as the golden
-*output* bits already are) so both sides start from identical data, leaving the
-gate measuring what it claims to measure: that the PyO3 marshalling layer is
-bit-transparent. That is a strictly stronger gate than today's, not a weaker
-one, since it removes a source of accidental passes as well as accidental
-failures.
+The second `exp` implementation is removed from the comparison. The Python
+sub-test no longer calls `np.exp`: it computes the *exponent* — which is exact,
+and which was verified bit-identical to the Rust path, `linspace` reproducing
+`Grid1D`'s `x_i = xmin + i·dx` exactly — and looks the exponential up in a
+pinned table.
 
-Until then the gate's red state is a property of the gate, not of the library.
-It still blocks release, and should.
+The table costs 16 constants, not 4096, because only 16 distinct exponents occur
+over the grid. They are the exact bit patterns the golden was computed from,
+extracted from the Rust IC itself. The reconstruction is pinned end-to-end by an
+FNV-1a/64 checksum printed on the Rust side, so a wrong ravel order or a
+truncated table fails loudly rather than silently producing a different vector.
+
+Why this is **stronger**, not weaker — the distinction matters, since relaxing a
+gate to make it green is the failure mode this project guards against:
+
+- Before: `exp_A(input) → kernel → compare bits with golden(exp_B(input))`. Two
+  `exp` implementations inside a bit-exactness assertion. Green meant "the
+  marshalling is transparent **and** two libms happened to agree", and the gate
+  could not tell those apart. It produced accidental **passes** as readily as
+  accidental failures.
+- After: `pinned_input → kernel → compare bits with golden(same pinned_input)`.
+  With `c ≡ 0` the compared path is `+ − × ÷` and `sqrt` over literal
+  Gauss–Hermite tables, all correctly rounded by IEEE-754 §5.4, so bit equality
+  is now required by specification on every conforming platform. Green means
+  exactly one thing, and red is now always a real defect.
+
+Two guards keep the pinned data honest: `test_ic_reconstruction_matches_rust_checksum`
+(bit-exact, against the Rust checksum) and `test_ic_table_is_the_documented_gaussian`
+(tolerance ≤4 ULP against `exp(-Σx²)`, so the constants cannot silently drift
+away from the canonical §1.3 parameters). The second is deliberately *not* a bit
+check — demanding bit equality with `np.exp` there would reintroduce the exact
+flake this amendment removes, one test to the left.
+
+The golden *output* constants are untouched, and no threshold, tolerance or
+skip was added to the parity assertion itself.

@@ -7432,8 +7432,37 @@ properties:
           ASSERT out[0..8] byte-identical AND out[-4..] byte-identical to core golden.
           ASSERT idempotency: second call returns same result.
 
+      NORMATIVE (ADR-0191 AMENDMENT 6, Gate-Change-Approved-By: ilia-volkov):
+      sub-test 2 MUST NOT recompute the IC with a second exp implementation.
+      It computes the exponent (exact: linspace reproduces Grid1D's
+      x_i = xmin + i·dx bit-for-bit, and the exponent is sums of products of
+      those coordinates) and looks the exponential up in a pinned 16-entry
+      table of raw float64 bit patterns taken from the Rust IC itself. Only 16
+      distinct exponents occur over the 4096 points.
+
+      Rationale: as originally written the gate ran u0 = np.exp(...) and
+      compared bit-for-bit against a golden whose IC came from Rust f64::exp.
+      NumPy's exp is vectorised and dispatched at run time by CPU feature, so
+      the gate's verdict depended on which hosted runner it drew — observed
+      fail/fail/pass/fail across four CI runs with no change to any code that
+      produces the vector. Pinning the input makes the compared path + - * /
+      and sqrt over literal Gauss-Hermite tables (c == 0, so exp(0) = 1
+      exactly), all correctly rounded per IEEE-754 §5.4, so 0-ULP is now
+      required by specification rather than achieved by luck. This STRENGTHENS
+      the gate: it previously produced accidental passes as well as accidental
+      failures, and could not distinguish "marshalling is transparent" from
+      "two libms happened to agree".
+
+      Guards on the pinned data (supporting tests, same file):
+        test_ic_reconstruction_matches_rust_checksum — FNV-1a/64 over the
+          reconstructed 4096-vector equals the checksum printed by the Rust
+          side. Catches a wrong ravel order, key, or truncated table.
+        test_ic_table_is_the_documented_gaussian — pinned values agree with
+          exp(-Σx²) to <= 4 ULP. Deliberately a TOLERANCE check: demanding bit
+          equality with np.exp here would reintroduce the same flake.
+
       Test files:
-        - crates/semiflow-core/tests/binding_smolyak_parity.rs  (sub-test 1)
+        - crates/semiflow/tests/binding_smolyak_parity.rs  (sub-test 1)
         - crates/semiflow-py/tests/test_smolyak_v8.py (sub-test 2, pytest)
       Failure of ANY sub-test BLOCKS v8.1.0 release.
 
@@ -7444,7 +7473,7 @@ properties:
       Cross-refs: math.md §32.4 (Smolyak algorithm); ADR-0123 Amendment 1;
       ADR-0138 (v8.1.0 TIER-2 binding surface); ADR-0028 Amendment 2 (per-crate-dup);
       G_SMOLYAK_D6 (core accuracy gate).
-    test_file: "crates/semiflow-core/tests/binding_smolyak_parity.rs, crates/semiflow-py/tests/test_smolyak_v8.py"
+    test_file: "crates/semiflow/tests/binding_smolyak_parity.rs, crates/semiflow-py/tests/test_smolyak_v8.py"
     feature_gate: "slow-tests"
 
   - name: G_BINDING_CARNOT_CPLX3_PARITY

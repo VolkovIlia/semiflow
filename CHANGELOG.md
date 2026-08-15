@@ -19,20 +19,31 @@ only for odd `D`: `D = 3` and `D = 5` shift by 1 ULP on this platform;
 *which* value you get, not an accuracy improvement — see the per-`D` table in
 ADR-0191 AMENDMENT 5.
 
-### Known issues
-
-- `G_BINDING_SMOLYAK_PARITY` sub-test 2 (`RELEASE_BLOCKING`) is **OPEN and red**.
-  It is non-deterministic across CI runners *by construction*: the golden vector
-  was captured from a Rust run whose initial condition came from `f64::exp`,
-  while the Python sub-test recomputes that initial condition with `np.exp` — a
-  different, runtime-CPU-dispatched implementation — and then asserts the two
-  pipelines agree bit-for-bit. It has failed, failed, passed and failed again
-  across four CI runs whose only Smolyak-affecting difference was the removal of
-  a lint attribute. Diagnosis, evidence table and the proposed repair are in
-  ADR-0191 AMENDMENT 6. The repair changes a `RELEASE_BLOCKING` gate and so
-  needs architect sign-off; it is deliberately not bundled into this patch.
-
 ### Fixed
+
+- **`G_BINDING_SMOLYAK_PARITY` sub-test 2 was non-deterministic by
+  construction** (ADR-0191 AMENDMENT 6, `Gate-Change-Approved-By: ilia-volkov`).
+  The golden vector was captured from a Rust run whose initial condition came
+  from `f64::exp`, while the Python sub-test recomputed that initial condition
+  with `np.exp` — a different, runtime-CPU-dispatched implementation — and then
+  asserted the two pipelines agree **bit-for-bit**. The gate's verdict depended
+  on which hosted runner it drew: fail, fail, pass, fail across four CI runs
+  whose only Smolyak-affecting difference was the removal of a lint attribute.
+  The Python side no longer calls `np.exp`. It computes the *exponent*, which is
+  exact — `linspace` reproduces `Grid1D`'s `x_i = xmin + i·dx` bit-for-bit — and
+  looks the exponential up in a 16-entry table of raw bit patterns taken from
+  the Rust initial condition itself (only 16 distinct exponents occur over the
+  4096 points). With the input pinned and `c ≡ 0`, the compared path is `+ − × ÷`
+  and `sqrt` over literal Gauss–Hermite tables, all correctly rounded by
+  IEEE-754 §5.4, so 0 ULP is now required by specification instead of achieved
+  by luck. This **strengthens** the gate — it previously produced accidental
+  passes as readily as accidental failures, and could not distinguish "the
+  marshalling is transparent" from "two libms happened to agree". No threshold,
+  tolerance or skip was added to the parity assertion, and the golden output
+  constants are untouched. Measured non-vacuity: a 1-ULP change to the input
+  moves the output by up to 25 ULP and trips the assertion. Two guards keep the
+  pinned data honest — an FNV-1a/64 checksum against the Rust side (bit-exact),
+  and a ≤4-ULP tolerance check that the constants really are `exp(-Σx²)`.
 
 - **`π^{-D/2}` was computed with `powf`, which is not portable** (ADR-0191
   AMENDMENT 5). This was found while investigating a failure of

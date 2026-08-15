@@ -39,11 +39,60 @@ TAU = 0.01
 N_TOTAL = N_PER_AXIS ** 6  # 4096
 
 # Gaussian IC on a 6-D grid: exp(-Σx²).
+#
 # IMPORTANT: Use Fortran-order (order='F') to match Rust's axis-0-fastest
 # enumerate_nd ordering (flat = k0 + k1*n + k2*n^2 + ..., axis-0 fastest).
+#
+# The exponent is computed; the exponential is NOT. See ADR-0191 AMENDMENT 6:
+# this file previously built U0 with `np.exp(...)` while GOLDEN was captured
+# from a Rust run whose IC came from `f64::exp`. Asserting bit equality between
+# two independent `exp` implementations — one of them vectorised and dispatched
+# at run time by CPU feature — made the parity gate a coin flip. It failed on
+# `(ubuntu, 3.13)`, passed on the same NumPy 2.5.2 wheel a run later, and failed
+# again, with no change to any code that produces the vector.
+#
+# Everything up to the exponential is exact and needs no pinning: `linspace`
+# reproduces `Grid1D`'s `x_i = xmin + i·dx` bit-for-bit (verified), and the
+# exponent is a sum of products of those coordinates. Only 16 distinct exponents
+# occur over the 4096 points, so pinning the IC costs 16 constants rather than
+# 4096. These are the exact bit patterns the Rust golden was computed from,
+# extracted from `binding_smolyak_parity.rs`'s own IC; keys are the raw float64
+# bits of the exponent, values the raw bits of `exp` of it.
+#
+# The gate now measures what it always claimed to: given identical input bits,
+# the PyO3 path reproduces the core's output bits. That is strictly stronger
+# than before — it removes accidental passes as well as accidental failures.
+_IC_EXP_TABLE = {
+    13850820653977960448: 4450894569972245130,
+    13849819854060767004: 4473961556924148569,
+    13848819054143573561: 4497080136181554011,
+    13848819054143573560: 4497080136181554036,
+    13847067654288485035: 4520255156233017250,
+    13847067654288485034: 4520255156233017264,
+    13845066054454098148: 4543491921213358464,
+    13845066054454098147: 4543491921213358479,
+    13842063654702517818: 4566723127938800310,
+    13842063654702517817: 4566723127938800314,
+    13842063654702517816: 4566723127938800319,
+    13836559255157953879: 4589671230983731725,
+    13836559255157953878: 4589671230983731727,
+    13836559255157953877: 4589671230983731729,
+    13836559255157953876: 4589671230983731731,
+    13836559255157953875: 4589671230983731734,
+}
+
+# FNV-1a/64 over the little-endian bytes of the 4096 IC values, as printed by
+# the Rust side. Pins the reconstruction end-to-end rather than trusting that
+# the 16 lookups were wired up correctly.
+_IC_FNV1A64 = 3401955263860027927
+
 _xs = np.linspace(DOMAIN_LO, DOMAIN_HI, N_PER_AXIS)
 _mg = np.meshgrid(*([_xs] * 6), indexing="ij")
-U0 = np.exp(-sum(x**2 for x in _mg)).ravel(order="F").astype(np.float64)
+_IC_EXPONENT = (-sum(x**2 for x in _mg)).ravel(order="F").astype(np.float64)
+U0 = np.array(
+    [_IC_EXP_TABLE[int(b)] for b in _IC_EXPONENT.view(np.uint64)],
+    dtype=np.uint64,
+).view(np.float64)
 del _xs, _mg
 
 
@@ -261,6 +310,42 @@ _GOLDEN_LAST4 = np.array(
     ],
     dtype=np.float64,
 )
+
+
+def test_ic_reconstruction_matches_rust_checksum() -> None:
+    """The pinned IC reconstructs the exact vector the Rust golden was fed.
+
+    Guards the lookup wiring, not the arithmetic: a wrong ravel order, a wrong
+    key, or a truncated table all change this checksum. Without it the 16
+    embedded constants are only as trustworthy as the loop that applies them.
+    """
+    h = 1469598103934665603
+    for bits in U0.view(np.uint64):
+        for byte in int(bits).to_bytes(8, "little"):
+            h ^= byte
+            h = (h * 1099511628211) % (1 << 64)
+    assert h == _IC_FNV1A64, (
+        f"pinned IC does not reconstruct the Rust golden's input\n"
+        f"got FNV-1a/64 = {h}, expected {_IC_FNV1A64}"
+    )
+
+
+def test_ic_table_is_the_documented_gaussian() -> None:
+    """The pinned constants really are exp(-Σx²), to within libm's slack.
+
+    Deliberately a tolerance check, not a bit check. Its job is to keep the
+    pinned table honest against the canonical parameters (§1.3) — if someone
+    edits a constant, this fails. It must NOT demand bit equality with
+    ``np.exp``: that demand is exactly what made the parity gate
+    non-deterministic (ADR-0191 AMENDMENT 6), and re-introducing it here would
+    reintroduce the flake one test to the left.
+    """
+    recomputed = np.exp(_IC_EXPONENT)
+    ulp = np.abs(U0.view(np.int64) - recomputed.view(np.int64))
+    assert int(ulp.max()) <= 4, (
+        f"pinned IC disagrees with exp(-sum x^2) by {int(ulp.max())} ULP — "
+        f"either the table is wrong or the canonical params changed"
+    )
 
 
 def test_g_binding_smolyak_parity_sub2_pyo3_0ulp() -> None:

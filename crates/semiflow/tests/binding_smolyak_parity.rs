@@ -177,3 +177,59 @@ fn g_binding_smolyak_parity_core_golden() {
     );
     println!("G_BINDING_SMOLYAK_PARITY sub-test 1: PASS ✓");
 }
+
+// ---------------------------------------------------------------------------
+// Regeneration helper for the PyO3 sub-test's pinned IC (ADR-0191 AMENDMENT 6)
+// ---------------------------------------------------------------------------
+
+/// FNV-1a/64 over the little-endian bytes of a float64 slice.
+fn fnv1a64(values: &[f64]) -> u64 {
+    let mut h: u64 = 1_469_598_103_934_665_603;
+    for v in values {
+        for b in v.to_bits().to_le_bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(1_099_511_628_211);
+        }
+    }
+    h
+}
+
+/// Prints the constants `test_smolyak_v8.py` pins for its initial condition.
+///
+/// Sub-test 2 must not recompute the IC with a second `exp` implementation —
+/// doing so made the 0-ULP gate depend on which CI runner it drew (ADR-0191
+/// AMENDMENT 6). It looks the exponential up in a pinned table instead, and
+/// this test is where that table comes from. Run it after any change to the
+/// canonical parameters and copy the output across.
+///
+/// Only 16 distinct exponents occur over the 4096 points, so the table is 16
+/// entries rather than 4096. The checksum pins the reconstruction end-to-end.
+#[test]
+fn print_pinned_ic_for_pyo3_subtest() {
+    let grid = make_grid();
+    let ic = GridFnND::from_fn(grid.clone(), gaussian);
+    let args = GridFnND::from_fn(grid, |x: &[f64; D]| {
+        -x.iter().map(|xi| xi * xi).sum::<f64>()
+    });
+
+    let mut pairs: Vec<(u64, u64)> = args
+        .values
+        .iter()
+        .zip(ic.values.iter())
+        .map(|(a, v)| (a.to_bits(), v.to_bits()))
+        .collect();
+    pairs.sort_unstable();
+    pairs.dedup();
+
+    println!("\n_IC_EXP_TABLE = {{  # paste into test_smolyak_v8.py");
+    for (a, v) in &pairs {
+        println!("    {a}: {v},");
+    }
+    println!("}}");
+    println!("_IC_FNV1A64 = {}", fnv1a64(&ic.values));
+    assert_eq!(
+        pairs.len(),
+        16,
+        "expected 16 distinct exponents on the grid"
+    );
+}
