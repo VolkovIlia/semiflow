@@ -204,18 +204,49 @@ Wait 5–15 minutes for registries to propagate:
 ```bash
 cargo search semiflow | grep "^semiflow "   # crates.io
 npm view @semiflow/wasm version                       # npmjs.org
-pip index versions semiflow-py                        # PyPI
+pip index versions semiflow-pde                       # PyPI
 # docs.rs: https://docs.rs/semiflow/N.M.K (allow ~15 min)
 ```
 
-Smoke-test each surface:
+**PyPI distribution name is `semiflow-pde`**, not `semiflow-py`. `semiflow-py`
+is the *crate* name in this workspace and is `publish = false`; it has never
+been a PyPI project. Installing it fetches nothing.
+
+PyPI's JSON API reports the new release before the `/simple/` index that `pip`
+resolves against does, so `pip install` can still fail with "No matching
+distribution found" for a minute or two after the workflow goes green. That is
+propagation lag, not a failed publish — confirm with
+`curl -s https://pypi.org/simple/semiflow-pde/ | grep <version>` before
+investigating anything else.
+
+Smoke-test each surface (`N.M.K` is the Cargo version; PyPI normalises it per
+PEP 440, so `0.13.1-beta` is installed as `0.13.1b0`):
 
 ```bash
 cargo add semiflow@N.M.K && cargo build
 npm install @semiflow/wasm@N.M.K && \
     node -e "const r=require('@semiflow/wasm'); console.log(typeof r.Heat1D)"
-pip install semiflow-py==N.M.K && \
-    python -c "import semiflow; print(semiflow.__version__)"
+pip install semiflow-pde==<PEP440 version> && \
+    python -c "import semiflow; print(semiflow.version())"
+```
+
+`semiflow.version()` is a function, and is the only version accessor the module
+exposes — there is no `semiflow.__version__`.
+
+Prefer a smoke test that computes something over one that only imports. The
+import succeeds even if the compiled extension is broken in ways that matter:
+
+```bash
+python - <<'PY'
+import semiflow, numpy as np
+n = 64; xs = np.linspace(-4.0, 4.0, n)
+s = semiflow.Heat1D(-4.0, 4.0, n, np.exp(-xs**2))
+s.evolve(0.1, 200)
+got = np.asarray(s.values())
+exact = np.exp(-xs**2 / 1.4) / np.sqrt(1.4)          # closed form at t=0.1
+print("version:", semiflow.version())
+print("sup error vs closed form: %.3e" % np.abs(got - exact).max())   # ~9e-06
+PY
 ```
 
 ---
