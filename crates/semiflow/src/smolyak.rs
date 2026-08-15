@@ -297,7 +297,7 @@ impl<F: SemiflowFloat, const D: usize> SmolyakGridND<F, D> {
         // Verify F(0)=I unit witness: Σ weights = π^{D/2}.
         let wsum: f64 = nw.iter().map(|(_, w)| *w).sum();
         #[allow(clippy::cast_precision_loss)]
-        let pi_dhalf = core::f64::consts::PI.powf(D as f64 / 2.0);
+        let pi_dhalf = 1.0_f64 / crate::float::inv_pi_pow_half::<f64>(D);
         let rel_err = (wsum - pi_dhalf).abs() / pi_dhalf;
         if rel_err > 1e-10 {
             return Err(SemiflowError::DomainViolation {
@@ -367,9 +367,10 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
         // Node scale: 2√τ (matches AnisotropicShiftChernoffND, ADR-0112).
         let two_sqrt_tau = from_f64::<F>(2.0_f64) * tau.sqrt();
         // Normalization: π^{-D/2} (required for F(0)=I, ADR-0112 §Decision 1).
-        #[allow(clippy::cast_precision_loss)]
-        let inv_pi_dhalf =
-            from_f64::<F>(core::f64::consts::PI).powf(from_f64::<F>(-(D as f64) / 2.0_f64));
+        // Not `powf`: this multiplies every output, and `pow` is not correctly
+        // rounded, so a 1-ULP platform difference here moves every value
+        // (ADR-0191 AMENDMENT 5).
+        let inv_pi_dhalf = crate::float::inv_pi_pow_half::<F>(D);
         let n_q = self.sm_nodes.len();
 
         for flat in 0..total {

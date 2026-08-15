@@ -400,8 +400,8 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for AnisotropicShiftC
         // Node scale: 2√τ (NOT √(2τ)) — required for correct heat variance 2τA (ADR-0112).
         let two_sqrt_tau = from_f64::<F>(2.0_f64) * tau.sqrt();
         // Normalization: π^{-D/2} — required for F(0)=I (ADR-0112 §Decision 1).
-        let inv_pi_dhalf =
-            from_f64::<F>(core::f64::consts::PI).powf(from_f64::<F>(-(D as f64) / 2.0_f64));
+        // Exact-ops, not `powf` — see `float::inv_pi_pow_half`.
+        let inv_pi_dhalf = crate::float::inv_pi_pow_half::<F>(D);
         let n_q = self.quadrature.n_nodes();
         for flat in 0..total {
             let xk = flat_to_x::<F, D>(flat, &ns, &self.grid);

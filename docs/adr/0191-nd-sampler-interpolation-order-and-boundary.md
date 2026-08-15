@@ -354,113 +354,6 @@ folded into flat offsets once and summed in a strided loop, which should be
 several times faster and would let `D = 5` keep its `N_AXIS = 6` datum. Not done
 here — it is a hot-path rewrite, and this ADR is already a correctness change.
 
-## AMENDMENT 2 (2026-08-14) — the FFI/WASM `boundary` mirror is not a parity gap
-
-The original plan called for mirroring the new `boundary=` kwarg on
-`AnisotropicShiftND2/3` into the C ABI and the WASM surface, per the bindings
-parity rule. That turned out to rest on a false premise, so it is **not** done,
-and the reason is recorded here rather than left as a silent omission.
-
-Neither surface exposes boundary selection **for any kernel**. Every FFI
-constructor hard-codes `.with_boundary(BoundaryPolicy::Reflect)` — `adaptive_ffi`,
-`cdr_ffi`, `diffusion_hi_zeta_ffi`, `expmv_ffi`, `drift_reaction_zeta4_ffi` and
-the rest — and `semiflow-wasm` never calls `with_boundary` at all, so every WASM
-kernel runs on the `Reflect` default. This predates the campaign: `Shift1D` has
-carried `boundary=` in Python since before it, against an FFI `Shift1D` that
-cannot express anything but `Reflect`.
-
-Adding the parameter to exactly the two ND constructors would therefore not
-restore parity; it would create a new inconsistency inside the C ABI, where one
-constructor of forty takes a boundary and the rest silently do not. Exposing
-boundary selection across the C and WASM surfaces is a coherent piece of work —
-one shared parser, one enum in the header, one sweep of the constructors, and an
-ABI decision about whether to extend existing entry points or add `_bc` variants
-— and it belongs in its own change, not as a two-function exception here.
-
-## AMENDMENT 3 (2026-08-14) — `G_DDIM` fails, and the reason is that its estimator was measuring the wrong thing
-
-**Status**: RESOLVED. The estimator is replaced, the threshold is re-based to
-the measured order, and the ladder is re-sized to be runnable. Approved by the
-architect; the commit carries `Gate-Change-Approved-By`.
-
-`G_DDIM D=2` (`RELEASE_BLOCKING`, `anisotropic_shift_nd_d2_slope.rs`) now reads
-`slope = −0.9249` against a `≤ −0.95` gate. It read `≈ −1.03` before this ADR.
-Nothing about the gate changed; what changed is the sampler underneath it. The
-investigation below says the gate was never measuring what it claimed, and the
-kernel's true temporal order on its own normative datum is **½**, not 1.
-
-### The estimator is contaminated
-
-The gate is a self-convergence test: reference at `n_ref = 512`, sweep
-`n ∈ {32, 64, 128, 256}`. The largest swept `n` is **half** the reference, so the
-last point's "error" is dominated by the reference's own remaining temporal
-error. Holding the sweep fixed and raising only `n_ref` shows it directly:
-
-| `n_ref` | 512 | 1024 | 2048 | 4096 | 8192 |
-|---|---|---|---|---|---|
-| slope, `N_AXIS = 8` | −0.925 | −0.718 | −0.625 | −0.574 | −0.543 |
-| slope, `N_AXIS = 16` | −0.934 | −0.727 | −0.634 | −0.583 | −0.552 |
-
-A converged estimator would be flat in `n_ref`. This one drifts monotonically
-toward ≈ −0.55, i.e. the `−0.95` the gate used to see was an artefact of a
-reference only 2× finer than the datum.
-
-### The order is ½
-
-Successive differences `sup|u_{2n} − u_n|` need no reference and cannot be
-contaminated. Their ratio is the convergence factor per halving of τ:
-
-| `n → 2n` | 32→64 | 64→128 | 128→256 | 256→512 | 512→1k | 1k→2k | 2k→4k | 4k→8k | 8k→16k |
-|---|---|---|---|---|---|---|---|---|---|
-| ratio, `N_AXIS = 8` | — | 1.374 | 1.383 | 1.391 | 1.398 | 1.402 | 1.406 | 1.408 | 1.410 |
-| ratio, `N_AXIS = 16` | — | 1.397 | 1.398 | 1.401 | 1.404 | 1.407 | 1.409 | 1.410 | 1.411 |
-| ratio, `N_AXIS = 32` | — | 0.917 | 1.294 | 1.371 | 1.384 | 1.393 | 1.399 | 1.404 | 1.407 |
-
-The ratio settles on **√2 = 1.414**, stably across three grid resolutions and
-nine octaves of `n`. Order 2 would give 4, order 1 would give 2. This is
-`O(τ^{1/2})`.
-
-The mechanism is consistent with the kernel's own structure. The Gauss–Hermite
-shift is `2√(a τ)·η`, and for a *variable* `A` the coefficient is frozen at the
-node while the sample is taken at the shifted point, so the operator mismatch is
-`A′·2√(aτ)·η` — a relative `O(√τ)` on the leading `O(τ)` term, i.e. local
-`O(τ^{3/2})` and global `O(τ^{1/2})`. ADR-0112's "honest order-1" accounted for a
-variable-`A` per-step mismatch of `O(τ²)`; the `√τ` inside the shift makes it
-`O(τ^{3/2})`.
-
-### It is not a regression
-
-The same probe on the pre-campaign baseline (`0e6d25b`) gives ratios of
-1.28 / 1.35 / 1.45 / 1.66 / 1.90 / 1.73 — noisy, no clean power law — with
-absolute differences an order of magnitude larger (`1.9e−2` against `2.2e−3` at
-`n = 32→64`, `N_AXIS = 8`). So the order was never 1. What this ADR changed is
-that the kernel became ~10× more accurate and its convergence became clean
-enough to read.
-
-### Why this is not resolved here
-
-Three things would have to be decided together, and two of them are the
-architect's:
-
-1. **`order()` cannot express ½.** `ChernoffFunction::order()` returns `u32`
-   (ADR-0074), and `AnisotropicShiftChernoffND::order()` returns 1. Truncating ½
-   to 0 would change adaptive step control; leaving 1 keeps an unearned claim.
-2. **Re-baselining the gate is a threshold change.** The estimator should be
-   fixed (`n_ref ≥ 8·n_max`), which makes the gate fail *harder*, and the
-   threshold restated near `−0.45`. The project's gate-integrity rule reserves
-   that for the architect, and the producing agent self-approving is the
-   anti-pattern the rule exists to prevent.
-3. **`shift_nd_zeta2` may already be the answer.** The ζ² correction exists to
-   lift exactly this kernel, and its own gates (`G_AS_ZETA2_TAU2`) confirm a
-   genuine `O(τ²)` correction magnitude. Whether it lifts the *global* order to 1
-   has not been measured with an uncontaminated estimator, and should be before
-   anyone changes `order()`.
-
-The gate is left **failing** so the decision is visible. `ADR-0112 §Decision 3`'s
-`N(D)` ladder, and the `FLAG for ai-solutions-architect` already carried in the
-test's own header, are both downstream of the same contaminated measurement and
-should be revisited in the same pass.
-
 ## AMENDMENT 4 (2026-08-14) — hoisting the boundary resolution out of the N-D sampler
 
 AMENDMENT 3 lowered the `D = 5` gate's grid from `N_AXIS = 6` to `5` to buy back
@@ -543,3 +436,56 @@ wrong.
   bug in place exactly where it is hardest to notice.
 - This ADR does not change the kernel formula, the quadrature, or the order
   claim. `AnisotropicShiftChernoffND::order()` remains 1 (ADR-0112 §Decision 2).
+
+---
+
+## AMENDMENT 5 (2026-08-15) — `π^{-D/2}` was the one non-portable operation in the N-D normalisation
+
+CI's `py-smoke` matrix cell `(ubuntu-latest, 3.13)` failed
+`G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP` with `max ULP diff = 2`; the other
+five cells passed. The gate asserts that the PyO3 surface reproduces a golden
+vector **bit-for-bit**, so a two-ULP drift on one runner is a real defect in the
+claim, not a flaky test.
+
+Ruled out first, by measurement rather than by argument: NumPy is not in the
+path that produces the drift — the input `U0` hashes identically with
+`NPY_DISABLE_CPU_FEATURES` set to disable every SIMD tier, and the failing cell
+shipped the same NumPy 2.5.2 as the passing ones. Smolyak's apply is a
+sequential accumulation, so it is not a reduction-order effect either.
+
+Walking the arithmetic, exactly one operation in the path is not a correctly
+rounded IEEE-754 primitive:
+
+```rust
+from_f64::<F>(core::f64::consts::PI).powf(from_f64::<F>(-(D as f64) / 2.0))
+```
+
+`powf` lowers to the system `pow`, which IEEE-754 does not require to be
+correctly rounded and which glibc dispatches by IFUNC to CPU-dependent
+implementations. Everything else is exact-by-construction: the Gauss–Hermite
+nodes and weights are literal tables, the parity datum has `c ≡ 0` so
+`exp(0) = 1` exactly, and the interpolation weights are `+`, `−`, `×` only.
+
+The severity comes from *where* it sits. `π^{-D/2}` is a global normalisation
+multiplying every output value, so a 1-ULP difference in it perturbs the entire
+vector — which is precisely the two-ULP signature observed.
+
+**Decision.** Compute it from correctly rounded operations only, in
+`float::inv_pi_pow_half`: `⌊D/2⌋` multiplications by `π`, one `sqrt(π)` when `D`
+is odd, one reciprocal. Multiplication, division and `sqrt` are correctly
+rounded by IEEE-754 §5.4.1 and §5.4.2 on every conforming platform, so the
+result is bit-identical everywhere by specification rather than by luck.
+
+Measured against the old expression: `D = 2, 4, 6` are bit-identical, `D = 3, 5`
+differ by 1 ULP in favour of the exactly rounded value. The parity golden is a
+`D = 6` vector and is therefore unchanged and still valid. The same substitution
+is applied at `shift_nd.rs:404` (`AnisotropicShiftChernoffND`, the kernel behind
+every `G_DDIM` gate) and at the `smolyak.rs:300` construction-time weight-sum
+validation.
+
+**Honest limits.** This makes the *normalisation* portable, not the whole
+library. Any kernel whose formula genuinely needs `exp`, `pow`, `sin` or `cos`
+of a data-dependent argument remains subject to the platform's libm, and the
+0-ULP contract (ADR-0018) is claimed only for the specific kernels that carry a
+parity gate. What this amendment establishes is that a gate promising bit
+equality must not have a transcendental in its scaling path.

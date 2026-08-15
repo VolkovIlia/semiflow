@@ -114,3 +114,29 @@ pub(crate) fn half<F: SemiflowFloat>() -> F {
 pub(crate) fn from_f64<F: SemiflowFloat>(v: f64) -> F {
     F::from(v).unwrap_or_else(F::zero)
 }
+
+/// `π^{-D/2}` computed without `powf`, so the value is bit-identical everywhere.
+///
+/// `f64::powf` lowers to the platform `pow`, which is not correctly rounded and
+/// whose glibc IFUNC variants differ by CPU. That matters here because this is a
+/// GLOBAL normalisation multiplying every output of the d-D Gauss-Hermite
+/// kernels: a 1-ULP difference in the prefactor moves every value, which is what
+/// made `G_BINDING_SMOLYAK_PARITY`'s 0-ULP golden pass on five CI runners and
+/// fail on the sixth (ADR-0191 AMENDMENT 5).
+///
+/// Every operation here is IEEE-754 correctly rounded — multiplication, `sqrt`
+/// and division are all required to be — so the result is reproducible across
+/// platforms and libm versions. At `D = 6` it is bit-identical to what `powf`
+/// returned; at odd `D` it differs by 1 ULP, which is the correctly-rounded
+/// value rather than `pow`'s.
+pub(crate) fn inv_pi_pow_half<F: SemiflowFloat>(d: usize) -> F {
+    let pi = core::f64::consts::PI;
+    let mut acc = 1.0_f64;
+    for _ in 0..(d / 2) {
+        acc *= pi;
+    }
+    if d % 2 == 1 {
+        acc *= libm::sqrt(pi);
+    }
+    from_f64::<F>(1.0 / acc)
+}

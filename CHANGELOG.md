@@ -6,6 +6,40 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`π^{-D/2}` was computed with `powf`, breaking the N-D 0-ULP parity claim**
+  (ADR-0191 AMENDMENT 5) — `G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP` failed on
+  one CI runner with `max ULP diff = 2` while five other matrix cells passed.
+  `powf` lowers to the system `pow`, which IEEE-754 does not require to be
+  correctly rounded and which glibc dispatches by IFUNC per CPU; because
+  `π^{-D/2}` is a global normalisation multiplying *every* output, a 1-ULP
+  platform difference there moves the whole vector. Replaced by
+  `float::inv_pi_pow_half` — `⌊D/2⌋` multiplications, one `sqrt` for odd `D`,
+  one reciprocal, all correctly rounded by IEEE-754 §5.4 and therefore
+  bit-identical across platforms by specification. `D = 2, 4, 6` are unchanged;
+  `D = 3, 5` move 1 ULP toward the exactly rounded value. Applied in
+  `SmolyakGridND` and in `AnisotropicShiftChernoffND` (the kernel behind every
+  `G_DDIM` gate). NumPy was ruled out first by measurement, not by argument: the
+  input hashes identically with all SIMD tiers disabled.
+- **ADR-0191 carried stale duplicate copies of AMENDMENTs 2 and 3** — the
+  0.13.0-beta merge appended the pre-resolution drafts (`### Why this is not
+  resolved here`) after the resolved versions, so the document contradicted
+  itself on whether `G_DDIM` had been re-based. Duplicates removed; a
+  duplicate-heading scan over `docs/adr/`, `contracts/` and the top-level docs
+  found no other instance.
+
+### Changed
+
+- `cargo fmt --all` applied across the workspace (33 files). `fmt` had been red
+  in CI since 2026-07-15 because two project gates were mutually unsatisfiable:
+  rustfmt expands the packed `pub mod a; pub mod b;` lines that `check-lints`'
+  500-line file budget was being kept under by packing them. Resolved by
+  shrinking `lib.rs` prose (506 → 498 lines) and splitting two functions that
+  crossed the 50-line budget once reformatted (`shift1d_coeff_grad`,
+  `diag_const_coeff_slope_control`, `g_shift1d_coeff_fd`) rather than by
+  relaxing either gate.
+
 ## [0.13.0-beta] — 2026-08-15
 
 Issue campaign #17 / #19 / #21–#26.
