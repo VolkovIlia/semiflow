@@ -439,21 +439,23 @@ wrong.
 
 ---
 
-## AMENDMENT 5 (2026-08-15) — `π^{-D/2}` was the one non-portable operation in the N-D normalisation
+## AMENDMENT 5 (2026-08-15) — `π^{-D/2}` was a non-portable operation in the N-D normalisation
+
+> **CORRECTION (2026-08-15, same day, before release).** As originally written
+> this amendment claimed that the `powf` substitution *fixed*
+> `G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP`, and that NumPy had been ruled out.
+> Both claims are withdrawn — see AMENDMENT 6, which has the evidence. The
+> substitution below is still correct and still worth keeping (a global
+> normalisation must not go through `pow`), but it is **not** the cause of that
+> gate's failure and did not fix it. What follows is the portability argument
+> only; read the causal claim as retracted.
 
 CI's `py-smoke` matrix cell `(ubuntu-latest, 3.13)` failed
 `G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP` with `max ULP diff = 2`; the other
-five cells passed. The gate asserts that the PyO3 surface reproduces a golden
-vector **bit-for-bit**, so a two-ULP drift on one runner is a real defect in the
-claim, not a flaky test.
+five cells passed. That failure is what prompted the audit below. (The failure
+itself is diagnosed in AMENDMENT 6; the audit still found a real defect.)
 
-Ruled out first, by measurement rather than by argument: NumPy is not in the
-path that produces the drift — the input `U0` hashes identically with
-`NPY_DISABLE_CPU_FEATURES` set to disable every SIMD tier, and the failing cell
-shipped the same NumPy 2.5.2 as the passing ones. Smolyak's apply is a
-sequential accumulation, so it is not a reduction-order effect either.
-
-Walking the arithmetic, exactly one operation in the path is not a correctly
+Walking the arithmetic, one operation in the path is not a correctly
 rounded IEEE-754 primitive:
 
 ```rust
@@ -468,7 +470,14 @@ nodes and weights are literal tables, the parity datum has `c ≡ 0` so
 
 The severity comes from *where* it sits. `π^{-D/2}` is a global normalisation
 multiplying every output value, so a 1-ULP difference in it perturbs the entire
-vector — which is precisely the two-ULP signature observed.
+vector.
+
+That last property is also what should have falsified the causal claim
+immediately, and did not: the observed failure had `first-8 ULP diff = 0` and
+`last-4 ULP diff = 2`. A global multiplier cannot move the tail while leaving
+the head bit-identical. The signature was in the failure log from the first
+occurrence and contradicted the diagnosis being written about it. See
+AMENDMENT 6.
 
 **Decision.** Compute it from correctly rounded operations only, in
 `float::inv_pi_pow_half`: `⌊D/2⌋` multiplications by `π`, one `sqrt(π)` when `D`
@@ -526,3 +535,63 @@ Two deliberate non-changes, recorded so a later sweep does not re-litigate them:
 proof that it changes no accept/reject decision (ADR-0044,
 `adaptive_classical_bit_equal.rs`), and `dual_helpers.rs`'s `powf` must track
 the user's own `powf` to be a correct derivative. Neither is a scaling prefactor.
+
+## AMENDMENT 6 (2026-08-15) — `G_BINDING_SMOLYAK_PARITY` sub-test 2 is non-deterministic by construction
+
+AMENDMENT 5 attributed this gate's failure to `powf` and treated one green CI
+run as confirmation. That was wrong on both counts. The gate failed again, with
+an identical signature, on the release candidate.
+
+### The evidence that settles it
+
+| # | Fact | How established |
+|---|------|-----------------|
+| 1 | Failure signature is `first-8 = 0 ULP`, `last-4 = 2 ULP` — before *and* after the `powf` change | CI job logs on `488a397` and on `8403b49` |
+| 2 | A global normalisation cannot produce that signature | it multiplies every entry, including the first 8 |
+| 3 | The only Smolyak change between the green run and the red one is the removal of an `#[allow(...)]` attribute | `git diff f094d52..8403b49 -- crates/semiflow/src/smolyak.rs` |
+| 4 | Both the green and the red `(ubuntu, 3.13)` job installed the *same* NumPy 2.5.2 manylinux x86-64 wheel | pip output in both job logs |
+| 5 | Rust's `simd` feature is not the variable: output is bit-identical with and without it | built both ways locally, dumped raw bits |
+| 6 | The gate's input comes from `np.exp(...)`; the golden's input came from Rust `f64::exp` (`gaussian()` in `binding_smolyak_parity.rs`) | source of both files |
+
+Facts 3 and 4 together mean the repository content that produces this vector did
+not change between a pass and a fail. The variable is the runner.
+
+### Why the gate cannot be trusted as written
+
+Fact 6 is the defect. The golden vector was captured from a Rust run whose
+initial condition was computed with the platform's scalar `exp`. The Python
+sub-test recomputes the initial condition with `np.exp`, a *different*
+implementation — vectorised, and dispatched at run time by CPU feature. The gate
+then asserts the two agree **bit-for-bit** across the whole pipeline.
+
+Two independent `exp` implementations agreeing to the last bit on all 4096 grid
+points is not something either library promises. When they agree the gate
+passes; when the runner's CPU selects a NumPy kernel that differs by 1 ULP on a
+few corner points, the perturbation propagates and the gate fails. The observed
+history — fail, fail, pass, fail, with no relevant code change — is what a
+coin-flip looks like, not what a regression looks like.
+
+Note the shape of the original mistake, since it is the more useful lesson: the
+"NumPy ruled out" measurement in AMENDMENT 5 was taken on a machine where the
+gate *passes*. A hypothesis about why a failure occurs cannot be tested on a
+configuration that does not exhibit the failure. That inference was invalid
+independently of the conclusion, and it is what let a contradicted diagnosis
+(fact 2) survive.
+
+### Status
+
+**OPEN.** No fix is proposed here, because fixing it means changing a
+`RELEASE_BLOCKING` gate, which needs architect sign-off
+(`Gate-Change-Approved-By:`) rather than a unilateral edit by whoever tripped
+over it.
+
+The obvious repair is to remove the second `exp` implementation from the
+comparison — embed the golden *input* bits in the Python test (as the golden
+*output* bits already are) so both sides start from identical data, leaving the
+gate measuring what it claims to measure: that the PyO3 marshalling layer is
+bit-transparent. That is a strictly stronger gate than today's, not a weaker
+one, since it removes a source of accidental passes as well as accidental
+failures.
+
+Until then the gate's red state is a property of the gate, not of the library.
+It still blocks release, and should.

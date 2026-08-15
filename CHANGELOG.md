@@ -19,11 +19,26 @@ only for odd `D`: `D = 3` and `D = 5` shift by 1 ULP on this platform;
 *which* value you get, not an accuracy improvement — see the per-`D` table in
 ADR-0191 AMENDMENT 5.
 
+### Known issues
+
+- `G_BINDING_SMOLYAK_PARITY` sub-test 2 (`RELEASE_BLOCKING`) is **OPEN and red**.
+  It is non-deterministic across CI runners *by construction*: the golden vector
+  was captured from a Rust run whose initial condition came from `f64::exp`,
+  while the Python sub-test recomputes that initial condition with `np.exp` — a
+  different, runtime-CPU-dispatched implementation — and then asserts the two
+  pipelines agree bit-for-bit. It has failed, failed, passed and failed again
+  across four CI runs whose only Smolyak-affecting difference was the removal of
+  a lint attribute. Diagnosis, evidence table and the proposed repair are in
+  ADR-0191 AMENDMENT 6. The repair changes a `RELEASE_BLOCKING` gate and so
+  needs architect sign-off; it is deliberately not bundled into this patch.
+
 ### Fixed
 
-- **`π^{-D/2}` was computed with `powf`, breaking the N-D 0-ULP parity claim**
-  (ADR-0191 AMENDMENT 5) — `G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP` failed on
-  one CI runner with `max ULP diff = 2` while five other matrix cells passed.
+- **`π^{-D/2}` was computed with `powf`, which is not portable** (ADR-0191
+  AMENDMENT 5). This was found while investigating a failure of
+  `G_BINDING_SMOLYAK_PARITY_SUB2_PYO3_0ULP`; it is **not** the cause of that
+  failure and does not fix it (ADR-0191 AMENDMENT 6 has the diagnosis and the
+  evidence — that gate remains OPEN). It is a real defect on its own terms:
   `powf` lowers to the system `pow`, which IEEE-754 does not require to be
   correctly rounded and which glibc dispatches by IFUNC per CPU; because
   `π^{-D/2}` is a global normalisation multiplying *every* output, a 1-ULP
@@ -38,8 +53,7 @@ ADR-0191 AMENDMENT 5.
   `SmolyakGridND`, `AnisotropicShiftChernoffND` (the kernel behind every
   `G_DDIM` gate), and `AnisotropicShiftAdaptiveQ` — the third was found by
   grepping for the pattern rather than by a failing gate, since no parity gate
-  covers the adaptive N-D kernel. NumPy was ruled out first by measurement, not
-  by argument: the input hashes identically with all SIMD tiers disabled.
+  covers the adaptive N-D kernel.
 - **`xtask py-smoke` reused a cached virtualenv across Python versions** — all
   six `py-smoke` matrix cells and `py-test-fast` failed with
   `Command '[...target/py-smoke-venv/bin/python3', '-m', 'ensurepip', ...]'
