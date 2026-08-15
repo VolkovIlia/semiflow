@@ -236,6 +236,10 @@ jobs:
         with: { python-version: "3.12" }
       - name: Create venv and install deps (mirrors xtask py-smoke)
         run: |
+          # rm -rf first: target/ is restored from the rust-cache archive, and
+          # `python -m venv` on an existing dir reuses it and runs ensurepip
+          # through that dir's recorded python3 symlink (see xtask create_venv).
+          rm -rf target/py-fast-venv
           python -m venv target/py-fast-venv
           target/py-fast-venv/bin/pip install maturin numpy pytest
       - name: Build and install extension module (maturin develop)

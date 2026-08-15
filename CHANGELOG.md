@@ -22,6 +22,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `SmolyakGridND` and in `AnisotropicShiftChernoffND` (the kernel behind every
   `G_DDIM` gate). NumPy was ruled out first by measurement, not by argument: the
   input hashes identically with all SIMD tiers disabled.
+- **`xtask py-smoke` reused a cached virtualenv across Python versions** — all
+  six `py-smoke` matrix cells and `py-test-fast` failed with
+  `Command '[...target/py-smoke-venv/bin/python3', '-m', 'ensurepip', ...]'
+  returned non-zero exit status 1`. The interpreter in that message is the
+  *venv's*, not the runner's, which is the tell: `python3 -m venv DIR` on an
+  existing `DIR` reuses it and bootstraps pip through the symlink recorded when
+  that venv was first built. The venv lives under `target/`, which CI restores
+  from the `Swatinem/rust-cache` archive, and the matrix points 3.10 and 3.13 at
+  the same path — so a cache entry written by one interpreter was handed to
+  another. `create_venv` now removes the directory first, matching what its own
+  doc comment already claimed ("create a fresh venv"); the `py-test-fast`
+  workflow step gets the same `rm -rf`.
 - **ADR-0191 carried stale duplicate copies of AMENDMENTs 2 and 3** — the
   0.13.0-beta merge appended the pre-resolution drafts (`### Why this is not
   resolved here`) after the resolved versions, so the document contradicted

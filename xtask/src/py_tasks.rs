@@ -31,7 +31,7 @@
 //! `GraphHeat.evolve` on a 1-D chain graph matches `Heat1D.evolve` to ≤3 ULP
 //! (ADR-0059 cross-binding identity gate).
 
-use std::{path::Path, process};
+use std::{fs, path::Path, process};
 
 use anyhow::{bail, Result};
 
@@ -88,8 +88,23 @@ pub fn py_smoke() -> Result<()> {
     run_pytest(&venv, &tests_dir, &root)
 }
 
-/// Create a fresh Python virtual environment.
+/// Create a fresh Python virtual environment, removing any leftover one first.
+///
+/// The removal is the load-bearing part, not tidiness. `python3 -m venv DIR` on
+/// an existing `DIR` *reuses* it, and then runs `ensurepip` through
+/// `DIR/bin/python3` — the symlink recorded when that venv was first built. The
+/// venv lives under `target/`, which CI restores from the `Swatinem/rust-cache`
+/// archive, and the `py-smoke` matrix points every Python version at this one
+/// path. So a cache entry written by one interpreter is handed to another, the
+/// recorded symlink no longer resolves to a working interpreter, and venv fails
+/// with `Command '[...target/py-smoke-venv/bin/python3', '-m', 'ensurepip', ...]'
+/// returned non-zero exit status 1` — note it is the *venv's* python3 in the
+/// message, not the runner's. Observed 2026-08-15 across all six matrix cells.
 fn create_venv(venv: &Path) -> Result<()> {
+    if venv.exists() {
+        eprintln!("$ rm -rf {}", venv.display());
+        fs::remove_dir_all(venv)?;
+    }
     eprintln!("$ python3 -m venv {}", venv.display());
     let status = process::Command::new("python3")
         .args(["-m", "venv", venv.to_str().unwrap()])
