@@ -51,10 +51,16 @@ Acceptance gates:
 
 | Gate | Threshold |
 |------|-----------|
-| G3⁶-2D | slope ∈ [-6.15, -5.85] |
+| G3⁶-2D | slope ∈ [-6.30, -5.85] AND wallclock ≤ 600 s |
 | G4_NS2D_aniso | slope ≤ -1.95 |
 | G5_3D | slope ≤ -1.95 |
 | NS2D_ANISO_PARALLEL_BIT_EQUAL | `abs_diff == 0.0` |
+
+The G3⁶-2D window is two-sided on purpose: `-5.85` catches order degradation,
+`-6.30` catches the interpolation floor returning as fake super-convergence.
+Both bounds and the 600 s budget come from `properties.yaml::G3_6_2D`, which the
+test file mirrors verbatim — recalibrated for the `SepticHermite` floor by
+ADR-0163 (the pre-0163 window `[-6.15, -5.85]` and 3300 s budget are dead).
 
 Fill in hardware block and slope numbers in `docs/audit-findings-vN_M_K.md`;
 flip `[ ]` → `[x]`; promote DRAFT → APPROVED.
@@ -93,14 +99,51 @@ All must exit 0 before tagging.
 ```bash
 cargo run -p xtask -- test-fast
 cargo run -p xtask -- test-full
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo +nightly fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p xtask -- check-lints
+cargo run -p xtask -- check-unsafe-scope
+cargo run -p xtask -- ffi-headers --check
 cargo run -p xtask -- ffi-smoke
 cargo run -p xtask -- py-smoke
 cargo run -p xtask -- wasm-test
 ```
 
 All must exit 0.
+
+Also run the two gates the release workflows themselves enforce, so a failure
+surfaces here rather than after the tag is already pushed — `release-crate.yml`,
+`release-wheels.yml` and `release-wasm.yml` each block publication on both:
+
+```bash
+cargo run -p xtask -- doc-check
+cargo run -p xtask -- changelog-check
+```
+
+**Known gap — clippy has never covered `slow-tests`.** The clippy line above
+matches `ci.yml` exactly and deliberately omits `--all-features`. Adding it does
+not pass. Measured 2026-08-17 with
+`cargo clippy --workspace --all-targets --all-features --keep-going`:
+**444 lints across 31 files**, every one a `slow-tests`-gated gate binary (plus
+`examples/cev_european_call.rs`). Largest offenders: `g_gridless_cv.rs` (74),
+`g_s3_drift_spectral.rs` (58), `g_s3_varcoef_spectral.rs` (33),
+`g_s3_nonlinear.rs` (30), `hormander_kolmogorov_slope.rs` (26).
+
+The mix is dominated by cosmetics — `doc_markdown` alone is 180 of the 444, then
+`cast_possible_truncation` (51), `similar_names` (30), `cast_lossless` (21). The
+12 `identity_op` / `erasing_op` hits were read individually and are benign
+row-major index arithmetic (`gen[0 * nd + 0]`, written uniformly for
+readability), **not** degenerate assertions.
+
+Note `--keep-going`: `.cargo/config.toml` sets `rustflags = ["-D", "warnings"]`,
+so each lint is a hard error and the build aborts at the first failing target.
+Without `--keep-going` you see one file per run and walk the backlog one step at
+a time, which badly understates it.
+
+Nothing here is a correctness finding, but the debt is invisible day to day and
+grows with every new gate binary. Clearing it is a standalone task; until then
+do not put `--all-features` back into this checklist, and do not "clear" it by
+blanket-`#![allow]`-ing the gate files.
 
 ### 5. Version bump consistent
 
@@ -134,10 +177,13 @@ commit (no code changes) that updates CHANGELOG + ROADMAP only; the BREAKING cod
 ships in the preceding `feat(vN.0.0)!:` commit. Pattern established at v3.0.0
 (Window #1, 2026-05-27) and v5.0.0 (Window #2, 2026-05-29).
 
-**BREAKING window cadence**: v3.0.0 = Window #1; v5.0.0 = Window #2; v7.0.0 = Window #3;
-v9.0.0 = Window #4 (last; current workspace version is v9.2.0 — two additive MINORs since).
-Future BREAKING windows follow the same pattern; see ROADMAP.md for the next candidate and
-ADR-0035 §9 for deprecation-clock rules.
+**BREAKING window cadence**: the windows above (v3.0.0 = #1, v5.0.0 = #2, v7.0.0 = #3,
+v9.0.0 = #4) are all **pre-rebrand**, on the `remizov-*` version line that ended at
+v9.2.0. The rebrand to SemiFlow reset the public version to `0.9.0-beta`, so the
+workspace is now on a `0.x` beta line and no BREAKING window has opened since. While
+the major is `0`, SemVer permits breaking changes in a MINOR — the deprecation-clock
+discipline in ADR-0035 §9 still applies by policy, not by SemVer obligation. See
+ROADMAP.md for the road to `1.0.0`, which is when windows resume being load-bearing.
 
 The bump commit preceding the tag must carry:
 ```
@@ -159,13 +205,22 @@ Set under **Settings → Secrets and variables → Actions**
 
 | Secret | Used by | Purpose |
 |--------|---------|---------|
-| `CARGO_REGISTRY_TOKEN` | manual | `cargo publish` to crates.io |
+| `CRATES_IO_TOKEN` | `release-crate.yml` | `cargo publish -p semiflow` |
 | `NPM_TOKEN` | `release-wasm.yml` | `npm publish --provenance` (+ OIDC `id-token: write`) |
-| `PYPI_API_TOKEN` | manual | `twine upload` (not yet automated) |
+
+PyPI needs **no secret**: `release-wheels.yml` publishes through OIDC Trusted
+Publishing (`pypa/gh-action-pypi-publish`, job `publish-pypi`, environment `pypi`).
+That environment must exist in repo settings and the PyPI project `semiflow-pde`
+must list this repository + workflow as a trusted publisher, or the job fails at
+the token-exchange step. There is no `PYPI_API_TOKEN` and no `twine upload`.
 
 ---
 
 ## Publication Order
+
+Publication is **fully automatic**. All three release workflows trigger on
+`push: tags: ["v*"]`, so pushing the tag is the only manual act — there is
+nothing left to run by hand afterwards.
 
 1. Push the tag:
 
@@ -173,27 +228,27 @@ Set under **Settings → Secrets and variables → Actions**
    git push origin master vN.M.K
    ```
 
-2. **Automatic** — `release-wasm.yml`: builds WASM, guards idempotency,
-   publishes `@semiflow/wasm@N.M.K` to npmjs.org.
+2. **Automatic** — `release-crate.yml`: publishes `semiflow` to crates.io
+   (`CRATES_IO_TOKEN`). Guards: tag/`Cargo.toml` version match, idempotency
+   probe against the crates.io API, and `cargo test -p semiflow --release`.
 
-3. **Automatic** — `release-wheels.yml`: builds `semiflow-py` wheels (CPython
-   3.10–3.13, Linux/macOS/Windows) and attaches them to the GitHub Release.
+3. **Automatic** — `release-wasm.yml`: builds WASM and publishes
+   `@semiflow/wasm@N.M.K` to npmjs.org with `--provenance` (`NPM_TOKEN` + OIDC).
 
-4. **Manual** — publish the Rust crate:
+4. **Automatic** — `release-wheels.yml`: `cibuildwheel` builds CPython 3.10–3.13
+   wheels (Linux x86-64 manylinux_2_28, macOS arm64, Windows) plus a maturin
+   sdist, attaches them to the GitHub Release, then job `publish-pypi` uploads
+   everything to PyPI as **`semiflow-pde`** via Trusted Publishing.
 
-   ```bash
-   cargo publish -p semiflow
-   ```
+All three gate on `doc-check` + `changelog-check` before publishing, so a stale
+CHANGELOG or a doc-drift failure blocks the release rather than shipping it.
 
-   `semiflow-ffi`, `semiflow-py`, `semiflow-wasm` have `publish = false`; do not
-   run `cargo publish` on them.
+Only `semiflow` is a published crate; `semiflow-ffi`, `semiflow-py` and
+`semiflow-wasm` carry `publish = false` and never go to crates.io.
 
-5. **Manual** — upload Python wheels to PyPI (download from GitHub Release):
-
-   ```bash
-   pip install twine
-   twine upload dist/*.whl   # PYPI_API_TOKEN in env or ~/.pypirc
-   ```
+**Idempotency**: crates.io and npm are guarded explicitly; PyPI uses
+`skip-existing: true`. Re-running a workflow on an already-published tag is
+therefore safe and is the normal way to recover from a single failed job.
 
 ---
 
