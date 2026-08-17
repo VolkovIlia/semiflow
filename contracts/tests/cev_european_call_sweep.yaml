@@ -203,7 +203,7 @@ acceptance_gates:
       large (λ → 100+) and the Poisson series tail dominates oracle
       precision; gate-C in those regimes prints the metric but does not
       assert. **CRITICAL**: this gate is the primary β≠0.5 validation —
-      a τ²-correction-polynomial bug in `crates/semiflow-core/src/diffusion.rs`
+      a τ²-correction-polynomial bug in `crates/semiflow/src/diffusion.rs`
       would manifest here at β∈{0.3, 0.7} where a''≠0.
 
   reporting: |
@@ -252,7 +252,7 @@ implementation_notes:
 
   j_max_bump: |
     Reuse the local `noncentral_chi2_cdf` helper from
-    `crates/semiflow-core/tests/cev_european_call.rs` BUT bump `j_max`
+    `crates/semiflow/tests/cev_european_call.rs` BUT bump `j_max`
     from 100 → 200. At T=2, σ₀=0.5, β=0.3 the noncentrality
     `λ = 2·k·S₀^(2-β_S) · e^((r-q)·(2-β_S)·T)` grows large (~150-200);
     100 terms can fall short of the 1e-12 early-exit. Fail-loud
@@ -291,7 +291,7 @@ implementation_notes:
     }
 
   test_files:
-    - "crates/semiflow-core/tests/cev_european_call_sweep.rs (~280 LoC)"
+    - "crates/semiflow/tests/cev_european_call_sweep.rs (~280 LoC)"
   estimated_wall_clock:
     default_set: "<30s (release)"
     full_set:    "~3 min (release, with --features slow-tests)"
@@ -314,7 +314,7 @@ risks:
   R_β_off_canonical:
     risk: |
       First closed-form validation of ζ-A at β ≠ 0.5 (a''≠0). The
-      τ²-correction polynomial in `crates/semiflow-core/src/diffusion.rs`
+      τ²-correction polynomial in `crates/semiflow/src/diffusion.rs`
       uses `a''` symbolically (ADR-0008 §Decision) but had no empirical
       oracle in v0.3.0 — β=0.5 ⇒ a''≡0 trivially zeroed the term.
     impact: |

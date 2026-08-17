@@ -7,7 +7,7 @@
 //!
 //! Run:
 //! ```sh
-//! cargo bench -p semiflow-core --bench advdiff_2d
+//! cargo bench -p semiflow --bench advdiff_2d
 //! ```
 //! Results land in `target/criterion/advdiff_2d/`.
 

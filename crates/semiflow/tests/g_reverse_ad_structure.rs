@@ -26,7 +26,7 @@
 //! ## Run
 //!
 //! ```sh
-//! cargo test -p semiflow-core --test g_reverse_ad_structure --nocapture
+//! cargo test -p semiflow --test g_reverse_ad_structure --nocapture
 //! # also runs as part of:
 //! cargo run -p xtask -- test-fast
 //! ```

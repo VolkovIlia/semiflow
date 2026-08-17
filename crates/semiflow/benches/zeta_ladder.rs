@@ -22,9 +22,9 @@
 //!
 //! Run:
 //! ```sh
-//! cargo bench -p semiflow-core --bench zeta_ladder
+//! cargo bench -p semiflow --bench zeta_ladder
 //! # Quick smoke (1 s warm-up, 2 s measurement, 10 samples):
-//! cargo bench -p semiflow-core --bench zeta_ladder -- \
+//! cargo bench -p semiflow --bench zeta_ladder -- \
 //!     --warm-up-time 1 --measurement-time 2 --sample-size 10
 //! ```
 //! Results land in `target/criterion/zeta_ladder/`.

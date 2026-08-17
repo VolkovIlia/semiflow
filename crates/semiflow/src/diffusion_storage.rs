@@ -27,7 +27,7 @@ use crate::float::SemiflowFloat;
 ///
 /// WASM single-thread path: the `semiflow-wasm` crate wraps `js_sys::Function` in a
 /// newtype with `unsafe impl Send + Sync` (permitted there by `#![allow(unsafe_code)]`)
-/// then calls `DiffusionChernoff::with_closure`. `semiflow-core` does not provide a
+/// then calls `DiffusionChernoff::with_closure`. `semiflow` does not provide a
 /// non-`Send+Sync` variant because `#![deny(unsafe_code)]` prevents explicit unsafe impls
 /// here; the WASM crate carries the safety contract.
 pub(crate) enum Storage<F: SemiflowFloat> {

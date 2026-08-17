@@ -4,7 +4,7 @@
 //! Magnus K=4 and `VarCoef` kernels. Run:
 //!
 //! ```text
-//! cargo test -p semiflow-core --features slow-tests graph_adjoint_sampled_parity
+//! cargo test -p semiflow --features slow-tests graph_adjoint_sampled_parity
 //! ```
 //!
 //! The test is `#[ignore]` unless `slow-tests` feature is active, so it does

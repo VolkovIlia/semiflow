@@ -32,7 +32,7 @@
 //!
 //! Run:
 //! ```text
-//! cargo test -p semiflow-core --features parallel,simd,slow-tests --release \
+//! cargo test -p semiflow --features parallel,simd,slow-tests --release \
 //!   -- --ignored --nocapture f32_regime
 //! ```
 //!

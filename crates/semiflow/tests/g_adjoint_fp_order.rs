@@ -38,7 +38,7 @@
 //!     O(1) rather than O(τ).
 //!
 //! Run with:
-//!   cargo test -p semiflow-core --features slow-tests -- --ignored `g_adjoint_fp` --nocapture
+//!   cargo test -p semiflow --features slow-tests -- --ignored `g_adjoint_fp` --nocapture
 
 #![allow(clippy::cast_precision_loss)]
 // Integration test: allows for numerical / binding wrapper patterns.

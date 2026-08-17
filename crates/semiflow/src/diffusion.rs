@@ -171,7 +171,7 @@ impl<F: SemiflowFloat> DiffusionChernoff<F> {
     /// Construct a `DiffusionChernoff` from owned closures WITHOUT `Send + Sync`.
     ///
     /// Convenience alias for [`Self::with_closure`] intended for WASM callers.
-    /// Because `semiflow-core` enforces `#![deny(unsafe_code)]`, closures stored
+    /// Because `semiflow` enforces `#![deny(unsafe_code)]`, closures stored
     /// here MUST still be `Send + Sync`. The WASM binding crate provides the
     /// `unsafe impl Send + Sync` wrapper for `js_sys::Function` before calling
     /// this function — the wrapper is in `semiflow-wasm` which allows unsafe.
@@ -191,7 +191,7 @@ impl<F: SemiflowFloat> DiffusionChernoff<F> {
         D: Fn(F) -> F + Send + Sync + 'static,
     {
         // Same storage as with_closure. The "local" distinction is in the WASM
-        // binding layer (unsafe wrapper), not here in semiflow-core.
+        // binding layer (unsafe wrapper), not here in semiflow.
         Self::with_closure(a, a_prime, a_double_prime, a_norm_bound, grid)
     }
 

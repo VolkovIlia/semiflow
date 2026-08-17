@@ -7,7 +7,7 @@
 //! ## v2.6 module relocation (ADR-0068)
 //!
 //! `BoundaryPolicy`, `BoundaryHit`, `InterpKind`, `bc_index`, `bc_value`,
-//! `bc_value_generic`, and `reflect_index` MOVED to `crates/semiflow-core/src/boundary.rs`.
+//! `bc_value_generic`, and `reflect_index` MOVED to `crates/semiflow/src/boundary.rs`.
 //! Re-exported here so that existing imports (`use crate::grid::BoundaryPolicy`, etc.)
 //! continue to compile unchanged.
 //!

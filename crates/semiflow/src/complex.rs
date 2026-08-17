@@ -57,7 +57,7 @@ use crate::float::SemiflowFloat;
 ///
 /// Shipped for `num_complex::Complex<f64>` and `num_complex::Complex<f32>`.
 /// The `num-complex = "0.4"` dependency is promoted from "reserved" to
-/// "direct" per ADR-0079; total `semiflow-core` deps = 3/3 (constitution
+/// "direct" per ADR-0079; total `semiflow` deps = 3/3 (constitution
 /// v1.8.0 cap).
 pub trait SemiflowComplex:
     Copy

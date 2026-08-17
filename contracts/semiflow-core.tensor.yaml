@@ -1414,7 +1414,7 @@ modules:
 # 7. Codegen (matches traits.yaml convention).
 # ---------------------------------------------------------------------------
 codegen:
-  command: "cargo build -p semiflow-core"
+  command: "cargo build -p semiflow"
   rust_target: "stable-1.78+"
   features:
     default: ["simd"]   # v0.8.0 Block C (ADR-0019): simd default-on for x86_64/aarch64.
@@ -1461,7 +1461,7 @@ codegen:
   notes: |
     No external codegen tools — the YAML schema is the single source of
     truth and Rust source is hand-written by the next agent against
-    this schema. `cargo doc --no-deps -p semiflow-core` MUST continue to
+    this schema. `cargo doc --no-deps -p semiflow` MUST continue to
     build (Phase 1 adds NO Rust source; Phase 2 adds the new module).
 
 # ---------------------------------------------------------------------------
@@ -1475,9 +1475,9 @@ codegen:
 simd:
   feature_flag: simd                # default-ON for x86_64/aarch64; scalar elsewhere.
   unsafe_scope: |
-    The crate root `crates/semiflow-core/src/lib.rs` keeps
+    The crate root `crates/semiflow/src/lib.rs` keeps
     `#![forbid(unsafe_code)]` UNCHANGED (line 69). The single permitted
-    `unsafe`-allowing module is `crates/semiflow-core/src/simd/mod.rs`,
+    `unsafe`-allowing module is `crates/semiflow/src/simd/mod.rs`,
     which begins with `#![allow(unsafe_code)]` (module scope, NOT
     crate scope). The arch-specific impls in `src/simd/x86_64.rs` and
     `src/simd/aarch64.rs` inherit that allowance via `pub(super) mod

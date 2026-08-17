@@ -45,15 +45,15 @@
 //! # Build / smoke
 //!
 //! ```text
-//! cargo build --release -p semiflow-core --example rough_heston_pricer
+//! cargo build --release -p semiflow --example rough_heston_pricer
 //! # Latency mode (unchanged):
-//! cargo run  --release -p semiflow-core --example rough_heston_pricer \
+//! cargo run  --release -p semiflow --example rough_heston_pricer \
 //!     -- --n-ticks 100 --warmup-ticks 10 --rep 0
 //! # Price mode (production upgrade, issue #9):
-//! cargo run  --release -p semiflow-core --example rough_heston_pricer \
+//! cargo run  --release -p semiflow --example rough_heston_pricer \
 //!     -- --price --rate 0.05
 //! # Rate=0 recovers pre-#9 forward-ish behaviour:
-//! cargo run  --release -p semiflow-core --example rough_heston_pricer \
+//! cargo run  --release -p semiflow --example rough_heston_pricer \
 //!     -- --price --rate 0.0
 //! ```
 

@@ -37,7 +37,7 @@ References:
   - ADR-0086 AMENDMENT 1 — gate bifurcation; sub-check (c) revised to Richardson Lagrange bound.
   - math.md §27 AMENDMENT — normative algorithm spec.
   - math.md §27 AMENDMENT 2 — Richardson algorithm AMENDMENT (NORMATIVE for v4.1).
-  - crates/semiflow-core/src/diffusion4_zeta4.rs (Rust implementation).
+  - crates/semiflow/src/diffusion4_zeta4.rs (Rust implementation).
 """
 
 import sys

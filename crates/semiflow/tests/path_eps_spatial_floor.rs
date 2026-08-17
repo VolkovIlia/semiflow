@@ -26,7 +26,7 @@
 //!
 //! - ADR-0089 Path ε (AC9) — original `RELEASE_BLOCKING` regression guard.
 //! - ADR-0120 — v7.0 honest recalibration; `QuinticHermite` removed, Septic is default.
-//! - `crates/semiflow-core/tests/path_eps_spatial_floor.rs` — this file.
+//! - `crates/semiflow/tests/path_eps_spatial_floor.rs` — this file.
 
 #![allow(clippy::cast_precision_loss)]
 

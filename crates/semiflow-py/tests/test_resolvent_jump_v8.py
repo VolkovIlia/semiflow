@@ -13,9 +13,9 @@ contracts/semiflow-core.properties.yaml §G_BINDING_RESOLVENT_JUMP_PARITY):
   unit diffusion a=1, DEFAULT grid.
 
 GOLDEN_JUMP produced by:
-  cargo test --package semiflow-core --test binding_resolvent_jump_parity \
+  cargo test --package semiflow --test binding_resolvent_jump_parity \
              --features slow-tests -- --nocapture
-(crates/semiflow-core/tests/binding_resolvent_jump_parity.rs,
+(crates/semiflow/tests/binding_resolvent_jump_parity.rs,
  verified against M_ref=40 self-convergence at ‖jump_M16−jump_M40‖∞ ~3e-8.)
 np.array_equal(got, GOLDEN_JUMP) is EXACT bit-for-bit (float64 IEEE-754).
 Any divergence indicates a marshalling bug in the PyO3 layer.
@@ -159,7 +159,7 @@ def test_jump_g_wrong_length() -> None:
 #   unit diffusion a=1, DEFAULT grid.
 #
 # GOLDEN_JUMP produced by:
-#   cargo test --package semiflow-core --test binding_resolvent_jump_parity \
+#   cargo test --package semiflow --test binding_resolvent_jump_parity \
 #              --features slow-tests -- --nocapture
 # (binding_resolvent_jump_parity.rs `canonical_resolvent_jump_core`,
 #  verified against M_ref=40 self-convergence.)

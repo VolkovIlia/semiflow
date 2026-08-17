@@ -14,9 +14,9 @@ contracts/semiflow-core.properties.yaml §G_BINDING_ADJOINT_FP_PARITY):
   tau=0.1, n_steps=1 → exactly 4 Diracs.
 
 GOLDEN_POS / GOLDEN_WTS produced by:
-  cargo test --package semiflow-core --test binding_adjoint_fp_parity \
+  cargo test --package semiflow --test binding_adjoint_fp_parity \
              --features slow-tests -- --nocapture
-(crates/semiflow-core/tests/binding_adjoint_fp_parity.rs,
+(crates/semiflow/tests/binding_adjoint_fp_parity.rs,
  verified against Lemma A.1 closed-form anchor ‖·‖∞ ≤ 1e-14.)
 np.array_equal(got, GOLDEN_*) is EXACT bit-for-bit (float64 IEEE-754).
 Any divergence indicates a marshalling bug in the PyO3 layer.
@@ -205,7 +205,7 @@ def test_second_moment_after_step() -> None:
 #   a=0.5, b=0.0, c=0.0, tau=0.1, ρ₀=δ_0.
 #
 # GOLDEN_POS / GOLDEN_WTS produced by:
-#   cargo test --package semiflow-core --test binding_adjoint_fp_parity \
+#   cargo test --package semiflow --test binding_adjoint_fp_parity \
 #              --features slow-tests -- --nocapture
 # (binding_adjoint_fp_parity.rs `canonical_adjoint_fp_core`,
 #  verified against Lemma A.1 analytic anchor ‖·‖∞ ≤ 1e-14.)

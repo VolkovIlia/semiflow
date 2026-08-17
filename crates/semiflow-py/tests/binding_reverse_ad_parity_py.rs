@@ -2,7 +2,7 @@
 //!
 //! This Rust integration test validates that the `PyO3` `ReverseHeat1D.value_and_grad`
 //! binding produces byte-identical (0 ULP) output to the core golden defined in
-//! `crates/semiflow-core/tests/binding_reverse_ad_parity.rs`.
+//! `crates/semiflow/tests/binding_reverse_ad_parity.rs`.
 //!
 //! Since the Python interpreter is unavailable in a Rust integration test,
 //! this file re-implements the core-golden arithmetic inline (per-crate dup,

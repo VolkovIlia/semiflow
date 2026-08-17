@@ -2,13 +2,13 @@
 
 **Scope:** proof-of-concept ONLY. ONE new evolver variant + ONE gate test. No public API churn, no migration, no library-wide rollout. Suckless: ≤500 LoC/file, ≤50 LoC/fn, no new dep (reuses `tt_spectral.rs` DFT + `SemiflowFloat` `exp/sin/cos`).
 **Design:** `.dev-docs/specs/s3-triz-general-curse-escape.md` (Amendment 1, post-audit). **Probes (truth):** `.dev-docs/specs/probe_s3_drift_spectral.py` (exactness/drift core) + `.dev-docs/specs/probe_s3_honest_curse_escape.py` (the honest Δrank + cost-scaling gate, replaces vacuous assert 4).
-**Builds on:** `crates/semiflow-core/src/tt_spectral.rs` (v9.1 §11.3 real spectral pair-factor — the ONLY change is widening the symbol from real to complex + one drift term).
+**Builds on:** `crates/semiflow/src/tt_spectral.rs` (v9.1 §11.3 real spectral pair-factor — the ONLY change is widening the symbol from real to complex + one drift term).
 
 ---
 
 ## 1. New types / functions (Rust, `no_std` + `alloc`, generic over `F: SemiflowFloat`)
 
-All live in a NEW module `crates/semiflow-core/src/tt_drift_spectral.rs` (keeps the POC isolated; ≤500 LoC). Reuse the existing private DFT helpers from `tt_spectral.rs` (promote them to `pub(crate)` if not already — they are: `dft_1d_real_to_cplx`, `dft_1d_cplx`, `idft_1d_cplx`).
+All live in a NEW module `crates/semiflow/src/tt_drift_spectral.rs` (keeps the POC isolated; ≤500 LoC). Reuse the existing private DFT helpers from `tt_spectral.rs` (promote them to `pub(crate)` if not already — they are: `dft_1d_real_to_cplx`, `dft_1d_cplx`, `idft_1d_cplx`).
 
 ### 1.1 Complex symbol builder (the ONE mathematical novelty)
 
@@ -64,7 +64,7 @@ This proves the new code is a faithful superset, NOT a relabel (anti-lesson #1).
 
 ## 2. The ONE gate that proves S³ (`G_S3_DRIFT_SPECTRAL`)
 
-`crates/semiflow-core/tests/g_s3_drift_spectral.rs`, RELEASE-BLOCKING-class but gated
+`crates/semiflow/tests/g_s3_drift_spectral.rs`, RELEASE-BLOCKING-class but gated
 `#[cfg_attr(not(feature = "slow-tests"), ignore)]` (dense `expm` control). HARD asserts.
 
 **Reference (independent, no spectral code):** assemble the dense centred-FD generator
@@ -149,9 +149,9 @@ of the design). This mirrors the v9.1 §10.13.2(a) exactness-gate decision.
 
 ```bash
 # unit + reduction invariants (fast):
-cargo test -p semiflow-core tt_drift_spectral
+cargo test -p semiflow tt_drift_spectral
 # the S³ proof gate (dense expm control, slow-tests):
-cargo test -p semiflow-core --features slow-tests g_s3_drift_spectral
+cargo test -p semiflow --features slow-tests g_s3_drift_spectral
 ```
 
 ## 4. Out of scope (FAIL-LOUD — do NOT implement in this POC)

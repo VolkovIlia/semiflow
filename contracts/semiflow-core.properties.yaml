@@ -1003,8 +1003,14 @@ schema_version: "4.16.0"
 # (verify_v0_7_0_kkernel.py + verify_v0_7_0_zeta6.py) via
 # Lemma 10.2/Theorem 7 separable-commutator identity.
 test_framework: "proptest"
-crate: semiflow-core
-location: "crates/semiflow-core/tests/properties.rs"
+crate: semiflow
+# The single-file `tests/properties.rs` layout this section originally prescribed
+# was never built. Proptest properties ship one file per concern as
+# `crates/semiflow/tests/proptest_*.rs` (32 files); a few live as `#[cfg(test)]`
+# units inside `crates/semiflow/src/*_tests.rs`. The per-section `# Location:`
+# hints below are likewise ASPIRATIONAL, not a map of the tree — resolve a
+# property by grepping its name, not by following the path.
+location: "crates/semiflow/tests/proptest_*.rs (per-concern; see note above)"
 default_cases: 1000          # baseline; G4 / G4-strang overrides to 10000
 shrink_enabled: true
 
@@ -1089,6 +1095,48 @@ generators:
 
 # ---------------------------------------------------------------------------
 # Properties.
+#
+# NAME DRIFT MAP (audited 2026-08-17). Seventeen property names below never
+# matched the identifier that actually shipped. Spot-checking found NO coverage
+# gap in the resolved cases — each is a RENAME: the property is implemented
+# under a different `fn` name, usually in a different file than the
+# `# Location:` hint claims. The contract names are kept as-is because ADRs
+# cross-reference them; use this table to resolve a name to running code.
+#
+# VERIFIED (contract text matched against the test body):
+#   contract name                              implemented as (crates/semiflow/)
+#   ------------------------------------------ ----------------------------------
+#   adaptive_pi_contractivity                  tests/proptest_adaptive_contractivity.rs::adaptive_contractivity
+#   boundary_periodic_round_trip               tests/boundary_periodic.rs
+#   boundary_linear_extrap_affine_exact        tests/boundary_linear_extrap.rs
+#   boundary_zero_extend_no_op_in_range        src/boundary_tests.rs
+#   diffusion_chernoff_consistency             tests/proptest_diffusion_constant.rs::g12_constant_fast_path_exact
+#   diffusion4_constant_fast_path_close        tests/proptest_diffusion4_consistency.rs::p1_constant_a_bit_equal
+#   truncated_exp4_constant_fast_path_close    tests/proptest_truncated_exp4_consistency.rs::p1_constant_a_proximity
+#   truncated_exp_cfl_violation_returns_error  tests/truncated_exp4_unit.rs::cfl_boundary_reject
+#   ns2d_zero_c_bit_equality                   tests/proptest_nonseparable2d_consistency.rs::zero_c_equals_strang2d
+#   ns2d_shape_preservation                    tests/proptest_nonseparable2d_consistency.rs::shape_preserved
+#   ns2d_linearity                             tests/proptest_nonseparable2d_consistency.rs::linearity
+#   ns2d_cfl_boundary                          tests/proptest_nonseparable2d_consistency.rs::cfl_boundary_returned
+#
+# UNRESOLVED — a plausible home exists but the mapping was NOT confirmed against
+# the test body. Treat each as an open question, not as evidence of coverage;
+# whoever next touches these should either confirm the mapping or record a real
+# coverage gap:
+#   drift_reaction_exact_characteristic        ? tests/proptest_contractivity.rs (apply_drift_reaction /
+#                                                consistency_with_pure_decay)
+#   strang_split_palindrome_consistency        ? no test found asserting the palindrome/self-adjoint
+#                                                composition property specifically
+#   truncated_exp_diffusion_constant_fast_path_close
+#                                              ? tests/truncated_exp_constant_a_regression.rs
+#   truncated_exp_strang_quasi_contractivity   ? no TruncatedExp analogue of
+#                                                g4_strang_quasi_contractivity found
+#   strang2d_separable_order_2                 ? tests/order_contract_v0_6_1.rs or
+#                                                tests/strang_fused_order_2d.rs
+#
+# `bounded_coeff`, `positive_diffusion` and `standard_grid` are NOT properties
+# and must not be looked for as tests: they are `generators:` entries above
+# (proptest Strategy fragments), inlined at each use site.
 # ---------------------------------------------------------------------------
 properties:
 
@@ -1220,7 +1268,8 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.2.0 properties — operator splitting (ADR-0006).
-# Location: crates/semiflow-core/tests/strang_properties.rs
+# Location (ASPIRATIONAL — file never created). Actual:
+#   crates/semiflow/tests/proptest_contractivity.rs
 # ---------------------------------------------------------------------------
 
   - name: strang_split_quasi_contractivity
@@ -1447,7 +1496,7 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.2.3 properties — DiffusionChernoff variable-`a` order-2 lift
-# (ADR-0006 Amendment 6). Location: crates/semiflow-core/tests/strang_properties.rs
+# (ADR-0006 Amendment 6). Location: crates/semiflow/tests/strang_properties.rs
 # ---------------------------------------------------------------------------
 
   - name: diffusion_chernoff_constant_fast_path_exact
@@ -2031,7 +2080,9 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.2.1 properties — boundary policies (ADR-0007).
-# Location: crates/semiflow-core/tests/boundary_properties.rs
+# Location (ASPIRATIONAL — file never created). Actual:
+#   crates/semiflow/src/grid_tests.rs (bc_index_* units)
+#   crates/semiflow/tests/boundary_dirichlet_neumann_round_trip.rs
 # ---------------------------------------------------------------------------
 
   - name: bc_index_totality
@@ -2185,7 +2236,8 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.4.0 properties — TruncatedExpDiffusionChernoff (ADR-0011, option ε, sibling type)
-# Location: crates/semiflow-core/tests/magnus_properties.rs
+# Location (ASPIRATIONAL — file never created). Actual:
+#   crates/semiflow/tests/truncated_exp_zeta_liouville_oracle.rs
 # ---------------------------------------------------------------------------
 
   - name: truncated_exp_diffusion_constant_fast_path_close
@@ -2646,7 +2698,9 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.5.0 properties (ADR-0012, tensor-product 2D extension).
-# Location: crates/semiflow-core/tests/tensor_properties.rs (new file).
+# Location (ASPIRATIONAL — file never created). Actual:
+#   crates/semiflow/tests/proptest_tensor_consistency.rs
+#   crates/semiflow/tests/proptest_grid_fn_2d_state.rs
 # These properties verify the Phase 1 contracts in
 # `contracts/semiflow-core.tensor.yaml` and the Theorem 7 / Lemma 10.2
 # normative claims in `contracts/semiflow-core.math.md` §10.
@@ -2936,9 +2990,9 @@ properties:
 
 # ---------------------------------------------------------------------------
 # v0.6.0 properties — 4th-order spatial + Adaptive PI (ADR-0013, ADR-0014).
-# Location: crates/semiflow-core/tests/diffusion4_properties.rs,
-#           crates/semiflow-core/tests/magnus4_properties.rs,
-#           crates/semiflow-core/tests/adaptive_properties.rs (new files).
+# Location (ASPIRATIONAL — none of these files were created). Actual:
+#   crates/semiflow/tests/proptest_diffusion4_consistency.rs
+#   crates/semiflow/tests/proptest_adaptive_contractivity.rs
 # These properties verify the v0.6.0 contracts in math.md §9.2.4,
 # §9.2.5, §11 + sympy gates verify_v0_6_0_zeta4.py, verify_v0_6_0_magnus4.py.
 # ---------------------------------------------------------------------------
@@ -3968,7 +4022,7 @@ properties:
       Cross-ref: `contracts/semiflow-core.properties.yaml`
       `STRANG2D_PARALLEL_BIT_EQUAL` (same guarantee for 2D Strang splitting,
       ADR-0018).
-    test_file: "crates/semiflow-core/tests/chernoff1d_parallel_bit_equal.rs"
+    test_file: "crates/semiflow/tests/chernoff1d_parallel_bit_equal.rs"
     feature_gate: "parallel,slow-tests"
     invariant: |
       // Pseudocode — see chernoff1d_parallel_bit_equal.rs run_matrix() helper:
@@ -5723,16 +5777,23 @@ properties:
       ≤ -0.95 for ALL four test ξ values. Order-1 rate per ADR-0107 Theorem A.2
       with the order-1 DiffusionChernoff forward backend (m = 1 ⇒ O(1/n)).
 
-      Status: RESERVED. The entry exists in properties.yaml at v5.1 schema
-      to mark the future engineer wave commitment but is NOT enforced until
-      the engineer wave lands. When the engineer wave ships, this entry is
-      materialised with a populated test_file and invocation; PRE-FLIGHT gate
-      replaced by ACCEPTANCE gate. See .dev-docs/specs/adjoint-fp-wave.md §3.
-    invocation: "(RESERVED — landed with engineer wave)"
+      Status: MATERIALISED — the reservation is DISCHARGED. The engineer wave
+      landed this gate under the name `G_ADJOINT_FP_ORDER` (ADR-0107
+      AMENDMENT 1, math.md §38.9) rather than as a standalone entry, and the
+      test file is `crates/semiflow/tests/g_adjoint_fp_order.rs`, not the
+      `adjoint_fokker_planck_slope.rs` name reserved here. Sub-gate (1) of that
+      test is exactly this contract: same ξ ∈ {0.5, 1.0, 1.5, 2.0}, same sweep
+      n ∈ {16, 32, 64, 128, 256}, same Gaussian characteristic-function
+      reference, same slope ≤ -0.95 acceptance. The reservation therefore
+      carries no independent obligation — enforcement lives in the
+      G_ADJOINT_FP_ORDER entry, and this entry is retained only as the audit
+      trail from ADR-0107's PRE-FLIGHT to that acceptance gate. Do NOT write a
+      second test against the reserved filename.
+    invocation: "(see G_ADJOINT_FP_ORDER)"
     introduced_in: post-v5.0
     authority: ADR-0107
-    test_file: "(RESERVED — landed with engineer wave: crates/semiflow-core/tests/adjoint_fokker_planck_slope.rs)"
-    feature_gate: "(RESERVED — landed with engineer wave; expected: slow-tests)"
+    test_file: "crates/semiflow/tests/g_adjoint_fp_order.rs (sub-gate 1; entry superseded by G_ADJOINT_FP_ORDER)"
+    feature_gate: "slow-tests"
 
   - name: T_CHEBYSHEV_SLOPE_LIMIT
     cases: 5
@@ -5887,14 +5948,14 @@ properties:
         Grid: N = 1536; n = 200 Chernoff steps.
         Seed: PCG64(0xC0FFEE_BABE_DEAD_BEEF).
         Input data: 1M GBM ticks from canonical file
-                    crates/semiflow-core/examples/data/gbm_ticks_1M.bin
+                    crates/semiflow/examples/data/gbm_ticks_1M.bin
                     sha256: beac36ebe1c541bff4641debe170cb00b35aedb0e893ac8603470d98508b2863
                     (reused from L_CEV_PTICK.canonical_input.sha256).
 
       Baseline reference:
         The v2.5.1 commit `dabf5a1` output for the smoke suite, captured as a
         fixed Float64Array of 1M entries:
-          crates/semiflow-core/examples/data/cev_baseline_v2_5_1.bin
+          crates/semiflow/examples/data/cev_baseline_v2_5_1.bin
         Captured by the v2.5.1 engineer at HFT-latency-tail SHIPPED commit
         (project_hft_latency_tail_shipped.md memory entry). Stored as
         little-endian f64 (matching native x86_64 / aarch64); sha256 captured
@@ -7299,7 +7360,7 @@ properties:
         divergence is a binding-boundary marshalling bug.
 
       Test files:
-        - crates/semiflow-core/tests/binding_resolvent_jump_parity.rs  (sub-test 1)
+        - crates/semiflow/tests/binding_resolvent_jump_parity.rs  (sub-test 1)
         - crates/semiflow-ffi/tests/binding_resolvent_jump_parity_ffi.rs  (sub-test 2)
         - crates/semiflow-py/tests/binding_resolvent_jump_parity_py.rs  (sub-test 3)
         - crates/semiflow-wasm/tests/binding_resolvent_jump_parity_wasm.rs  (sub-test 4)
@@ -7308,7 +7369,7 @@ properties:
       Cross-refs: math.md §47 (NORMATIVE); ADR-0134 (F2 NARROW-GO, ACCEPTED); ADR-0138
       (v8.1.0 TIER-3 binding surface); ADR-0028 Amendment 2 (per-crate-dup); ADR-0076
       (additive _v3 binding pattern); G_RESOLVENT_JUMP_ORDER (core accuracy gate).
-    test_file: "crates/semiflow-core/tests/binding_resolvent_jump_parity.rs, crates/semiflow-ffi/tests/binding_resolvent_jump_parity_ffi.rs"
+    test_file: "crates/semiflow/tests/binding_resolvent_jump_parity.rs, crates/semiflow-ffi/tests/binding_resolvent_jump_parity_ffi.rs"
     feature_gate: "slow-tests"
 
   # =========================================================================
@@ -7376,7 +7437,7 @@ properties:
         ASSERT FFI v3 == PyO3 v3 == WASM v3 == CORE golden (pairwise, 0 ULP).
 
       Test files:
-        - crates/semiflow-core/tests/binding_adjoint_fp_parity.rs  (sub-test 1)
+        - crates/semiflow/tests/binding_adjoint_fp_parity.rs  (sub-test 1)
         - crates/semiflow-ffi/tests/binding_adjoint_fp_parity_ffi.rs  (sub-test 2)
         - crates/semiflow-py/tests/test_adjoint_fp_v8.py (sub-test 3, pytest)
         - crates/semiflow-wasm/tests/binding_adjoint_fp_parity_wasm.rs  (sub-test 4)
@@ -7385,7 +7446,7 @@ properties:
       Cross-refs: math.md §38 (NORMATIVE); ADR-0107 Amendment 1 (C2 Adjoint FP);
       ADR-0138 (v8.1.0 TIER-3 binding surface); ADR-0028 Amendment 2 (per-crate-dup);
       ADR-0076 (additive _v3 binding pattern); G_ADJOINT_FP_ORDER (core accuracy gate).
-    test_file: "crates/semiflow-core/tests/binding_adjoint_fp_parity.rs, crates/semiflow-ffi/tests/binding_adjoint_fp_parity_ffi.rs, crates/semiflow-py/tests/test_adjoint_fp_v8.py"
+    test_file: "crates/semiflow/tests/binding_adjoint_fp_parity.rs, crates/semiflow-ffi/tests/binding_adjoint_fp_parity_ffi.rs, crates/semiflow-py/tests/test_adjoint_fp_v8.py"
     feature_gate: "slow-tests"
 
   - name: G_BINDING_SMOLYAK_PARITY
@@ -7518,7 +7579,7 @@ properties:
           ASSERT idempotency: second call returns same result.
 
       Test files:
-        - crates/semiflow-core/tests/binding_carnot_cplx3_parity.rs  (sub-test 1)
+        - crates/semiflow/tests/binding_carnot_cplx3_parity.rs  (sub-test 1)
         - crates/semiflow-py/tests/test_carnot_cplx3_v8.py (sub-test 2, pytest)
       Failure of ANY sub-test BLOCKS v8.1.0 release.
 
@@ -7528,7 +7589,7 @@ properties:
       Cross-refs: math.md §28.bis.8 (complex triple-jump); ADR-0136 Amendment 2;
       ADR-0138 (v8.1.0 TIER-2 binding surface); ADR-0028 Amendment 2 (per-crate-dup);
       G_CARNOT_CPLX3 (core accuracy gate, unchanged).
-    test_file: "crates/semiflow-core/tests/binding_carnot_cplx3_parity.rs, crates/semiflow-py/tests/test_carnot_cplx3_v8.py"
+    test_file: "crates/semiflow/tests/binding_carnot_cplx3_parity.rs, crates/semiflow-py/tests/test_carnot_cplx3_v8.py"
     feature_gate: "slow-tests"
 
   # =========================================================================
@@ -7696,14 +7757,14 @@ notes:
   - "v0.7.0 Block C properties (ns2d_*) live in tests/proptest_nonseparable2d_consistency.rs (4 proptest properties) and tests/strang_nonseparable_slope.rs (G3_NS2D + G3_NS2D_var, #[cfg(feature=slow-tests)]). Failure of G3_NS2D or G3_NS2D_var BLOCKS v0.7.0 release."
   - "v0.8.0 Block B (ADR-0018) gate STRANG2D_PARALLEL_BIT_EQUAL lives in tests/strang2d_parallel_bit_equal.rs (new file, #[cfg(all(feature=\"parallel\", feature=\"slow-tests\"))]). Failure BLOCKS v0.8.0 release — bit-equality vs serial across {1,2,4,8} threads is the sole acceptance criterion for the parallel kernel. STRANG2D_PARALLEL_SPEEDUP in the same file is INFORMATIONAL (warn-only)."
   - "v0.8.0 Block C (ADR-0019) gates SIMD_BIT_EQUAL and SIMD_BIT_EQUAL_PARALLEL live in tests/simd_bit_equal.rs (new file). SIMD_BIT_EQUAL is `#[cfg(feature=\"simd\")]` and BLOCKS v0.8.0 — bit-equality between AVX2/NEON and the scalar fallback is the SOLE acceptance criterion for landing the unsafe intrinsic module. SIMD_BIT_EQUAL_PARALLEL is `#[cfg(all(feature=\"parallel\", feature=\"simd\", feature=\"slow-tests\"))]` and BLOCKS v0.8.0 — composes Block B + Block C. SIMD_HERMITE_SPEEDUP and SIMD_COMBINED_SPEEDUP in the same file are INFORMATIONAL (warn-only). The `with_force_scalar_simd` and `with_simd_impl` helpers are crate-private test hooks (e.g. `thread_local! { static FORCE_SCALAR: Cell<bool> }`) — Engineer chooses the minimal-surface mechanism."
-  - "v0.8.0 Block D (ADR-0020) gate G3_6_2D (FLAGSHIP) lives in tests/convergence_rate_6th_2d.rs (new file, `#[cfg(feature=\"slow-tests\")]`). Test file mirrors the 1D template tests/convergence_rate_6th.rs::g3_6_slope_gate (prime-N rationale not needed in 2D — the Strang2D Y-pass averaging breaks the K7-grid resonance that motivated prime sweeps in 1D, so dyadic N ∈ {128, 256, 512, 1024} is safe). Gate compounds: (a) two-sided slope window [-6.15, -5.85], (b) wallclock ≤ 300 s under `RUSTFLAGS=\"-C target-cpu=native\" cargo test --release --features parallel,simd,slow-tests`. Both must pass; the runtime sub-condition is the FLAGSHIP evidence for ROADMAP item 3 (Block B+C ≥5× combined speedup vs v0.6.0). NO new sympy script, NO new dependency (dep count stays at 2: num-traits, libm), NO source code under crates/semiflow-core/src/ touched in Block D itself (the ADR-0019 amendment cfg-gate tightening is a separate engineer-domain follow-up), NO public API changes. ROADMAP v0.8.0 item 4 closes when this gate passes."
+  - "v0.8.0 Block D (ADR-0020) gate G3_6_2D (FLAGSHIP) lives in tests/convergence_rate_6th_2d.rs (new file, `#[cfg(feature=\"slow-tests\")]`). Test file mirrors the 1D template tests/convergence_rate_6th.rs::g3_6_slope_gate (prime-N rationale not needed in 2D — the Strang2D Y-pass averaging breaks the K7-grid resonance that motivated prime sweeps in 1D, so dyadic N ∈ {128, 256, 512, 1024} is safe). Gate compounds: (a) two-sided slope window [-6.15, -5.85], (b) wallclock ≤ 300 s under `RUSTFLAGS=\"-C target-cpu=native\" cargo test --release --features parallel,simd,slow-tests`. Both must pass; the runtime sub-condition is the FLAGSHIP evidence for ROADMAP item 3 (Block B+C ≥5× combined speedup vs v0.6.0). NO new sympy script, NO new dependency (dep count stays at 2: num-traits, libm), NO source code under crates/semiflow/src/ touched in Block D itself (the ADR-0019 amendment cfg-gate tightening is a separate engineer-domain follow-up), NO public API changes. ROADMAP v0.8.0 item 4 closes when this gate passes."
   - "v0.8.0 Block D Amendment 2026-05-06 (schema 0.7.4) — recalibrates G3_6_2D after first-run failure. Original sweep N ∈ {64, 128, 256, 512} produced slope -4.30 (pre-asymptotic — ratios 13.2/18.5/31.8 vs 6th-order asymptote 64) at 388 s with 1.01× SIMD speedup (AVX2 not in default x86_64 cargo target). Recalibration: N ∈ {128, 256, 512, 1024} (enters asymptotic regime per the 1D wide-sweep evidence in tests/convergence_rate_6th.rs::spatial_convergence_constant_a_wide_sweep), runtime budget 120→300 s (absorbs N=1024² = 1 048 576 cells, 4× N=512² cost, while still asserting ≥5× combined speedup), `rustflags: \"-C target-cpu=native\"` MANDATORY in invocation. Slope window [-6.15, -5.85] UNCHANGED (do not loosen — the empirical floor in the 1D wide sweep is -5.50 with N=200 pre-asymptotic; our N≥128 with extension to N=1024 should hit ≈ -5.95 cleanly per Theorem 7). Pairs with ADR-0019 amendment tightening cfg gate to `cfg(all(target_arch, target_feature))` so silent-scalar trap is closed at compile time."
   - "v0.8.0 Block D Amendment 2026-05-06 #2 (schema 0.7.5) — DEFERS G3_6_2D to v0.8.1 after the schema 0.7.4 recalibration ALSO failed. 2nd run: slope -5.3945, runtime 772 s (per-N timings 10/38/149/573 s; per-N error ratios 18.5/31.8/139.0). OLS basket still pulled by pre-asymptotic N=128/256; runtime budget gate would fail even if slope-only at N≥1024 passed. The 5× combined speedup target from ROADMAP item 3 was overoptimistic for default cargo target on this CPU's ~10–15× achievable parallel+SIMD ceiling at 2D heat-equation problem scale. Decision (user-approved 2026-05-06): G3_6_2D entry adds `status: DEFERRED`, `deferred_to: \"v0.8.1\"`, `deferred_reason: \"Two-run calibration failures; ADR-0020 Amendment 2\"` — `status: DEFERRED` OVERRIDES `severity: RELEASE_BLOCKING` for v0.8.0. All constants preserved verbatim (N_SWEEP, SLOPE_LO, SLOPE_HI, RUNTIME_BUDGET_SEC, rustflags) — they are v0.8.1's starting point for re-calibration (likely N up to 2048, drop or raise budget to ~1500 s, possibly non-power-of-2 N, possibly architectural extension not just constant tweaks). Test file `tests/convergence_rate_6th_2d.rs` ships in v0.8.0 with `#[ignore = \"Block D FLAGSHIP deferred to v0.8.1 — see ADR-0020 Amendment 2\"]` (engineer adds the attribute separately) — harness compiles cleanly (no bitrot), does not run by default, does not gate v0.8.0 CI. Block A (D2 rename), Block B (parallel Strang2D bit-equal), Block C (SIMD bit-equal + cfg-tightening) remain independently green and ship in v0.8.0. ROADMAP item 4 stays OPEN with deferral annotation. See `docs/adr/0020-g3-6th-2d-flagship.md` Amendment 2026-05-06 #2 for full rationale and v0.8.1 plan."
   - "v0.8.1 Block B (schema 0.7.6, ADR-0020 Amendment 3 — 2026-05-07) — UNDEFERS G3_6_2D and recalibrates with 3-point prime-N basket. Pilot run on hardware with Block A tile-scratch perf (commit eae2b7a) confirmed slope -6.0837 at wallclock 3084 s for N ∈ {503, 997, 1999}; projected 4-point with N=3989 was ~12 400 s, infeasible for a flagship slow-test. Decision: drop N=3989 (1D's 5-point basket [251..3989] does not lift to 2D under N²-cost amplification at the largest entries), keep prime-N to suppress K7-grid resonance, set runtime budget to 3300 s (pilot 3084 s + 7% headroom). Schema fields changed: status/deferred_to/deferred_reason REMOVED, N_SWEEP {128,256,512,1024} → {503,997,1999}, RUNTIME_BUDGET_SEC 300 → 3300; slope window [-6.15, -5.85] UNCHANGED. The 3-point slope already proves O(dx⁶) per Theorem 7 — adding N=3989 would tighten the OLS but adds no mathematical content. ROADMAP item 3 (≥5× combined speedup) validated separately by benches/heat_2d (Block A 4.38× at N=1600²) and benches/advdiff_2d (3.87×) — cleanly separates mathematical-correctness gate from perf-claim benchmarks. Test file unignored: `#[ignore = ...]` removed from g3_6_2d_flagship_slope_and_runtime_gate. ROADMAP item 4 CLOSES when this gate passes (Block C ships ROADMAP update + ADR-0020 Amendment 3 + ADR-0022 + tag v0.8.1)."
   - "v0.9.0 Block C (ADR-0024) — adds Gate G5_3D (spatial convergence, 3D separable diffusion). G5_3D smoke test lives in tests/heat_3d_oracle.rs (g5_heat_3d_oracle_smoke, N=16, n=200, gate 8e-2, always runs). Tight slope gate lives in tests/strang_3d_slope.rs (g5_3d_slope, N ∈ {16,32,64}, feature `slow-tests`). Failure of g5_3d_slope BLOCKS v0.9.0 release. New types Grid3D/GridFn3D/AxisLift3D/Strang3D added in src/grid3d.rs, src/grid_fn3d.rs, src/strang3d.rs. Axis enum extended with Z variant (Option A, see tensor.yaml §2). No new dependencies (dep count stays at 2: num-traits, libm). No 2D public API changes except DomainViolation guard for Axis::Z in 2D AxisLift::apply."
   - "v2.6 ADR-0068 — adds new top-level `latency_gates:` section (separate from `properties:`) + G23 (KillingChernoff Dirichlet slope ≤ -0.95, slow-tests) + T18N (sympy eigenmode identity) + bc_index_dirichlet_neumann_totality (extends I1 to 6 enum variants). schema_version 0.7.6 → 0.8.0. G23 + T18N BLOCK v2.6 release. `latency_gates:` populated with L_CEV_PTICK (i7-12700K profile, advisory in v2.6, baseline 45ns p999 from ADR-0067; m2-pro placeholder). v2.6 `xtask latency-gate` runs the bench, asserts budgets, exits 0 with warnings on breach (advisory). v2.7 promotes L_CEV_PTICK to RELEASE_BLOCKING via separate ADR. BoundaryPolicy widening (Dirichlet + Neumann variants) and KillingChernoff/KillingRegion/BoxRegion/BallRegion + HdrSnapshot public surface added in traits.yaml §4 + §5 (schema 0.8.0 → 0.9.0). math.md §3.5.bis (BC widening), §3.6.bis (L-gate normative defn), §21 (Butko 2018 killing) NEW sections (append-only, no breaking change to existing §1..§20). See `docs/adr/0068-bc-widening-killing-and-lgates.md`."
-  - "v2.7 ADR-0069 (A1 Laplace-Chernoff resolvent) — adds G24 (RELEASE_BLOCKING — resolvent residual ≤ 1e-3 at n=64 + slope ≥ 1.0 + TrapezoidWithTail stress sub-test, slow-tests) + T19N (NORMATIVE — sympy Laplace-transform identity, 4 sub-checks). New traits.yaml types: LaplaceChernoffResolvent<C, F>, LaplaceQuadrature<F> (enum: GaussLaguerre32 | TrapezoidWithTail{t_max}); new module crates/semiflow-core/src/resolvent.rs (~350 LoC, default 500-LoC cap). G24 + T19N BLOCK v2.7 release. math.md §22 NEW section (Hille-Yosida Laplace, Remizov 2025 Vladikavkaz Theorem 3, Gauss-Laguerre 32-pt with const-array nodes). L_RESOLVENT_N64_P99 POPULATED (was v2.6 placeholder): bench examples/resolvent_perf.rs, advisory=true in v2.7.0-rc.1 (calibration cycle), promoted to advisory=false on i7-12700K in v2.7.0 final via one-line PR. L_HESTON_PTICK NEW (HFT side-track example/heston_pricer.rs, advisory throughout v2.7). schema_version 0.8.0 → 0.9.0 (per-profile `advisory:` field becomes load-bearing — v2.6 declared it but harness clamped all to advisory; v2.7 promotes per math.md §3.6.bis.7 amendment). xtask/src/latency_gate.rs updated: when severity=RELEASE_BLOCKING AND advisory=false AND floor breached → exit 1; default-if-absent advisory=true (backward-compat with v2.6 entries). L_CEV_PTICK.i7-12700K.advisory: true → false (explicit promotion edit; documented in CHANGELOG)."
-  - "v2.7 ADR-0070 (B2 Howland nonautonomous lift) — adds G25 (RELEASE_BLOCKING — Howland-lift slope ≤ -0.95 on time-dependent heat ∂_t u = (1+0.5s)·∂_xx u, slow-tests) + T20N (NORMATIVE — sympy augmented-generator commutator identity, 4 sub-checks). New traits.yaml types: TimedChernoffFunction<F> super-trait (additive over ChernoffFunction<F>; default apply_at bridges to apply_into ignoring t, so every existing autonomous impl gets a free `impl TimedChernoffFunction<F> for X<F> {}` one-liner); HowlandLift<C, F>; HowlandState<S, F>. New module crates/semiflow-core/src/howland.rs (~400 LoC, default 500-LoC cap). G25 + T20N BLOCK v2.7 release. math.md §23 NEW section (Howland 1974 Trans. AMS 207 Theorem 1 lift, left-endpoint shift convention, matched-step τ=Δs requirement). Order-1 only (higher-order Howland via midpoint sampling or Casas-Iserles palindromic Magnus deferred to v3.x). schema_version bump combined with ADR-0069 (single 0.8.0 → 0.9.0 jump). The super-trait may be folded into v3.0 ChernoffFunction trait redesign per roadmap-reflective-biscuit.md §v3.0."
+  - "v2.7 ADR-0069 (A1 Laplace-Chernoff resolvent) — adds G24 (RELEASE_BLOCKING — resolvent residual ≤ 1e-3 at n=64 + slope ≥ 1.0 + TrapezoidWithTail stress sub-test, slow-tests) + T19N (NORMATIVE — sympy Laplace-transform identity, 4 sub-checks). New traits.yaml types: LaplaceChernoffResolvent<C, F>, LaplaceQuadrature<F> (enum: GaussLaguerre32 | TrapezoidWithTail{t_max}); new module crates/semiflow/src/resolvent.rs (~350 LoC, default 500-LoC cap). G24 + T19N BLOCK v2.7 release. math.md §22 NEW section (Hille-Yosida Laplace, Remizov 2025 Vladikavkaz Theorem 3, Gauss-Laguerre 32-pt with const-array nodes). L_RESOLVENT_N64_P99 POPULATED (was v2.6 placeholder): bench examples/resolvent_perf.rs, advisory=true in v2.7.0-rc.1 (calibration cycle), promoted to advisory=false on i7-12700K in v2.7.0 final via one-line PR. L_HESTON_PTICK NEW (HFT side-track example/heston_pricer.rs, advisory throughout v2.7). schema_version 0.8.0 → 0.9.0 (per-profile `advisory:` field becomes load-bearing — v2.6 declared it but harness clamped all to advisory; v2.7 promotes per math.md §3.6.bis.7 amendment). xtask/src/latency_gate.rs updated: when severity=RELEASE_BLOCKING AND advisory=false AND floor breached → exit 1; default-if-absent advisory=true (backward-compat with v2.6 entries). L_CEV_PTICK.i7-12700K.advisory: true → false (explicit promotion edit; documented in CHANGELOG)."
+  - "v2.7 ADR-0070 (B2 Howland nonautonomous lift) — adds G25 (RELEASE_BLOCKING — Howland-lift slope ≤ -0.95 on time-dependent heat ∂_t u = (1+0.5s)·∂_xx u, slow-tests) + T20N (NORMATIVE — sympy augmented-generator commutator identity, 4 sub-checks). New traits.yaml types: TimedChernoffFunction<F> super-trait (additive over ChernoffFunction<F>; default apply_at bridges to apply_into ignoring t, so every existing autonomous impl gets a free `impl TimedChernoffFunction<F> for X<F> {}` one-liner); HowlandLift<C, F>; HowlandState<S, F>. New module crates/semiflow/src/howland.rs (~400 LoC, default 500-LoC cap). G25 + T20N BLOCK v2.7 release. math.md §23 NEW section (Howland 1974 Trans. AMS 207 Theorem 1 lift, left-endpoint shift convention, matched-step τ=Δs requirement). Order-1 only (higher-order Howland via midpoint sampling or Casas-Iserles palindromic Magnus deferred to v3.x). schema_version bump combined with ADR-0069 (single 0.8.0 → 0.9.0 jump). The super-trait may be folded into v3.0 ChernoffFunction trait redesign per roadmap-reflective-biscuit.md §v3.0."
 
 # ---------------------------------------------------------------------------
 # L-gates (v2.6, ADR-0068, math.md §3.6.bis — NEW top-level section).
@@ -7736,11 +7797,11 @@ latency_gates:
 
   - id: L_CEV_PTICK
     severity: ADVISORY            # v2.6 — bump to RELEASE_BLOCKING at v2.7 (ADR-0069)
-    bench_target: "crates/semiflow-core/examples/latency_tail.rs"
+    bench_target: "crates/semiflow/examples/latency_tail.rs"
     bench_invocation: |
       cargo run --release --example latency_tail -- \
         --n 1536 --n-steps 200 --n-ticks 1000000 --warmup-ticks 1000 \
-        --gbm-ticks-path crates/semiflow-core/examples/data/gbm_ticks_1M.bin \
+        --gbm-ticks-path crates/semiflow/examples/data/gbm_ticks_1M.bin \
         --out-json target/lgate/L_CEV_PTICK-rep{rep}.jsonl --rep {rep}
     measurement: "Per-tick CEV European-call pricing latency via DiffusionChernoff N=1536 (ADR-0067 §Decision)."
     canonical_input:
@@ -7873,7 +7934,7 @@ latency_gates:
 
   - id: L_HESTON_PTICK            # v2.7 (ADR-0069 §"Consequences" — HFT side-track).
     severity: ADVISORY            # v2.7: advisory throughout (calibration deferred to v2.8 if Heston usage stabilises)
-    bench_target: "crates/semiflow-core/examples/heston_pricer.rs"  # Wave D engineer ships
+    bench_target: "crates/semiflow/examples/heston_pricer.rs"  # Wave D engineer ships
     bench_invocation: |
       cargo run --release --example heston_pricer -- \
         --strike 100 --maturity 0.5 --vol-of-vol 0.3 --kappa 2.0 --theta 0.04 --rho -0.7 \
@@ -7925,9 +7986,9 @@ latency_gates:
 
   - id: L_SABR_PTICK            # v2.8 (ADR-0071 §"Consequences" — SABR-on-H² industrial showcase).
     severity: ADVISORY            # v2.8: advisory throughout (budgets pending calibration; promotion deferred to v2.9)
-    bench_target: "crates/semiflow-core/examples/sabr_pricer.rs"
+    bench_target: "crates/semiflow/examples/sabr_pricer.rs"
     bench_invocation: |
-      cargo run --release -p semiflow-core --example sabr_pricer -- \
+      cargo run --release -p semiflow --example sabr_pricer -- \
         --n-ticks 1000 --warmup-ticks 100 \
         --out-json target/lgate/sabr_{rep}.jsonl --rep {rep} \
         --gate-id L_SABR_PTICK
@@ -8313,7 +8374,7 @@ latency_gates:
           IG fix is deferred to a future patch.
 
       Anti-linearization regression (always-on, non-slow):
-        Test `subordinated_does_not_linearize_phi` (crates/semiflow-core/src/subordinated.rs
+        Test `subordinated_does_not_linearize_phi` (crates/semiflow/src/subordinated.rs
         mod tests) uses the Gamma backend at λ=4 and asserts that the single-step
         output satisfies err_correct < 0.1·err_wrong, so φ-linearization can never
         again hide behind a single-eigenvalue gate.
@@ -8467,19 +8528,21 @@ latency_gates:
     introduced_in: v6.0.0
     authority: ADR-0110
 
-  # G_zeta6_TRUTHFUL_ORDER — DEFERRED to v7.0+ OCTONIC per ADR-0110 AMENDMENT 1.
-  # GLOBAL truthful_order gate MATHEMATICALLY INFEASIBLE at v6.0.0 K5 3-point
-  # divergence stencil + SepticHermite floor. Academic K=6 honesty at v6.0.0
-  # covered by: G_zeta6_const_a_richardson_cheb (≥ 3.8 BLOCKING PASS) +
-  # T23N_zeta6 sympy oracle (LOCAL Taylor tangency). Test file
-  # crates/semiflow-core/tests/zeta6_truthful_order.rs REMOVED per AMENDMENT 1.
-
-  # G_zeta8_TRUTHFUL_ORDER — DEFERRED to v7.0+ OCTONIC per ADR-0110 AMENDMENT 1.
-  # GLOBAL truthful_order gate MATHEMATICALLY INFEASIBLE at v6.0.0 K5 3-point
-  # divergence stencil + SepticHermite floor. Academic K=8 honesty at v6.0.0
-  # covered by: G_zeta8_const_a_richardson_cheb (≥ 3.0 BLOCKING PASS) +
-  # implicit T-equivalent ζ⁸ sympy oracle (LOCAL Taylor tangency). Test file
-  # crates/semiflow-core/tests/zeta8_truthful_order.rs REMOVED per AMENDMENT 1.
+  # HISTORICAL (v6.0.0 state — SUPERSEDED, do not act on this block):
+  # G_zeta6_TRUTHFUL_ORDER and G_zeta8_TRUTHFUL_ORDER were DEFERRED to v7.0+
+  # OCTONIC per ADR-0110 AMENDMENT 1 (a GLOBAL truthful_order gate was
+  # mathematically infeasible on the v6.0.0 K5 3-point divergence stencil +
+  # SepticHermite floor), and their test files were removed at that time.
+  # K=6/K=8 honesty was carried instead by G_zeta{6,8}_const_a_richardson_cheb
+  # plus the ζ⁶/ζ⁸ sympy oracles (LOCAL Taylor tangency).
+  #
+  # The deferral was DISCHARGED by ADR-0119 when OctonicHermite landed. Both
+  # gates are LIVE and RELEASE_BLOCKING again — see their real entries further
+  # down this file (`- name: G_zeta6_TRUTHFUL_ORDER` / `G_zeta8_TRUTHFUL_ORDER`,
+  # authority ADR-0119 AMENDMENT 2, finest-pair Richardson witness) and the
+  # reinstated test files crates/semiflow/tests/zeta{6,8}_truthful_order.rs.
+  # This block is kept only so the v6.0.0 reasoning stays readable; read the
+  # live entries for the current contract.
 
   - name: T_ZETA_TRUTHFUL_ORDER_AMENDMENT1
     type: NORMATIVE_PREFLIGHT
@@ -9229,7 +9292,7 @@ latency_gates:
           Rust; fix the GOLDEN grid[64] the bindings must reproduce. Sanity: output
           finite; dissipative (no norm growth, Cayley contraction §49.4).
           ASSERT output finite AND ‖u‖ ≤ ‖u0‖ (Cayley contraction).
-          File: crates/semiflow-core/tests/binding_wentzell_parity.rs
+          File: crates/semiflow/tests/binding_wentzell_parity.rs
         Sub-test 2 (FFI v3): smf_wentzell_evolver_new_heat_1d_unit_v3(0,10,64,32,0.5,
           schedule,32,u0,64,&ev); smf_wentzell_evolve_v3(ev,0.05,0.0,out,64);
           ASSERT memcmp(out, golden, 64*8) == 0.
@@ -9261,7 +9324,7 @@ latency_gates:
       divergence is a marshalling bug.
 
       Test files:
-        - crates/semiflow-core/tests/binding_wentzell_parity.rs       (sub-test 1, CORE golden)
+        - crates/semiflow/tests/binding_wentzell_parity.rs       (sub-test 1, CORE golden)
         - crates/semiflow-ffi/tests/binding_wentzell_parity_ffi.rs    (sub-test 2, FFI 0-ULP-vs-golden)
         - crates/semiflow-py/tests/binding_wentzell_parity_py.rs      (sub-test 3, PyO3 determinism preamble)
         - crates/semiflow-wasm/tests/binding_wentzell_parity_wasm.rs  (sub-test 4, WASM determinism preamble)
@@ -9270,7 +9333,7 @@ latency_gates:
       Cross-refs: math.md §49 (NORMATIVE); ADR-0151 (Wentzell Cayley kernel);
       ADR-0153 (v8.3.0 TIER-3 binding surface); ADR-0028 Amendment 2 (per-crate-dup);
       ADR-0031 (PyO3 three-phase GIL); G_WENTZELL_ORDER + G_WENTZELL_STABLE (core gates).
-    test_file: "crates/semiflow-core/tests/binding_wentzell_parity.rs, crates/semiflow-ffi/tests/binding_wentzell_parity_ffi.rs"
+    test_file: "crates/semiflow/tests/binding_wentzell_parity.rs, crates/semiflow-ffi/tests/binding_wentzell_parity_ffi.rs"
     feature_gate: "slow-tests"
     introduced_in: v8.3.0
     authority: ADR-0153
@@ -9318,7 +9381,7 @@ latency_gates:
         Sub-test 1 (CORE golden, 2D + 3D): compute jump directly in Rust via
           ResolventJumpChernoff{2,3}D::jump; fix the GOLDEN vectors. Sanity: finite,
           correct length (nx·ny / nx·ny·nz).
-          File: crates/semiflow-core/tests/binding_resolvent_jump_nd_parity.rs
+          File: crates/semiflow/tests/binding_resolvent_jump_nd_parity.rs
         Sub-test 2 (PyO3 v3, pytest): ResolventJump2DV8 / ResolventJump3DV8 .jump(t,g)
           with ND arrays; asserts np.array_equal(out, golden) AND the order="F"
           round-trip preserves layout.
@@ -9336,7 +9399,7 @@ latency_gates:
       Cross-refs: math.md §47.8 (NORMATIVE); ADR-0148 (2D/3D NARROW-parabolic GO);
       ADR-0153 (v8.3.0 TIER-3 binding surface); ADR-0138 (ABI-safety); ADR-0028
       Amendment 2 (per-crate-dup); G_RESOLVENT_JUMP_2D_ORDER + G_RESOLVENT_JUMP_3D_ORDER.
-    test_file: "crates/semiflow-core/tests/binding_resolvent_jump_nd_parity.rs, crates/semiflow-py/tests/test_resolvent_jump_nd_v8.py"
+    test_file: "crates/semiflow/tests/binding_resolvent_jump_nd_parity.rs, crates/semiflow-py/tests/test_resolvent_jump_nd_v8.py"
     feature_gate: "slow-tests"
     introduced_in: v8.3.0
     authority: ADR-0153
@@ -9386,14 +9449,14 @@ latency_gates:
       (byte-identical f64 + bool + usize). Same Rust core; divergence = marshalling bug.
 
       Test files:
-        - crates/semiflow-core/tests/binding_obstacle_gamma_parity.rs    (sub-test 1)
+        - crates/semiflow/tests/binding_obstacle_gamma_parity.rs    (sub-test 1)
         - crates/semiflow-py/tests/binding_obstacle_gamma_parity_py.rs   (sub-test 2)
       Failure of ANY active sub-test BLOCKS v8.3.0 release.
 
       Cross-refs: math.md §44.5.bis (NORMATIVE); ADR-0152 (obstacle Γ ill-posedness);
       ADR-0153 (v8.3.0 TIER-3 binding surface, TIER-2 obstacle scope); ADR-0028
       Amendment 2 (per-crate-dup); ADR-0031 (PyO3 GIL); G_OBSTACLE_GAMMA (core gate).
-    test_file: "crates/semiflow-core/tests/binding_obstacle_gamma_parity.rs, crates/semiflow-py/tests/binding_obstacle_gamma_parity_py.rs"
+    test_file: "crates/semiflow/tests/binding_obstacle_gamma_parity.rs, crates/semiflow-py/tests/binding_obstacle_gamma_parity_py.rs"
     feature_gate: "slow-tests"
     introduced_in: v8.3.0
     authority: ADR-0153
@@ -9445,7 +9508,7 @@ latency_gates:
       Chernoff kernel (discounting + diffusion + CIR coupling + Feynman-Kac)
       against its own MC reference. Gate I only — model-approximation bias
       (gate II) is separately documented via A_ROUGH_HESTON_MODEL_BIAS.
-    test_file: "crates/semiflow-core/tests/rough_heston_mc_oracle.rs"
+    test_file: "crates/semiflow/tests/rough_heston_mc_oracle.rs"
     feature_gate: "slow-tests"
     introduced_in: v0.9.0-beta
     authority: ADR-0181
@@ -9485,7 +9548,7 @@ advisory_records:
       - id: n_factor_markov
         description: "3-factor GL vs N→∞ Markov at H=0.1 (El Euch–Rosenbaum 2019 theory)"
         expected_rel_pct: "3-5"
-    test_file: "crates/semiflow-core/tests/rough_heston_model_bias.rs"
+    test_file: "crates/semiflow/tests/rough_heston_model_bias.rs"
     feature_gate: "slow-tests"
     introduced_in: v0.9.0-beta
     authority: ADR-0181

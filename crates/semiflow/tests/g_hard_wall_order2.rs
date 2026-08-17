@@ -40,7 +40,7 @@
 //!
 //! `slow-tests`. Run with:
 //! ```bash
-//! cargo test -p semiflow-core --features slow-tests -- --ignored g_hard_wall_order2
+//! cargo test -p semiflow --features slow-tests -- --ignored g_hard_wall_order2
 //! ```
 
 #![cfg(feature = "slow-tests")]

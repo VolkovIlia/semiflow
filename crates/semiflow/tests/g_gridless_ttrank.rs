@@ -71,11 +71,11 @@
 //! 3. Analytic truth: `Σ_T` = `Σ_0` + 2T·A is closed-form, d-independent.
 //!
 //! ## Placement
-//!   crates/semiflow-core/tests/g_gridless_ttrank.rs
+//!   `crates/semiflow/tests/g_gridless_ttrank.rs`
 //!   #[ignore] + #[cfg(feature="slow-tests")]
 //!
 //! ## Run
-//!   cargo test -p semiflow-core --features slow-tests \
+//!   cargo test -p semiflow --features slow-tests \
 //!     --test `g_gridless_ttrank` -- --ignored --nocapture
 //!
 //! ## ZERO new deps — Jacobi SVD inline (~140 `LoC`), Gauss-Jordan inversion inline.

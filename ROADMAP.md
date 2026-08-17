@@ -884,7 +884,7 @@ Critical correctness fixes and CI hardening landed as the first post-v6.0.0 main
 ### Heavy validation deferred (mirror prior pattern)
 
 ```
-RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core --release \
+RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow --release \
   --features slow-tests \
   zeta4_correction_slope_cheb zeta6_correction_slope_cheb zeta8_correction_slope \
   zeta4_truthful_order \
@@ -937,7 +937,7 @@ Docs-only MINOR. 3 commits since v5.0.0 tag at efe99b9.
 ### Heavy validation deferred
 
 ```
-RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core --release \
+RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow --release \
   --features slow-tests \
   zeta4_correction_slope_cheb zeta6_correction_slope_cheb zeta8_correction_slope \
   -- --ignored --nocapture
@@ -987,7 +987,7 @@ SECOND BREAKING window of the post-v4.0 roadmap. 2 commits since v4.8.0 tag at 1
 Chebyshev-mode slope gates (slow-tests; post-fix calibration stable but lower than ADR-0104 prediction):
 
 ```
-RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core --release \
+RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow --release \
   --features slow-tests \
   zeta4_correction_slope_cheb zeta6_correction_slope_cheb zeta8_correction_slope_cheb \
   -- --ignored --nocapture
@@ -1223,7 +1223,7 @@ A.5 SubordinatedChernoff ships strictly additive via Butko 2018 GL32-quadrature 
 
 ### Heavy validation deferred
 - G_SUBORD_ORDER1 slow-tests slope gate (3/3 PASS in fast mode; formal slow-test requires):
-  `RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core --release --features slow-tests subord_order1 -- --ignored --nocapture`
+  `RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow --release --features slow-tests subord_order1 -- --ignored --nocapture`
 
 Commits: bfaaed8 (ADR-0102), a9f774f (ADR-0103), 347ac28 (ADR-0104), 346e372 (A.5 impl), b6f2f4d (lint).
 See CHANGELOG.md §[4.8.0].
@@ -1415,14 +1415,14 @@ coverage of the new kernels.
 ### Scope (Waves 2.4A/B/C, all complete)
 
 - [x] **Wave 2.4A — Order-6 spatial graph heat** (ADR-0062, math.md §19).
-  `GraphHeat6thChernoff<F>` in `crates/semiflow-core/src/graph_heat6.rs` —
+  `GraphHeat6thChernoff<F>` in `crates/semiflow/src/graph_heat6.rs` —
   degree-6 operator-Taylor of `e^{-τL_G}`, 6 SpMV / step, 2 ping-pong
   scratch buffers (zero heap alloc steady-state), generic `<F: SemiflowFloat>`.
   Gates: G21 f64 slope ≤ −5.85; G21 f32 absolute-floor `|err|_∞ ≤ 5e-6`;
   T16N sympy.
 - [x] **Wave 2.4B — Variable-coefficient × time-dependent Magnus K=4**
   (ADR-0063, math.md §20). `VarCoefMagnusGraphHeatChernoff<F>` in
-  `crates/semiflow-core/src/varcoef_magnus_graph.rs`. Closure-driven
+  `crates/semiflow/src/varcoef_magnus_graph.rs`. Closure-driven
   sampling of `(a(t), L_G(t))` at GL₂ abscissae. `compute_rho_bar` helper.
   G22 f64 slope ≤ −3.85; T17N sympy; G11 byte-equality regression PASS.
 - [x] **Wave 2.4C — FFI / WASM expansion** (ADR-0064).
@@ -1692,8 +1692,11 @@ If any slope gate empirically fails:
 bindings — no new math, no new core API. Per **ADR-0029**, every change in
 v0.11.0 is confined to the three binding crates (`semiflow-ffi`, `semiflow-py`,
 `semiflow-wasm`), CI workflow files, and `docs/`. The reviewer-suckless gate
-blocks the tag if `git diff v0.10.0..v0.11.0 -- crates/semiflow-core/` is
-non-empty.
+blocks the tag if `git diff v0.10.2-beta..v0.11.0-beta -- crates/semiflow/` is
+non-empty. (Historical note: as originally written this gate named the tags
+`v0.10.0..v0.11.0` and the path `crates/semiflow-core/` — neither exists, so
+the command matched nothing and the gate passed vacuously. Corrected here to
+the real tag names and the post-rename path.)
 
 **SemVer**: MINOR (additive only).
 **Status**: Released — 2026-05-09. I12 heavy validation pending maintainer
@@ -2035,7 +2038,7 @@ SUPERSEDED but kept as alias per ADR-0058).
       of `NonSeparable2DChernoff` and `NonSeparable2DAnisotropicChernoff`.
       v2.1 constructors preserved as type-aliased shims. (`src/nonseparable_mixed.rs`).
 - [x] **G20 alias-identity gate** — 0 ULP between v0.7/v0.9 paths and generic. PASS.
-- [x] Graph bindings — `crates/remizov-{ffi,py,wasm}/src/graph_*.rs`. f64-only.
+- [x] Graph bindings — `crates/semiflow-{ffi,py,wasm}/src/graph_*.rs`. f64-only.
 - [x] **G_cross_binding_graph_identity gate** — cross-binding sup-error ≤ 3 ULP. PASS.
 - [x] **G_FFI_smoke_graph, G_PyO3_smoke_graph, G_WASM_smoke_graph** — 3-OS. PASS.
 - [x] ADR-0033 transitioned to SUPERSEDED-BY-0058.

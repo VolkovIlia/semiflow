@@ -10,7 +10,7 @@
 //!
 //! Contract gate: `L_HESTON_PTICK` (ADR-0069, math.md §22).
 //!
-//! Build: `cargo build --release --example heston_pricer -p semiflow-core`
+//! Build: `cargo build --release --example heston_pricer -p semiflow`
 //! Smoke: `cargo run --release --example heston_pricer -- --n-ticks 200 --warmup-ticks 50`
 
 // Integration test/example: allows for numerical patterns.

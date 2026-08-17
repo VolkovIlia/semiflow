@@ -38,7 +38,7 @@ References:
   - Galkin-Remizov 2025 *Israel J. Math.* Theorem 3.1 (m=6 Taylor tangency).
   - ADR-0088 Wave I — R³ nested Richardson algorithm.
   - math.md §27.bis — R³ normative algorithm spec.
-  - crates/semiflow-core/src/diffusion6_zeta6.rs (Rust implementation).
+  - crates/semiflow/src/diffusion6_zeta6.rs (Rust implementation).
 """
 
 import sys

@@ -7,7 +7,7 @@
 //!     XMIN=-10.0, XMAX=10.0, N=64, `M_NODES=16`, T=0.5,
 //!     u0(x)=exp(-x²), unit diffusion a=1, DEFAULT grid.
 //!   Assert that the returned jump values are byte-identical (0 ULP) to the
-//!   CORE GOLDEN — the values produced directly by `semiflow-core`.
+//!   CORE GOLDEN — the values produced directly by `semiflow`.
 //!
 //! ## Why this is GENUINE
 //!
@@ -15,7 +15,7 @@
 //! construction + `smf_resolvent_jump_apply_v3` + buffer-copy into caller-owned
 //! memory.  Any precision loss or marshalling bug would show up as a non-zero ULP.
 //! The core golden is independently produced by
-//! `crates/semiflow-core/tests/binding_resolvent_jump_parity.rs`, not this file.
+//! `crates/semiflow/tests/binding_resolvent_jump_parity.rs`, not this file.
 //!
 //! ## ABI-safety
 //!
@@ -46,7 +46,7 @@ const M_NODES: usize = 16;
 const T: f64 = 0.5;
 
 // ---------------------------------------------------------------------------
-// Core golden (produced by crates/semiflow-core/tests/binding_resolvent_jump_parity.rs
+// Core golden (produced by crates/semiflow/tests/binding_resolvent_jump_parity.rs
 // `canonical_resolvent_jump_core` — verified against M_ref=40 self-convergence).
 // These are the bit-exact results; any binding that diverges has a marshalling bug.
 // ---------------------------------------------------------------------------

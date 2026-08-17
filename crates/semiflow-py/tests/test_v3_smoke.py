@@ -15,7 +15,7 @@ Parameters match the standard Wave-A/B heat smoke:
 
 Cross-validation:
   EvolverHeat1DUnitV3.evolve_into result MUST equal Heat1D result bit-for-bit
-  (same semiflow-core kernel, different binding surface).
+  (same semiflow kernel, different binding surface).
 """
 
 import math

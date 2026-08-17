@@ -9,7 +9,7 @@ tridiagonal mat-vecs).
 **Probes (truth):** `.dev-docs/specs/probe_s3_varcoef_final.py` (definitive two-layer: L1
 exact, L2 order-2 slope 2.0000, rank-1 op, boundary floor), `probe_s3_varcoef.py` (additive
 potential order/rank/cost), `probe_s3_varcoef_diffusion.py` (variable-diffusion crux + boundary).
-**Builds on:** `crates/semiflow-core/src/tt_drift_spectral.rs` (ADR-0164: 1-D spectral const-coef
+**Builds on:** `crates/semiflow/src/tt_drift_spectral.rs` (ADR-0164: 1-D spectral const-coef
 factor `apply_drift_spectral_axis`; the ONLY new ingredients are the per-axis ADDITIVE split +
 the polynomial residual factor `P₂`).
 
@@ -17,7 +17,7 @@ the polynomial residual factor `P₂`).
 
 ## 1. New types / functions (Rust, `no_std` + `alloc`, generic over `F: SemiflowFloat`)
 
-All live in a NEW module `crates/semiflow-core/src/tt_varcoef_spectral.rs` (keeps the POC
+All live in a NEW module `crates/semiflow/src/tt_varcoef_spectral.rs` (keeps the POC
 isolated; ≤500 LoC). Reuse the 1-D DFT helpers from `tt_spectral.rs`
 (`dft_1d_real_to_cplx`, `idft_1d_cplx`) and ADR-0164's `axis_symbols_drift` pattern. The
 evolver is a per-axis Strang of 1-D variable-coef factors; each 1-D factor is the order-2
@@ -98,7 +98,7 @@ diagonals all `≈0` (≤1e-13) so `P₂(s)=I` exactly.
 
 ## 2. The ONE gate that proves S³ (`G_S3_VARCOEF_SPECTRAL`)
 
-`crates/semiflow-core/tests/g_s3_varcoef_spectral.rs`, RELEASE-BLOCKING-class but gated
+`crates/semiflow/tests/g_s3_varcoef_spectral.rs`, RELEASE-BLOCKING-class but gated
 `#[cfg_attr(not(feature = "slow-tests"), ignore)]` (dense `expm` control). HARD asserts.
 
 **Reference (independent, NO spectral/split code):** assemble the dense `n^d × n^d`
@@ -207,9 +207,9 @@ is a strictly harder, strictly-approximate regime.
 
 ```bash
 # unit + reduction invariants (fast):
-cargo test -p semiflow-core tt_varcoef_spectral
+cargo test -p semiflow tt_varcoef_spectral
 # the S³ proof gate (dense expm control, slow-tests):
-cargo test -p semiflow-core --features slow-tests g_s3_varcoef_spectral
+cargo test -p semiflow --features slow-tests g_s3_varcoef_spectral
 ```
 
 ## 4. Out of scope (FAIL-LOUD — do NOT implement in this POC)

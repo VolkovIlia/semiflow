@@ -16,9 +16,9 @@ Domain [-2,2] (not [-5,5]): same correction as g_smolyak_d6 test; N=4 with [-5,5
 gives near-zero IC values (inner pts at ±5/3 → IC≈5.6e-8, essentially zero).
 
 GOLDEN produced by:
-  cargo test --package semiflow-core --test binding_smolyak_parity \\
+  cargo test --package semiflow --test binding_smolyak_parity \\
              --features slow-tests -- --nocapture
-(crates/semiflow-core/tests/binding_smolyak_parity.rs, F(0)=I anchor 3.3e-15.)
+(crates/semiflow/tests/binding_smolyak_parity.rs, F(0)=I anchor 3.3e-15.)
 np.array_equal(got, GOLDEN) is EXACT bit-for-bit (float64 IEEE-754).
 Any divergence indicates a marshalling bug in the PyO3 layer.
 """
@@ -262,7 +262,7 @@ def test_size() -> None:
 #   D=6, domain=[-2,2], n_per_axis=4, tau=0.01, n_chernoff=1.
 #
 # GOLDEN_FLAT produced by:
-#   cargo test --package semiflow-core --test binding_smolyak_parity \
+#   cargo test --package semiflow --test binding_smolyak_parity \
 #              --features slow-tests -- --nocapture
 # (binding_smolyak_parity.rs, F(0)=I anchor: sup_err=3.3e-15.)
 #

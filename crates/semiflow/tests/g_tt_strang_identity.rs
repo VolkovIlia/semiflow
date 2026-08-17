@@ -26,7 +26,7 @@
 //!
 //! ## Run
 //! ```bash
-//! cargo test -p semiflow-core --test g_tt_strang_identity -- --nocapture
+//! cargo test -p semiflow --test g_tt_strang_identity -- --nocapture
 //! ```
 
 #![allow(clippy::cast_precision_loss)]

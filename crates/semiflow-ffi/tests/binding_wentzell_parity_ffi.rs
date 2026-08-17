@@ -6,7 +6,7 @@
 //!     XMIN=0.0, XMAX=10.0, N=64, `n_steps=32`, c=0.5, t=0.05, `t_offset=0.0`,
 //!     schedule `γ(t_k)=0.5+0.1·t_k`, u0=exp(-x²).
 //!   Assert that the returned evolved values are byte-identical (0 ULP) to the
-//!   CORE GOLDEN produced by `crates/semiflow-core/tests/binding_wentzell_parity.rs`.
+//!   CORE GOLDEN produced by `crates/semiflow/tests/binding_wentzell_parity.rs`.
 //!
 //! ## Why GENUINE
 //!
@@ -54,8 +54,8 @@ fn make_u0() -> Vec<f64> {
 }
 
 // ---------------------------------------------------------------------------
-// Golden (produced by crates/semiflow-core/tests/binding_wentzell_parity.rs,
-// run: cargo test -p semiflow-core --test binding_wentzell_parity -- --nocapture)
+// Golden (produced by crates/semiflow/tests/binding_wentzell_parity.rs,
+// run: cargo test -p semiflow --test binding_wentzell_parity -- --nocapture)
 // ---------------------------------------------------------------------------
 // NOTE: golden is populated by running the core test FIRST and embedding the
 // printed result vector here.  Before a production release the golden MUST be

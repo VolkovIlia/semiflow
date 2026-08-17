@@ -6,7 +6,7 @@
 //! Contract gate: `L_RESOLVENT_N64_P99` (ADR-0069, math.md §22).
 //! Properties entry: `contracts/semiflow-core.properties.yaml`.
 //!
-//! Build: `cargo build --release --example resolvent_perf -p semiflow-core`
+//! Build: `cargo build --release --example resolvent_perf -p semiflow`
 //! Smoke: `cargo run --release --example resolvent_perf -- --n-ticks 1000 --warmup-ticks 100`
 
 // Integration test: allows for numerical / binding wrapper patterns.

@@ -6,7 +6,7 @@
 # valid sympy at runtime (verified by the T_DUAL oracle below).
 """T_DUAL sympy PRE-FLIGHT oracle — forward-mode dual-number AD (v8.0.0, ADR-0133).
 
-Verifies, BEFORE the engineer writes `crates/semiflow-core/src/dual.rs`, that the
+Verifies, BEFORE the engineer writes `crates/semiflow/src/dual.rs`, that the
 forward-mode dual-number arithmetic specified in `contracts/semiflow-core.math.md`
 §46 is mathematically exact. A dual number is `Dual(value, tangent) = a + ε·b`
 with the nilpotent unit `ε² = 0`. Carrying `b = dF/dθ` in the tangent slot makes
@@ -51,7 +51,7 @@ and exits 1 on failure.
 References:
   - ADR-0133 §"Decision" — Dual<F>: SemiflowFloat + blanket ChernoffFunction<Dual<F>>.
   - contracts/semiflow-core.math.md §46 (NORMATIVE — dual-number forward AD).
-  - crates/semiflow-core/src/float.rs (SemiflowFloat: Float + … bound surface).
+  - crates/semiflow/src/float.rs (SemiflowFloat: Float + … bound surface).
   - num_traits::Float (the transcendental ops Dual<F> must forward).
 """
 

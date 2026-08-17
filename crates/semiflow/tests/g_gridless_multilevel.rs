@@ -58,7 +58,7 @@
 //!    same as the flat estimator — no structural advantage from the multilevel topology.
 //!
 //! ## Run:
-//!   cargo test -p semiflow-core --features slow-tests \
+//!   cargo test -p semiflow --features slow-tests \
 //!     --test `g_gridless_multilevel` -- --ignored --nocapture
 
 #![cfg(feature = "slow-tests")]

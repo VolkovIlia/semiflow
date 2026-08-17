@@ -15,7 +15,7 @@
 //!
 //! Run (quick smoke):
 //! ```sh
-//! cargo bench -p semiflow-core --features parallel,simd \
+//! cargo bench -p semiflow --features parallel,simd \
 //!     --bench ns2d_aniso_parallel -- --quick
 //! ```
 //! Results land in `target/criterion/ns2d_aniso_parallel/`.

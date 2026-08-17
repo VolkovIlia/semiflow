@@ -6,7 +6,7 @@ TRUE coupled semigroup e^{TL}u0 a FIXABLE cross-term scaling bug, or a FUNDAMENT
 obstruction of the integer-shift Chernoff structure?
 
 This script faithfully replicates the Rust CoupledTtChernoff::step algorithm
-(crates/semiflow-core/src/tt_coupled.rs) on the DENSE n^d tensor (small n,d) — NOT
+(crates/semiflow/src/tt_coupled.rs) on the DENSE n^d tensor (small n,d) — NOT
 an explicit-Euler stand-in — and measures the error vs the analytic correlated-
 Gaussian semigroup under tau-refinement at FIXED fine dx, for THREE coupling
 scalings:

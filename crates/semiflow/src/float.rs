@@ -1,4 +1,4 @@
-//! Sealed scalar-float trait used throughout `semiflow-core`.
+//! Sealed scalar-float trait used throughout `semiflow`.
 //!
 //! [`SemiflowFloat`] bundles the exact bounds required by every generic Chernoff
 //! implementation. Only `f32` and `f64` implement the trait (explicit `impl`
@@ -20,7 +20,7 @@ use num_traits::Float;
 // Trait
 // ---------------------------------------------------------------------------
 
-/// Sealed scalar-float trait: the set of types accepted by generic `semiflow-core` types.
+/// Sealed scalar-float trait: the set of types accepted by generic `semiflow` types.
 ///
 /// ## Sealed design (ADR-0025, v0.9.0 Block D pilot)
 ///

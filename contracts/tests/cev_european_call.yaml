@@ -400,7 +400,7 @@ implementation_notes:
         assert!(slope <= -0.95, "G_real_world_3: slope = {slope} > -0.95");
     }
 
-  test_file: "crates/semiflow-core/tests/cev_european_call.rs"
+  test_file: "crates/semiflow/tests/cev_european_call.rs"
   estimated_loc: "~150 (test) + ~40 (noncentral_chi2_cdf helper) + ~30 (schroder_call helper) = ~220 LoC"
   estimated_wall_clock: "~5-30 s on a modern x86 (256 steps × 512 nodes × Strang × 2 helpers)"
 

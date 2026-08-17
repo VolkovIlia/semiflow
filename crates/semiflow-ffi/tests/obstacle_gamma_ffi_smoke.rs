@@ -4,7 +4,7 @@
 //! ## Cross-check methodology
 //!
 //! The core `binding_obstacle_gamma_parity` integration test (crate
-//! `semiflow-core/tests/binding_obstacle_gamma_parity.rs`) establishes
+//! `crates/semiflow/tests/binding_obstacle_gamma_parity.rs`) establishes
 //! the canonical golden: for a perpetual-put value field on `[0,3]`
 //! with `N=64` nodes and obstacle `g = K − S`:
 //!   - `count > 0` (some interior nodes defined).

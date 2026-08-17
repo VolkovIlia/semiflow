@@ -22,7 +22,7 @@
 //! (~1.6e-7 per step, ~8e-6 total at n=50) is below 5e-4. For a systematic
 //! slope test see `tests/strang_advdiff_2d.rs` (slow-tests, N=1000, n up to 256).
 //!
-//! Run with:  `cargo run --release --example heat_2d_demo -p semiflow-core`
+//! Run with:  `cargo run --release --example heat_2d_demo -p semiflow`
 
 use semiflow::{ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D};
 
@@ -76,7 +76,7 @@ fn run(n: usize) -> f64 {
 }
 
 fn print_header() {
-    println!("=== semiflow-core v0.5.0 — 2D heat kernel demo ===");
+    println!("=== semiflow v0.5.0 — 2D heat kernel demo ===");
     println!();
     println!("PDE:    ∂_t u = ½(∂_xx + ∂_yy)u");
     println!("IC:     u(0,x,y) = exp(-(x² + y²))");

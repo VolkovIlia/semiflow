@@ -1,7 +1,21 @@
-# cargo-semver-checks allowlist for semiflow-core v2.0.0 (Wave 3, ADR-0043).
+# ⚠ INERT — THIS FILE IS NOT READ BY ANYTHING. Audited 2026-08-17.
 #
-# These are INTENTIONAL breaking changes mandated by the Wave 3 MAJOR version
-# bump from v1.x to v2.0.0. Each entry documents the rationale.
+# Two independent reasons, either one sufficient:
+#   1. `cargo-semver-checks` does not read `.cargo/semver-checks-allowlist.toml`.
+#      It has no such config path; suppressions go in `[package.metadata.
+#      semver-checks]` in the crate's Cargo.toml, or via CLI flags.
+#      `.github/workflows/semver.yml` runs a bare
+#      `cargo semver-checks check-release -p semiflow` and passes no allowlist.
+#   2. The `[package.semiflow-core]` key below names a package that no longer
+#      exists — the crate was renamed `semiflow-core` -> `semiflow` in the
+#      SemiFlow rebrand, so the section would not match even if it were read.
+#
+# The key was deliberately NOT renamed to `semiflow`: doing so would make the
+# file look wired up while it stayed just as inert. DO NOT add entries here
+# expecting them to suppress a semver failure — they will not.
+#
+# Kept as the historical record of the v1.x -> v2.0.0 (Wave 3) intentional
+# breaking changes, which are the entries below.
 #
 # Reference: docs/adr/0043-state-trait-three-layer-split.md
 

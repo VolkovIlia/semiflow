@@ -393,7 +393,7 @@ fn print_diag_summary(ns_f: &[f64], errs: &[f64]) {
 /// OLS slope (expected ≈ -6, the true asymptotic order). Asserts NOTHING.
 ///
 /// Run ONCE via:
-/// `RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core \
+/// `RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
 ///   --features parallel,simd,slow-tests --release \
 ///   --test convergence_rate_6th_2d -- --ignored \
 ///   g3_6_2d_regime_map_diagnostic --nocapture`

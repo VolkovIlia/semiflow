@@ -222,9 +222,9 @@ def test_killed_bad_t() -> None:
 #   domain [-10, 10], N=64, n_chernoff=32, t=0.05, theta=0.5, u0=exp(-x²).
 #
 # GOLDEN arrays were produced by:
-#   cargo test --package semiflow-core --test binding_greeks_parity \
+#   cargo test --package semiflow --test binding_greeks_parity \
 #              print_golden -- --nocapture
-# (crates/semiflow-core/tests/binding_greeks_parity.rs, verified vs Richardson FD)
+# (crates/semiflow/tests/binding_greeks_parity.rs, verified vs Richardson FD)
 #
 # np.array_equal(got, GOLDEN) is EXACT bit-for-bit (float64 IEEE-754).
 # Any divergence indicates a marshalling bug in the PyO3 layer.

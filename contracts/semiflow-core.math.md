@@ -618,7 +618,7 @@ $$
 i.e., $D(\tau) = e^{\tau A} + O(\tau^3)$ — **local order 2 in time**
 (equivalently, $D'(0) = A$ and $D''(0) = A^2$ both match $e^{\tau A}$).
 
-The v0.2.0 implementation `crates/semiflow-core/src/diffusion.rs:162`
+The v0.2.0 implementation `crates/semiflow/src/diffusion.rs:162`
 evaluates `a` only at the central node `x_i`, which is the correct
 choice for constant `a` (every midpoint coincides) but produces an
 $O(\tau^2)$ local error for variable `a(x)` because the shift scales
@@ -2417,7 +2417,7 @@ QuinticHermite combination is the unique minimal set that delivers genuine dx⁶
 
 > **Status: NORMATIVE for v4.2 release.** Architectural retrofit only — the
 > `InterpKind::QuinticHermite` kernel and its `sample_quintic_1d` impl in
-> `crates/semiflow-core/src/grid_quintic.rs` (208 LoC, sympy-verified via
+> `crates/semiflow/src/grid_quintic.rs` (208 LoC, sympy-verified via
 > `QHerm5_partition` / `QHerm5_endpoints` / `QHerm5_consistency` / `QHerm5_order`)
 > are unchanged from v0.7.0 (§9.2.6). Path ε only changes WHICH kernels opt in.
 
@@ -2476,7 +2476,7 @@ $$
 y_k = \cos(k\pi / M), \qquad x_k = \tfrac{x_{\max} + x_{\min}}{2} + \tfrac{x_{\max} - x_{\min}}{2}\, y_k, \qquad k = 0, 1, \ldots, M.
 $$
 
-Nodes precomputed as `const` arrays for $M \in \{8, 16, 32, 64, 128, 256, 512\}$ in `crates/semiflow-core/src/grid_chebyshev_nodes.rs` (~50 LoC; one-time compile-time cost). Default $M = 64$ per ADR-0090 engineer Wave AC1; configurable via `.with_chebyshev_sampling(m: usize)` builder.
+Nodes precomputed as `const` arrays for $M \in \{8, 16, 32, 64, 128, 256, 512\}$ in `crates/semiflow/src/grid_chebyshev_nodes.rs` (~50 LoC; one-time compile-time cost). Default $M = 64$ per ADR-0090 engineer Wave AC1; configurable via `.with_chebyshev_sampling(m: usize)` builder.
 
 **Barycentric Lagrange interpolation** (Berrut-Trefethen 2004 *SIAM Review* 46:501, formula 5.1; NORMATIVE):
 
@@ -4287,7 +4287,7 @@ $$
 
 This is the **inductive extension** of the v0.5.0 2D layout invariant I-T1
 ($\mathrm{idx}(i, j) = j \cdot nx + i$, x-fastest; see
-`crates/semiflow-core/src/grid2d.rs:7-8`): adding a Z axis prepends a
+`crates/semiflow/src/grid2d.rs:7-8`): adding a Z axis prepends a
 $k \cdot nx \cdot ny$ stride while preserving the (i, j) layout of each
 Z-slice as a v0.5.0 `GridFn2D`.
 
@@ -4813,7 +4813,7 @@ where `W` is the adjacency matrix `W[i,j] = w(i,j)` for `(i,j) ∈ E`, zero othe
 | `col_idx`   | `Vec<u32>`     | `nnz`    | Each row's entries sorted ascending; no duplicate column in a row |
 | `vals`      | `Vec<F>`       | `nnz`    | All finite (`f64::is_finite`); all `col_idx[k] < N` |
 
-**Symmetric storage**: each undirected edge `(u, v)` contributes two entries — `(u, v)` in row `u` and `(v, u)` in row `v`. Hence `nnz = 2|E| + N` (off-diagonal pairs + diagonal entries). **Diagonal-last invariant**: for each row `i`, the diagonal entry `L_G[i, i] = deg_w(i)` is stored as the last element in the row's slice (column `i` is the largest column index in the row after sorting, guaranteed because `L_G[i, j] ≠ 0` only for `j ∈ N(i) ∪ {i}` and we require `j < i` for at least one neighbour or the diagonal stands alone). Implementation: `crates/semiflow-core/src/graph.rs` `Laplacian::from_edges`.
+**Symmetric storage**: each undirected edge `(u, v)` contributes two entries — `(u, v)` in row `u` and `(v, u)` in row `v`. Hence `nnz = 2|E| + N` (off-diagonal pairs + diagonal entries). **Diagonal-last invariant**: for each row `i`, the diagonal entry `L_G[i, i] = deg_w(i)` is stored as the last element in the row's slice (column `i` is the largest column index in the row after sorting, guaranteed because `L_G[i, j] ≠ 0` only for `j ∈ N(i) ∪ {i}` and we require `j < i` for at least one neighbour or the diagonal stands alone). Implementation: `crates/semiflow/src/graph.rs` `Laplacian::from_edges`.
 
 The CSR layout is immutable post-assembly (no in-place re-weighting after construction). This is a NORMATIVE contract: code that relies on mutating `row_ptr`, `col_idx`, or `vals` after `Laplacian::from_edges` returns invokes undefined behaviour from `semiflow-core`'s perspective.
 
@@ -4850,7 +4850,7 @@ The CSR layout is immutable post-assembly (no in-place re-weighting after constr
 S(τ) : ℝ^N → ℝ^N,    S(τ) f = f − τ L_G f = (I − τ L_G) f.
 ```
 
-This defines `GraphHeatChernoff<F>::apply_into(scratch, dst, tau, src)` in `crates/semiflow-core/src/graph_heat.rs`. The function signature is NORMATIVE: `apply_into` takes a mutable scratch slice, mutable destination slice, step `τ`, and immutable source slice, and writes `(I − τ L_G) src` into `dst` in a single CSR matrix-vector product. No heap allocation occurs inside `apply_into`.
+This defines `GraphHeatChernoff<F>::apply_into(scratch, dst, tau, src)` in `crates/semiflow/src/graph_heat.rs`. The function signature is NORMATIVE: `apply_into` takes a mutable scratch slice, mutable destination slice, step `τ`, and immutable source slice, and writes `(I − τ L_G) src` into `dst` in a single CSR matrix-vector product. No heap allocation occurs inside `apply_into`.
 
 **Hypothesis verification for the Chernoff product formula (§12.2):**
 
@@ -4903,7 +4903,7 @@ This sub-section mirrors ADR-0048 verbatim so that `contracts/semiflow-core.math
 
 **Symmetric storage convention.** Each undirected edge `(u, v) ∈ E` is stored twice: once as off-diagonal entry `(u, v)` in row `u` and once as `(v, u)` in row `v`. Total `nnz = 2|E| + N` (two off-diagonal entries per edge plus `N` diagonal entries).
 
-**Relationship to §12.1 definition.** The CSR `vals` array encodes exactly the matrix `L_G` defined in §12.1: negative edge weights on off-diagonal positions and positive weighted degrees on the diagonal. A read of `vals[k]` for a diagonal position always yields a non-negative value; a read for an off-diagonal position always yields a non-positive value (because `w > 0`). These sign conventions are NORMATIVE and tested by `crates/semiflow-core/src/graph.rs` unit tests `test_laplacian_sign_convention` and `test_csr_diagonal_last`.
+**Relationship to §12.1 definition.** The CSR `vals` array encodes exactly the matrix `L_G` defined in §12.1: negative edge weights on off-diagonal positions and positive weighted degrees on the diagonal. A read of `vals[k]` for a diagonal position always yields a non-negative value; a read for an off-diagonal position always yields a non-positive value (because `w > 0`). These sign conventions are NORMATIVE and tested by `crates/semiflow/src/graph.rs` unit tests `test_laplacian_sign_convention` and `test_csr_diagonal_last`.
 
 ---
 
@@ -5423,7 +5423,7 @@ S_6(τ) f = Σ_{k=0}^{6} (−τ L_G)^k / k! · f
           + (τ⁴/24) L_G⁴ f − (τ⁵/120) L_G⁵ f + (τ⁶/720) L_G⁶ f.
 ```
 
-This defines `GraphHeat6thChernoff<F: SemiflowFloat>::apply_into` in `crates/semiflow-core/src/graph_heat6.rs`. Two ping-pong scratch buffers (`ScratchPool::take_vec`/`return_vec`) carry the SpMV intermediates `L_G^k · src` for `k ∈ {1, …, 6}`; zero heap allocation in steady state.
+This defines `GraphHeat6thChernoff<F: SemiflowFloat>::apply_into` in `crates/semiflow/src/graph_heat6.rs`. Two ping-pong scratch buffers (`ScratchPool::take_vec`/`return_vec`) carry the SpMV intermediates `L_G^k · src` for `k ∈ {1, …, 6}`; zero heap allocation in steady state.
 
 ### §19.2 — Order verification (CITATION)
 
@@ -5475,7 +5475,7 @@ Let `t ↦ Arc<Laplacian<F>>` be the `LaplacianAtTime<F>` closure (§14.1) and l
 L_a(t) : ℝ^N → ℝ^N,    [L_a(t) v]_i = sqrt(a_i(t)) · [L_G(t) (sqrt(a(t)) ⊙ v)]_i.
 ```
 
-This is exactly the operator-form `apply_la_on_slice` (`crates/semiflow-core/src/graph_var_coef.rs:208`) with the diagonal `sqrt(a(t))` and the Laplacian `L_G(t)` both sampled at time `t`. `L_a(t)` is symmetric positive semidefinite for every `t` (Schur-product preservation of PSD; Horn-Johnson 2013 §7.5).
+This is exactly the operator-form `apply_la_on_slice` (`crates/semiflow/src/graph_var_coef.rs:208`) with the diagonal `sqrt(a(t))` and the Laplacian `L_G(t)` both sampled at time `t`. `L_a(t)` is symmetric positive semidefinite for every `t` (Schur-product preservation of PSD; Horn-Johnson 2013 §7.5).
 
 ### §20.2 — Magnus K=4 with GL₂ sampling (CITATION + NORMATIVE)
 
@@ -5603,7 +5603,7 @@ All six policies satisfy the I5 strict-interior agreement invariant (§3.5; for 
 
 ### §3.5.bis.4 — Module relocation note (NORMATIVE — ADR-0068)
 
-The implementation of `BoundaryPolicy`, `BoundaryHit`, `bc_index`, `bc_value`, `bc_value_generic`, and `reflect_index` MOVES from `crates/semiflow-core/src/grid.rs` to a NEW module `crates/semiflow-core/src/boundary.rs` at v2.6. Public re-exports preserve the v2.5.1 import path (`use semiflow_core::BoundaryPolicy`); no user code is affected. Rationale: `grid.rs` is at 715/715 LoC against its Override #1 carve-out; the v2.6 widening would force another cap expansion. Extracting `boundary.rs` (estimated ≤500 LoC, within default suckless cap) shrinks `grid.rs` back below the original 700 cap and obviates further carve-out expansion. See ADR-0068 §"Consequences" and constitution amendment v1.6.1 → v1.6.2.
+The implementation of `BoundaryPolicy`, `BoundaryHit`, `bc_index`, `bc_value`, `bc_value_generic`, and `reflect_index` MOVES from `crates/semiflow/src/grid.rs` to a NEW module `crates/semiflow/src/boundary.rs` at v2.6. Public re-exports preserve the v2.5.1 import path (`use semiflow_core::BoundaryPolicy`); no user code is affected. Rationale: `grid.rs` is at 715/715 LoC against its Override #1 carve-out; the v2.6 widening would force another cap expansion. Extracting `boundary.rs` (estimated ≤500 LoC, within default suckless cap) shrinks `grid.rs` back below the original 700 cap and obviates further carve-out expansion. See ADR-0068 §"Consequences" and constitution amendment v1.6.1 → v1.6.2.
 
 ---
 
@@ -5794,8 +5794,8 @@ The default-if-absent rule is `advisory: true` (backward-compatible: any v2.6 en
 
 **v2.7 promotes one gate to blocking**: `L_CEV_PTICK` `percentile_budgets_ns.i7-12700K.advisory: true → false` (explicit edit in `properties.yaml`, recorded in CHANGELOG). The other profiles (`m2-pro`, `aws-c7g-large`) remain `advisory: true` placeholders until calibration samples are collected. The v2.7 release also adds:
 
-- `L_RESOLVENT_N64_P99` — new gate per ADR-0069 for the Laplace-Chernoff resolvent (`crates/semiflow-core/examples/resolvent_perf.rs`). `i7-12700K.advisory: true` in v2.7.0-rc.1 (one RC cycle of calibration); `advisory: false` in v2.7.0 final.
-- `L_HESTON_PTICK` — new gate for the HFT Heston pricer side-track example (`crates/semiflow-core/examples/heston_pricer.rs`). `i7-12700K.advisory: true` throughout v2.7 (calibration deferred to v2.8 if Heston usage stabilises). No promotion in v2.7.
+- `L_RESOLVENT_N64_P99` — new gate per ADR-0069 for the Laplace-Chernoff resolvent (`crates/semiflow/examples/resolvent_perf.rs`). `i7-12700K.advisory: true` in v2.7.0-rc.1 (one RC cycle of calibration); `advisory: false` in v2.7.0 final.
+- `L_HESTON_PTICK` — new gate for the HFT Heston pricer side-track example (`crates/semiflow/examples/heston_pricer.rs`). `i7-12700K.advisory: true` throughout v2.7 (calibration deferred to v2.8 if Heston usage stabilises). No promotion in v2.7.
 
 Schema-version impact: `properties.yaml` 0.8.0 → 0.9.0. The bump is justified by the load-bearing semantics change to an existing field, not by new schema keys (the field already existed in v2.6 but had no enforcement effect).
 
@@ -6043,7 +6043,7 @@ The library uses **$N = 32$**, giving:
 $$
 \widetilde{R}_n(\lambda) g \;\approx\; \frac{1}{\lambda} \sum_{k=0}^{31} w_k \cdot (C(s_k/(\lambda n)))^n\, g. \tag{22.6}
 $$
-The 32 nodes and weights are stored as `const [F; 32]` arrays in `crates/semiflow-core/src/resolvent.rs` (no_std-safe, zero allocation, ABI-stable). The choice $N = 32$ is justified by Trefethen 2008 (Theorem 4.1): for analytic integrands on $[0, \infty)$, Gauss-Laguerre converges super-algebraically with $N$; 32 nodes suffice for relative accuracy $\le 10^{-10}$ on the heat-equation core (verified empirically — see G24).
+The 32 nodes and weights are stored as `const [F; 32]` arrays in `crates/semiflow/src/resolvent.rs` (no_std-safe, zero allocation, ABI-stable). The choice $N = 32$ is justified by Trefethen 2008 (Theorem 4.1): for analytic integrands on $[0, \infty)$, Gauss-Laguerre converges super-algebraically with $N$; 32 nodes suffice for relative accuracy $\le 10^{-10}$ on the heat-equation core (verified empirically — see G24).
 
 **Per-call cost**: $N \cdot n$ evaluations of $C$ (32 Chernoff steps per node × $n$ nodes per quadrature point). At $N = 32$, $n = 64$: $32 \cdot 64 = 2048$ inner Chernoff steps per $\widetilde{R}_n(\lambda)\, g$ call. The L-gate `L_RESOLVENT_N64_P99` benches this cost on a tight per-call loop.
 
@@ -6905,7 +6905,7 @@ $$
 P_2[A] f \;=\; \sum_{j=1}^{6} c_j \cdot A^{k_{1,j}} \cdot a^{(k_{2,j})} \cdot A^{k_{3,j}} f, \tag{27.3}
 $$
 
-where each monomial encodes a triple-index $(k_{1,j}, k_{2,j}, k_{3,j})$ with $k_{1,j} + k_{2,j} + k_{3,j} = 6$ (the total degree). The 6 entries cover all τ²-leading-order terms in the Taylor expansion of $(F(\tau/n))^n f - \exp(\tau A) f$ that survive the cancellation requirement of Theorem 27.1. The exact monomial table is sympy-derived (T23N script — see §27.5) and shipped verbatim as a const-array in `crates/semiflow-core/src/diffusion4_zeta4.rs`:
+where each monomial encodes a triple-index $(k_{1,j}, k_{2,j}, k_{3,j})$ with $k_{1,j} + k_{2,j} + k_{3,j} = 6$ (the total degree). The 6 entries cover all τ²-leading-order terms in the Taylor expansion of $(F(\tau/n))^n f - \exp(\tau A) f$ that survive the cancellation requirement of Theorem 27.1. The exact monomial table is sympy-derived (T23N script — see §27.5) and shipped verbatim as a const-array in `crates/semiflow/src/diffusion4_zeta4.rs`:
 
 ```rust
 // 6-monomial closed-form of P_2[A] for the v0.6.0 9-point stencil + variable a.
@@ -7598,7 +7598,7 @@ Empirical $\log$-$\log$ OLS slope of $\mathrm{err}_n$ vs $n$ MUST be $\le -1.95$
 - **Slope $\in (-1.95, -1.0)$**: partial confirmation → ship as `experimental`; ADR amendment downgrading G_HORM_ENGEL gate to ADVISORY.
 - **Slope $> -1.0$ or flat**: hypothesis refuted → Outcome B fallback per ADR-0095 §"Consequences"; reaffirm Item 3 STILL_OPEN; defer Rothschild-Stein lifting path to v5.x.
 
-Test file: `crates/semiflow-core/tests/hormander_engel_slope.rs` (Engineer Wave; feature `slow-tests`; mirror `hormander_heisenberg_slope.rs` verbatim). Memory: 32⁴ × 8 B ≈ 8 MB per state. Wallclock estimate: ~30 s per probe on i7-12700K (4 probes × 2 grids ≈ 4 min; well under existing test-flagship budget).
+Test file: `crates/semiflow/tests/hormander_engel_slope.rs` (Engineer Wave; feature `slow-tests`; mirror `hormander_heisenberg_slope.rs` verbatim). Memory: 32⁴ × 8 B ≈ 8 MB per state. Wallclock estimate: ~30 s per probe on i7-12700K (4 probes × 2 grids ≈ 4 min; well under existing test-flagship budget).
 
 #### §28.bis.5 — Limitations and future research
 
@@ -9137,10 +9137,10 @@ The 12-month deprecation window runs v3.0.0 (release 2026-05-27) → v4.0.0 (rel
 
 | Path | Kind | Removed because |
 |---|---|---|
-| `crates/semiflow-core/src/v2_compat.rs` (~120 LoC) | FILE | v3.0 ADR-0074 deprecation shim — 12-month window expired |
-| `crates/semiflow-core/Cargo.toml` `[features] v2_compat = []` | FEATURE FLAG | Feature is no longer needed (the gated module is removed) |
-| `crates/semiflow-core/Cargo.toml` `default = ["v2_compat"]` | DEFAULT-FEATURE | No-op after the feature is removed; explicitly deleted for cleanliness |
-| `crates/semiflow-core/src/lib.rs` `#[cfg(feature = "v2_compat")] pub use v2_compat::*;` | RE-EXPORT | Symbols are no longer reachable |
+| `crates/semiflow/src/v2_compat.rs` (~120 LoC) | FILE | v3.0 ADR-0074 deprecation shim — 12-month window expired |
+| `crates/semiflow/Cargo.toml` `[features] v2_compat = []` | FEATURE FLAG | Feature is no longer needed (the gated module is removed) |
+| `crates/semiflow/Cargo.toml` `default = ["v2_compat"]` | DEFAULT-FEATURE | No-op after the feature is removed; explicitly deleted for cleanliness |
+| `crates/semiflow/src/lib.rs` `#[cfg(feature = "v2_compat")] pub use v2_compat::*;` | RE-EXPORT | Symbols are no longer reachable |
 | `pub type ChernoffSemigroup<C> = Evolver<C, f64>` (in v2_compat) | TYPE ALIAS | v3.0 deprecation note "Hard-removed at v4.0" honoured |
 | `pub trait ChernoffFunctionApplyShim<F>` (in v2_compat) | TRAIT | v3.0 deprecation note "Hard-removed at v4.0" honoured |
 | `impl<C, F> ChernoffFunctionApplyShim<F> for C` (blanket impl) | BLANKET IMPL | Removed with the trait |
@@ -9390,8 +9390,8 @@ The old v4.8 GL32 `resolvent_quad.rs` table is no longer used for the density qu
 
 ### §37.7 — Implementation map (NORMATIVE library)
 
-- **File**: `crates/semiflow-core/src/subordinated.rs`.
-- **Quadrature infrastructure**: `crates/semiflow-core/src/gen_quadrature.rs` (Golub-Welsch + generalized Gauss-Laguerre; extracted at v6.2.4).
+- **File**: `crates/semiflow/src/subordinated.rs`.
+- **Quadrature infrastructure**: `crates/semiflow/src/gen_quadrature.rs` (Golub-Welsch + generalized Gauss-Laguerre; extracted at v6.2.4).
 - **Trait**: `LevySubordinator<F>` (sibling-to-`BoundedGeometryManifold<F>` pattern from ADR-0071).
 - **Concrete impls**: `StableSubordinator<F>` (CORRECT), `GammaSubordinator<F>` (CORRECT), `InverseGaussianSubordinator<F>` (KNOWN-FAILING — IG deferred).
 - **Generic wrapper**: `SubordinatedChernoff<C, S, F>` where `C: ChernoffFunction<F>, S: LevySubordinator<F>` — itself impl `ChernoffFunction<F>` with `order() = 1`.
@@ -9546,7 +9546,7 @@ The engineer wave at `.dev-docs/specs/adjoint-fp-wave.md` documents the `Adjoint
 - **Wrapper**: `AdjointFokkerPlanckChernoff<C, F, D>` is generic over forward `C : Adjointable<F, D>` (compositional per Theorem A.2).
 - **Super-trait**: `Adjointable<F, D>` with blanket impl for every forward `ChernoffFunction<F>` via the Theorem 4 dual-pairing form.
 - **Engineer-wave gate**: `G_ADJOINT_FP_ORDER` (RELEASE_BLOCKING; vague-convergence slope ≤ −0.95 on iterated Brownian-motion characteristic-function self-convergence at `n ∈ {16, 32, 64, 128, 256}` PLUS a discrete-adjoint-identity smoke ⟨L*u,v⟩=⟨u,Lv⟩ < 1e-12). Materialises the v6.0.0 RESERVED `G_ADJOINT_FP_TIGHTNESS_VAGUE` stub.
-- **Module**: `crates/semiflow-core/src/adjoint_fp.rs` (Cohort 13 pre-allocated this name).
+- **Module**: `crates/semiflow/src/adjoint_fp.rs` (Cohort 13 pre-allocated this name).
 - **v8.0.0 status (Phase-4 item C2, IMPLEMENTING — ADR-0107 AMENDMENT 1):** the user opted the engineer wave into v8.0.0 (synergy with F1 differentiable Chernoff — a measure-side adjoint complements the `Dual<F>` function-side forward-mode AD for sensitivity workflows). The §38 math (Lemmas A.1, A.3; Theorem A.2; mass conservation; Brownian example) and the `T_ADJOINT_FP_TIGHTNESS` sympy oracle (6/6 PASS, re-confirmed 2026-06-07) are UNCHANGED — no new math or oracle is authored at v8.0.0; the wave materialises the existing blueprint as Rust + the `G_ADJOINT_FP_ORDER` numerical gate. The Dirac-count $4^{n}$ blow-up (spec §"Per-step cost") is sidestepped at the gate by the characteristic-function analytical Dirac-fold (⟨cos(ξx), Σwᵢδ_{xᵢ}⟩ = Σwᵢcos(ξxᵢ), O(n_diracs) cost); long-time applications use the Gaussian-smoothed background + weighted-Voronoi reduction. NOT confused with the shipped `AdjointChernoff` (§15, ADR-0114): that is the dual semigroup $S^*(\tau)=\exp(\tau A^T)$ on the SAME $L^2$/$C_b$ function space (backward Cauchy problem); §38 is the dual on the MEASURE space $M(\mathbb{R}^d)$ with a `MeasureState` — a different object.
 
 ### §38.10 — Future extensions (NORMATIVE library — out-of-scope notes)
@@ -9797,7 +9797,7 @@ PRE-FLIGHT RESULT 2026-05-30: 6/6 PASS. Integrated into the xtask test-fast symp
 - Berrut & Trefethen 2004 *SIAM Review* 46:501 — barycentric Lagrange + Lebesgue constant theorem.
 - Fornberg 1988 *Math. Comp.* 51:699 — high-order central FD stencil tables (used for f', f'', f''' computation inside `sample_septic_1d`).
 - `scripts/verify_septic_hermite_weights.py` — PRE-FLIGHT T_SEPTIC_HERMITE sympy oracle (6/6 PASS 2026-05-30; ships as the T_SEPTIC_HERMITE invocation).
-- `crates/semiflow-core/src/grid_chebyshev_septic.rs` — Rust implementation (engineer wave authorised; landing at v6.0.0 tag).
+- `crates/semiflow/src/grid_chebyshev_septic.rs` — Rust implementation (engineer wave authorised; landing at v6.0.0 tag).
 - `.dev-docs/specs/septic-hermite-wave.md` — engineer-wave implementation specification.
 
 ## §41 — Pre-asymptotic order demonstration framework (v6.0.0 BREAKING window #3 sibling, ADR-0110, NORMATIVE library; CITATION mathematics)
@@ -9913,7 +9913,7 @@ PRE-FLIGHT RESULT 2026-05-30: **6/6 PASS**. Integrated into the xtask test-fast 
 - math.md §39.2 — saturation formula (NORMATIVE; the shared mathematical kernel for §39 saturated regime + §41 pre-asymp regime).
 - math.md §40 — SepticHermite virtual-node sampler (NORMATIVE; supplies `φ = 1.49·10⁻¹²` used by §41.2 numerical instantiation).
 - `scripts/verify_zeta_truthful_order.py` — PRE-FLIGHT T_ZETA_TRUTHFUL_ORDER sympy oracle (6/6 PASS 2026-05-30; ships as the T_ZETA_TRUTHFUL_ORDER invocation).
-- `crates/semiflow-core/tests/zeta{4,6,8}_truthful_order.rs` — Rust gate implementations (engineer wave authorised; landing at v6.0.0 tag).
+- `crates/semiflow/tests/zeta{4,6,8}_truthful_order.rs` — Rust gate implementations (engineer wave authorised; landing at v6.0.0 tag).
 - `.dev-docs/specs/septic-hermite-wave.md` — AMENDED engineer-wave implementation specification (delivers ADR-0109 + ADR-0110 jointly).
 
 ## §41.bis — OCTONIC-Hermite degree-9 virtual-node sampler (v7.0.0 KEYSTONE, ADR-0117, NORMATIVE library; CITATION mathematics)
@@ -10333,14 +10333,14 @@ halving. Oracle `scripts/verify_adjoint_state_sensitivity.py`
 - Y. Cao, S. Li, L. Petzold, R. Serban, *Adjoint sensitivity analysis for ODEs/DAEs*, SIAM J. Sci. Comput. 24 (2003) 1076–1089.
 - §42 — exact truncated-Magnus state-adjoint (enabling fact for §43.4).
 - ADR-0115 — contract authority + in-core-math vs revssm-ML boundary.
-- `crates/semiflow-core/src/diffusion4_zeta4.rs:18-20` — documents the τ·ρ ≈ 122 pre-asymp-temporal context.
+- `crates/semiflow/src/diffusion4_zeta4.rs:18-20` — documents the τ·ρ ≈ 122 pre-asymp-temporal context.
 
 ---
 
 ## §44 — Projective-splitting obstacle evolver / variational inequalities (v6.3, ADR-0116, NORMATIVE library; CITATION mathematics)
 
 > Scope: this section is the normative basis for the `ObstacleChernoff` kernel
-> family (`crates/semiflow-core/src/obstacle.rs`) and its active-set adjoint
+> family (`crates/semiflow/src/obstacle.rs`) and its active-set adjoint
 > primitive. It composes the library's *linear* Chernoff propagators (§1, §3, §9,
 > …) with a *nonlinear* metric projection to solve obstacle problems /
 > variational inequalities (VI) / optimal-stopping problems. The framing is that
@@ -11124,7 +11124,7 @@ convergence gate. No IC change required.
 ## §45 — Action-of-exponential `e^{τA}·v` via scaled truncated Taylor (Al-Mohy & Higham 2011 `expmv`) — `DiffusionExpmvChernoff` (v7.0, ADR-0121, NORMATIVE library; CITATION mathematics)
 
 > Scope: this section is the normative basis for the `DiffusionExpmvChernoff`
-> kernel (`crates/semiflow-core/src/expmv.rs`). It is an ADDITIVE tolerance-driven
+> kernel (`crates/semiflow/src/expmv.rs`). It is an ADDITIVE tolerance-driven
 > ζ⁸-class propagator that REVIVES the ζ⁸-accuracy goal closed for the *operator-
 > level Padé* kernel by ADR-0101 (§27.quart AMENDMENT 3), via a structurally
 > different published algorithm. ADR-0101's Padé deferral is UNCHANGED — this is a
@@ -11258,7 +11258,7 @@ is INAPPLICABLE). Compare against a high-$s$ self-converged reference (mirror th
 ## §46 — Forward-mode dual-number AD over the Chernoff product structure — `Dual<F>` (v8.0.0 HEADLINE, ADR-0133, NORMATIVE library; CITATION mathematics — second S-curve)
 
 > Scope: this section is the normative basis for the `Dual<F>` scalar field
-> (`crates/semiflow-core/src/dual.rs`) and its blanket participation as the field
+> (`crates/semiflow/src/dual.rs`) and its blanket participation as the field
 > parameter of `ChernoffFunction<Dual<F>>`. It is STRICTLY ADDITIVE: no existing
 > kernel's semantics, signature, or numerical output for `F ∈ {f32, f64}` changes.
 > `Dual<F>` is a NEW member of the `SemiflowFloat` family (it satisfies every
@@ -11688,7 +11688,7 @@ The rotation-exactness of Theorem 48.1 hinges on `Q` being a **constant** orthog
 
 **Kernel:** `DynamicWentzellChernoff<C, R, F>` (module `wentzell.rs`, ADR-0151, v8.2.0 Wave-2 C-9).
 
-**Status:** NORMATIVE. Implementation: `crates/semiflow-core/src/wentzell.rs`. Gates: `G_WENTZELL_STABLE` (RELEASE_BLOCKING), `G_WENTZELL_ORDER` (RELEASE_BLOCKING), `T_WENTZELL` (NORMATIVE oracle, `scripts/wentzell_robin_stability_preflight.py`).
+**Status:** NORMATIVE. Implementation: `crates/semiflow/src/wentzell.rs`. Gates: `G_WENTZELL_STABLE` (RELEASE_BLOCKING), `G_WENTZELL_ORDER` (RELEASE_BLOCKING), `T_WENTZELL` (NORMATIVE oracle, `scripts/wentzell_robin_stability_preflight.py`).
 
 ### §49.1 — Problem setting: dynamic Wentzell/Robin BC
 
@@ -11747,7 +11747,7 @@ The SYMBOLIC witness (sympy, `τ, μ > 0`): the Cayley symbol at eigenvalue `λ 
 
 ### §49.5 — Gate G_WENTZELL_STABLE (RELEASE_BLOCKING)
 
-**File:** `crates/semiflow-core/tests/g_wentzell_stable.rs`. Feature: `slow-tests`. Function: `g_wentzell_stable` (`#[ignore]`).
+**File:** `crates/semiflow/tests/g_wentzell_stable.rs`. Feature: `slow-tests`. Function: `g_wentzell_stable` (`#[ignore]`).
 
 **Sweep:** `dx ∈ {1/16, 1/64, 1/256, 1/1024}`, `γ ∈ {0.5, 1, 4, 16}`, `κ = π/dx`, `τ = 0.4·dx²/a`.
 
@@ -11759,7 +11759,7 @@ The SYMBOLIC witness (sympy, `τ, μ > 0`): the Cayley symbol at eigenvalue `λ 
 
 ### §49.6 — Gate G_WENTZELL_ORDER (RELEASE_BLOCKING)
 
-**File:** `crates/semiflow-core/tests/g_wentzell_order.rs`. Feature: `slow-tests`. Function: `g_wentzell_order` (`#[ignore]`).
+**File:** `crates/semiflow/tests/g_wentzell_order.rs`. Feature: `slow-tests`. Function: `g_wentzell_order` (`#[ignore]`).
 
 **Method:** Self-convergence (no closed-form oracle for dynamic Wentzell BCs). Reference = N_REF = 512 Chernoff steps. Sweep `n ∈ {16, 32, 64, 128}`. Spatial probe at `x = 0.35 · DOMAIN_MAX` (non-origin, non-midpoint — symmetric-cancellation avoidance per the G24 lesson).
 
@@ -12441,7 +12441,7 @@ symbol(k_j,k_k) = c_j·σ_{D2}(k_j) + c_k·σ_{D2}(k_k) + 2r·σ_{D1}(k_j)·σ_{
 The diagonal `exp(τ_eff·symbol)` is built **once per `(pair, τ)`** before the step loop (τ constant
 within `evolve`) and reused every step. **No linear solver** (FFT is a fixed unitary + elementwise
 scalar `exp` — Theorem-6 R2 honoured throughout, coupling factor included). **The spectral R3 path is
-the shipped production implementation** (`crates/semiflow-core/src/tt_spectral.rs` +
+the shipped production implementation** (`crates/semiflow/src/tt_spectral.rs` +
 `tt_coupled_pair.rs`); the `no_lu_in_coupling` source-scan test confirms no `lu_solve_inplace` or
 `dense_expm` outside `#[cfg(test)]`. Fallback: **(R0) dense `expm(τ_eff·L_pair)` via Padé+LU** is
 exact and poly-`d` but carries an LU triangular solve per pair (R2 NOT honoured for that factor);
@@ -12533,7 +12533,7 @@ permutations (rank-O(1)) while the band-weights realise the exact displacement (
 floor (round 2) is removed by the spectral (FFT-diagonal) pair factor (round 4), which is **exact** for
 the constant-coef correlated-Gaussian class and **no-solver** (Theorem-6 R2 honoured). The `G_TT_COUPLED_EXACT` exactness gate (≤1e-12 vs independent dense `expm(τL_h^{dx})`, `d∈{3,4}`,
 `ρ≠0`) is **REINSTATED** (formerly withdrawn under the BOUNDARY verdict) and is the binding arbiter.
-The spectral R3 factor is **SHIPPED** (`crates/semiflow-core/src/tt_spectral.rs` + `tt_coupled_pair.rs`)
+The spectral R3 factor is **SHIPPED** (`crates/semiflow/src/tt_spectral.rs` + `tt_coupled_pair.rs`)
 and the gate **PASSES** (`#[ignore]`+`slow-tests` for ~140s runtime; RELEASE_BLOCKING, green). The
 "exact / no-solver / third S-curve" language is therefore **CERTIFIED** for this session.
 
@@ -12645,7 +12645,7 @@ This is honestly order-p (p=2), NOT exact: variable LEADING diffusion is provabl
 multiplier (ADR-0166 wrong-operator floor), so the gate is a **slope** gate, never an exactness gate.
 
 **§52.10.4 — Acceptance gate `G_TT_VARCOEF` (NORMATIVE — RELEASE-BLOCKING, PRE-REGISTERED).**
-File `crates/semiflow-core/tests/g_tt_varcoef.rs` (`slow-tests`, `--ignored`). Runs the new
+File `crates/semiflow/tests/g_tt_varcoef.rs` (`slow-tests`, `--ignored`). Runs the new
 `tt_varcoef::VarCoefTt` evolver **on `TtState`** for `∂_t u = Σ_j ∂_{x_j}(a_j(x_j)∂_{x_j})u`,
 `a_j(x_j) = a₀ + α·g_j(x_j)` with `g_j` a smooth low-rank profile, `d ∈ {4,6,8,10}`, `n = 32`,
 `ε_round = 1e-8`. **TWO load-bearing assertions (PASS iff BOTH):**

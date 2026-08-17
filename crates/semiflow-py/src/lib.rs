@@ -1,4 +1,4 @@
-//! `semiflow` — `PyO3` Python bindings for `semiflow-core`.
+//! `semiflow` — `PyO3` Python bindings for `semiflow`.
 //!
 //! ## Contents
 //!
@@ -35,7 +35,7 @@
 //!
 //! ## Scope (v0.9.0-beta binding-parity wave)
 //!
-//! Broad parity with `semiflow-core` across the following families:
+//! Broad parity with `semiflow` across the following families:
 //!
 //! - **1D diffusion** — `Heat1D`, `Heat1D4th/6th`, `TruncatedExp/4th`,
 //!   `DriftReaction1D`, `Shift1D`, `Strang1D`.

@@ -77,8 +77,8 @@ References:
   - math.md §27 AMENDMENT — Path β Richardson algorithm spec.
   - math.md §40.bis NEW — pure-temporal vs spatial-floor regime distinction (THIS ADR creates).
   - Galkin-Remizov 2025 *Israel J. Math.* Theorem 3.1 — m=4 Taylor tangency.
-  - crates/semiflow-core/src/diffusion4_zeta4.rs — Path β Richardson implementation.
-  - crates/semiflow-core/tests/zeta4_correction_slope_cheb.rs — empirical gate.
+  - crates/semiflow/src/diffusion4_zeta4.rs — Path β Richardson implementation.
+  - crates/semiflow/tests/zeta4_correction_slope_cheb.rs — empirical gate.
 """
 
 from __future__ import annotations

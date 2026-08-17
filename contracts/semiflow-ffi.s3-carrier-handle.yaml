@@ -17,12 +17,12 @@
 # (cbindgen reads the Rust source, not this YAML — see build-run note).
 #
 # Cross-references:
-#   - crates/semiflow-core/src/tt_chernoff.rs   — TtState, TtChernoff
-#   - crates/semiflow-core/src/tt_coupled.rs    — CoupledTtChernoff, CouplingTopology
-#   - crates/semiflow-core/src/tt_core.rs       — TtCore (rank/storage internals)
-#   - crates/semiflow-core/src/gridless.rs      — GridlessChernoff
-#   - crates/semiflow-core/src/gridless_reduce.rs — ParticleReduction
-#   - crates/semiflow-core/src/adjoint_fp.rs    — MeasureState
+#   - crates/semiflow/src/tt_chernoff.rs   — TtState, TtChernoff
+#   - crates/semiflow/src/tt_coupled.rs    — CoupledTtChernoff, CouplingTopology
+#   - crates/semiflow/src/tt_core.rs       — TtCore (rank/storage internals)
+#   - crates/semiflow/src/gridless.rs      — GridlessChernoff
+#   - crates/semiflow/src/gridless_reduce.rs — ParticleReduction
+#   - crates/semiflow/src/adjoint_fp.rs    — MeasureState
 #   - crates/semiflow-ffi/src/status.rs         — SemiflowStatus (REUSED verbatim)
 #   - crates/semiflow-ffi/src/v3.rs             — opaque-handle + catch_panic precedent
 #   - crates/semiflow-ffi/src/wentzell_ffi.rs   — flattened-schedule ABI precedent

@@ -31,8 +31,8 @@ integrity of dependencies.
 
 **In-scope (we will fix):**
 
-- Memory unsafety in `unsafe` blocks (`crates/remizov-{ffi,py,wasm}/src/**`,
-  `crates/semiflow-core/src/simd/**`; ADR-0019, `xtask check-unsafe-scope`).
+- Memory unsafety in `unsafe` blocks (`crates/semiflow-{ffi,py,wasm}/src/**`,
+  `crates/semiflow/src/simd/**`; ADR-0019, `xtask check-unsafe-scope`).
 - Panics that escape an `extern "C"` boundary (FFI). Note: `wasm-bindgen`
   deliberately routes panics to JS via `__wbindgen_throw` — this is documented
   behaviour, not a vulnerability.
@@ -71,7 +71,7 @@ integrity of dependencies.
 
 ## Update Channels
 
-- **crates.io**: `cargo update -p semiflow-core`. Security advisories on
+- **crates.io**: `cargo update -p semiflow`. Security advisories on
   RustSec (<https://rustsec.org>).
 - **PyPI**: `pip install --upgrade semiflow-py`. Security notices via
   maintainer email if a PyPI advisory is filed.

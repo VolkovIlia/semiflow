@@ -1,4 +1,4 @@
-"""Type stubs for semiflow — PyO3 bindings to semiflow-core.
+"""Type stubs for semiflow — PyO3 bindings to semiflow.
 
 These stubs mirror the actual #[pymethods] signatures defined in
 crates/semiflow-py/src/state.rs / src/error.rs / src/lib.rs.

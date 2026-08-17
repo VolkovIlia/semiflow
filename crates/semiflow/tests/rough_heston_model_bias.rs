@@ -34,7 +34,7 @@
 //!
 //! Run (warn-only, ~minutes for 1M paths):
 //! ```text
-//! RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core \
+//! RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
 //!     --features slow-tests --release --test rough_heston_model_bias \
 //!     -- --ignored --nocapture
 //! ```

@@ -39,10 +39,10 @@
 //!
 //! ```sh
 //! # Full slow-tests (G_REVERSE_AD_GRADIENT + G_REVERSE_AD_CHECKPOINT):
-//! cargo test -p semiflow-core --features slow-tests --test g_reverse_ad \
+//! cargo test -p semiflow --features slow-tests --test g_reverse_ad \
 //!     -- --ignored --nocapture
 //! # Structure gate only (test-fast, no --ignored):
-//! cargo test -p semiflow-core --test g_reverse_ad g_reverse_ad_structure \
+//! cargo test -p semiflow --test g_reverse_ad g_reverse_ad_structure \
 //!     --nocapture
 //! ```
 

@@ -141,7 +141,7 @@ fn build_json(name: &str, taus: &[f64]) -> String {
 /// Do NOT remove the `#[ignore]`: running this test automatically in CI
 /// would overwrite the golden fixture and break the bit-equality gate.
 ///
-/// Run with: `cargo test -p semiflow-core --test capture_trace_v1 -- --ignored`
+/// Run with: `cargo test -p semiflow --test capture_trace_v1 -- --ignored`
 #[test]
 #[ignore = "one-shot fixture capture: run manually, never in CI (overwrites golden fixture)"]
 fn capture_and_write_fixtures() {

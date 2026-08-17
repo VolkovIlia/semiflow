@@ -7,7 +7,7 @@
 //!     θ₀=0.5, N=64, `n_chernoff=32`, t=0.05, u0=exp(-x²), domain [-10, 10].
 //!   Assert that the returned (value, delta, gamma) triples are byte-identical
 //!   (0 ULP) to the CORE GOLDEN — the same values produced directly by the
-//!   `semiflow-core` hyper-dual sweep with identical parameters.
+//!   `semiflow` hyper-dual sweep with identical parameters.
 //!
 //! ## Why this is GENUINE and not tautological
 //!
@@ -15,8 +15,8 @@
 //! `Box<GreeksInnerV3>` construction + `apply_f` loop + three separate
 //! `write_output_buffers` calls.  Any precision loss in the buffer-copy or
 //! grid-index computation would show up as a ULP difference here.
-//! The golden constants are independently produced by `semiflow-core` directly
-//! (see `crates/semiflow-core/tests/binding_greeks_parity.rs`), not by this file.
+//! The golden constants are independently produced by `semiflow` directly
+//! (see `crates/semiflow/tests/binding_greeks_parity.rs`), not by this file.
 //!
 //! ## How the FFI is called
 //!
@@ -50,7 +50,7 @@ const T: f64 = 0.05;
 const THETA: f64 = 0.5;
 
 // ---------------------------------------------------------------------------
-// Core golden (produced by crates/semiflow-core/tests/binding_greeks_parity.rs
+// Core golden (produced by crates/semiflow/tests/binding_greeks_parity.rs
 // `print_golden_for_binding_tests` — verified against Richardson FD anchor).
 // These are the bit-exact results of the hyper-dual core sweep; any binding
 // that diverges has a marshalling bug.

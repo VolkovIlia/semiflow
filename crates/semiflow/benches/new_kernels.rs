@@ -12,9 +12,9 @@
 //!
 //! Run:
 //! ```sh
-//! cargo bench -p semiflow-core --bench new_kernels
+//! cargo bench -p semiflow --bench new_kernels
 //! # Quick smoke:
-//! cargo bench -p semiflow-core --bench new_kernels -- \
+//! cargo bench -p semiflow --bench new_kernels -- \
 //!     --warm-up-time 1 --measurement-time 2 --sample-size 10
 //! ```
 //! Results land in `target/criterion/new_kernels/`.

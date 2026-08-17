@@ -28,7 +28,7 @@
 //!            β̂ = Cov(f,g)/Var(g) estimated per-arm from the SAME P samples.
 //!
 //! Run:
-//!   cargo test -p semiflow-core --features slow-tests \
+//!   cargo test -p semiflow --features slow-tests \
 //!     --test `g_gridless_cv` -- --ignored --nocapture
 
 #![cfg(feature = "slow-tests")]

@@ -6,7 +6,7 @@
 //!
 //! Per ADR-0028 §5, `build_heat_unit` is duplicated (not shared through a common
 //! crate) to avoid creating a `semiflow-py → semiflow-ffi` dependency.  Both copies
-//! call into `semiflow-core` independently.  The rule-of-three has not been hit yet.
+//! call into `semiflow` independently.  The rule-of-three has not been hit yet.
 
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::too_many_arguments)]

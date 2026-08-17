@@ -18,7 +18,7 @@
 //! ## Run
 //!
 //! ```sh
-//! cargo test -p semiflow-core --features slow-tests --test g_reverse_ad_kvector \
+//! cargo test -p semiflow --features slow-tests --test g_reverse_ad_kvector \
 //!     -- --ignored --nocapture
 //! ```
 

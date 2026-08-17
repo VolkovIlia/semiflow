@@ -29,7 +29,7 @@
 //!
 //! # Run
 //! ```bash
-//! cargo test -p semiflow-core --features slow-tests g_s3_drift_spectral -- --nocapture
+//! cargo test -p semiflow --features slow-tests g_s3_drift_spectral -- --nocapture
 //! ```
 
 #![cfg(feature = "slow-tests")]

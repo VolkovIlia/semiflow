@@ -9,7 +9,7 @@
 //!
 //! Also runs v0.1.0 `ShiftChernoff1D` on the same problem for direct comparison.
 //!
-//! Run with:  `cargo run --release --example strang_advdiff_demo -p semiflow-core`
+//! Run with:  `cargo run --release --example strang_advdiff_demo -p semiflow`
 
 use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D, ShiftChernoff1D,
@@ -67,7 +67,7 @@ fn run_v0_1_baseline(n: usize, n_nodes: usize) -> f64 {
 }
 
 fn print_header() {
-    println!("=== semiflow-core v0.2.0 — real-world verification ===");
+    println!("=== semiflow v0.2.0 — real-world verification ===");
     println!();
     println!("PDE: ∂_t u = (1/2)·∂_xx u + (1/2)·∂_x u");
     println!("IC:  u(0,x) = exp(-x²)");

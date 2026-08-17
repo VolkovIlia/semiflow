@@ -686,7 +686,7 @@ def main() -> int:
         "  (5) ADR-0109 may be declared ACCEPTED — engineer wave authorised."
     )
     print(
-        "      Recommended next step: write `crates/semiflow-core/src/"
+        "      Recommended next step: write `crates/semiflow/src/"
     )
     print(
         "      grid_chebyshev_septic.rs` (~300 LoC) per the wave spec in"

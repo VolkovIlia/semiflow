@@ -8,7 +8,7 @@ factor is ADR-0164's, the residual factor is pure low-rank TT mat-vecs).
 **Probe (truth):** `.dev-docs/specs/probe_s3_nonsep_varcoef.py` (make-or-break: 0166 boundary
 `cos(x)sin(y)` slope +2.0000 all 3 roles; ablation reproduces 0166 floor 9.548e-3; op-rank ==
 CP-rank flat in d; generic → full op-rank; reduction to 0166 = 2.22e-16).
-**Builds on:** `crates/semiflow-core/src/tt_drift_spectral.rs` (ADR-0164: const-coef spectral
+**Builds on:** `crates/semiflow/src/tt_drift_spectral.rs` (ADR-0164: const-coef spectral
 factor) and the ADR-0166 split idea — the ONLY new ingredient is the FULL low-CP-rank residual
 operator `R` (vs 0166's mean-frozen per-axis residual).
 
@@ -16,7 +16,7 @@ operator `R` (vs 0166's mean-frozen per-axis residual).
 
 ## 1. New types / functions (Rust, `no_std` + `alloc`, generic over `F: SemiflowFloat`)
 
-All live in a NEW module `crates/semiflow-core/src/tt_nonsep_varcoef.rs` (keeps the POC isolated;
+All live in a NEW module `crates/semiflow/src/tt_nonsep_varcoef.rs` (keeps the POC isolated;
 ≤500 LoC). Reuse the d-D spectral const-coef factor (ADR-0164 `apply_drift_spectral_axis`/FFT
 helpers) for `k(τ)`. The evolver is a single symmetric Chernoff sandwich `P₂(τ/2)·k(τ)·P₂(τ/2)`;
 the residual `R` is a sum of `m` rank-1 TT operators applied as TT mat-vecs.
@@ -112,7 +112,7 @@ superset of the 0166 mechanism (anti-lesson #1).
 
 ## 2. The ONE gate that proves S³ (`G_S3_NONSEP_VARCOEF`)
 
-`crates/semiflow-core/tests/g_s3_nonsep_varcoef.rs`, RELEASE-BLOCKING-class but gated
+`crates/semiflow/tests/g_s3_nonsep_varcoef.rs`, RELEASE-BLOCKING-class but gated
 `#[cfg_attr(not(feature = "slow-tests"), ignore)]` (dense `expm` control). HARD asserts.
 
 **Reference (independent, NO spectral/split code):** assemble the dense `n^d × n^d` centred-FD
@@ -225,9 +225,9 @@ gate, no exactness gate) — the honest signature of the approximate variable-co
 
 ```bash
 # unit + reduction invariants (fast):
-cargo test -p semiflow-core tt_nonsep_varcoef
+cargo test -p semiflow tt_nonsep_varcoef
 # the S³ proof gate (dense expm control, slow-tests):
-cargo test -p semiflow-core --features slow-tests g_s3_nonsep_varcoef
+cargo test -p semiflow --features slow-tests g_s3_nonsep_varcoef
 ```
 
 ## 4. Out of scope (FAIL-LOUD — do NOT implement in this POC)

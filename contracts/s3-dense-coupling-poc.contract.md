@@ -8,7 +8,7 @@ ADR-0164's, applied to the full coupling matrix).
 **Probes (truth):** `.dev-docs/specs/probe_dense_rank.py` (make-or-break d-sweep),
 `probe_offdiag_rank.py` (off-block-rank governs bond rank), `probe_rank1_dense.py` (positive
 class + negative boundary), `probe_triz_confirm.py` (single-generator analytic backing).
-**Builds on:** `crates/semiflow-core/src/tt_drift_spectral.rs` (ADR-0164 complex symbol; the
+**Builds on:** `crates/semiflow/src/tt_drift_spectral.rs` (ADR-0164 complex symbol; the
 ONLY new ingredient is the *full* (all-pairs) coupling sum in the symbol + a rank-1-dense
 matrix builder).
 
@@ -16,7 +16,7 @@ matrix builder).
 
 ## 1. New types / functions (Rust, `no_std` + `alloc`, generic over `F: SemiflowFloat`)
 
-All live in a NEW module `crates/semiflow-core/src/tt_dense_coupling.rs` (keeps the POC
+All live in a NEW module `crates/semiflow/src/tt_dense_coupling.rs` (keeps the POC
 isolated; ≤500 LoC). Reuse the existing `pub(crate)` DFT helpers from `tt_spectral.rs`
 (`dft_1d_real_to_cplx`, `dft_1d_cplx`, `idft_1d_cplx`) and ADR-0164's axis-symbol pattern.
 The evolver is a d-D full-symbol apply (the d-D generalization of ADR-0164's `spectral_evolve`
@@ -94,7 +94,7 @@ bit-for-bit (0 ULP) — chains this POC onto the proven drift milestone.
 
 ## 2. The ONE gate that proves S³ (`G_S3_DENSE_COUPLING`)
 
-`crates/semiflow-core/tests/g_s3_dense_coupling.rs`, RELEASE-BLOCKING-class but gated
+`crates/semiflow/tests/g_s3_dense_coupling.rs`, RELEASE-BLOCKING-class but gated
 `#[cfg_attr(not(feature = "slow-tests"), ignore)]` (dense `expm` control). HARD asserts.
 
 **Reference (independent, NO spectral code):** assemble the dense centred-FD generator
@@ -213,9 +213,9 @@ ADR-0164 / v9.1 §10.13.2(a) exactness-gate decision.
 
 ```bash
 # unit + reduction invariants (fast):
-cargo test -p semiflow-core tt_dense_coupling
+cargo test -p semiflow tt_dense_coupling
 # the S³ proof gate (dense expm control, slow-tests):
-cargo test -p semiflow-core --features slow-tests g_s3_dense_coupling
+cargo test -p semiflow --features slow-tests g_s3_dense_coupling
 ```
 
 ## 4. Out of scope (FAIL-LOUD — do NOT implement in this POC)

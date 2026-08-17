@@ -32,7 +32,7 @@
 //!
 //! # Run
 //! ```bash
-//! cargo test -p semiflow-core --features slow-tests \
+//! cargo test -p semiflow --features slow-tests \
 //!   --test g_tt_band_converge -- --ignored --nocapture
 //! ```
 //!

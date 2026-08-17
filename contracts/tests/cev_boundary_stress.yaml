@@ -194,7 +194,7 @@ implementation_notes:
 
   helper_reuse: |
     Reuse the `noncentral_chi2_cdf` and `schroder_call` helpers from
-    `crates/semiflow-core/tests/cev_european_call.rs` — copy-paste-edit
+    `crates/semiflow/tests/cev_european_call.rs` — copy-paste-edit
     (~30 LoC) with the `j_max=200` bump (per
     cev_european_call_sweep.yaml §implementation_notes.j_max_bump).
     Two consumers (sweep + boundary stress) is below the suckless
@@ -261,7 +261,7 @@ implementation_notes:
             "G_cev_boundary_C: err(150)={:.3e} ≥ 5e-1 — solver blow-up", err_150);
     }
 
-  test_file: "crates/semiflow-core/tests/cev_boundary_stress.rs (~180 LoC)"
+  test_file: "crates/semiflow/tests/cev_boundary_stress.rs (~180 LoC)"
   estimated_wall_clock: "<30s release (6 configurations × ~2-3s each on x86)"
 
 # -----------------------------------------------------------------------------

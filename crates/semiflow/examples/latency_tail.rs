@@ -9,7 +9,7 @@
 //! to match iter-5 convergence (9.4e-6 at N=88) and pass preflight (≤5e-4).
 //! S-domain grid with σ=0.4 β=0.7 requires N≥2000 for 5e-4 tolerance.
 //!
-//! Build: `cargo build --release --example latency_tail -p semiflow-core`
+//! Build: `cargo build --release --example latency_tail -p semiflow`
 //! Smoke: `cargo run --release --example latency_tail -- --n 88 --n-steps 88 --n-ticks 1000`
 
 // ── Heap tracker (feature = "tracking-alloc") ──────────────────────────────

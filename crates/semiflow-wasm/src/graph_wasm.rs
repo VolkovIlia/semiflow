@@ -1,4 +1,4 @@
-//! Graph PDE WASM bindings for `semiflow-core` (v2.2 Wave C).
+//! Graph PDE WASM bindings for `semiflow` (v2.2 Wave C).
 //!
 //! Exposes two JS classes for graph heat diffusion:
 //!   `new GraphPath(n_nodes)` — path graph `0−1−…−(n−1)` with unit weights.

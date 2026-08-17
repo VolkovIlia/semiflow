@@ -10,7 +10,7 @@ pointwise reaction-flow / Cole-Hopf maps).
 time `1-shot==8-step→3.16e-11`, φ rank-1 for separable potential; Seam-B Strang logistic RD slope
 `+2.0002` real regime `4.3e-5..4.2e-8`, eff-TT-rank bounded at `2`; WALL: generic `sin(25u)` reaction
 eff-rank `→11≈n/2`; reduction `f≡0` → ADR-0164 heat `0 ULP`).
-**Builds on:** `crates/semiflow-core/src/tt_drift_spectral.rs` (ADR-0164 `b=0` linear heat) and the
+**Builds on:** `crates/semiflow/src/tt_drift_spectral.rs` (ADR-0164 `b=0` linear heat) and the
 ADR-0166/0167 Strang-split discipline — the ONLY new ingredients are the **Cole-Hopf forward/back
 maps** (Seam A) and the **exact pointwise polynomial reaction flow** (Seam B).
 
@@ -18,7 +18,7 @@ maps** (Seam A) and the **exact pointwise polynomial reaction flow** (Seam B).
 
 ## 1. New types / functions (Rust, `no_std` + `alloc`, generic over `F: SemiflowFloat`)
 
-All live in a NEW module `crates/semiflow-core/src/tt_nonlinear_spectral.rs` (keeps the POC isolated;
+All live in a NEW module `crates/semiflow/src/tt_nonlinear_spectral.rs` (keeps the POC isolated;
 ≤500 LoC). Reuse `apply_drift_spectral_axis(line, n, dx, ν, 0, τ)` (ADR-0164, `b=0`) for every heat
 factor. NO LU, NO dense `expm` anywhere in the evolvers.
 
@@ -93,7 +93,7 @@ gate (NOT a forged exactness-vs-reference assert).
 
 ## 2. The ONE gate that proves S³ (`G_S3_NONLINEAR`)
 
-`crates/semiflow-core/tests/g_s3_nonlinear.rs`, RELEASE-BLOCKING-class but gated
+`crates/semiflow/tests/g_s3_nonlinear.rs`, RELEASE-BLOCKING-class but gated
 `#[cfg_attr(not(feature = "slow-tests"), ignore)]` (fine-RK4 reference is expensive). HARD asserts.
 
 **References (independent, NO shared code with the evolver):**
@@ -225,9 +225,9 @@ gate). Only Seam A is exact-in-time, gated by the semigroup property.
 
 ```bash
 # unit + reduction invariants (fast):
-cargo test -p semiflow-core tt_nonlinear_spectral
+cargo test -p semiflow tt_nonlinear_spectral
 # the S³ proof gate (fine-RK4 reference, slow-tests):
-cargo test -p semiflow-core --features slow-tests g_s3_nonlinear
+cargo test -p semiflow --features slow-tests g_s3_nonlinear
 ```
 
 ## 4. Out of scope (FAIL-LOUD — do NOT implement in this POC)

@@ -80,7 +80,7 @@ pub(crate) struct JsCallback(pub(crate) js_sys::Function);
 // Safety: wasm32-unknown-unknown is single-threaded by spec (no Workers can share
 // the same WASM linear memory by default). Send + Sync are vacuously safe here.
 // ADR-0034 §"Per-binding plan" designates the WASM binding crate as the holder of
-// this safety contract; semiflow-core carries #![deny(unsafe_code)] and cannot do this.
+// this safety contract; semiflow carries #![deny(unsafe_code)] and cannot do this.
 unsafe impl Send for JsCallback {}
 unsafe impl Sync for JsCallback {}
 

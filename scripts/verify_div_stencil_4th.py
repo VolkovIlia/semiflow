@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ADR-0118 PRE-FLIGHT sympy oracle — ≥5-point 4th-order divergence-form stencil.
 
-The v6.0.0 K5 base operator `apply_div_form` (crates/semiflow-core/src/diffusion4_zeta4.rs:305)
+The v6.0.0 K5 base operator `apply_div_form` (crates/semiflow/src/diffusion4_zeta4.rs:305)
 discretises `A f = ∂_x(a(x) ∂_x f)` with the classical 3-point half-node flux:
 
     (Af)_i ≈ [a_{i+½}(f_{i+1} − f_i) − a_{i-½}(f_i − f_{i-1})] / dx²

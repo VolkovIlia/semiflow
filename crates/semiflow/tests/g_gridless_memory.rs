@@ -28,7 +28,7 @@
 //!   The gate has a real failure mode, so a PASS is informative.
 //!
 //! Run:
-//!   cargo test -p semiflow-core --features slow-tests \
+//!   cargo test -p semiflow --features slow-tests \
 //!     --test `g_gridless_memory` -- --ignored --nocapture
 
 #![cfg(feature = "slow-tests")]

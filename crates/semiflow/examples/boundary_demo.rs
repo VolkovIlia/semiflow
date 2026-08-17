@@ -1,7 +1,7 @@
 //! `boundary_demo` — tabulate `f(x) = exp(-x²)` sampled with all four boundary
 //! policies on a small `Grid1D` (n=8, [-2, 2]) at x in {-3, -2.5, …, 2.5, 3}.
 //!
-//! Run with: `cargo run --example boundary_demo --package semiflow-core`
+//! Run with: `cargo run --example boundary_demo --package semiflow`
 
 use semiflow::{BoundaryPolicy, Grid1D, GridFn1D};
 

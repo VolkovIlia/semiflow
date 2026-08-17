@@ -16,7 +16,7 @@
 //! S₄(τ) f ≈ Σ_{k=0..4} (Ω₄(τ))^k · f / k!
 //! ```
 //!
-//! **This is the FIRST genuine Magnus expansion in `semiflow-core`.**
+//! **This is the FIRST genuine Magnus expansion in `semiflow`.**
 //! The pre-existing `TruncatedExpDiffusionChernoff` /
 //! `TruncatedExp4thDiffusionChernoff` types were renamed from `Magnus*`
 //! in v0.7.0 (audit finding D2) because they truncate `exp(τG)` for a
@@ -150,7 +150,7 @@ pub type LaplacianAtTime<F> = crate::graph_traj::SegmentWeightFn<F>;
 /// For accurate time-varying evolution, use [`apply_into_at`](Self::apply_into_at)
 /// with explicit `t_start`, or drive a manual loop as in the G11 gate test.
 ///
-/// **This is the FIRST genuine Magnus expansion in semiflow-core** — see
+/// **This is the FIRST genuine Magnus expansion in semiflow** — see
 /// module-level documentation for the naming history.
 ///
 /// # Convergence

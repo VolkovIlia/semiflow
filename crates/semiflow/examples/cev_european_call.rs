@@ -6,7 +6,7 @@
 //!   δ² = σ₀²·S₀^(2-2β) = 0.09·100 = 9.0
 //!   a(S) = 4.5·S,  a'(S) = 4.5,  a''(S) = 0
 //!
-//! Run with: `cargo run --release --example cev_european_call -p semiflow-core`
+//! Run with: `cargo run --release --example cev_european_call -p semiflow`
 
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines, clippy::unused_self)]

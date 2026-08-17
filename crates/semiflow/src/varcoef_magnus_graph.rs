@@ -493,6 +493,6 @@ pub(crate) fn apply_omega4_la<F: SemiflowFloat>(
     }
 }
 
-// Unit tests live in `crates/semiflow-core/tests/varcoef_magnus_unit.rs`
+// Unit tests live in `crates/semiflow/tests/varcoef_magnus_unit.rs`
 // (extracted to keep the library file under the 500-LoC cap per
 // `.dev-docs/constitution.md` Override #1 budget).

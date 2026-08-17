@@ -45,7 +45,7 @@ pub(crate) struct SemiflowStateInner {
 ///
 /// Variable-coefficient support (`a: fn(f64) -> f64` callback) requires a
 /// runtime fn-pointer which the current `DiffusionChernoff::new` API cannot
-/// accept without modifying `semiflow-core`. Deferred to v0.11.0.
+/// accept without modifying `semiflow`. Deferred to v0.11.0.
 extern "Rust" fn unit_a(_: f64) -> f64 {
     1.0
 }

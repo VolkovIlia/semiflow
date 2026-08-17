@@ -54,7 +54,7 @@
 //! is the honest §50.6 outcome and NOT a gate violation.
 //!
 //! Run:
-//!   cargo test -p semiflow-core --features slow-tests \
+//!   cargo test -p semiflow --features slow-tests \
 //!     --test `g_gridless` -- --ignored --nocapture
 //!
 //! No new runtime deps: LCG + Box-Muller + Acklam quantile + van-der-Corput inline.

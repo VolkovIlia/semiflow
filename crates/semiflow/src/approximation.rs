@@ -104,7 +104,7 @@ where
 
 /// Private sealed marker — prevents downstream crates from implementing
 /// [`LadderRung<K, F>`] without going through an ADR + impl block inside
-/// `semiflow-core` (rustls / thiserror sealed-trait pattern).
+/// `semiflow` (rustls / thiserror sealed-trait pattern).
 mod sealed {
     pub trait Sealed {}
     impl<F: crate::float::SemiflowFloat> Sealed for crate::diffusion4::Diffusion4thChernoff<F> {}
@@ -128,7 +128,7 @@ mod sealed {
 /// See math.md §36 for the K → K-2 invariant and Galkin-Remizov 2025 *IJM*
 /// Theorem 3.1 specialisation. Sealed via `mod sealed` private marker — downstream
 /// crates CANNOT impl `LadderRung<K, F>` without ADR + sealed impl block inside
-/// `semiflow-core`.
+/// `semiflow`.
 ///
 /// ## v5.0 catalogue (4 rungs)
 ///

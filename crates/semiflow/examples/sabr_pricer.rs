@@ -62,13 +62,13 @@
 //! # Build
 //!
 //! ```text
-//! cargo build --release -p semiflow-core --example sabr_pricer
+//! cargo build --release -p semiflow --example sabr_pricer
 //! ```
 //!
 //! # Smoke test
 //!
 //! ```text
-//! cargo run --release -p semiflow-core --example sabr_pricer -- \
+//! cargo run --release -p semiflow --example sabr_pricer -- \
 //!     --n-ticks 100 --warmup-ticks 10 --rep 0
 //! ```
 

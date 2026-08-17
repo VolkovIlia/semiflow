@@ -102,7 +102,7 @@ pub trait State<F: SemiflowFloat = f64> {
     /// In-place scale: `self ← k · self`.
     ///
     /// **Must be overridden.** The default panics with `unimplemented!`.
-    /// All concrete types in `semiflow-core` override this. Generic code should
+    /// All concrete types in `semiflow` override this. Generic code should
     /// use concrete types' inherent `scale(k)` or override this method.
     fn scale_into(&mut self, k: F) {
         let _ = k;

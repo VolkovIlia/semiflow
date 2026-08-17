@@ -26,7 +26,7 @@
 //!
 //! # Run
 //! ```bash
-//! cargo test -p semiflow-core --features slow-tests g_s3_nonlinear -- --nocapture
+//! cargo test -p semiflow --features slow-tests g_s3_nonlinear -- --nocapture
 //! ```
 
 #![cfg(feature = "slow-tests")]

@@ -31,7 +31,7 @@
 //!
 //! Run (slow test, ~minutes for 1M paths):
 //! ```text
-//! RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow-core \
+//! RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
 //!     --features slow-tests --release --test rough_heston_mc_oracle \
 //!     -- --ignored --nocapture
 //! ```

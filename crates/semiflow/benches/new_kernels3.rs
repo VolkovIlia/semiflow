@@ -1,7 +1,7 @@
 //! Criterion benchmark: v3.1–v4.8 kernel families (subordinated, Kolmogorov,
 //! quantum-graph, matrix-diffusion, anisotropic-shift, Schrödinger).
 //!
-//! Run: `cargo bench -p semiflow-core --bench new_kernels3 --features simd`
+//! Run: `cargo bench -p semiflow --bench new_kernels3 --features simd`
 
 #![allow(missing_docs)]
 // Integration test/bench: allows for numerical patterns.

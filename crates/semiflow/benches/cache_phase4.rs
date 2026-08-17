@@ -7,10 +7,10 @@
 //
 // A/B procedure (per CONTRACT-phase4-ab.md §3):
 //   BEFORE:
-//     taskset -c 0 cargo bench -p semiflow-core --bench cache_phase4 \
+//     taskset -c 0 cargo bench -p semiflow --bench cache_phase4 \
 //       --features parallel,simd -- --save-baseline phase4-baseline
 //   AFTER applying Candidate B / E:
-//     taskset -c 0 cargo bench -p semiflow-core --bench cache_phase4 \
+//     taskset -c 0 cargo bench -p semiflow --bench cache_phase4 \
 //       --features parallel,simd -- --baseline phase4-baseline
 //
 // The bench uses `evolve` (= apply_into × n_chernoff) so the steady-state

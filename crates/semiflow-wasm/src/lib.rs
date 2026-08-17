@@ -1,6 +1,6 @@
-//! WebAssembly bindings for `semiflow-core` (experimental, v0.9.0-beta).
+//! WebAssembly bindings for `semiflow` (experimental, v0.9.0-beta).
 //!
-//! Exposes a broad set of `semiflow-core` engine families as JS classes via
+//! Exposes a broad set of `semiflow` engine families as JS classes via
 //! `wasm-bindgen`, mirroring `semiflow-ffi` and `semiflow-py`.
 //!
 //! ## Cargo features — `full` vs default (lite)

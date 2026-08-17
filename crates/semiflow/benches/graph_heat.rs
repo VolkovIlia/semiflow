@@ -16,7 +16,7 @@
 //!
 //! Run (quick smoke):
 //! ```sh
-//! cargo bench -p semiflow-core --bench graph_heat -- --quick
+//! cargo bench -p semiflow --bench graph_heat -- --quick
 //! ```
 //! Results land in `target/criterion/graph_heat/`.
 

@@ -13,7 +13,7 @@
 //!
 //! Run (quick smoke):
 //! ```sh
-//! cargo bench -p semiflow-core --features parallel,simd \
+//! cargo bench -p semiflow --features parallel,simd \
 //!     --bench strang2d_parallel -- --quick
 //! ```
 //! Results land in `target/criterion/strang2d_parallel/`.

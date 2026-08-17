@@ -7,7 +7,7 @@ Tests mirror Wave A's ``examples/heat.c`` parameters:
   tolerance      sup_error < 5e-4
 
 Cross-validation: Python result must be byte-identical to the Wave A reference
-vector (same semiflow-core kernel, different language boundary).  ADR-0031 Risk R8.
+vector (same semiflow kernel, different language boundary).  ADR-0031 Risk R8.
 
 GIL release (ADR-0031 I6): test_evolve_handles_sigint verifies that SIGINT
 delivered during py.allow_threads surfaces as KeyboardInterrupt after GIL
@@ -60,7 +60,7 @@ def _compute_reference_result() -> np.ndarray:
     """Compute the canonical result via the same parameters as Wave A.
 
     Wave A (semiflow-ffi) smoke test: domain [-10,10], n=1000, t=1, n_steps=100,
-    u0(x)=exp(-x^2).  The Python binding calls the identical semiflow-core kernel,
+    u0(x)=exp(-x^2).  The Python binding calls the identical semiflow kernel,
     so results must be byte-identical (np.array_equal, not allclose).
 
     This function builds the reference by running Heat1D once and caching the

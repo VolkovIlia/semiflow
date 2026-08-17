@@ -1,4 +1,4 @@
-//! C ABI bindings for `semiflow-core` (experimental, v0.10.0).
+//! C ABI bindings for `semiflow` (experimental, v0.10.0).
 //!
 //! ## Status
 //!
@@ -19,7 +19,7 @@
 //!
 //! ## Scope (v0.9.0-beta binding-parity wave)
 //!
-//! Near-full parity with `semiflow-core` across the following families:
+//! Near-full parity with `semiflow` across the following families:
 //!
 //! - **1D diffusion** — standard (`smf_heat1d_*`), higher-order ζ-ladder
 //!   (`Diffusion4th/6th/8th`, `Zeta4/6th`), truncated-exp (`TruncExp/4th`),

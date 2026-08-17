@@ -14,9 +14,9 @@ contracts/semiflow-core.properties.yaml §G_BINDING_CARNOT_CPLX3_PARITY):
   tau=0.02, u0(x)=exp(-(x0²+x1²)/2) (Gaussian IC).
 
 GOLDEN produced by:
-  cargo test --package semiflow-core --test binding_carnot_cplx3_parity \\
+  cargo test --package semiflow --test binding_carnot_cplx3_parity \\
              --features slow-tests -- --nocapture
-(crates/semiflow-core/tests/binding_carnot_cplx3_parity.rs, γ⋆ anchor PASS.)
+(crates/semiflow/tests/binding_carnot_cplx3_parity.rs, γ⋆ anchor PASS.)
 np.array_equal(got, GOLDEN) is EXACT bit-for-bit (float64 IEEE-754).
 Any divergence indicates a marshalling bug in the PyO3 layer.
 """
@@ -191,7 +191,7 @@ def test_size() -> None:
 #   D=5, domain=[-1.5,1.5], n_per_axis=5, tau=0.02.
 #
 # GOLDEN_FIRST8 / GOLDEN_LAST4 produced by:
-#   cargo test --package semiflow-core --test binding_carnot_cplx3_parity \
+#   cargo test --package semiflow --test binding_carnot_cplx3_parity \
 #              --features slow-tests -- --nocapture
 # (binding_carnot_cplx3_parity.rs, γ⋆ cubic residual PASS.)
 #

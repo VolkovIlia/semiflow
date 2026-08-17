@@ -32,7 +32,7 @@
 //!
 //! ## Run command
 //! ```sh
-//! cargo test -p semiflow-core --features slow-tests --test g_reverse_ad_advantage \
+//! cargo test -p semiflow --features slow-tests --test g_reverse_ad_advantage \
 //!     -- --ignored --nocapture
 //! ```
 

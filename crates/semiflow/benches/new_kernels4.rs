@@ -18,9 +18,9 @@
 //!
 //! Run:
 //! ```sh
-//! cargo bench -p semiflow-core --bench new_kernels4 --features simd
+//! cargo bench -p semiflow --bench new_kernels4 --features simd
 //! # Quick smoke:
-//! cargo bench -p semiflow-core --bench new_kernels4 --features simd -- \
+//! cargo bench -p semiflow --bench new_kernels4 --features simd -- \
 //!     --warm-up-time 1 --measurement-time 2 --sample-size 10
 //! ```
 //! Results land in `target/criterion/new_kernels4/`.

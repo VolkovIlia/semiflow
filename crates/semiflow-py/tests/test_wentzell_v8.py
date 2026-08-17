@@ -14,7 +14,7 @@ contracts/semiflow-core.properties.yaml §G_BINDING_WENTZELL_PARITY):
   schedule γ(t_k)=0.5+0.1·t_k, u0=exp(-x²).
 
 GOLDEN is produced by running:
-  cargo test -p semiflow-core --test binding_wentzell_parity -- --nocapture
+  cargo test -p semiflow --test binding_wentzell_parity -- --nocapture
 and embedding the printed values below.
 np.array_equal(got, GOLDEN) is EXACT bit-for-bit (float64 IEEE-754).
 Any divergence indicates a marshalling bug in the PyO3 GIL-off sweep.
@@ -213,7 +213,7 @@ def test_evolve_boundary_modified() -> None:
 # ---------------------------------------------------------------------------
 #
 # The GOLDEN vector below is produced by running:
-#   cargo test -p semiflow-core --test binding_wentzell_parity \
+#   cargo test -p semiflow --test binding_wentzell_parity \
 #              -- --nocapture 2>&1 | grep 'result\['
 # and embedding the printed float64 hex values here.
 #

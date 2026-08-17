@@ -110,7 +110,7 @@ deadlion-studio/
 
 # Generated bench/example fixtures (committed-binary blobs would exceed VCS hygiene)
 # v2.6 Wave C — latency_tail example writes deterministic GBM ticks here on first run
-crates/semiflow-core/examples/data/
+crates/semiflow/examples/data/
 
 # Crate-level telemetry runtime data (generated, never commit)
-crates/semiflow-core/.telemetry/
+crates/semiflow/.telemetry/

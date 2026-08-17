@@ -27,7 +27,7 @@
 //!
 //! # Run
 //! ```bash
-//! cargo test -p semiflow-core --features slow-tests g_s3_dense_coupling -- --nocapture
+//! cargo test -p semiflow --features slow-tests g_s3_dense_coupling -- --nocapture
 //! ```
 
 #![cfg(feature = "slow-tests")]

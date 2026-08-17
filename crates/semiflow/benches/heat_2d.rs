@@ -7,7 +7,7 @@
 //!
 //! Run:
 //! ```sh
-//! cargo bench -p semiflow-core --bench heat_2d
+//! cargo bench -p semiflow --bench heat_2d
 //! ```
 //! Results land in `target/criterion/heat_2d/`.
 

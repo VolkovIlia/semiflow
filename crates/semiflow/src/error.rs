@@ -1,4 +1,4 @@
-//! Error taxonomy for `semiflow-core`.
+//! Error taxonomy for `semiflow`.
 //!
 //! See `contracts/semiflow-core.errors.yaml` for the authoritative listing.
 //! Every fallible operation returns `Result<T, SemiflowError>`; the library
@@ -17,7 +17,7 @@
 
 use core::fmt;
 
-/// Errors returned by `semiflow-core` operations.
+/// Errors returned by `semiflow` operations.
 ///
 /// `#[non_exhaustive]` — new variants may be added in minor versions without
 /// a semver break. Match with a catch-all `_ => {}` arm when forward-compat

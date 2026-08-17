@@ -5,11 +5,11 @@
 //!
 //! Run with SIMD enabled:
 //! ```sh
-//! RUSTFLAGS="-C target-feature=+avx2" cargo bench -p semiflow-core --features simd --bench diffusion6_simd
+//! RUSTFLAGS="-C target-feature=+avx2" cargo bench -p semiflow --features simd --bench diffusion6_simd
 //! ```
 //! Run scalar baseline:
 //! ```sh
-//! cargo bench -p semiflow-core --no-default-features --bench diffusion6_simd
+//! cargo bench -p semiflow --no-default-features --bench diffusion6_simd
 //! ```
 //! Results land in `target/criterion/diffusion6_simd/`.
 

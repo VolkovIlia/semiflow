@@ -5,7 +5,7 @@
 //!   at the CANONICAL smoke params (§1.2 `V8_1_TIER3_BINDING_DESIGN.md)`:
 //!     a=0.5, b=0.0, c=0.0 (Brownian), `ρ₀=δ_0`, tau=0.1, `n_steps=1`.
 //!   Assert that the returned (positions, weights) buffers are byte-identical
-//!   (0 ULP) to the CORE GOLDEN — the values produced directly by `semiflow-core`.
+//!   (0 ULP) to the CORE GOLDEN — the values produced directly by `semiflow`.
 //!
 //! ## Why this is GENUINE
 //!
@@ -14,7 +14,7 @@
 //! Any marshalling bug (wrong pointer arithmetic, extra copy, off-by-one)
 //! would show up as a non-zero ULP divergence from the core golden.
 //! The core golden is independently produced by
-//! `crates/semiflow-core/tests/binding_adjoint_fp_parity.rs`, not this file.
+//! `crates/semiflow/tests/binding_adjoint_fp_parity.rs`, not this file.
 
 #![allow(unsafe_code)]
 // Binding layer: allows for FFI/PyO3/wasm-bindgen wrapper patterns.
@@ -38,7 +38,7 @@ const MAX_STEPS: usize = 1;
 const OUT_CAP: usize = 4;
 
 // ---------------------------------------------------------------------------
-// Core golden (from crates/semiflow-core/tests/binding_adjoint_fp_parity.rs
+// Core golden (from crates/semiflow/tests/binding_adjoint_fp_parity.rs
 // `canonical_adjoint_fp_core`; verified against Lemma A.1 analytic anchor).
 // h = 2√(aτ) = 2√(0.05) = 0.4472135954999579 (exact IEEE-754 double).
 // ---------------------------------------------------------------------------
