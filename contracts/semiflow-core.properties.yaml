@@ -4621,7 +4621,7 @@ properties:
           }
         }
       }
-    test_file: "tests/properties.rs"
+    test_file: "crates/semiflow/src/grid_tests.rs (bc_index_* units; the prescribed tests/properties.rs was never created)"
 
   - name: G23
     cases: 1
@@ -5068,7 +5068,7 @@ properties:
       Test file: tests/approximation_subspace_witness.rs (new file, v3.0 Wave A
       engineer). Sympy reference script: scripts/verify_approximation_subspace.py.
       All three sub-tests MUST pass; any failure BLOCKS v3.0 release.
-    test_file: "tests/approximation_subspace_witness.rs"
+    test_file: "crates/semiflow/tests/approximation_subspace.rs"
     feature_gate: "slow-tests"
 
   # =========================================================================
@@ -6032,7 +6032,7 @@ properties:
       canonical smoke suite + sha256 baseline reused); L_CEV_PTICK (canonical
       input definition; per-tick budget is INDEPENDENT and v2.x-baseline gated;
       this is the OUTPUT-parity gate).
-    test_file: "tests/binding_parity_ffi_v3.rs, tests/binding_parity_py_v3.rs, tests/binding_parity_wasm_v3.rs"
+    test_file: "crates/semiflow-ffi/tests/ffi_v3_smoke.rs, crates/semiflow-py/tests/test_v3_smoke.py, crates/semiflow-wasm/tests/v3_smoke.rs"
     feature_gate: "none"
 
   # =========================================================================
@@ -6508,7 +6508,7 @@ properties:
       - "math.md §28.bis.8"
       - "Castella-Chartier-Descombes-Vilmart 2009 BIT 49"
       - "Hairer-Lubich-Wanner 2006 §III.5 (even-order theorem)"
-    test_file: "tests/carnot_cplx3_slope.rs"
+    test_file: "crates/semiflow/tests/g_carnot_cplx3_slope.rs"
     feature_gate: "slow-tests"
 
   # =========================================================================
@@ -7286,7 +7286,7 @@ properties:
       (v3 additive binding pattern this extends); G_DUAL_AD_GRADIENT (core-only
       first-order oracle reused here); G_binding_parity (value-only sibling gate —
       unchanged).
-    test_file: "tests/binding_greeks_parity_ffi.rs, tests/binding_greeks_parity_py.rs, tests/binding_greeks_parity_wasm.rs"
+    test_file: "crates/semiflow-ffi/tests/binding_greeks_parity_ffi.rs, crates/semiflow-py/tests/test_greeks_v8.py, crates/semiflow-wasm/tests/v3_smoke.rs"
     feature_gate: "slow-tests"
 
   # =========================================================================
