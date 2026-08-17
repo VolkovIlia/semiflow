@@ -45,11 +45,11 @@ Five criterion benchmarks are tracked at v1.0.0.  Each runs via
 
 | Benchmark key | File | What it exercises |
 |---|---|---|
-| `semiflow_core::heat_1d` | `crates/semiflow/benches/heat_1d.rs` | `ShiftChernoff1D::evolve` — 1D Gaussian heat kernel, N=1000 grid points, n=100 Chernoff steps, T=1.0.  Single-threaded scalar path. |
-| `semiflow_core::heat_2d` | `crates/semiflow/benches/heat_2d.rs` | `Strang2D<DiffusionChernoff>` — 2D isotropic heat, 400×400 grid, `n_chernoff=10`, T=1.0.  Representative slice of the v0.7.0 baseline grid. |
-| `semiflow_core::advdiff_2d` | `crates/semiflow/benches/advdiff_2d.rs` | `Strang2D<DriftReactionChernoff>` — 2D advection-diffusion, 400×400 grid, `n_chernoff=10`, T=1.0.  Constant drift `b=0.5`, zero reaction. |
-| `semiflow_core::diffusion6_simd` | `crates/semiflow/benches/diffusion6_simd.rs` | `Diffusion6thChernoff::apply` — single `apply` call, N=1024, variable-`a` coefficients with sinusoidal variation, `BoundaryPolicy::Reflect`.  Exercises the 9-point Fornberg FD kernel and SIMD path (when `--features simd`). |
-| `semiflow::evolve_bench` | `crates/semiflow-py/benches/evolve_bench.rs` | `ChernoffSemigroup::evolve` via the pure-Rust kernel that backs `Heat1D::evolve` in the PyO3 layer.  N=1000, `n_steps=100`, T=1.0.  Measures the Rust hot path without Python GIL overhead. |
+| `semiflow::heat_1d` | `crates/semiflow/benches/heat_1d.rs` | `ShiftChernoff1D::evolve` — 1D Gaussian heat kernel, N=1000 grid points, n=100 Chernoff steps, T=1.0.  Single-threaded scalar path. |
+| `semiflow::heat_2d` | `crates/semiflow/benches/heat_2d.rs` | `Strang2D<DiffusionChernoff>` — 2D isotropic heat, 400×400 grid, `n_chernoff=10`, T=1.0.  Representative slice of the v0.7.0 baseline grid. |
+| `semiflow::advdiff_2d` | `crates/semiflow/benches/advdiff_2d.rs` | `Strang2D<DriftReactionChernoff>` — 2D advection-diffusion, 400×400 grid, `n_chernoff=10`, T=1.0.  Constant drift `b=0.5`, zero reaction. |
+| `semiflow::diffusion6_simd` | `crates/semiflow/benches/diffusion6_simd.rs` | `Diffusion6thChernoff::apply` — single `apply` call, N=1024, variable-`a` coefficients with sinusoidal variation, `BoundaryPolicy::Reflect`.  Exercises the 9-point Fornberg FD kernel and SIMD path (when `--features simd`). |
+| `semiflow-py::evolve_bench` | `crates/semiflow-py/benches/evolve_bench.rs` | `ChernoffSemigroup::evolve` via the pure-Rust kernel that backs `Heat1D::evolve` in the PyO3 layer.  N=1000, `n_steps=100`, T=1.0.  Measures the Rust hot path without Python GIL overhead. |
 
 ---
 
@@ -62,11 +62,11 @@ Current values in `docs/perf/baseline-v1_0_0.json`:
 
 | Benchmark key | Median (ns) | Std-dev (ns) |
 |---|---|---|
-| `semiflow_core::heat_1d` | TBD — populated by maintainer | TBD |
-| `semiflow_core::heat_2d` | TBD — populated by maintainer | TBD |
-| `semiflow_core::advdiff_2d` | TBD — populated by maintainer | TBD |
-| `semiflow_core::diffusion6_simd` | TBD — populated by maintainer | TBD |
-| `semiflow::evolve_bench` | TBD — populated by maintainer | TBD |
+| `semiflow::heat_1d` | TBD — populated by maintainer | TBD |
+| `semiflow::heat_2d` | TBD — populated by maintainer | TBD |
+| `semiflow::advdiff_2d` | TBD — populated by maintainer | TBD |
+| `semiflow::diffusion6_simd` | TBD — populated by maintainer | TBD |
+| `semiflow-py::evolve_bench` | TBD — populated by maintainer | TBD |
 
 Fill these by running:
 
@@ -150,7 +150,7 @@ The following are **not** currently part of the tracked commitment:
 - **Startup / cold-cache latency** — first-call overhead from cold instruction
   and data caches.  Criterion's warmup phase (§ 4) discards these samples.
 - **Memory bandwidth peak** — not exercised by the current bench suite.
-- **Python GIL overhead** — `semiflow::evolve_bench` measures the pure-Rust
+- **Python GIL overhead** — `semiflow-py::evolve_bench` measures the pure-Rust
   kernel; GIL acquire/release and NumPy array copy overhead are exercised by
   the PyO3 integration smoke test (`xtask py-smoke`) but not tracked here.
 - **WASM throughput** — `semiflow-wasm` has no criterion bench at v1.0.0.

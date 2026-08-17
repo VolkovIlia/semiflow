@@ -30,7 +30,7 @@ floating-point guarantees differ.
 
 - Tight error budgets (slope ≥ −1.95 required).
 - Sixth-order spatial schemes (`Diffusion6thChernoff`,
-  `TruncatedExp6thChernoff`).
+  `Diffusion6thZeta6Chernoff`, `GraphHeat6thChernoff`).
 - Any sympy-verified property is load-bearing in your pipeline.
 - Long-time integration where rounding accumulates.
 

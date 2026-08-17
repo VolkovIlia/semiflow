@@ -532,7 +532,7 @@ suckless file-size violations introduced by v8.0.0 module growth.
   `ResolventJumpChernoff` (F2) across FFI + PyO3 + WASM;
   `AdjointFokkerPlanckChernoff` (C2) across FFI + PyO3 + WASM;
   `SmolyakGridND-D6` (C1) via PyO3;
-  `ComplexTripleJumpChernoff` (F4) via PyO3.
+  `ComplexTripleJump` (F4) via PyO3 (`PyComplexTripleJumpV8`).
   All 0-ULP cross-binding parity (`G_BINDING_*_PARITY`).
   No Complex or NARROW types leak across any ABI.
 
@@ -715,7 +715,9 @@ FOURTH BREAKING window. 28 commits on `feat/v7.0.0-debt-closure`. ADRs 0117–01
   `G_AS_ZETA2_DDIM` (halving ratio ≈ 4.0) PASS.
 - **[DONE — ADR-0124]** `MatrixDiffusionChernoff2D/3D<F, M>` palindromic Strang.
   `G_MATRIX_2D`, `G_MATRIX_3D` PASS.
-- **[DONE — ADR-0125]** `MatrixExpPade<M>` — Padé[13/13] lifts M≥5 cap. `G_MATRIX_PADE_M5` PASS.
+- **[DONE — ADR-0125]** Padé[13/13] matrix exponential lifts the M≥5 cap —
+  shipped as the function `mat_exp_pade13` (`crates/semiflow/src/matrix_pade.rs`), not as the
+  `MatrixExpPade<M>` type this entry originally named. `G_MATRIX_PADE_M5` PASS.
 - **[DONE — ADR-0126]** `Killing2ndChernoff<C, K, F>` soft-killing order-2. `G_KILLING_ORDER2` PASS.
 - **[DONE — ADR-0127]** Complex-λ Laplace-Chernoff resolvent. `G_CPLX_RES` PASS.
 - **[DONE — ADR-0128]** `MatrixDiffusionChernoffComplex<F, M>`. `G_CPLX_MATRIX` PASS.

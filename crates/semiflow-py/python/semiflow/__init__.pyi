@@ -4935,7 +4935,7 @@ class Heat2DVarA:
 
     Note the operator: this is the **non-divergence** form ``a(x)·u_xx``, not
     ``d_x(a(x) d_x u)``. The two differ whenever ``a`` varies; if you want the
-    conservative form use :class:`ConservativeDiffusion1D` per axis.
+    conservative form use :class:`ConservativeDiffusionChernoff` per axis.
 
     ``order()`` reports **1**, not 2. The Strang composition is second-order,
     but each axis kernel freezes ``a`` at the node, which is order 1 wherever

@@ -111,7 +111,8 @@ scope (ADR-0115).
 **Notes**
 
 - `Heat2D` and `Heat3D` gained the `boundary` kwarg in Phase 1; internally
-  wired through `Grid1D::new_with_policy` on each axis.
+  wired through `Grid1D::new(...)?.with_boundary(...)` on each axis
+  (there is no `Grid1D::new_with_policy`; boundary is a builder step).
 - `NonSeparable2D` wraps the unified `NonSeparableMixedChernoff` type
   (ADR-0058). The constant-`c` path and the `with_beta_array` pre-sampled
   β(x,y) path via bilinear interpolation are both exposed. See `coeff2d.rs`.
@@ -341,7 +342,7 @@ Behaviour changes on the existing Python surface, not additions:
 |---------|--------|-----------|
 | every `D > 1` kernel | `GridFnND::sample` now honours `InterpKind` + `BoundaryPolicy`; results change (they become correct) | ADR-0191 |
 | `Heat2DVarA.order()`, `Heat3DVarA.order()` | 2 → **1**; the axis kernels freeze `a` at the node | ADR-0191 AM1 |
-| `ConservativeDiffusion1D` | accepts `k ≥ 0` (CEV / Feller / Wright–Fisher degenerate ends) | ADR-0192 |
+| `ConservativeDiffusionChernoff` | accepts `k ≥ 0` (CEV / Feller / Wright–Fisher degenerate ends) | ADR-0192 |
 | `DiffusionExpmv1D`, graph Lanczos | corrected θ_m table changes the substep count | ADR-0198 |
 ## 10. Known Gaps and Deferred Items
 

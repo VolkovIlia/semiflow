@@ -290,8 +290,13 @@ schema_version: "4.14.0"
 #       reduction); GH ladder depth (max 5) suffices (ℓ−D+1 = 4 ≤ 5).
 #   - `MatrixDiffusionChernoff2D<F, M>` — 2D matrix Strang, ADR-0124.
 #   - `MatrixDiffusionChernoff3D<F, M>` — 3D matrix Strang, ADR-0124.
-#   - `MatrixAxisLift` — component-aware pencil gather/scatter, ADR-0124.
-#   - `MatrixExpPade<M>` (internal dispatch lifts M≥5 cap), ADR-0125.
+#   - component-aware pencil gather/scatter, ADR-0124. NOTE (audited 2026-08-17):
+#     ADR-0124 authorised this as a `MatrixAxisLift` TYPE, but the engineer wave
+#     shipped it as free functions `pass_2d_x` / `pass_2d_y` / `pass_3d_{x,y,z}`
+#     in crates/semiflow/src/matrix_2d3d.rs. No `MatrixAxisLift` type exists.
+#   - Padé[13/13] internal dispatch lifting the M>=5 cap, ADR-0125. NOTE
+#     (audited 2026-08-17): shipped as the function `mat_exp_pade13` in
+#     crates/semiflow/src/matrix_pade.rs; no `MatrixExpPade<M>` type exists.
 #   - `Killing2ndChernoff<C, K, F>` — soft-killing order-2 Strang, ADR-0126.
 #   - `KillingRate<F>` trait — κ(x) ≥ 0 killing-rate field, ADR-0126.
 #   - `LaplaceChernoffResolvent::eval_complex<Cx>` — complex-λ resolvent, ADR-0127.
@@ -6829,10 +6834,15 @@ enums:
     impls:
       - trait: "ChernoffFunction<F>"
         notes: |
-          `type S = ManifoldGridFn<F, M>` (a backend-specific discretisation
-          type that the manifold backend defines — e.g., for Sphere2 it is an
-          icosahedral mesh; for Torus<F, D> it is a tensor-product flat grid;
-          for Hyperbolic2 it is a hyperbolic tessellation).
+          `type S = GridFn2D<f64>` (crates/semiflow/src/manifold_chernoff.rs).
+          NOTE (audited 2026-08-17): this entry previously specified
+          `type S = ManifoldGridFn<F, M>`, "a backend-specific discretisation
+          type that the manifold backend defines — icosahedral mesh for Sphere2,
+          tensor-product flat grid for Torus<F, D>, hyperbolic tessellation for
+          Hyperbolic2". That type does NOT exist in any source file: the design
+          was never built. What shipped is concrete and f64-only — every backend
+          shares one `GridFn2D<f64>` carrier. Treat the per-backend discretisation
+          as an unimplemented design note, not as the current contract.
           `apply_into`: per-cell quadrature loop per the struct `doc:` block.
           `order()` returns 1 or 2 per `with_curvature_correction`.
           `growth()` returns (1.0, 0.0) — contractive on bounded-geometry M.

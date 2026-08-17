@@ -5395,7 +5395,7 @@ Differential Equations", Cayley map for unitary group SU(N).
 
 This section is an API refactor pointer. The mathematical content for non-separable 2D operators is fully covered in §10.7 (constant-c case, v0.7.0) and §10.7-ter (anisotropic `β(x,y)` case, v0.9.0). v2.2 ADR-0058 unifies the two v0.7.0 + v0.9.0 implementations under a single generic `NonSeparableMixedChernoff<X, Y, F, S>` parameterised by the state type `S`. The existing types `NonSeparable2DChernoff` and `NonSeparable2DAnisotropicChernoff` become type aliases.
 
-**No math change**. The Strang-style palindromic 5-leg composition (Theorem 7-bis, §10.7-ter) is unchanged. The order-2 in τ result (Theorem 7-bis Corollary) applies to both `MixedDerivOperator::ScalarCoupling` and `MixedDerivOperator::BetaCoupling` impls — only the discretisation of the mixed-Taylor coupling step changes between them (one scalar multiply vs one per-node lookup).
+**No math change**. The Strang-style palindromic 5-leg composition (Theorem 7-bis, §10.7-ter) is unchanged. The order-2 in τ result (Theorem 7-bis Corollary) applies to both the `ScalarCoupling` and `BetaCoupling` impls of the `MixedDerivOp<F>` trait — only the discretisation of the mixed-Taylor coupling step changes between them (one scalar multiply vs one per-node lookup).
 
 **Library policy** (NORMATIVE — ADR-0058):
 
@@ -6402,7 +6402,7 @@ where
 
 ### §23.9 — Limitations and future work
 
-- **Order-1 only.** Higher-order Howland (midpoint-sampled $\widehat{F}(\tau) \widehat{f}(s) := F(\tau, s - \tau/2) \widehat{f}(s - \tau)$ gives order-2; Casas-Iserles 2009 palindromic Magnus gives order-4) requires either a midpoint `apply_at(t_mid, τ, …)` or the v3.0 `ApproxSubspace<k>` machinery. Defer.
+- **Order-1 only.** Higher-order Howland (midpoint-sampled $\widehat{F}(\tau) \widehat{f}(s) := F(\tau, s - \tau/2) \widehat{f}(s - \tau)$ gives order-2; Casas-Iserles 2009 palindromic Magnus gives order-4) requires either a midpoint `apply_at(t_mid, τ, …)` or the v3.0 `ApproximationSubspace<K, F>` machinery. Defer.
 - **Uniform $\Delta s$ only.** Adaptive time-sample grids require $s$-axis interpolation between samples. Defer to v3.x once concrete use cases inform the API.
 - **No commutator-aware termination.** The G25 oracle uses an analytical closed-form because the diffusion family $\{(1+0.5 s) \partial_{xx}\}_{s}$ is *commuting* (any two times commute). The Howland lift handles non-commuting families correctly per §23.2 but a richer benchmark (e.g., $\{(1+0.5s) \partial_{xx} + s \partial_x\}$) would require numerical reference. Defer.
 - **Sub-trait may be folded into v3.0 trait redesign.** The roadmap (`roadmap-reflective-biscuit.md` §v3.0) explicitly considers folding `TimedChernoffFunction` into the redesigned `ChernoffFunction` once A1+B2+A4+B4 use cases have crystallised. v2.7 ships the super-trait as a *probe* of the time-dependent surface.
@@ -7166,7 +7166,24 @@ Script: `scripts/verify_zeta8_correction.py`. MUST print exactly `T23N_zeta8 PAS
 
 ---
 
-### §27.quart — Order-8 ζ-correction via diagonal Padé P₄/Q₄ on K5 — `Diffusion8thZeta8PadeChernoff` (v4.3+, ADR-0091, NORMATIVE library; CITATION mathematics)
+### §27.quart — Order-8 ζ-correction via diagonal Padé P₄/Q₄ on K5 — `Diffusion8thZeta8PadeChernoff` (ADR-0091; **CITATION mathematics only — NOT a normative library mapping**)
+
+> **Status (audited 2026-08-17).** This heading previously read "NORMATIVE library". That was stale:
+> the amendments below take the kernel through three states, and the heading was never updated to the
+> last one.
+>
+> - **AMENDMENT 1** (v4.3) — DEFERRED: Padé instantiated on `A` without a scaling-and-squaring
+>   envelope, `τ‖A‖ ≈ 62` against a convergence radius of ~5.4. Demoted to citation mathematics.
+> - **AMENDMENT 2** (v4.4+) — REVIVED as a NORMATIVE *algorithm* specification once Higham 2005
+>   supplied the missing envelope (ADR-0094).
+> - **AMENDMENT 3** — TERMINAL CLOSURE per ADR-0101, after the v4.5 Wave I landing came back
+>   anti-convergent (`log₂ = −0.4053`) with the envelope gate passing. ADR-0101 status:
+>   "Padé permanently DEFERRED v6.0+ pending external math advance."
+>
+> AMENDMENT 3 is the operative state. `Diffusion8thZeta8PadeChernoff` exists in **no** source file and
+> never shipped; the order-8 contract is closed by `Diffusion8thZeta8Chernoff` ALONE
+> (`crates/semiflow/src/diffusion8_zeta8.rs`, §27.tris Chebyshev). The scalar Padé identity below is
+> correct mathematics and stays; only the library mapping is withdrawn.
 
 Direct order-8 alternative to the DEFERRED §27.tris nested Richardson rung. The diagonal Padé approximant of `exp(z)` at degree $K = 4$ achieves order $2K = 8$ in a single step via rational approximation rather than recursive cascade:
 
@@ -9114,7 +9131,7 @@ Test file: `tests/laplace_resolvent_residual.rs` (REUSED from v2.7 G24; only the
 
 - **$\lambda$-sweep gate**: G_RES_RES tests only $\lambda = 1.0$. A multi-$\lambda$ sweep (e.g., $\lambda \in \{0.1, 1.0, 10.0\}$) defers to v4.1+ — would verify the $\lambda \to 0$ corner (where Gauss-Laguerre is sensitive) and the $\lambda \to \infty$ corner (where the resolvent norm approaches zero).
 - **Non-Gaussian $f$**: G_RES_RES tests only the canonical Gaussian. Non-smooth or oscillatory $f$ would stress the Gauss-Laguerre quadrature differently; defers to v4.x+ if a use case demands.
-- **2D / 3D resolvent** (`LaplaceChernovResolvent<Strang2D, f64>`, etc.): the v2.7 implementation is generic over `C: TimedChernoffFunction<F>` so 2D / 3D resolvents COMPILE; the gate G_RES_RES extends straightforwardly but the per-test cost grows with grid size. Deferred to v4.x+ — current use cases (Heston, Tikhonov) are 1D or 2D-via-tensor-product.
+- **2D / 3D resolvent** (`LaplaceChernoffResolvent<Strang2D, f64>`, etc.): the v2.7 implementation is generic over `C: TimedChernoffFunction<F>` so 2D / 3D resolvents COMPILE; the gate G_RES_RES extends straightforwardly but the per-test cost grows with grid size. Deferred to v4.x+ — current use cases (Heston, Tikhonov) are 1D or 2D-via-tensor-product.
 
 ### §34.5 — References
 
@@ -9655,7 +9672,7 @@ These three ceilings — `{3.226, 3.870, 3.067}` — are the **MATHEMATICAL CEIL
 
 ### §39.5 — SepticHermite breakthrough projection (v6.0.0 plan)
 
-The only path that genuinely lifts the §39.4 ceiling WITHOUT raising `N` (which increases both memory and runtime) is to **lower `φ`** by replacing the `QuinticHermite` virtual-node sampler with a higher-order Hermite primitive. The order-7 (`SepticHermite`) or order-8 (`OcticHermite`) variants would deliver `φ ≈ O(dx⁸) ≈ 10⁻¹³` at `N = 512` — a 3-orders-of-magnitude floor reduction. Extending §39.2 with `φ ≈ 10⁻¹³`:
+The only path that genuinely lifts the §39.4 ceiling WITHOUT raising `N` (which increases both memory and runtime) is to **lower `φ`** by replacing the `QuinticHermite` virtual-node sampler with a higher-order Hermite primitive. The order-7 (`SepticHermite`) or order-8 (`OctonicHermite`) variants would deliver `φ ≈ O(dx⁸) ≈ 10⁻¹³` at `N = 512` — a 3-orders-of-magnitude floor reduction. Extending §39.2 with `φ ≈ 10⁻¹³`:
 
 | Kernel | Saturation ceiling at `φ ≈ 10⁻¹⁰` (v5.x) | Projected ceiling at `φ ≈ 10⁻¹³` (v6.0+) |
 |--------|---------------------------------------------|-------------------------------------------|
