@@ -27,6 +27,8 @@ name: Flagship Gates (RELEASE_BLOCKING)
 #   G17            g17_magnus6_slope             (MagnusGraph 6th-order)
 #   G18            g18_schrodinger_unitarity     (Schrödinger slope part)
 #   G_zeta4_TRUTHFUL_ORDER  zeta4_truthful_order  (ζ⁴ true-order gate)
+#   G_zeta6_TRUTHFUL_ORDER  zeta6_truthful_order  (ζ⁶ true-order gate, ADR-0119)
+#   G_zeta8_TRUTHFUL_ORDER  zeta8_truthful_order  (ζ⁸ true-order gate, ADR-0119)
 #   G_zeta4        zeta4_correction_slope        (ζ⁴ correction slope)
 #   G_zeta4_cheb   zeta4_correction_slope_cheb   (ζ⁴ Chebyshev variant)
 #   G_zeta6        zeta6_correction_slope        (ζ⁶ correction slope)
@@ -60,6 +62,21 @@ on:
   schedule:
     # Nightly at 00:30 UTC (offset from midnight to avoid GitHub queue peak).
     - cron: "30 0 * * *"
+  push:
+    # Release tags. Before this trigger existed, the flagship gates ran ONLY on
+    # the nightly schedule, so a tag pushed between two nightlies was published
+    # with no flagship evidence bound to its SHA at all — v0.13.0-beta shipped
+    # that way (its last flagship run predated the whole issue campaign).
+    #
+    # This lane is a RECORD, not a blocker: it does NOT gate release-crate.yml /
+    # release-wheels.yml / release-wasm.yml, which publish in minutes while this
+    # workflow takes 83-118 min on hosted runners. Making publication wait on it
+    # would trade a fast release for a 2 h stall plus a 6 h-timeout failure mode
+    # that blocks the release entirely. The actual pre-tag gate remains the local
+    # run on production hardware (docs/release-process.md step 3); this trigger
+    # guarantees an auditable run exists against the exact released commit, and a
+    # red result here is grounds to yank and patch.
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       runner:
@@ -139,6 +156,8 @@ jobs:
           RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test zeta4_truthful_order \
+            --test zeta6_truthful_order \
+            --test zeta8_truthful_order \
             --test zeta4_correction_slope \
             --test zeta4_correction_slope_cheb \
             --test zeta6_correction_slope \
