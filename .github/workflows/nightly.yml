@@ -32,6 +32,34 @@ jobs:
             --features parallel,simd,slow-tests --release \
             --test anisotropic_shift_nd_d5_slope -- --nocapture
 
+  smolyak-d5-d6:
+    name: G_SMOLYAK_D5 / D6 (RELEASE_BLOCKING, hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Same reasoning as ddim-d5 above, and discovered the same way: these two
+      # gates ran in no workflow at all until 2026-08-18, so their cost had
+      # never been measured. First measurement, on a 12-core host: D=5 exceeded
+      # a 40 min cap outright; D=6 is the same order. Both files still claim
+      # "~10-30 s on release" in their headers — a figure from before ADR-0191
+      # replaced multilinear sampling with the `K^D` tensor stencil (1024 node
+      # reads per sample at D=5 against multilinear's 32, a 32x interpolation
+      # cost that ADR-0191 measured on the D=5 smoke tests but never on these).
+      #
+      # They therefore cannot share a job with gates that answer in seconds,
+      # and they are not on the tag lane: a hosted runner is ~6x slower than
+      # the measurement host, which puts them near the 6 h job limit.
+      - name: Run G_SMOLYAK_D5 and G_SMOLYAK_D6
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test g_smolyak_d5 \
+            --test g_smolyak_d6 \
+            --no-fail-fast -- --include-ignored --nocapture
+
   miri:
     runs-on: ubuntu-latest
     steps:

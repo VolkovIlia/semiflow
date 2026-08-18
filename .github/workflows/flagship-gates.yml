@@ -216,6 +216,222 @@ jobs:
             --no-fail-fast -- --ignored --nocapture
 
   # ---------------------------------------------------------------------------
+  # Pattern C: the gate sweep.
+  #
+  # WHY THIS EXISTS
+  # ---------------
+  # Audited 2026-08-18: `properties.yaml` declares 117 RELEASE_BLOCKING gates.
+  # Before these jobs, they were executed as follows —
+  #
+  #     35  plain `cargo test --workspace --release`  (ci.yml)
+  #     16  named `--test` binaries in this file / nightly.yml
+  #      2  Python, via py-smoke
+  #     59  NOTHING. No workflow ran them, on any trigger.
+  #      4  marker entries with no test_file
+  #
+  # The 59 were unreachable in two different ways, and the second is the one
+  # that reads as healthy: 27 files are `#![cfg(feature = "slow-tests")]`, so
+  # CI never even compiled them; the rest carry `#[ignore]`, so CI compiled and
+  # ran the binary and then SKIPPED the gate, reporting it in the `N ignored`
+  # tally of a green run.
+  #
+  # The formal safety net was `xtask test-full` + `test-ignored-gates`, run by
+  # hand before a tag (docs/release-process.md steps 3a/4). It depends on a
+  # human remembering, and before v0.13.0-beta it did not happen — which is how
+  # gates written FOR the v0.13.0-beta issue campaign (G_ASND_MOMENT, the
+  # second-moment gate written to catch issue #17; the five G_CONS_* gates for
+  # #26; G_SHIFT1D_COEFF_FD for #25; G_PENCIL_ORDER2 for #21) shipped without
+  # ever having executed in CI.
+  #
+  # These jobs bind that set to both triggers of this workflow: nightly, and
+  # every `v*` tag. Grouped by concern so a red job names the culprit area,
+  # matching the Pattern B style above. `--include-ignored` runs both the
+  # `#[ignore]`d gates and the plain tests in the same binaries, so a file does
+  # not need to be classified by gating mechanism to be covered here.
+  #
+  # timeout-minutes is a runaway guard, not a tight budget. Local wallclock was
+  # measured on a 12-core host on 2026-08-18 (the first execution most of these
+  # gates ever had): the overwhelming majority finish in 11-20 s each, the
+  # slowest survivors being g_killing_order2 at 90 s and g_kahler_curv at 50 s.
+  # Hosted runners are ~6x slower, so the guards below sit far above expectation
+  # on purpose. The two genuine outliers found by that measurement —
+  # G_SMOLYAK_D5 and G_SMOLYAK_D6 — were moved to nightly.yml rather than
+  # absorbed into a guard here. Tighten from the first green nightly.
+  # ---------------------------------------------------------------------------
+
+  campaign-gates:
+    name: Issue-campaign gates (#17, #21, #25, #26)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_ASND_MOMENT (#17 regression oracle), G_CONS_* ×5 (#26 degenerate
+      # faces), G_SHIFT1D_COEFF_FD (#25 coefficient VJP), G_PENCIL_ORDER2
+      # (#21 transverse-varying pencils), G_FROZEN_COEFF_* ×2.
+      - name: Run issue-campaign gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test aniso_nd_moment \
+            --test conservative_gates \
+            --test shift1d_vjp_gates \
+            --test strang2d_pencil_gates \
+            --test frozen_coeff_operator \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  operator-exponential-gates:
+    name: Operator / matrix-exponential gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_ENTRY_FRECHET, G_MASSK_*,
+      # G_PHI_AUG_DENSE, G_ETDRK4_ORDER, G_ETD_ADJOINT_FD, G_MATRIX_2D/3D,
+      # G_MATRIX_PADE_M5, G_CPLX_MATRIX, and G_MATRIX (m1..m4 slope ladder,
+      # which properties.yaml records via the brace shorthand
+      # `matrix_diffusion_m{1,2,3,4}_slope.rs`).
+      - name: Run operator and matrix-exponential gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test graph_expmv_dense \
+            --test graph_expmv_depth_flat \
+            --test graph_frechet_fd \
+            --test sym_op_entry_frechet \
+            --test massk_lumped \
+            --test massk_consistent \
+            --test g_phi_aug_dense \
+            --test g_etdrk4_order \
+            --test g_etd_adjoint_fd \
+            --test expmv_div_form_action_accuracy \
+            --test g_matrix_2d3d \
+            --test g_matrix_pade_m5 \
+            --test g_cplx_matrix \
+            --test matrix_diffusion_m1_slope \
+            --test matrix_diffusion_m2_slope \
+            --test matrix_diffusion_m3_slope \
+            --test matrix_diffusion_m4_slope \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  geometry-hypoelliptic-gates:
+    name: Geometry / manifold / hypoelliptic gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_KAHLER_CURV, G_CARNOT_CPLX3, G26 (sphere), G23 + G_KILLING_ORDER2,
+      # G27 (reflected half-line), G25 (Howland lift), G_HARD_WALL_ORDER2,
+      # G_QSCHROD, G_SCHROD_B.
+      - name: Run geometry and hypoelliptic gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test g_kahler_curv \
+            --test g_carnot_cplx3_slope \
+            --test manifold_sphere_slope \
+            --test killing_dirichlet_slope \
+            --test g_killing_order2 \
+            --test reflected_heat_halfline \
+            --test howland_lift_slope \
+            --test g_hard_wall_order2 \
+            --test g_qschrod \
+            --test schrodinger_complex_unitarity \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  resolvent-sampling-gates:
+    name: Resolvent / sampling-floor / sparse-grid gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_RESOLVENT_JUMP_{,,2D_,3D_}ORDER, G_RES_RES, G_CPLX_RES,
+      # G_PATH_EPS_FLOOR, G_PATH_EPS_CHEB_FLOOR, G_POINTEVAL, G_AS_K,
+      # G_AS_ZETA2_DDIM.
+      #
+      # G_SMOLYAK_D5 / G_SMOLYAK_D6 are NOT here — they moved to the
+      # `smolyak-d5-d6` job in nightly.yml. Measured 2026-08-18 on a 12-core
+      # host, the first execution either has ever had: D=5 exceeded a 40 min
+      # cap and D=6 is the same order. The files claim "~10-30 s on release",
+      # a figure that predates ADR-0191's `K^D` sampler (1024 node reads per
+      # sample at D=5 against multilinear's 32). Left in this job they would
+      # dominate it and, on a 2-vCPU hosted runner, put the tag lane at risk of
+      # the 6 h job limit.
+      - name: Run resolvent, sampling-floor and sparse-grid gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test g_resolvent_jump_order \
+            --test g_resolvent_jump_2d_order \
+            --test g_resolvent_jump_3d_order \
+            --test laplace_resolvent_residual \
+            --test g_cplx_res \
+            --test path_eps_spatial_floor \
+            --test path_eps_chebyshev_floor \
+            --test point_eval_byte_identity \
+            --test approximation_subspace \
+            --test g_as_zeta2_ddim \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  wentzell-multilayer-ad-gates:
+    name: Wentzell / multilayer / AD gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_WENTZELL_{STABLE,ORDER}, G_TPS_* ×4 (multilayer stack),
+      # G_DUAL_AD_GRADIENT, G_DUAL_ZERO_ALLOC, G_ADJOINT_FP_ORDER +
+      # G_ADJOINT_FP_TIGHTNESS_VAGUE, G_DR_ZETA4_TRUTHFUL_ORDER.
+      - name: Run Wentzell, multilayer and AD gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test g_wentzell_stable \
+            --test g_wentzell_order \
+            --test multilayer_gates \
+            --test dual_ad_gradient \
+            --test dual_zero_alloc \
+            --test g_adjoint_fp_order \
+            --test g_dr_zeta4_truthful_order \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  nonseparable-2d-gates:
+    name: Non-separable 2-D slope gates (G3_NS2D, G3_NS2D_var)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Given its own job: this binary fixes N=1000 Chernoff steps and sweeps
+      # the spatial grid, the same shape as `strang_nonseparable_aniso_slope`
+      # in the flagship job, which measures 118 min on a hosted runner. Sharing
+      # a job with the short gates above would let one slow binary time out the
+      # whole group and hide their results.
+      - name: Run G3_NS2D and G3_NS2D_var
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test strang_nonseparable_slope \
+            --no-fail-fast -- --include-ignored --nocapture
+
+
+  # ---------------------------------------------------------------------------
   # L-gate: latency floor (L_CEV_PTICK — RELEASE_BLOCKING, ADR-0069).
   #
   # NOTE: meaningful p99.9 measurements require dedicated prod hardware
