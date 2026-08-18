@@ -94,13 +94,60 @@ covered include (non-exhaustive):
 
 All must exit 0 before tagging.
 
+### 3b. Which workflow actually runs which gate
+
+`properties.yaml` declares 117 `RELEASE_BLOCKING` gates. Audited 2026-08-18,
+their execution was:
+
+| Executed by | Gates |
+|---|---|
+| `ci.yml` — plain `cargo test --workspace --release` | 35 |
+| `flagship-gates.yml` / `nightly.yml` — named `--test` binaries | 16 |
+| `py-smoke` (Python) | 2 |
+| **nothing — no workflow, on any trigger** | **59** |
+| marker entries with no `test_file` | 4 |
+
+The 59 were unreachable in two ways. 27 files are
+`#![cfg(feature = "slow-tests")]`, so CI never compiled them; the rest carry
+`#[ignore]`, so CI compiled the binary, skipped the gate, and reported it inside
+the `N ignored` tally of a green run — the failure mode that reads as health.
+
+Steps 3 and 3a above were the only thing standing between that set and a
+release, and they are manual. Before v0.13.0-beta they were not run, which is
+how the gates written FOR that release's issue campaign — `G_ASND_MOMENT` (the
+second-moment oracle written to catch issue #17), the five `G_CONS_*` (#26),
+`G_SHIFT1D_COEFF_FD` (#25), `G_PENCIL_ORDER2` (#21) — shipped without ever
+having executed in CI.
+
+Those 59 are now bound to `flagship-gates.yml`, which triggers nightly **and on
+every `v*` tag**, in six concern-grouped jobs: `campaign-gates`,
+`operator-exponential-gates`, `geometry-hypoelliptic-gates`,
+`resolvent-sampling-gates`, `wentzell-multilayer-ad-gates` and
+`nonseparable-2d-gates`. They run with `-- --include-ignored`, so a file is
+covered regardless of which of the two gating mechanisms it uses.
+
+Measuring that set before wiring it up — its first execution — immediately
+turned up one stale cost claim. `G_SMOLYAK_D5` documents "~10-30 s on release"
+and exceeded a 40-minute cap on a 12-core host; `G_SMOLYAK_D6` documents "≤ 2 min"
+and runs tens of minutes. Both pass; what went stale is the estimate, because
+ADR-0191's `K^D` sampler made a `D = 5` sample read 1024 nodes instead of 32 and
+nobody re-measured a gate that ran nowhere. They now live in
+`nightly.yml::smolyak-d5-d6` beside `ddim-d5`, off the tag lane. Expect more of
+this kind as the sweep runs: a gate that has never executed has never had its
+documented cost checked either.
+
+This does **not** retire steps 3/3a: the tag lane is a record bound to the
+released SHA, not a blocker on publication (see the `tags:` comment in
+`flagship-gates.yml`), and hosted runners are not the calibrated bench hardware.
+It does mean a skipped manual run is now visible within a day instead of never.
+
 ### 4. Test suite and lints clean
 
 ```bash
 cargo run -p xtask -- test-fast
 cargo run -p xtask -- test-full
-cargo +nightly fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo run -p xtask -- check-lints
 cargo run -p xtask -- check-unsafe-scope
 cargo run -p xtask -- ffi-headers --check
@@ -120,30 +167,46 @@ cargo run -p xtask -- doc-check
 cargo run -p xtask -- changelog-check
 ```
 
-**Known gap — clippy has never covered `slow-tests`.** The clippy line above
-matches `ci.yml` exactly and deliberately omits `--all-features`. Adding it does
-not pass. Measured 2026-08-17 with
-`cargo clippy --workspace --all-targets --all-features --keep-going`:
-**444 lints across 31 files**, every one a `slow-tests`-gated gate binary (plus
-`examples/cev_european_call.rs`). Largest offenders: `g_gridless_cv.rs` (74),
-`g_s3_drift_spectral.rs` (58), `g_s3_varcoef_spectral.rs` (33),
-`g_s3_nonlinear.rs` (30), `hormander_kolmogorov_slope.rs` (26).
+**Resolved 2026-08-18 — clippy now covers `slow-tests`.** The line above matches
+`ci.yml`, which gained `--all-features`. Until that day neither job saw the
+`#![cfg(feature = "slow-tests")]` files: `clippy --all-targets` without
+`--all-features` skips them, and `cargo test --workspace --release` does not
+build them either. 27 of the files carrying RELEASE_BLOCKING gates were
+therefore type-checked by no workflow at all.
 
-The mix is dominated by cosmetics — `doc_markdown` alone is 180 of the 444, then
-`cast_possible_truncation` (51), `similar_names` (30), `cast_lossless` (21). The
-12 `identity_op` / `erasing_op` hits were read individually and are benign
-row-major index arithmetic (`gen[0 * nd + 0]`, written uniformly for
-readability), **not** degenerate assertions.
+The backlog that had accumulated behind that blind spot measured **346 unique
+diagnostics across 31 files** (`cargo clippy --workspace --all-targets
+--all-features --keep-going`, deduplicated by lint × file × line; earlier
+counts of 412/444 double-counted sites reported under more than one target).
+It was cleared as follows, with no gate threshold, tolerance or assertion
+touched:
 
-Note `--keep-going`: `.cargo/config.toml` sets `rustflags = ["-D", "warnings"]`,
-so each lint is a hard error and the build aborts at the first failing target.
-Without `--keep-going` you see one file per run and walk the backlog one step at
-a time, which badly understates it.
+| Disposition | Count | What |
+|---|---|---|
+| Fixed by `cargo clippy --fix` | 183 | `doc_markdown` (127), `uninlined_format_args`, `cloned_instead_of_copied`, `map_unwrap_or`, `enum_glob_use`, `let_and_return`, `manual_range_contains`, … |
+| Fixed by hand | 10 | `ignore_without_reason` ×8 — every ignored gate now states WHY in the attribute — plus `vec_init_then_push`, `empty_line_after_doc_comments` |
+| File-level `#![allow]` + justification | 153 | numeric-cast family, `similar_names`, `needless_range_loop`, `too_many_lines`, `too_many_arguments`, `identity_op`/`erasing_op`, `manual_clamp`, `match_same_arms` |
 
-Nothing here is a correctness finding, but the debt is invisible day to day and
-grows with every new gate binary. Clearing it is a standalone task; until then
-do not put `--all-features` back into this checklist, and do not "clear" it by
-blanket-`#![allow]`-ing the gate files.
+The `#![allow]` route is the repo's existing convention for test files, not a
+new escape hatch: 130 test files already carried one before this change, and
+each new line states its reason inline. Three of those reasons are load-bearing
+rather than cosmetic and should not be "cleaned up" later:
+
+- `identity_op` / `erasing_op` — row-major index formulas are written uniformly
+  (`gen[0 * nd + 0]`, `d_tri[1 * d + 0]`). The redundant `0 *` and `+ 0` terms
+  document the layout; `cargo clippy --fix` rewrote them to `gen[0 * nd]` and
+  the rewrite was reverted on purpose.
+- `manual_clamp` — `x.max(lo).min(hi)` is **not** `f64::clamp(x, lo, hi)`:
+  `max`/`min` map a NaN input onto a bound, `clamp` propagates it. Rewriting
+  would change what the gate does with non-finite input.
+- `match_same_arms` — the `d = 4 => 4` arm mirrors the §3.1 table explicitly;
+  folding it into the default would hide the spec it transcribes.
+
+Note `--keep-going` if you re-measure: `.cargo/config.toml` sets
+`rustflags = ["-D", "warnings"]` and `[workspace.lints.clippy] all = "deny"`, so
+lints are hard errors and the build aborts at the first failing target. Without
+it you see one file per run and walk the backlog one step at a time, which badly
+understates it. Add `RUSTFLAGS="--cap-lints warn"` to see every lint at once.
 
 ### 5. Version bump consistent
 
