@@ -41,7 +41,7 @@ alters a gate threshold, tolerance or assertion.
   Found by measuring the newly-reachable gates before wiring them up — their
   first execution, ever. `g_smolyak_d5.rs` advertises "~10-30 s on release";
   it exceeded a 40-minute cap on a 12-core host without finishing.
-  `g_smolyak_d6.rs` budgets "≤ 2 min wall-clock"; it is tens of minutes.
+  `g_smolyak_d6.rs` budgets "≤ 2 min wall-clock"; it hit the same 40-minute cap.
 
   Neither gate changed and neither is failing — the *estimates* went stale.
   ADR-0191 replaced multilinear N-D sampling with the `K^D` tensor stencil, so

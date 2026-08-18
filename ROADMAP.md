@@ -44,8 +44,8 @@ and the 346-diagnostic lint backlog that second change exposed. Details in
 `docs/release-process.md` §3b and the `[Unreleased]` CHANGELOG section.
 
 First finding from actually running them: `G_SMOLYAK_D5` exceeds 40 min on a
-12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` is tens of
-minutes against a documented "≤ 2 min". Neither gate is failing — ADR-0191's
+12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` hits the same
+cap against a documented "≤ 2 min". Neither gate is failing — ADR-0191's
 `K^D` sampler made each `D = 5` sample read 1024 nodes instead of 32, and the
 budget claims were never re-measured because the gates ran nowhere. Both moved
 to `nightly.yml::smolyak-d5-d6`, alongside `ddim-d5`.

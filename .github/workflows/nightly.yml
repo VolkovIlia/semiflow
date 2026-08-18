@@ -43,7 +43,7 @@ jobs:
       # Same reasoning as ddim-d5 above, and discovered the same way: these two
       # gates ran in no workflow at all until 2026-08-18, so their cost had
       # never been measured. First measurement, on a 12-core host: D=5 exceeded
-      # a 40 min cap outright; D=6 is the same order. Both files still claim
+      # a 40 min cap outright, and D=6 hit the same cap. Both files still claim
       # "~10-30 s on release" in their headers — a figure from before ADR-0191
       # replaced multilinear sampling with the `K^D` tensor stencil (1024 node
       # reads per sample at D=5 against multilinear's 32, a 32x interpolation

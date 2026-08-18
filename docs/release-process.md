@@ -129,7 +129,7 @@ covered regardless of which of the two gating mechanisms it uses.
 Measuring that set before wiring it up — its first execution — immediately
 turned up one stale cost claim. `G_SMOLYAK_D5` documents "~10-30 s on release"
 and exceeded a 40-minute cap on a 12-core host; `G_SMOLYAK_D6` documents "≤ 2 min"
-and runs tens of minutes. Both pass; what went stale is the estimate, because
+and hit the same cap. Both pass; what went stale is the estimate, because
 ADR-0191's `K^D` sampler made a `D = 5` sample read 1024 nodes instead of 32 and
 nobody re-measured a gate that ran nowhere. They now live in
 `nightly.yml::smolyak-d5-d6` beside `ddim-d5`, off the tag lane. Expect more of

@@ -26,7 +26,7 @@
 //!   total ≈ 262M ops → ~6–14 s; comfortably ≤ 2 min wall-clock.
 //!
 //! **That estimate is stale.** Measured 2026-08-18, the first execution this
-//! gate ever had: tens of minutes on a 12-core host, not ~14 s. The op counts
+//! gate ever had: it exceeded a 40 min cap on a 12-core host, not ~14 s. The op counts
 //! above are still right; what changed is the cost per sample. ADR-0191
 //! replaced multilinear N-D sampling with the `K^D` tensor stencil, so each
 //! sample now reads `4^6` nodes instead of `2^6`. The gate is unchanged — only
@@ -171,7 +171,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
 /// Prints incremental progress. (The old "budget ≤ 3 min on dev HW" no longer
 /// holds — see the measured cost in the module header.)
 #[test]
-#[ignore = "RELEASE_BLOCKING slow gate: tens of minutes on a 12-core host (measured 2026-08-18); run with -- --ignored"]
+#[ignore = "RELEASE_BLOCKING slow gate: >40 min on a 12-core host (measured 2026-08-18); run with -- --ignored"]
 fn g_smolyak_d6() {
     println!("G_SMOLYAK_D6: building D=6 Smolyak kernel (ℓ={LEVEL}, N_AXIS={N_AXIS})…");
     let kernel = make_kernel(N_AXIS);
