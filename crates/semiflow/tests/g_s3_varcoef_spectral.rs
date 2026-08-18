@@ -32,6 +32,12 @@
     clippy::suboptimal_flops,
     clippy::many_single_char_names
 )]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
+#![allow(clippy::needless_range_loop)] // index addresses two parallel arrays
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
+#![allow(clippy::too_many_arguments)] // builders take the operator's full parameter set
+#![allow(clippy::unreadable_literal)] // mnemonic seed constant, not a magnitude
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -56,21 +62,21 @@ fn grid_xs(n: usize) -> Vec<f64> {
     (0..n).map(|i| i as f64 * dx).collect()
 }
 
-/// a[j][i] = 0.5 + 0.2·cos(x_i + 0.4·j)  (varies in [0.3, 0.7], genuinely variable).
+/// a[j][i] = 0.5 + `0.2·cos(x_i` + 0.4·j)  (varies in [0.3, 0.7], genuinely variable).
 fn coef_a(xs: &[f64], j: usize) -> Vec<f64> {
     xs.iter()
         .map(|&x| 0.5 + 0.2 * (x + 0.4 * j as f64).cos())
         .collect()
 }
 
-/// b[j][i] = 0.3·sin(x_i + 0.2·j).
+/// b[j][i] = `0.3·sin(x_i` + 0.2·j).
 fn coef_b(xs: &[f64], j: usize) -> Vec<f64> {
     xs.iter()
         .map(|&x| 0.3 * (x + 0.2 * j as f64).sin())
         .collect()
 }
 
-/// Smooth IC: tensor product of (cos(x_i)+0.3) per axis.
+/// Smooth IC: tensor product of (`cos(x_i)+0.3`) per axis.
 fn smooth_u0_n(n: usize, d: usize) -> Vec<f64> {
     let xs = grid_xs(n);
     let g: Vec<f64> = xs.iter().map(|&x| x.cos() + 0.3).collect();
@@ -176,7 +182,7 @@ fn kron(a: &[f64], m: usize, b: &[f64], k: usize) -> Vec<f64> {
     c
 }
 
-/// Build lifted L_j ⊗ I^{rest} for d-D tensor (last index fastest).
+/// Build lifted `L_j` ⊗ I^{rest} for d-D tensor (last index fastest).
 fn lift_axis(lj: &[f64], n: usize, d: usize, j: usize) -> Vec<f64> {
     let before = n.pow(j as u32);
     let after = n.pow((d - 1 - j) as u32);
@@ -349,7 +355,7 @@ fn idft_c2r(x: &[f64]) -> Vec<f64> {
     out
 }
 
-/// Apply k(τ) = exp(τ·a0·Lap_1d) via 1-D const-coef spectral (NO solver, NO drift).
+/// Apply k(τ) = `exp(τ·a0·Lap_1d)` via 1-D const-coef spectral (NO solver, NO drift).
 fn k1d(line: &[f64], n: usize, dx: f64, a0: f64, tau: f64) -> Vec<f64> {
     let dx2 = dx * dx;
     let mut cplx = dft_r2c(line);
@@ -363,7 +369,7 @@ fn k1d(line: &[f64], n: usize, dx: f64, a0: f64, tau: f64) -> Vec<f64> {
     (0..n).map(|i| iv[2 * i]).collect()
 }
 
-/// Apply R = L_j(a,b) - a0·Lap_fd as a periodic tridiagonal mat-vec.
+/// Apply R = `L_j(a,b)` - `a0·Lap_fd` as a periodic tridiagonal mat-vec.
 fn r_matvec(u: &[f64], a: &[f64], b: &[f64], n: usize, dx: f64, a0: f64) -> Vec<f64> {
     let dx2 = dx * dx;
     let two_dx = 2.0 * dx;
@@ -428,7 +434,7 @@ fn apply_axis_local(
     out
 }
 
-/// d-D symmetric Strang (local re-impl, zero reuse of tt_varcoef_spectral.rs).
+/// d-D symmetric Strang (local re-impl, zero reuse of `tt_varcoef_spectral.rs`).
 fn evolve_local(
     u0: &[f64],
     n: usize,
@@ -471,7 +477,7 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
                 .sqrt()
         })
         .collect();
-    let max_norm = col_norms.iter().cloned().fold(0.0f64, f64::max);
+    let max_norm = col_norms.iter().copied().fold(0.0f64, f64::max);
     let tol = eps * max_norm;
     let mut rank = 0usize;
     for col in 0..k {
@@ -479,8 +485,7 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
             .iter()
             .enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .map(|(i, &v)| (i + col, v))
-            .unwrap_or((col, 0.0));
+            .map_or((col, 0.0), |(i, &v)| (i + col, v));
         if pnorm < tol {
             break;
         }
@@ -893,8 +898,8 @@ fn g_s3_varcoef_spectral() {
         let rel_diff = rel_l2(&u_var, &u_const);
         let var_amp = {
             let a0 = &a_axis[0];
-            a0.iter().cloned().fold(0.0f64, f64::max)
-                - a0.iter().cloned().fold(f64::INFINITY, f64::min)
+            a0.iter().copied().fold(0.0f64, f64::max)
+                - a0.iter().copied().fold(f64::INFINITY, f64::min)
         };
         println!("Assert 5: rel_diff={rel_diff:.3e} (≥0.02), var-amp={var_amp:.3} (>0.1)");
         assert!(

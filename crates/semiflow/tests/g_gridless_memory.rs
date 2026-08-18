@@ -33,8 +33,10 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_sign_loss)] // non-negative counters cast to unsigned
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
-use allocation_counter;
 use semiflow::{
     grid::Grid1D, grid_nd::GridND, smolyak::SmolyakGridND, ChernoffFunction, GridlessChernoff,
     MeasureState, ParticleReduction, ScratchPool,
@@ -139,7 +141,7 @@ macro_rules! find_pcap_acc {
     }};
 }
 
-/// Measure peak bytes via allocation_counter at P*(d). Returns bytes_max.
+/// Measure peak bytes via `allocation_counter` at P*(d). Returns `bytes_max`.
 macro_rules! measure_peak_bytes {
     ($d:literal, $cap:expr) => {{
         let info = allocation_counter::measure(|| {
@@ -172,12 +174,12 @@ fn dense_grid_nodes(d: usize, n_per_axis: usize) -> usize {
     n_per_axis.pow(d as u32)
 }
 
-/// Memory footprint for dense f64 GridND: nodes * 8 bytes.
+/// Memory footprint for dense f64 `GridND`: nodes * 8 bytes.
 fn dense_grid_bytes(d: usize, n_per_axis: usize) -> usize {
     dense_grid_nodes(d, n_per_axis) * 8
 }
 
-/// Get the SmolyakGridND node count for the given d and level.
+/// Get the `SmolyakGridND` node count for the given d and level.
 fn smolyak_n_nodes_d2(level: usize) -> usize {
     // Use a unit constant-a Smolyak for the node count (grid geometry only)
     let grid = GridND::<f64, 2>::new([
@@ -230,14 +232,13 @@ fn smolyak_n_nodes_d3(level: usize) -> usize {
 
 // ── Leaf serialiser for Leg B bit-identity ────────────────────────────────────
 
-/// Serialize the leaves of a MeasureState<f64,D> as sorted (to_bits()) u64 pairs.
+/// Serialize the leaves of a `MeasureState`<f64,D> as sorted (`to_bits()`) u64 pairs.
 /// Sorting makes the comparison order-independent (§4.2 implementation note).
 // We compare the terminal ensembles by checking that pair(f) is bit-identical
 // for a battery of test functionals. If pair(f) agrees for all test functions
 // across two independent runs, the leaf sets are effectively identical
 // (by linear density of C_b). The fingerprint tuple is used as the hard assert.
 // This is deterministic bit-for-bit if the evolver is deterministic.
-
 macro_rules! leaf_fingerprint {
     ($rho:expr, $d:literal) => {{
         // Fingerprint: (pair(f1).to_bits(), pair(f2).to_bits(), pair(f3).to_bits())
@@ -281,18 +282,18 @@ macro_rules! leaf_fingerprint {
 // Main test: G_GRIDLESS_MEMORY (RELEASE_BLOCKING)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// G_GRIDLESS_MEMORY — RELEASE_BLOCKING gate.
+/// `G_GRIDLESS_MEMORY` — `RELEASE_BLOCKING` gate.
 ///
-/// Leg A: memory-at-matched-accuracy (<5e-3) peak working-set vs dense GridND
-///        and SmolyakGridND at the SAME accuracy. Sub-exponential growth required.
+/// Leg A: memory-at-matched-accuracy (<5e-3) peak working-set vs dense `GridND`
+///        and `SmolyakGridND` at the SAME accuracy. Sub-exponential growth required.
 ///
 /// Leg B: byte-reproducibility — two independent runs must produce bit-identical
-///        leaf fingerprints. Hard assert_eq! on to_bits() values.
+///        leaf fingerprints. Hard `assert_eq`! on `to_bits()` values.
 ///
-/// VALIDATED_DIMS = {2} by default; d=3 conditionally per §4.4.
+/// `VALIDATED_DIMS` = {2} by default; d=3 conditionally per §4.4.
 /// d≥4: outside validated envelope (printed as evidence, not asserted).
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate: gridless memory bit-identity; run with -- --ignored"]
 fn g_gridless_memory() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_MEMORY — RELEASE_BLOCKING gate (§4, v9.0.0)");
@@ -340,10 +341,7 @@ fn g_gridless_memory() {
         } else {
             "does NOT reach ACC (outside envelope)"
         };
-        println!(
-            "{:<4} | {:>8} | {:>10.4e} | {:>14} | {status}",
-            d, pcap, err, curse
-        );
+        println!("{d:<4} | {pcap:>8} | {err:>10.4e} | {curse:>14} | {status}");
     }
     println!();
 
@@ -479,7 +477,7 @@ fn g_gridless_memory() {
 
     // Binding comparison uses proxy_bytes (structural, §4.2)
     let d3_mem_win = pcap3 > 0 && proxy_bytes_d3 < dense_bytes_d3;
-    let d3_slope_ok = slope_opt.map_or(false, |s| s <= 1.5);
+    let d3_slope_ok = slope_opt.is_some_and(|s| s <= 1.5);
     let d3_validated = pcap3 > 0 && d3_mem_win && d3_slope_ok;
 
     println!("VALIDATED_DIMS determination (§4.4) — using structural proxy for comparison:");

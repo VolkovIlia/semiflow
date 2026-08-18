@@ -10,6 +10,9 @@
 
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::too_many_lines, clippy::unused_self)]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
+#![allow(clippy::cast_sign_loss)] // non-negative counters cast to unsigned
 
 use semiflow::{
     grid::{BoundaryPolicy, InterpKind},
@@ -39,7 +42,10 @@ const N_STEPS: usize = 256;
 mod tracking {
     use std::{
         alloc::{GlobalAlloc, Layout, System},
-        sync::atomic::{AtomicU64, AtomicUsize, Ordering::*},
+        sync::atomic::{
+            AtomicU64, AtomicUsize,
+            Ordering::{Acquire, Relaxed, Release},
+        },
     };
     pub struct Alloc;
     static CUR: AtomicUsize = AtomicUsize::new(0);

@@ -39,6 +39,14 @@
     clippy::suboptimal_flops,
     clippy::many_single_char_names
 )]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
+#![allow(clippy::erasing_op)] // row-major index formulas kept uniform: 0 marks the axis
+#![allow(clippy::identity_op)] // row-major index formulas kept uniform: gen[0 * nd + 0]
+#![allow(clippy::needless_range_loop)] // index addresses two parallel arrays
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
+#![allow(clippy::too_many_arguments)] // builders take the operator's full parameter set
+#![allow(clippy::unreadable_literal)] // mnemonic seed constant, not a magnitude
 
 // Assert 7 (NO-SOLVER audit): checked by the `no_solver_in_drift_evolver` test below.
 
@@ -272,7 +280,7 @@ fn add_d2_axis(l: &mut [f64], n: usize, d: usize, j: usize, coeff: f64, dx: f64)
 /// Add `coeff · I⊗…⊗D1c_j⊗…⊗I` to `l` (centred antisymm 1st-diff on axis j).
 ///
 /// `D1c[i,i+1] = 1/(2dx)`, `D1c[i,i-1] = -1/(2dx)`.
-/// Eigenvalue: `i·sin(ω)/dx` (same as σ_D1r in spectral code).
+/// Eigenvalue: `i·sin(ω)/dx` (same as `σ_D1r` in spectral code).
 fn add_d1c_axis(l: &mut [f64], n: usize, d: usize, j: usize, coeff: f64, dx: f64) {
     let tot = n.pow(d as u32);
     let s = n.pow((d - 1 - j) as u32);
@@ -664,7 +672,7 @@ fn build_expsym_nd(n: usize, d: usize, a: f64, b: f64, rho: f64, tau: f64) -> Ve
 
 /// Apply exp(τ·L) to `u0` via full d-D complex spectral symbol.
 ///
-/// Algorithm: fft_d → elementwise COMPLEX multiply by expsym_nd → ifft_d → take real.
+/// Algorithm: `fft_d` → elementwise COMPLEX multiply by `expsym_nd` → `ifft_d` → take real.
 /// This is the d-D analogue of the pair-factor apply, using the complete symbol.
 /// Returns (evolved state, max |imag residue|).
 fn spectral_evolve(
@@ -734,7 +742,7 @@ fn rank_by_qr(a: &[f64], m: usize, eps: f64) -> usize {
                 .sqrt()
         })
         .collect();
-    let max_norm = col_norms.iter().cloned().fold(0.0f64, f64::max);
+    let max_norm = col_norms.iter().copied().fold(0.0f64, f64::max);
     let tol = eps * max_norm;
 
     for col in 0..m {
@@ -743,8 +751,7 @@ fn rank_by_qr(a: &[f64], m: usize, eps: f64) -> usize {
             .iter()
             .enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .map(|(i, &v)| (i + col, v))
-            .unwrap_or((col, 0.0));
+            .map_or((col, 0.0), |(i, &v)| (i + col, v));
         if pnorm < tol {
             break;
         }
@@ -825,7 +832,7 @@ fn lcg_ic(count: usize, seed: u64) -> Vec<f64> {
 }
 
 /// Count columns with column-norm > `eps * max_col_norm` in an `rows × cols` matrix.
-/// For a rectangular matrix A this approximates the count of singular values > eps * sv_max.
+/// For a rectangular matrix A this approximates the count of singular values > eps * `sv_max`.
 fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
     let mut r = a.to_vec();
     let k = rows.min(cols);
@@ -837,7 +844,7 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
                 .sqrt()
         })
         .collect();
-    let max_norm = col_norms.iter().cloned().fold(0.0f64, f64::max);
+    let max_norm = col_norms.iter().copied().fold(0.0f64, f64::max);
     let tol = eps * max_norm;
     let mut rank = 0usize;
     for col in 0..k {
@@ -845,8 +852,7 @@ fn rank_rect_qr(a: &[f64], rows: usize, cols: usize, eps: f64) -> usize {
             .iter()
             .enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .map(|(i, &v)| (i + col, v))
-            .unwrap_or((col, 0.0));
+            .map_or((col, 0.0), |(i, &v)| (i + col, v));
         if pnorm < tol {
             break;
         }
@@ -1341,7 +1347,7 @@ fn expm_l_diagonal_3x3() {
     // exp(diag(a,b,c)) = diag(exp(a), exp(b), exp(c))
     let a = vec![-1.0, 0.0, 0.0, 0.0, -2.0, 0.0, 0.0, 0.0, -3.0];
     let result = expm_l(&a, 3);
-    println!("diag expm: result={:?}", &result);
+    println!("diag expm: result={result:?}");
     assert!(
         (result[0] - (-1.0f64).exp()).abs() < 1e-12,
         "r[0,0]={}",
@@ -1367,7 +1373,7 @@ fn expm_l_sanity_2x2() {
     let result = expm_l(&a, 2);
     let cos1 = 1.0f64.cos();
     let sin1 = 1.0f64.sin();
-    println!("expm_l 2x2 rotation: result={:?}", &result);
+    println!("expm_l 2x2 rotation: result={result:?}");
     println!("expected: [{cos1:.6}, {:.6}, {sin1:.6}, {cos1:.6}]", -sin1);
     assert!((result[0] - cos1).abs() < 1e-12, "r[0,0]");
     assert!((result[1] - (-sin1)).abs() < 1e-12, "r[0,1]");

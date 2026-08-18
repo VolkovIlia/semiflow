@@ -23,8 +23,20 @@
 //!   3. Self-convergence slope ≤ −0.95 (order-1; consistent with kernel order).
 //!
 //! Feature gate: `slow-tests`.
+//!
+//! # Cost (measured 2026-08-18 — the first execution this gate ever had)
+//!
+//! **Over 40 minutes on a 12-core host**, where it hit a 40 min cap without
+//! finishing. Cause: ADR-0191 replaced multilinear N-D sampling with the `K^D`
+//! tensor stencil, which at `D = 5` reads 1024 nodes per sample against
+//! multilinear's 32 — a 32x interpolation cost. ADR-0191 measured that on the
+//! `D = 5` Smolyak *smoke* tests (70 s → 198 s, which is why they were re-sized)
+//! and left this gate alone; nobody measured this one, because it ran in no
+//! workflow. It now runs in the `smolyak-d5-d6` job of `nightly.yml`, not on the
+//! release-tag lane.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},
@@ -82,7 +94,7 @@ fn initial_fn(x: &[f64; 5]) -> f64 {
 }
 
 fn run_steps(kernel: &SmolyakGridND<f64, 5>, n_steps: u32) -> GridFnND<f64, 5> {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), initial_fn);
     let mut src = f0;
     let mut dst = GridFnND::from_fn(kernel.grid().clone(), |_| 0.0_f64);
@@ -103,7 +115,7 @@ fn sup_diff(a: &GridFnND<f64, 5>, b: &GridFnND<f64, 5>) -> f64 {
 }
 
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
-    let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
+    let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let n = x.len() as f64;
     let sx: f64 = x.iter().sum();
@@ -113,7 +125,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
     (n * sxy - sx * sy) / (n * sxx - sx * sx)
 }
 
-/// G_SMOLYAK_D5 gate: D=5 Smolyak sparse-grid kernel.
+/// `G_SMOLYAK_D5` gate: D=5 Smolyak sparse-grid kernel.
 ///
 /// Verifies:
 /// 1. `n_nodes < 3125` (tensor 5⁵ baseline)
@@ -121,7 +133,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
 /// 3. Self-convergence slope ≤ −0.95 (order-1; note: ADR-0123 spec listed −1.95
 ///    which is inconsistent with kernel order — see file header comment)
 #[test]
-#[ignore] // slow-tests: runs in ~10-30s on release; add --ignored to run
+#[ignore = "RELEASE_BLOCKING slow gate: >40 min on a 12-core host (measured 2026-08-18); run with -- --ignored"]
 fn g_smolyak_d5() {
     let kernel = make_kernel(N_AXIS);
 
@@ -167,7 +179,7 @@ fn g_smolyak_d5() {
     for (&n, &e) in N_SWEEP.iter().zip(errs.iter()) {
         println!(
             "G_SMOLYAK_D5: n={n} tau={:.5} sup‖u_n−u_ref‖={e:.4e}",
-            T / n as f64
+            T / f64::from(n)
         );
     }
 

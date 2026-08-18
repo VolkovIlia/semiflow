@@ -43,7 +43,7 @@ const N_SWEEP: [usize; 4] = [16, 32, 64, 128];
 ///
 /// NOTE: this function is O(N^6) and is intentionally NOT called in the
 /// flagship test.  The absolute-error gate in `g_horm_heisenberg_slope` uses
-/// a seeded-fundamental-solution IC instead (see G_HORM_HEISENBERG_ABS),
+/// a seeded-fundamental-solution IC instead (see `G_HORM_HEISENBERG_ABS`),
 /// which achieves an independent oracle check without the convolution cost.
 #[allow(dead_code)]
 fn reference_solution(grid: Grid3D<f64>, t_final: f64, u0: &GridFn3D<f64>) -> GridFn3D<f64> {

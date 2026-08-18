@@ -8,6 +8,8 @@
 //! NOT a release gate. RUN with --features slow-tests. Results are printed; no assert on slope.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},
@@ -121,7 +123,7 @@ fn make_kernel_d5_variable(n: usize) -> AnisotropicShiftChernoffND<f64, 5> {
 // ---------------------------------------------------------------------------
 
 fn run_steps_d2(kernel: &AnisotropicShiftChernoffND<f64, 2>, n_steps: u32) -> GridFnND<f64, 2> {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), |x: &[f64; 2]| {
         (-x[0] * x[0] - x[1] * x[1]).exp()
     });
@@ -136,7 +138,7 @@ fn run_steps_d2(kernel: &AnisotropicShiftChernoffND<f64, 2>, n_steps: u32) -> Gr
 }
 
 fn run_steps_d3(kernel: &AnisotropicShiftChernoffND<f64, 3>, n_steps: u32) -> GridFnND<f64, 3> {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), |x: &[f64; 3]| {
         (-x.iter().map(|xi| xi * xi).sum::<f64>()).exp()
     });
@@ -151,7 +153,7 @@ fn run_steps_d3(kernel: &AnisotropicShiftChernoffND<f64, 3>, n_steps: u32) -> Gr
 }
 
 fn run_steps_d5(kernel: &AnisotropicShiftChernoffND<f64, 5>, n_steps: u32) -> GridFnND<f64, 5> {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), |x: &[f64; 5]| {
         (-x.iter().map(|xi| xi * xi).sum::<f64>()).exp()
     });
@@ -190,7 +192,7 @@ fn sup_diff_d5(a: &GridFnND<f64, 5>, b: &GridFnND<f64, 5>) -> f64 {
 }
 
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
-    let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
+    let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let n = x.len() as f64;
     let sx: f64 = x.iter().sum();
@@ -236,7 +238,7 @@ fn exp1_d2_spatial_floor_reconciliation() {
             .collect();
         println!("D=2 N_AXIS=8 sweep={{32,64,128,256}} N_REF=512:");
         for (&n, &e) in ns.iter().zip(errs.iter()) {
-            println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+            println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
         }
         let slope = ols_slope(&ns, &errs);
         println!("  OLS slope = {slope:.4}");
@@ -254,7 +256,7 @@ fn exp1_d2_spatial_floor_reconciliation() {
             .collect();
         println!("D=2 N_AXIS=128 sweep={{32,64,128,256}} N_REF=2048:");
         for (&n, &e) in ns.iter().zip(errs.iter()) {
-            println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+            println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
         }
         let slope = ols_slope(&ns, &errs);
         println!("  OLS slope = {slope:.4}");
@@ -272,7 +274,7 @@ fn exp1_d2_spatial_floor_reconciliation() {
             .collect();
         println!("D=2 N_AXIS=128 sweep={{16,32,64,128,256}} N_REF=2048 (includes n=16):");
         for (&n, &e) in ns.iter().zip(errs.iter()) {
-            println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+            println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
         }
         let slope_all = ols_slope(&ns, &errs);
         let slope_skip16 = ols_slope(&ns[1..], &errs[1..]);
@@ -300,7 +302,7 @@ fn exp2_d3_spatial_floor_reconciliation() {
             .collect();
         println!("D=3 N_AXIS=8 sweep={{32,64,128,256}} N_REF=512:");
         for (&n, &e) in ns.iter().zip(errs.iter()) {
-            println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+            println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
         }
         let slope = ols_slope(&ns, &errs);
         println!("  OLS slope = {slope:.4}");
@@ -318,7 +320,7 @@ fn exp2_d3_spatial_floor_reconciliation() {
             .collect();
         println!("D=3 N_AXIS=32 sweep={{32,64,128,256}} N_REF=2048:");
         for (&n, &e) in ns.iter().zip(errs.iter()) {
-            println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+            println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
         }
         let slope = ols_slope(&ns, &errs);
         println!("  OLS slope = {slope:.4}");
@@ -343,7 +345,7 @@ fn exp3_d2_range_robustness() {
 
     println!("Full err ladder:");
     for (&n, &e) in all_ns.iter().zip(all_errs.iter()) {
-        println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+        println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
     }
 
     // Slope over different subwindows
@@ -417,7 +419,7 @@ fn exp4_constant_a_exact_d2() {
             .iter()
             .zip(dst.values.iter())
             .map(|(&e, &a)| (e - a).abs())
-            .fold(0.0_f64, |m, v| m.max(v));
+            .fold(0.0_f64, f64::max);
         // All values must be finite and positive
         let all_finite = dst.values.iter().all(|v| v.is_finite());
         println!("  tau={tau:.4}: sup|kernel - exact| = {err:.4e}  all_finite={all_finite}");
@@ -427,7 +429,7 @@ fn exp4_constant_a_exact_d2() {
         );
         assert!(err.is_finite(), "Non-finite error at tau={tau}");
         // Error should not be catastrophic (orders of magnitude larger than f_exact max)
-        let f_max = f_exact.values.iter().cloned().fold(0.0_f64, f64::max);
+        let f_max = f_exact.values.iter().copied().fold(0.0_f64, f64::max);
         assert!(
             err < f_max * 10.0,
             "Constant-A: catastrophic error err={err:.4e} > 10*f_max={:.4e} at tau={tau}",
@@ -456,7 +458,7 @@ fn exp4_constant_a_exact_d2() {
             .iter()
             .zip(dst_nn.values.iter())
             .map(|(&e, &a)| (e - a).abs())
-            .fold(0.0_f64, |m, v| m.max(v));
+            .fold(0.0_f64, f64::max);
         println!("    N_AXIS={nn}: err={err:.4e}");
         if prev_sp_err.is_finite() {
             let converging = err < prev_sp_err;
@@ -486,7 +488,7 @@ fn exp5_d5_full_sweep() {
 
     println!("D=5 N_AXIS=6 sweep={{16,32,64,128}} N_REF=512:");
     for (&n, &e) in ns.iter().zip(errs.iter()) {
-        println!("  n={n} tau={:.5}: err={e:.4e}", T / n as f64);
+        println!("  n={n} tau={:.5}: err={e:.4e}", T / f64::from(n));
     }
     let slope = ols_slope(&ns, &errs);
     println!("  OLS slope = {slope:.4}");

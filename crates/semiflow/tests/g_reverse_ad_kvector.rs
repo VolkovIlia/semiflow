@@ -24,6 +24,11 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
+#![allow(clippy::needless_range_loop)] // index addresses grads[r] and picks the FD region
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use semiflow::{
     CheckpointSchedule, DiffusionChernoff, Dual, Grid1D, GridFn1D, RegionMap, ReverseChernoff,
@@ -105,7 +110,7 @@ fn node_idx(x: f64, n: usize, xmin: f64, xmax: f64) -> usize {
 // Loss evaluation helpers
 // ---------------------------------------------------------------------------
 
-/// Eval ‖(F_θ(τ))^n u₀‖² with Lorentzian IC u₀ = 1/(1+(x/5)²).
+/// Eval ‖(`F_θ(τ))^n` u₀‖² with Lorentzian IC u₀ = 1/(1+(x/5)²).
 fn eval_loss_region_lorentz(thetas: &[f64], tau: f64, n: usize) -> f64 {
     let k = thetas.len();
     let grid = f64_default_grid();
@@ -116,7 +121,7 @@ fn eval_loss_region_lorentz(thetas: &[f64], tau: f64, n: usize) -> f64 {
         move |x: f64| thetas_v[rmap2.region_of(node_idx(x, N_GRID, X_MIN, X_MAX))],
         |_: f64| 0.0_f64,
         |_: f64| 0.0_f64,
-        thetas.iter().cloned().fold(0.0_f64, f64::max),
+        thetas.iter().copied().fold(0.0_f64, f64::max),
         grid,
     );
     let u0 = GridFn1D::from_fn(grid, |x| 1.0 / (1.0 + (x / 5.0) * (x / 5.0)));
@@ -127,7 +132,7 @@ fn eval_loss_region_lorentz(thetas: &[f64], tau: f64, n: usize) -> f64 {
     u.values.iter().map(|v| v * v).sum()
 }
 
-/// Eval ‖(F_θ(τ))^n u₀‖² with Gaussian IC u₀ = exp(−x²).
+/// Eval ‖(`F_θ(τ))^n` u₀‖² with Gaussian IC u₀ = exp(−x²).
 fn eval_loss_region(thetas: &[f64], tau: f64, n: usize) -> f64 {
     let k = thetas.len();
     let grid = f64_default_grid();
@@ -138,7 +143,7 @@ fn eval_loss_region(thetas: &[f64], tau: f64, n: usize) -> f64 {
         move |x: f64| thetas_v[rmap2.region_of(node_idx(x, N_GRID, X_MIN, X_MAX))],
         |_: f64| 0.0_f64,
         |_: f64| 0.0_f64,
-        thetas.iter().cloned().fold(0.0_f64, f64::max),
+        thetas.iter().copied().fold(0.0_f64, f64::max),
         grid,
     );
     let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
@@ -153,7 +158,7 @@ fn eval_loss_region(thetas: &[f64], tau: f64, n: usize) -> f64 {
 // Finite-difference gradient helpers
 // ---------------------------------------------------------------------------
 
-/// Richardson 4-point ∂J/∂θ_r for region r, Lorentzian IC (O(h⁴)).
+/// Richardson 4-point ∂`J/∂θ_r` for region r, Lorentzian IC (O(h⁴)).
 fn fd_grad_region_lorentz(thetas: &[f64], perturb_r: usize, tau: f64, n: usize) -> f64 {
     let h = FD_H;
     let mut t_p2 = thetas.to_vec();
@@ -187,10 +192,10 @@ fn fd_grad_region(thetas: &[f64], perturb_r: usize, tau: f64, n: usize) -> f64 {
 // G_REVERSE_AD_GRADIENT (K-vector) — RELEASE_BLOCKING
 // ---------------------------------------------------------------------------
 
-/// `G_REVERSE_AD_GRADIENT (K-vector)` — RELEASE_BLOCKING (§51.10, ADR-0177).
+/// `G_REVERSE_AD_GRADIENT (K-vector)` — `RELEASE_BLOCKING` (§51.10, ADR-0177).
 ///
 /// For each region r: `|grad[r] − fd_r| / |fd_r| < 1e-9`.
-/// Uses N_GRID=128, K=4, contiguous regions, distinct θ_r.
+/// Uses `N_GRID=128`, K=4, contiguous regions, distinct `θ_r`.
 ///
 /// Initial condition: `u₀(x) = 1 / (1 + (x/5)²)` (Lorentzian with half-width 5).
 /// Non-negligible across all 4 regions (avoids near-zero gradient for outer regions).
@@ -257,8 +262,8 @@ fn g_reverse_ad_gradient_kvector() {
 // ---------------------------------------------------------------------------
 
 /// DIAGNOSTIC: K-vector gradient with n=1 step (no cotangent propagation).
-/// If this PASSES, issue is in cotangent propagation (apply_transpose_step).
-/// If this FAILS, issue is in step_jacobian_col_region.
+/// If this PASSES, issue is in cotangent propagation (`apply_transpose_step`).
+/// If this FAILS, issue is in `step_jacobian_col_region`.
 #[test]
 #[ignore = "DIAGNOSTIC: run with --features slow-tests -- --ignored --nocapture"]
 fn g_reverse_ad_gradient_kvector_n1() {
@@ -312,7 +317,7 @@ fn g_reverse_ad_gradient_kvector_n1() {
 // DIAGNOSTIC: K=2 uniform cross-check
 // ---------------------------------------------------------------------------
 
-/// DIAGNOSTIC: K=2 with θ_1=θ_2=θ (should match K=1 scalar reverse gradient).
+/// DIAGNOSTIC: K=2 with `θ_1=θ_2=θ` (should match K=1 scalar reverse gradient).
 /// If this PASSES (cross-mode parity), K>1 math is correct but FD is limited.
 /// If this FAILS, there is a genuine error in K>1 reverse sweep.
 #[test]

@@ -150,10 +150,10 @@ fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
 
 // ─── G_CARNOT_CPLX3 ──────────────────────────────────────────────────────────
 
-/// RELEASE_BLOCKING: order-4 self-convergence of `ComplexTripleJump`.
+/// `RELEASE_BLOCKING`: order-4 self-convergence of `ComplexTripleJump`.
 ///
 /// `G_CARNOT_CPLX3` — ADR-0136 Amendment 2, math.md §28.bis.8.
-/// OLS slope of ‖u_n − u_{2n}‖_∞ vs log(n) ≤ −3.80 (gate; theory −4.0).
+/// OLS slope of ‖`u_n` − u_{2n}‖_∞ vs log(n) ≤ −3.80 (gate; theory −4.0).
 /// Feature-gated `slow-tests`; runs only under:
 ///   `cargo test --features slow-tests -- --ignored g_carnot_cplx3`
 #[test]
@@ -219,9 +219,7 @@ fn g_carnot_cplx3_slope() {
 
     assert!(
         slope <= SLOPE_GATE,
-        "G_CARNOT_CPLX3 FAIL: OLS slope {:.4} > {} \
-         (filiform N=5 complex triple-jump order-4; ADR-0136 Amendment 2)",
-        slope,
-        SLOPE_GATE
+        "G_CARNOT_CPLX3 FAIL: OLS slope {slope:.4} > {SLOPE_GATE} \
+         (filiform N=5 complex triple-jump order-4; ADR-0136 Amendment 2)"
     );
 }

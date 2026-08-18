@@ -25,6 +25,7 @@
 //! This is the **G24 convention** from ADR-0134 §47.5 — identical here.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
 
 use semiflow::{Grid1D, Grid2D, GridFn2D, ResolventJumpChernoff2D};
 
@@ -45,7 +46,7 @@ const L: f64 = 5.0;
 /// Large horizon (§47.5 convention).
 const T_SLOPE: f64 = 100.0;
 
-/// Contour-node sweep (mirrors G_RESOLVENT_JUMP_ORDER M_SWEEP).
+/// Contour-node sweep (mirrors `G_RESOLVENT_JUMP_ORDER` `M_SWEEP`).
 const M_SWEEP: [usize; 5] = [6, 8, 10, 12, 14];
 
 /// High-M reference for self-convergence anchor.
@@ -94,12 +95,12 @@ fn sup_err(a: &GridFn2D<f64>, b: &GridFn2D<f64>) -> f64 {
 // G_RESOLVENT_JUMP_2D_ORDER gate
 // ---------------------------------------------------------------------------
 
-/// G_RESOLVENT_JUMP_2D_ORDER — slope ≥ +1.95 (RELEASE_BLOCKING, ADR-0148).
+/// `G_RESOLVENT_JUMP_2D_ORDER` — slope ≥ +1.95 (`RELEASE_BLOCKING`, ADR-0148).
 ///
-/// Self-convergence: reference at M_ref=40, probe at M ∈ {6,8,10,12,14}.
-/// Mirrors G_RESOLVENT_JUMP_ORDER design (§47.5) but for the 2D banded LHP solve.
+/// Self-convergence: reference at `M_ref=40`, probe at M ∈ {6,8,10,12,14}.
+/// Mirrors `G_RESOLVENT_JUMP_ORDER` design (§47.5) but for the 2D banded LHP solve.
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate: 2-D resolvent-jump order sweep; run with -- --ignored"]
 fn g_resolvent_jump_2d_order() {
     let grid = make_grid();
     let g = GridFn2D::from_fn(grid, |x: f64, y: f64| (-x * x - y * y).exp());

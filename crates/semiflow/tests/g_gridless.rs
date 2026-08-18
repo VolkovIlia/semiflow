@@ -817,7 +817,7 @@ fn g_gridless_variance() {
 /// |  8 | 4.953e-1      |       — | curse-dominated               |
 /// | 10 | 7.054e-1      |       — | fully curse-dominated         |
 ///
-/// Variance evidence (P=512, R=64, T=0.5, n_steps=16):
+/// Variance evidence (P=512, R=64, T=0.5, `n_steps=16)`:
 ///
 /// | d  | MSE_det   | MSE_mc    | ratio  | verdict                        |
 /// |----|-----------|-----------|--------|--------------------------------|
@@ -825,7 +825,7 @@ fn g_gridless_variance() {
 /// |  3 | 4.954e-4  | 2.144e-4  | 0.433× | det LOSES (bias dominates)    |
 /// |  4 | 4.466e-2  | 1.253e-4  | 0.003× | severe bias, thesis falsified |
 #[test]
-#[ignore]
+#[ignore = "documentation record, not a gate (ADR-0160): prints the O(m^d) intrinsic limit"]
 fn record_gridless_intrinsic_limit_documented() {
     println!("\nRECORD_GRIDLESS_INTRINSIC_LIMIT: O(m^d) curse of spatial-merge reduction");
     println!("{}", "=".repeat(70));

@@ -49,6 +49,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
 #![allow(unsafe_code)]
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
 
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -68,7 +69,7 @@ struct PeakTrackingAlloc;
 
 /// Current live bytes (allocated − freed).
 static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
-/// Maximum live_bytes seen since last reset.
+/// Maximum `live_bytes` seen since last reset.
 static PEAK_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 unsafe impl GlobalAlloc for PeakTrackingAlloc {
@@ -145,10 +146,10 @@ fn read_live_bytes() -> usize {
 
 /// Relative gradient accuracy: reverse vs Richardson FD (§51.6 threshold).
 const GRAD_REL_GATE: f64 = 1e-9;
-/// Cross-mode parity: |reverse − forward_dual| / |forward_dual| < 1e-12
+/// Cross-mode parity: |reverse − `forward_dual`| / |`forward_dual`| < 1e-12
 /// (§51.4 Amendment 2 — NOT 0 ULP; two independent float paths).
 const CROSS_MODE_REL_GATE: f64 = 1e-12;
-/// Peak memory slope: log(peak_bytes)/log(n) ≤ 0.6 (§51.6; smaller = better).
+/// Peak memory slope: `log(peak_bytes)/log(n)` ≤ 0.6 (§51.6; smaller = better).
 const CHECKPOINT_SLOPE_GATE: f64 = 0.6;
 
 /// Gate kernel parameters.
@@ -188,7 +189,7 @@ fn dual_default_grid() -> Grid1D<Dual<f64>> {
 // Forward-mode gradient (§46 — the 0-ULP reference)
 // ---------------------------------------------------------------------------
 
-/// Forward-mode Dual<f64> gradient of J = ‖u_n‖² (target=0) via §46.
+/// Forward-mode Dual<f64> gradient of J = ‖`u_n‖²` (target=0) via §46.
 /// This is the 0-ULP reference that `value_and_grad_k1` must match (§51.4).
 fn forward_mode_grad(tau: f64, n: usize) -> f64 {
     let grid = dual_default_grid();
@@ -270,7 +271,7 @@ fn richardson_fd(tau: f64, n: usize) -> f64 {
 // G_REVERSE_AD_GRADIENT gate
 // ---------------------------------------------------------------------------
 
-/// `G_REVERSE_AD_GRADIENT` — RELEASE_BLOCKING (§51.6, ADR-0156 Amendment 2).
+/// `G_REVERSE_AD_GRADIENT` — `RELEASE_BLOCKING` (§51.6, ADR-0156 Amendment 2).
 ///
 /// Two conjunctive thresholds:
 /// (i)  `|reverse − FD| / |FD| < 1e-9` (relative accuracy vs Richardson).
@@ -342,9 +343,9 @@ fn g_reverse_ad_gradient() {
 /// Measure peak live bytes during `value_and_grad_k1` (genuine reverse-mode
 /// backward sweep).
 ///
-/// Protocol (mirrors G_DUAL_ZERO_ALLOC warm-up pattern):
+/// Protocol (mirrors `G_DUAL_ZERO_ALLOC` warm-up pattern):
 ///   1. Warm run (Vec capacities settle, JIT-like effects done).
-///   2. Reset peak tracker (peak = current live_bytes at reset point).
+///   2. Reset peak tracker (peak = current `live_bytes` at reset point).
 ///   3. Measurement run — capture peak above the reset baseline.
 fn measure_peak_bytes_above_baseline(n: usize) -> usize {
     let tau = T_FINAL / n as f64;
@@ -368,7 +369,7 @@ fn measure_peak_bytes_above_baseline(n: usize) -> usize {
     peak.saturating_sub(baseline)
 }
 
-/// `G_REVERSE_AD_CHECKPOINT` — RELEASE_BLOCKING memory-scaling gate (§51.6).
+/// `G_REVERSE_AD_CHECKPOINT` — `RELEASE_BLOCKING` memory-scaling gate (§51.6).
 ///
 /// Fits `log(peak_live_bytes_above_baseline)` vs `log(n)` over
 /// `n ∈ {64, 256, 1024}`. Slope ≤ 0.6 PASSES (O(√n) ideal = 0.5).

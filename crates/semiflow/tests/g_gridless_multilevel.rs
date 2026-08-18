@@ -66,6 +66,7 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_range_loop)] // index feeds the coefficient and the RNG order
 
 extern crate alloc;
 
@@ -115,7 +116,7 @@ fn xi_j(j: usize) -> f64 {
     1.0 / (1.0 + 0.05 * j as f64)
 }
 
-/// Truth for product cosine under pure diffusion: E[f] = ∏_j exp(-T ξ_j² a_j).
+/// Truth for product cosine under pure diffusion: E[f] = ∏_j exp(-T `ξ_j²` `a_j`).
 fn truth_d(d: usize, t: f64) -> f64 {
     (0..d)
         .map(|j| libm::exp(-t * xi_j(j) * xi_j(j) * a_j(j)))
@@ -126,7 +127,7 @@ fn functional_d(pos: &[f64], d: usize) -> f64 {
     (0..d).map(|j| libm::cos(xi_j(j) * pos[j])).product()
 }
 
-/// CV control: g(x) = ∏_j cos(0.5 ξ_j x_j), E[g] = ∏_j exp(-0.25 ξ_j² a_j T).
+/// CV control: g(x) = ∏_j cos(0.5 `ξ_j` `x_j`), E[g] = ∏_j exp(-0.25 `ξ_j²` `a_j` T).
 fn e_g_d(d: usize, t: f64) -> f64 {
     (0..d)
         .map(|j| {
@@ -241,7 +242,7 @@ fn ou_em_fine(d: usize, n_fine: usize, x0: &[f64], lcg: &mut Lcg64) -> alloc::ve
     x
 }
 
-/// Coupled fine+coarse OU EM paths. Returns (x_fine, x_coarse).
+/// Coupled fine+coarse OU EM paths. Returns (`x_fine`, `x_coarse`).
 fn ou_em_coupled(
     d: usize,
     n_fine: usize,
@@ -417,8 +418,8 @@ fn arm2_mlmc_rw(d: usize, p_per_level: usize, seed: u64) -> f64 {
 }
 
 /// ML-Chernoff: closed-form telescope (exact for product cosine functional).
-/// Estimate = Σ_ℓ ΔA_ℓ · mean_ℓ[f(x₀)]
-/// Converges to A_L · E[f(x₀)] (biased by A_L-truth at large P).
+/// Estimate = `Σ_ℓ` `ΔA_ℓ` · `mean_ℓ`[f(x₀)]
+/// Converges to `A_L` · E[f(x₀)] (biased by A_L-truth at large P).
 fn arm3_ml_chernoff(d: usize, p_per_level: usize, seed: u64) -> f64 {
     let mut lcg = Lcg64::new(seed);
     let mut total = 0.0f64;
@@ -548,7 +549,7 @@ fn complexity_slopes(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate: 4-arm MLMC experiment; run with -- --ignored"]
 fn g_gridless_multilevel() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_MULTILEVEL — 4-arm MLMC decisive gate (§4, v9.0.0)");
@@ -732,7 +733,7 @@ fn g_gridless_multilevel() {
         );
         // Print MSE at each P for Arm3 with bias floor annotation
         let bias_sq = (chernoff_a_level(d, L) - truth_d(d, T)).powi(2);
-        println!("  Arm3 MSE vs bias floor ({:.3e}):", bias_sq);
+        println!("  Arm3 MSE vs bias floor ({bias_sq:.3e}):");
         for (i, (&mse, &cost)) in m3_arr.iter().zip(cost_arr.iter()).enumerate() {
             println!(
                 "    P_flat={:.0}  MSE={:.3e}  (bias_floor: {:.3}×)",

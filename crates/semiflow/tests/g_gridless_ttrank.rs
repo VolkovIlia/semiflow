@@ -197,7 +197,7 @@ fn invert(a: &[f64], d: usize) -> Vec<f64> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Extract off-diagonal block of `full` (d×d):
-/// rows 0..row_end, cols col_start..d  →  block of shape `(row_end)` × `(d-col_start)`.
+/// rows `0..row_end`, cols `col_start..d`  →  block of shape `(row_end)` × `(d-col_start)`.
 fn extract_block(full: &[f64], d: usize, row_end: usize, col_start: usize) -> Vec<f64> {
     let nr = row_end;
     let nc = d - col_start;

@@ -19,6 +19,7 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
 
 use semiflow::{
     chernoff::Growth,
@@ -42,7 +43,7 @@ const N_T_SWEEP: [usize; 4] = [32, 64, 128, 256];
 // apply_at(t, …) re-constructs DiffusionChernoff with the sampled coefficient.
 // ---------------------------------------------------------------------------
 
-/// Test helper: DiffusionChernoff with a(x, t) = 1 + 0.5·t (autonomous bridge IC).
+/// Test helper: `DiffusionChernoff` with a(x, t) = 1 + 0.5·t (autonomous bridge IC).
 struct TimedDiffusionChernoff {
     grid: Grid1D<f64>,
 }
@@ -101,7 +102,7 @@ impl TimedChernoffFunction<f64> for TimedDiffusionChernoff {
 /// where A(t) = t + 0.25·t² = ∫₀^t (1 + 0.5·s) ds.
 ///
 /// Satisfies ∂_t u = a(t) ∂_xx u with u(0, x) = exp(-x²).
-/// Factor 4 verified by verify_howland_lift.py oracle_pde sub-check.
+/// Factor 4 verified by `verify_howland_lift.py` `oracle_pde` sub-check.
 fn oracle(t: f64, x: f64) -> f64 {
     let a_t = t + 0.25 * t * t; // A(t) = ∫₀ᵗ (1 + 0.5s) ds
     let denom = 1.0 + 4.0 * a_t;
@@ -128,7 +129,7 @@ fn ols_slope(xs: &[f64], ys: &[f64]) -> f64 {
     num / den
 }
 
-/// Run the Howland lift for a given n_t; return sup-norm error vs oracle at T.
+/// Run the Howland lift for a given `n_t`; return sup-norm error vs oracle at T.
 #[allow(clippy::cast_precision_loss)]
 fn sup_error_at(n_t: usize, grid: Grid1D<f64>) -> f64 {
     let inner = TimedDiffusionChernoff { grid };
@@ -169,8 +170,8 @@ fn sup_error_at(n_t: usize, grid: Grid1D<f64>) -> f64 {
 /// G25 — Howland nonautonomous lift slope ≤ -0.95.
 ///
 /// Time-dependent heat ∂_t u = (1 + 0.5t) ∂_xx u with Gaussian IC.
-/// Iterates (n_t - 1) Howland steps and compares slot [n_t-1] to oracle.
-/// OLS slope of log(err) vs log(n_t) must be ≤ -0.95 (order-1, 5% margin).
+/// Iterates (`n_t` - 1) Howland steps and compares slot [n_t-1] to oracle.
+/// OLS slope of log(err) vs `log(n_t)` must be ≤ -0.95 (order-1, 5% margin).
 #[test]
 fn g25_howland_lift_slope() {
     // Grid [-8, 8] with N=256, Reflect BC (wide domain: boundary error < 1e-6 at T=0.5).

@@ -33,6 +33,10 @@
 
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)]
+#![allow(clippy::match_same_arms)] // the d=4 arm transcribes the table explicitly
+#![allow(clippy::needless_range_loop)] // index feeds the coefficient and the RNG order
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use semiflow::{ChernoffFunction, GridlessChernoff, MeasureState, ParticleReduction, ScratchPool};
 
@@ -81,14 +85,14 @@ fn xi_j(j: usize) -> f64 {
     1.0 / (1.0 + 0.05 * j as f64)
 }
 
-/// Closed-form E[f] = ∏_j exp(−T ξ_j² a_j)  (truth for functional f).
+/// Closed-form E[f] = ∏_j exp(−T `ξ_j²` `a_j`)  (truth for functional f).
 fn truth_d(d: usize, t: f64) -> f64 {
     (0..d)
         .map(|j| libm::exp(-t * xi_j(j) * xi_j(j) * a_j(j)))
         .product()
 }
 
-/// Product functional f(x) = ∏_j cos(ξ_j x_j).
+/// Product functional f(x) = ∏_j `cos(ξ_j` `x_j`).
 fn functional(pos: &[f64], d: usize) -> f64 {
     (0..d).map(|j| libm::cos(xi_j(j) * pos[j])).product()
 }
@@ -105,8 +109,8 @@ fn functional(pos: &[f64], d: usize) -> f64 {
 /// Pre-registered control frequency factor γ (§2.4, NOT tuned post-hoc).
 const GAMMA: f64 = 0.5;
 
-/// E[g] = ∏_j exp(−(γ ξ_j)² a_j T) — closed-form from §38.7, guard #4.
-/// This is computed BEFORE sampling; it is a pure function of (d, T, γ, a_j, ξ_j).
+/// E[g] = ∏_j exp(−(γ `ξ_j)²` `a_j` T) — closed-form from §38.7, guard #4.
+/// This is computed BEFORE sampling; it is a pure function of (d, T, γ, `a_j`, `ξ_j`).
 fn e_g(d: usize, t: f64) -> f64 {
     (0..d)
         .map(|j| {
@@ -116,16 +120,16 @@ fn e_g(d: usize, t: f64) -> f64 {
         .product()
 }
 
-/// Control value g(x) = ∏_j cos(η_j x_j), η_j = γ·ξ_j.
+/// Control value g(x) = ∏_j `cos(η_j` `x_j`), `η_j` = `γ·ξ_j`.
 fn control(pos: &[f64], d: usize) -> f64 {
     (0..d)
         .map(|j| libm::cos(GAMMA * xi_j(j) * pos[j]))
         .product()
 }
 
-/// CV estimator. Takes arm's own (fs, gs) samples + pre-registered e_g constant.
-/// Returns (cv_estimate, beta_hat, rho_fg).
-/// Guard #4: e_g is a constant, never estimated; beta_hat from within-arm only.
+/// CV estimator. Takes arm's own (fs, gs) samples + pre-registered `e_g` constant.
+/// Returns (`cv_estimate`, `beta_hat`, `rho_fg`).
+/// Guard #4: `e_g` is a constant, never estimated; `beta_hat` from within-arm only.
 fn cv_estimate(fs: &[f64], gs: &[f64], eg: f64) -> (f64, f64, f64) {
     assert_eq!(fs.len(), gs.len(), "fs and gs must have same length");
     let n = fs.len() as f64;
@@ -199,7 +203,7 @@ fn build_crn_cloud(lcg: &mut Lcg64, d: usize) -> alloc::vec::Vec<[f64; 10]> {
 }
 
 /// MC arm: P random walks with Euler-Maruyama.
-/// Starting point: eps * z_i (§3.2 NORMATIVE shared IC).
+/// Starting point: eps * `z_i` (§3.2 NORMATIVE shared IC).
 /// Returns (f-samples, g-samples) at terminal positions.
 fn run_arm_mc(
     cloud: &[[f64; 10]],
@@ -237,9 +241,9 @@ fn run_arm_mc(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Run the branching arm for compile-time D, returns (f-samples-weighted, g-samples-weighted,
-/// leaf_weights, leaf_f_g_pairs) for weighted CV. Returns (est_f, est_g, beta, rho).
-/// The "samples" for weighted Cov/Var are the per-leaf (f_i, g_i) values,
-/// with weights w_i. β̂ uses weighted covariance (§3.2 NORMATIVE).
+/// `leaf_weights`, `leaf_f_g_pairs`) for weighted CV. Returns (`est_f`, `est_g`, beta, rho).
+/// The "samples" for weighted Cov/Var are the per-leaf (`f_i`, `g_i`) values,
+/// with weights `w_i`. β̂ uses weighted covariance (§3.2 NORMATIVE).
 fn run_arm_branch_cv<const D: usize>(
     cloud: &[[f64; 10]],
     n_steps_d: usize,
@@ -517,7 +521,7 @@ macro_rules! run_dim {
 // §I — Main test: G_GRIDLESS_CV (§3, EVIDENTIARY, slow-tests gate)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// G_GRIDLESS_CV — 4-arm CV-controlled experiment.
+/// `G_GRIDLESS_CV` — 4-arm CV-controlled experiment.
 ///
 /// ## Anti-gaming
 /// - Binding variance comparison is C vs B (guard #1): identical CV both arms.
@@ -525,11 +529,11 @@ macro_rules! run_dim {
 /// - β̂ estimated within each arm's own P samples only.
 /// - Each arm's MSE > 0 (anti-degeneracy, §3.3).
 ///
-/// ## This gate is EVIDENTIARY (not RELEASE_BLOCKING).
+/// ## This gate is EVIDENTIARY (not `RELEASE_BLOCKING`).
 /// It can refute the variance sub-claim but does not gate v9.0.0 shipping.
-/// The binding gate is G_GRIDLESS_MEMORY (g_gridless_memory.rs).
+/// The binding gate is `G_GRIDLESS_MEMORY` (`g_gridless_memory.rs`).
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate: 4-arm CV experiment; run with -- --ignored"]
 fn g_gridless_cv() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_CV — 4-arm CV-controlled decisive experiment (§3, v9.0.0)");
