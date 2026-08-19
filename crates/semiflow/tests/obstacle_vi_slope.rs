@@ -537,7 +537,7 @@ fn pap_gamma(s: f64) -> f64 {
 
 /// `G_OBSTACLE_GAMMA`: O(Δx²) convergence of inactive-set Γ + refusal sub-gate.
 ///
-/// Probe: S = S* + `0.40·(S_max` - S*) strictly inside the continuation set.
+/// Probe: S = S* + `0.40·(S_max - S*)` strictly inside the continuation set.
 /// Convergence: |`Γ_h` − `Γ_analytic`| at the probe node over Δx-halving sweep;
 /// OLS slope in Δx ≤ −1.95.
 /// Refusal: for every node `S_i` ≤ S*, `defined[i] == false`.

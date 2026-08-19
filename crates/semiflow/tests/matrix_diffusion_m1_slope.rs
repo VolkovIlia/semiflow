@@ -135,7 +135,7 @@ fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
     err
 }
 
-/// OLS slope of (ln `n_i`, ln `err_i)`: negative for convergence.
+/// OLS slope of (ln `n_i`, ln `err_i`): negative for convergence.
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
     let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();

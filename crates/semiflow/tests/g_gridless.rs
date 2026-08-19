@@ -817,7 +817,7 @@ fn g_gridless_variance() {
 /// |  8 | 4.953e-1      |       — | curse-dominated               |
 /// | 10 | 7.054e-1      |       — | fully curse-dominated         |
 ///
-/// Variance evidence (P=512, R=64, T=0.5, `n_steps=16)`:
+/// Variance evidence (P=512, R=64, T=0.5, `n_steps=16`):
 ///
 /// | d  | MSE_det   | MSE_mc    | ratio  | verdict                        |
 /// |----|-----------|-----------|--------|--------------------------------|

@@ -15,16 +15,17 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 ## Gate-coverage campaign — DONE (CI only, no ADR: no math or contract change)
 
 An audit of `properties.yaml` against the workflow files on 2026-08-18 found
-that of the 117 gates declared `RELEASE_BLOCKING`, **59 were executed by no
+that of the 117 gates declared `RELEASE_BLOCKING`, **62 were executed by no
 workflow on any trigger**:
 
 | Executed by | Gates |
 |---|---|
-| `ci.yml`, plain `cargo test --workspace --release` | 35 |
+| `ci.yml`, plain `cargo test --workspace --release` | 30 |
 | `flagship-gates.yml` / `nightly.yml`, named `--test` binaries | 16 |
-| `py-smoke` | 2 |
-| **nothing** | **59** |
+| `py-smoke` | 3 |
+| **nothing** | **62** |
 | marker entries with no `test_file` | 4 |
+| unresolvable pointers | 2 |
 
 Two mechanisms, one of which reads as health: 27 files are
 `#![cfg(feature = "slow-tests")]` and were never compiled by CI; the rest carry
@@ -38,7 +39,9 @@ The gap was not theoretical. The gates written for the campaign below —
 having never executed in CI, because the manual `xtask test-full` /
 `test-ignored-gates` step that was supposed to cover them was not run.
 
-Closed by: six concern-grouped jobs in `flagship-gates.yml` (nightly + every
+Closed by: seven concern-grouped jobs in `flagship-gates.yml`, plus an invariant
+check (`scripts/check_gate_coverage.py`) that fails CI if the enumeration drifts
+again — it already had, four binaries' worth, within a day of being written (nightly + every
 `v*` tag, `-- --include-ignored`), `--all-features` on the `ci.yml` clippy job,
 and the 346-diagnostic lint backlog that second change exposed. Details in
 `docs/release-process.md` §3b and the `[Unreleased]` CHANGELOG section.

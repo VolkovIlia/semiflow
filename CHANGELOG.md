@@ -11,7 +11,7 @@ alters a gate threshold, tolerance or assertion.
 
 ### Fixed
 
-- **59 of the 117 `RELEASE_BLOCKING` gates were executed by no workflow at
+- **62 of the 117 `RELEASE_BLOCKING` gates were executed by no workflow at
   all.** `ci.yml` runs `cargo test --workspace --release` — no
   `--features slow-tests`, no `-- --ignored` — and `flagship-gates.yml` names
   its test binaries one by one, 24 of them in total. Everything else fell
@@ -26,7 +26,7 @@ alters a gate threshold, tolerance or assertion.
   (the second-moment oracle written to catch issue #17), the five `G_CONS_*`
   (#26), `G_SHIFT1D_COEFF_FD` (#25), `G_PENCIL_ORDER2` (#21).
 
-  `flagship-gates.yml` gains six concern-grouped jobs covering all 59 —
+  `flagship-gates.yml` gains seven concern-grouped jobs covering all 62 —
   `campaign-gates`, `operator-exponential-gates`,
   `geometry-hypoelliptic-gates`, `resolvent-sampling-gates`,
   `wentzell-multilayer-ad-gates`, `nonseparable-2d-gates` — run with
@@ -36,6 +36,23 @@ alters a gate threshold, tolerance or assertion.
   manual pre-tag run on bench hardware is unchanged and still authoritative;
   what changes is that skipping it becomes visible within a day instead of
   never.
+
+- **The gate-to-workflow mapping is now machine-checked**
+  (`scripts/check_gate_coverage.py`, wired into `ci.yml`). The list of `--test`
+  flags that closes the hole above is hand-maintained, and it drifted within a
+  day of being written: review of this change found four binaries already
+  missing from it — `sym_op_dense`, `obstacle_vi_slope`,
+  `strang2d_parallel_bit_equal`, `chernoff1d_parallel_bit_equal`, 7 gates
+  between them. They are added here, and the invariant is asserted on every PR
+  instead of audited once.
+
+  The same pass corrected the audit figure: **62**, not the 59 first published.
+  The original script matched one regex and had three blind spots — it saw only
+  the bare `#![cfg(feature = "slow-tests")]` and missed the compound
+  `#![cfg(all(feature = "parallel", feature = "slow-tests"))]`; it never
+  considered per-test `#[cfg(feature = "slow-tests")]`; and a trailing comment
+  after an attribute broke its attribute-chain match, which is exactly how
+  `sym_op_dense` read as reachable.
 
 - **`G_SMOLYAK_D5` / `G_SMOLYAK_D6` cost far more than their headers claim.**
   Found by measuring the newly-reachable gates before wiring them up — their
@@ -59,13 +76,16 @@ alters a gate threshold, tolerance or assertion.
   job limit for the tag lane.
 
   All three now run in `nightly.yml` next to `ddim-d5`, which was moved out of
-  the flagship workflow for the same reason. They are deliberately
-  not on the tag lane: a hosted runner is ~6× slower than the measurement host,
-  which would put them near the 6 h job limit. The stale budget claims in both
+  the flagship workflow for the same reason — **each in its own job**, since two
+  multi-hour gates sharing one runner would exceed the 6 h hosted limit and be
+  killed with neither result recorded. Their `timeout-minutes` is 350, not 420:
+  GitHub kills a hosted job at 6 h regardless, so a larger number would only
+  misdescribe the budget. They are deliberately not on the tag lane: a hosted
+  runner is ~6× slower than the measurement host. The stale budget claims in both
   file headers are corrected in place rather than deleted.
 
 - **`clippy` had never type-checked the `slow-tests` files either.** `ci.yml`
-  now runs `cargo clippy --workspace --all-targets --all-features -D warnings`.
+  now runs `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
   Without `--all-features` the same 27 files were invisible to the lint job too,
   so they could drift out of sync with the library — a renamed constructor or a
   changed signature would break them while every PR stayed green. clippy is a

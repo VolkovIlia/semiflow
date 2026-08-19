@@ -533,7 +533,7 @@ macro_rules! run_dim {
 /// It can refute the variance sub-claim but does not gate v9.0.0 shipping.
 /// The binding gate is `G_GRIDLESS_MEMORY` (`g_gridless_memory.rs`).
 #[test]
-#[ignore = "RELEASE_BLOCKING slow gate: 4-arm CV experiment; run with -- --ignored"]
+#[ignore = "evidentiary slow gate (see module header, NOT release-blocking); run with -- --ignored"]
 fn g_gridless_cv() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_CV — 4-arm CV-controlled decisive experiment (§3, v9.0.0)");

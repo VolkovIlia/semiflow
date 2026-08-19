@@ -291,7 +291,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_ENTRY_FRECHET, G_MASSK_*,
+      # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_DENSE + G_SYMOP_ENTRY_FRECHET, G_MASSK_*,
       # G_PHI_AUG_DENSE, G_ETDRK4_ORDER, G_ETD_ADJOINT_FD, G_MATRIX_2D/3D,
       # G_MATRIX_PADE_M5, G_CPLX_MATRIX, and G_MATRIX (m1..m4 slope ladder,
       # which properties.yaml records via the brace shorthand
@@ -303,6 +303,7 @@ jobs:
             --test graph_expmv_dense \
             --test graph_expmv_depth_flat \
             --test graph_frechet_fd \
+            --test sym_op_dense \
             --test sym_op_entry_frechet \
             --test massk_lumped \
             --test massk_consistent \
@@ -407,6 +408,35 @@ jobs:
             --test dual_zero_alloc \
             --test g_adjoint_fp_order \
             --test g_dr_zeta4_truthful_order \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  obstacle-and-parallel-gates:
+    name: Obstacle VI + parallel bit-equality gates
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_OBSTACLE_{GAMMA,SLOPE_2D,SLOPE_AMERICAN,SLOPE_SMOOTH},
+      # STRANG2D_PARALLEL_BIT_EQUAL, CHERNOFF1D_PARALLEL_BIT_EQUAL.
+      #
+      # These four binaries were MISSED by the first version of this sweep, and
+      # the miss is the reason `scripts/check_gate_coverage.py` now exists. They
+      # hide behind two gating forms the original audit did not look for:
+      # `obstacle_vi_slope.rs` gates individual tests with `#[cfg(feature =
+      # "slow-tests")]` rather than the whole file, and the two bit-equality
+      # binaries use the compound `#![cfg(all(feature = "parallel", feature =
+      # "slow-tests"))]`. `sym_op_dense` was missed for a third reason — a
+      # trailing comment after `#[ignore = "..."]` broke the attribute scan.
+      - name: Run obstacle-VI and parallel bit-equality gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test obstacle_vi_slope \
+            --test strang2d_parallel_bit_equal \
+            --test chernoff1d_parallel_bit_equal \
             --no-fail-fast -- --include-ignored --nocapture
 
   # ---------------------------------------------------------------------------

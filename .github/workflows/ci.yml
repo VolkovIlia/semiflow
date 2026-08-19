@@ -87,6 +87,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- check-lints
 
+  gate-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Asserts that every RELEASE_BLOCKING gate in properties.yaml is executed
+      # by some workflow. Added because the hand-maintained `--test` list in
+      # flagship-gates.yml drifted within a day of being written: review found
+      # four binaries the first sweep had missed. Runs in seconds, stdlib only.
+      - run: python3 scripts/check_gate_coverage.py
+
   doc-check:
     runs-on: ubuntu-latest
     steps:

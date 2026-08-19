@@ -47,7 +47,7 @@ const T_FINAL: f64 = 0.5;
 /// `σ_v` = sqrt(1.0) = 1.0 >> Δv ≈ 0.031; well-resolved on 384-point grid.
 const T_IC: f64 = 1.0;
 
-/// Phase-space domain (x,v) ∈ [-L,L]². Wide enough for `σ_x` ≈ (`T_IC)^{3/2}/√3` ≈ 0.58.
+/// Phase-space domain (x,v) ∈ [-L,L]². Wide enough for `σ_x` ≈ `T_IC^{3/2}/√3` ≈ 0.58.
 const DOMAIN_HALF: f64 = 6.0;
 
 /// Fixed grid resolution (both axes).

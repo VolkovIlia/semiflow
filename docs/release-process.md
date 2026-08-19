@@ -101,16 +101,35 @@ their execution was:
 
 | Executed by | Gates |
 |---|---|
-| `ci.yml` — plain `cargo test --workspace --release` | 35 |
+| `ci.yml` — plain `cargo test --workspace --release` | 30 |
 | `flagship-gates.yml` / `nightly.yml` — named `--test` binaries | 16 |
-| `py-smoke` (Python) | 2 |
-| **nothing — no workflow, on any trigger** | **59** |
+| `py-smoke` (Python) | 3 |
+| **nothing — no workflow, on any trigger** | **62** |
 | marker entries with no `test_file` | 4 |
+| pointers this checker cannot resolve | 2 |
 
-The 59 were unreachable in two ways. 27 files are
-`#![cfg(feature = "slow-tests")]`, so CI never compiled them; the rest carry
-`#[ignore]`, so CI compiled the binary, skipped the gate, and reported it inside
-the `N ignored` tally of a green run — the failure mode that reads as health.
+> The first published version of this table said 59, not 62. The audit script
+> behind it classified gates with a single regex and had three blind spots:
+> it recognised only the bare `#![cfg(feature = "slow-tests")]` form and missed
+> the compound `#![cfg(all(feature = "parallel", feature = "slow-tests"))]`; it
+> never looked at per-test `#[cfg(feature = "slow-tests")]`; and a trailing
+> comment after an attribute broke its attribute-chain match, which is how
+> `sym_op_dense` read as reachable. The numbers above come from
+> `scripts/check_gate_coverage.py`, which parses attribute blocks properly.
+
+Gates are unreachable in two ways, and the second reads as health: files gated
+by `#![cfg(...)]` on `slow-tests` are never compiled by CI, while gates carrying
+`#[ignore]` are compiled, skipped, and reported inside the `N ignored` tally of
+a green run.
+
+**The enumeration is no longer trusted.** `scripts/check_gate_coverage.py` runs
+as a `ci.yml` job on every PR and fails if any `RELEASE_BLOCKING` gate is
+executed by no workflow. It exists because the hand-maintained list of ~78
+`--test` flags drifted within a day of being written: review of the very PR that
+added it found four binaries already missing (`sym_op_dense`,
+`obstacle_vi_slope`, `strang2d_parallel_bit_equal`,
+`chernoff1d_parallel_bit_equal`, together 7 gates). Add a gate, and this job
+tells you if you forgot to wire it up.
 
 Steps 3 and 3a above were the only thing standing between that set and a
 release, and they are manual. Before v0.13.0-beta they were not run, which is
@@ -119,7 +138,7 @@ second-moment oracle written to catch issue #17), the five `G_CONS_*` (#26),
 `G_SHIFT1D_COEFF_FD` (#25), `G_PENCIL_ORDER2` (#21) — shipped without ever
 having executed in CI.
 
-Those 59 are now bound to `flagship-gates.yml`, which triggers nightly **and on
+Those 62 are now bound to `flagship-gates.yml`, which triggers nightly **and on
 every `v*` tag**, in six concern-grouped jobs: `campaign-gates`,
 `operator-exponential-gates`, `geometry-hypoelliptic-gates`,
 `resolvent-sampling-gates`, `wentzell-multilayer-ad-gates` and

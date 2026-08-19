@@ -549,7 +549,7 @@ fn complexity_slopes(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[ignore = "RELEASE_BLOCKING slow gate: 4-arm MLMC experiment; run with -- --ignored"]
+#[ignore = "slow gate: 4-arm MLMC decisive experiment; run with -- --ignored"]
 fn g_gridless_multilevel() {
     println!("\n{}", "═".repeat(72));
     println!("G_GRIDLESS_MULTILEVEL — 4-arm MLMC decisive gate (§4, v9.0.0)");
