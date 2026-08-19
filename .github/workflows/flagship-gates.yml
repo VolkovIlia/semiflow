@@ -439,6 +439,36 @@ jobs:
             --test chernoff1d_parallel_bit_equal \
             --no-fail-fast -- --include-ignored --nocapture
 
+  binding-parity-gates:
+    name: Binding-parity gates (Rust halves)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_BINDING_{ADJOINT_FP,CARNOT_CPLX3,RESOLVENT_JUMP,RESOLVENT_JUMP_ND,
+      # SMOLYAK}_PARITY.
+      #
+      # These gates name a Rust half and a Python half. `py-smoke` runs the
+      # Python half, which is why the coverage check first scored them as
+      # covered while their Rust assertions ran nowhere — half a parity claim
+      # is not the claim. `check_gate_coverage.py` now requires EVERY pointer of
+      # a gate to be reachable, and this job supplies the missing half.
+      #
+      # Measured 2026-08-19 on a 12-core host: 13-15 s each.
+      - name: Run the Rust half of the binding-parity gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test binding_adjoint_fp_parity \
+            --test binding_carnot_cplx3_parity \
+            --test binding_resolvent_jump_parity \
+            --test binding_resolvent_jump_nd_parity \
+            --test binding_smolyak_parity \
+            --no-fail-fast -- --include-ignored --nocapture
+
   # ---------------------------------------------------------------------------
   # L-gate: latency floor (L_CEV_PTICK — RELEASE_BLOCKING, ADR-0069).
   #

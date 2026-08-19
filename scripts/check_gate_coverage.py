@@ -152,7 +152,11 @@ def unreached(gates, names):
             # No pointer resolved to a file. Previously this fell through as a
             # pass, which is how a shredded brace group hid two gates.
             bad.append((gate["name"], gate["test_file"] + "   [no pointer resolves]"))
-        elif all(v == "UNREACHED" for v in verdicts):
+        elif any(v == "UNREACHED" for v in verdicts):
+            # EVERY pointer must be reachable, not merely one of them. A
+            # binding-parity gate names its Rust and Python halves; running only
+            # the Python half executes only half the assertion, and "some
+            # pointer runs" would score that as covered.
             bad.append((gate["name"], gate["test_file"]))
     return bad
 
