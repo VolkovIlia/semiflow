@@ -12,6 +12,58 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Gate-coverage campaign — DONE (CI only, no ADR: no math or contract change)
+
+An audit of `properties.yaml` against the workflow files on 2026-08-18 found
+that of the 117 gates declared `RELEASE_BLOCKING`, **62 were executed by no
+workflow on any trigger**:
+
+| Executed by | Gates |
+|---|---|
+| `ci.yml`, plain `cargo test --workspace --release` | 30 |
+| `flagship-gates.yml` / `nightly.yml`, named `--test` binaries | 16 |
+| `py-smoke` | 3 |
+| **nothing** | **62** |
+| marker entries with no `test_file` | 4 |
+| unresolvable pointers | 2 |
+
+Two mechanisms, one of which reads as health: 27 files are
+`#![cfg(feature = "slow-tests")]` and were never compiled by CI; the rest carry
+`#[ignore]`, were compiled, skipped, and counted in the `N ignored` line of a
+green run. `clippy --all-targets` without `--all-features` shared the first
+blind spot, so those files were not even type-checked.
+
+The gap was not theoretical. The gates written for the campaign below —
+`G_ASND_MOMENT` (issue #17's regression oracle), `G_CONS_*` (#26),
+`G_SHIFT1D_COEFF_FD` (#25), `G_PENCIL_ORDER2` (#21) — shipped in 0.13.0-beta
+having never executed in CI, because the manual `xtask test-full` /
+`test-ignored-gates` step that was supposed to cover them was not run.
+
+Closed by: seven concern-grouped jobs in `flagship-gates.yml`, plus an invariant
+check (`scripts/check_gate_coverage.py`) that fails CI if the enumeration drifts
+again — it already had, four binaries' worth, within a day of being written (nightly + every
+`v*` tag, `-- --include-ignored`), `--all-features` on the `ci.yml` clippy job,
+and the 346-diagnostic lint backlog that second change exposed. Details in
+`docs/release-process.md` §3b and the `[Unreleased]` CHANGELOG section.
+
+First finding from actually running them: `G_SMOLYAK_D5` exceeds 40 min on a
+12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` hits the same
+cap against a documented "≤ 2 min"; `strang_nonseparable_slope` is a third,
+expensive by construction rather than by drift. Neither Smolyak gate is failing
+— ADR-0191's
+`K^D` sampler made each `D = 5` sample read 1024 nodes instead of 32, and the
+budget claims were never re-measured because the gates ran nowhere. All three
+moved to `nightly.yml`, alongside `ddim-d5`.
+
+Full sweep: 52 binaries, 49 PASS in 1035 s, 3 over a 40 min cap. Median ~13 s.
+
+Deliberately NOT done: making publication wait on these jobs. The tag lane is a
+record bound to the released SHA, not a blocker — see the `tags:` comment in
+`flagship-gates.yml` for why gating a minutes-long publish on a multi-hour
+workflow is the worse trade.
+
+---
+
 ## Issue campaign #17/#19/#21–#26 — DONE (ADRs 0190–0197)
 
 Eight issues filed against 0.11.0-beta from a quant-finance showcase. One is a

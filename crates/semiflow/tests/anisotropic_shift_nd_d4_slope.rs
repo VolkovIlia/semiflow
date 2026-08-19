@@ -52,6 +52,7 @@
 #![cfg(feature = "slow-tests")]
 #![allow(clippy::cast_precision_loss)] // usize→f64 in OLS; values ≤ 512 ≤ 2^52
 #![allow(clippy::cast_lossless)] // u32→f64 for n_steps: infallible, project idiom
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},

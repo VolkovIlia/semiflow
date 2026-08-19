@@ -40,6 +40,11 @@
     unused_assignments,
     dead_code
 )]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
+#![allow(clippy::manual_clamp)] // max().min() maps NaN to a bound; clamp propagates it
+#![allow(clippy::similar_names)] // paired names differ by one letter (fwd_/fd_)
+#![allow(clippy::too_many_arguments)] // builders take the operator's full parameter set
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -146,7 +151,7 @@ fn spectral_antideriv(u: &[f64], n: usize, dx: f64) -> Vec<f64> {
     idft_c2r(&cplx)
 }
 
-/// Apply spectral heat factor exp(τ·ν·σ_D2) to a 1-D line (b=0).
+/// Apply spectral heat factor `exp(τ·ν·σ_D2)` to a 1-D line (b=0).
 fn heat_spectral_1d(u: &[f64], n: usize, dx: f64, nu: f64, tau: f64) -> Vec<f64> {
     let mut cplx = dft_r2c(u);
     let tpn = TAU / n as f64;
@@ -325,7 +330,7 @@ fn ref_rd_rk4(
 // §F — Independent reference: direct-PDE spectral RK4 Burgers (Seam A ref)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Spectral Burgers RHS: u_t = ν u_xx - u u_x (NO Cole-Hopf).
+/// Spectral Burgers RHS: `u_t` = ν `u_xx` - u `u_x` (NO Cole-Hopf).
 fn burgers_rhs_spectral(u: &[f64], n: usize, dx: f64, nu: f64) -> Vec<f64> {
     // u_xx = derivative of derivative
     let u_x = spectral_deriv(u, n, dx);
@@ -415,7 +420,7 @@ fn strang_generic_evolve(
 /// TT-SVD left-to-right sweep returning (d-1) bond ranks.
 ///
 /// Bond j separates {0..j} | {j+1..d-1}. Rank at bond j = numerical rank of
-/// the (r_prev*n) × n^rest unfolding after carrying the left orthogonal factor.
+/// the (`r_prev`*n) × n^rest unfolding after carrying the left orthogonal factor.
 /// Uses power-deflation SVD (no gram matrix — avoids gram-squaring precision
 /// loss that makes true rank-1 tensors read as rank > 1 at eps=1e-6).
 fn tt_ranks_all_bonds(u_flat: &[f64], n: usize, d: usize, eps: f64) -> Vec<usize> {
@@ -438,7 +443,7 @@ fn tt_ranks_all_bonds(u_flat: &[f64], n: usize, d: usize, eps: f64) -> Vec<usize
 }
 
 /// Power-deflation SVD: returns (rank, carry) where rank = number of singular
-/// values above eps·σ_max, and carry = diag(σ₁…σᵣ)·Vᵣᵀ  (r × cols, row-major).
+/// values above `eps·σ_max`, and carry = diag(σ₁…σᵣ)·Vᵣᵀ  (r × cols, row-major).
 ///
 /// Uses left power iteration: u ← Bv/‖Bv‖, v ← Bᵀu; σ = ‖Bᵀu‖.
 /// No gram matrix formed — avoids precision loss from squaring the condition number.

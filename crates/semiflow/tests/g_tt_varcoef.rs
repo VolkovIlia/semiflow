@@ -44,6 +44,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::needless_range_loop)]
+#![allow(clippy::cast_possible_wrap)] // usize to isize offsets; grids far below isize::MAX
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -93,8 +94,8 @@ fn mean(v: &[f64]) -> f64 {
 
 /// Amplitude span of a profile (load-bearing variation check).
 fn span(v: &[f64]) -> f64 {
-    let lo = v.iter().cloned().fold(f64::INFINITY, f64::min);
-    let hi = v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let lo = v.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     hi - lo
 }
 
@@ -180,8 +181,8 @@ fn oracle_axis_inner(j: usize) -> f64 {
 
 /// Reference functional `⟨f, u_T⟩` for the variable-`a` Gaussian.
 ///
-/// Independent oracle: per-axis dense matrix power series for exp(T·L_j),
-/// different method from VarCoefTt (spectral + P₂ tridiag). MUST NOT be
+/// Independent oracle: per-axis dense matrix power series for `exp(T·L_j)`,
+/// different method from `VarCoefTt` (spectral + P₂ tridiag). MUST NOT be
 /// a self-comparison.
 fn oracle_inner_d(d: usize, _n_steps: usize) -> f64 {
     // Separable: inner(u_T) = prod_j ⟨ones, exp(T·L_j)·f_j⟩
@@ -219,7 +220,7 @@ fn run_varcoef_tt(d: usize, n_steps: usize, state: &mut TtState<f64>) {
     ev.evolve(T_FINAL, n_steps, state);
 }
 
-/// Evolve with CONST-mean coefficients (flat a_j = mean(a_j)) for variation check.
+/// Evolve with CONST-mean coefficients (flat `a_j` = `mean(a_j)`) for variation check.
 fn run_const_mean_tt(d: usize, n_steps: usize, state: &mut TtState<f64>) {
     let a_axis: Vec<Vec<f64>> = (0..d)
         .map(|j| {

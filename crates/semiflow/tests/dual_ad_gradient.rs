@@ -129,8 +129,8 @@ where
 // Sub-test: DiffusionChernoff
 // ---------------------------------------------------------------------------
 
-/// Forward-mode gradient of L²(θ) at θ₀ via DiffusionChernoff<Dual<f64>>.
-/// Pinned to CubicHermite to match `f64_grid()` reference (pre-v8 cross-check).
+/// Forward-mode gradient of L²(θ) at θ₀ via `DiffusionChernoff`<Dual<f64>>.
+/// Pinned to `CubicHermite` to match `f64_grid()` reference (pre-v8 cross-check).
 fn forward_grad_diffusion() -> f64 {
     let grid =
         Grid1D::<Dual<f64>>::new_generic(Dual::constant(X_MIN), Dual::constant(X_MAX), N_GRID)
@@ -149,9 +149,9 @@ fn forward_grad_diffusion() -> f64 {
     grad_from_dual(&u_t)
 }
 
-/// f64 L² norm of DiffusionChernoff at diffusivity θ — uses `apply_f` (generic
+/// f64 L² norm of `DiffusionChernoff` at diffusivity θ — uses `apply_f` (generic
 /// scalar path) to match EXACTLY the code path exercised by the Dual<f64> mode.
-/// Uses CubicHermite interp to match `new_generic` default (see `f64_grid`).
+/// Uses `CubicHermite` interp to match `new_generic` default (see `f64_grid`).
 fn l2_diffusion(theta: f64) -> f64 {
     let grid = f64_grid();
     let diff =
@@ -187,7 +187,7 @@ fn g_dual_ad_gradient_diffusion() {
 // Sub-test: Diffusion4thChernoff
 // ---------------------------------------------------------------------------
 
-/// Pinned to CubicHermite to match `f64_grid()` reference (pre-v8 cross-check).
+/// Pinned to `CubicHermite` to match `f64_grid()` reference (pre-v8 cross-check).
 fn forward_grad_diffusion4() -> f64 {
     let grid =
         Grid1D::<Dual<f64>>::new_generic(Dual::constant(X_MIN), Dual::constant(X_MAX), N_GRID)
@@ -241,7 +241,7 @@ fn g_dual_ad_gradient_diffusion4() {
 // Sub-test: StrangSplit (θ enters the diffusion leg)
 // ---------------------------------------------------------------------------
 
-/// StrangSplit step via the generic apply_into path:
+/// `StrangSplit` step via the generic `apply_into` path:
 /// D(τ/2) ∘ R(τ) ∘ D(τ/2) using `apply_f` on each leg.
 fn strang_step_dual(
     diff: &DiffusionChernoff<Dual<f64>>,
@@ -256,7 +256,7 @@ fn strang_step_dual(
     diff.apply_f(half_tau, &u2).expect("D(τ/2)")
 }
 
-/// Pinned to CubicHermite to match `f64_grid()` reference (pre-v8 cross-check).
+/// Pinned to `CubicHermite` to match `f64_grid()` reference (pre-v8 cross-check).
 fn forward_grad_strang() -> f64 {
     let grid =
         Grid1D::<Dual<f64>>::new_generic(Dual::constant(X_MIN), Dual::constant(X_MAX), N_GRID)
@@ -284,7 +284,7 @@ fn forward_grad_strang() -> f64 {
     grad_from_dual(&u)
 }
 
-/// f64 L² norm of StrangSplit at diffusivity θ — uses apply_f on each leg
+/// f64 L² norm of `StrangSplit` at diffusivity θ — uses `apply_f` on each leg
 /// to match the generic path exercised by Dual<f64> forward mode.
 fn l2_strang(theta: f64) -> f64 {
     let grid = f64_grid();
@@ -328,7 +328,7 @@ fn g_dual_ad_gradient_strang() {
 // ---------------------------------------------------------------------------
 
 /// Forward-mode gradient via the default `Grid1D::<Dual<f64>>::new_generic`
-/// (SepticHermite since v8.0 §46.5.bis).  No `.with_interp` call.
+/// (`SepticHermite` since v8.0 §46.5.bis).  No `.with_interp` call.
 fn forward_grad_diffusion_septic() -> f64 {
     let grid =
         Grid1D::<Dual<f64>>::new_generic(Dual::constant(X_MIN), Dual::constant(X_MAX), N_GRID)
@@ -348,8 +348,8 @@ fn forward_grad_diffusion_septic() -> f64 {
     grad_from_dual(&u_t)
 }
 
-/// f64 L² norm for the SepticHermite reference path.
-/// Uses `Grid1D::<f64>::new_generic` (default SepticHermite) + `apply_f`
+/// f64 L² norm for the `SepticHermite` reference path.
+/// Uses `Grid1D::<f64>::new_generic` (default `SepticHermite`) + `apply_f`
 /// to match the generic scalar path taken by the Dual<f64> forward mode.
 fn l2_diffusion_septic(theta: f64) -> f64 {
     let grid = Grid1D::<f64>::new_generic(X_MIN, X_MAX, N_GRID).expect("grid valid");
@@ -364,12 +364,12 @@ fn l2_diffusion_septic(theta: f64) -> f64 {
     l2_f64(&u)
 }
 
-/// §46.5.bis gate: forward-mode AD on the DEFAULT grid (SepticHermite)
+/// §46.5.bis gate: forward-mode AD on the DEFAULT grid (`SepticHermite`)
 /// matches Richardson FD to ≤ 1e-10.
 ///
 /// This sub-test MUST be in the gate set per ADR-0133 Amendment 1: "at least
-/// one kernel MUST run on a grid built by the default Grid1D::new constructor
-/// (i.e. InterpKind::SepticHermite, §46.5.bis) — NOT pinned to CubicHermite".
+/// one kernel MUST run on a grid built by the default `Grid1D::new` constructor
+/// (i.e. `InterpKind::SepticHermite`, §46.5.bis) — NOT pinned to `CubicHermite`".
 #[test]
 #[ignore = "G_DUAL_AD_GRADIENT: run with --features slow-tests --release -- --ignored"]
 fn g_dual_ad_gradient_diffusion_septic_default() {

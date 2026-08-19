@@ -25,7 +25,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # `--all-features` is load-bearing, not cosmetic.
+      #
+      # Without it this job never saw the `#![cfg(feature = "slow-tests")]`
+      # test files — 27 of the files carrying RELEASE_BLOCKING gates. Neither
+      # did the `test` job below (`cargo test --workspace --release`, no
+      # feature flags, no `-- --ignored`). Those files were therefore not
+      # type-checked by ANY workflow: a renamed constructor or a changed
+      # signature broke them while every PR stayed green, until a human
+      # remembered to run `xtask test-full` by hand. Before v0.13.0-beta that
+      # local run did not happen.
+      #
+      # clippy is a `check` build (no codegen), so covering them costs minutes
+      # — a full `cargo test --no-run --release` over the same targets measured
+      # >18 min on 12 cores, which is hours on a 2-vCPU hosted runner and far
+      # too slow for every PR. Actually BUILDING and RUNNING the gates is the
+      # `gate-sweep` job in flagship-gates.yml (nightly + release tags).
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     runs-on: ${{ matrix.os }}
@@ -70,6 +86,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- check-lints
+
+  gate-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Asserts that every RELEASE_BLOCKING gate in properties.yaml is executed
+      # by some workflow. Added because the hand-maintained `--test` list in
+      # flagship-gates.yml drifted within a day of being written: review found
+      # four binaries the first sweep had missed. Runs in seconds, stdlib only.
+      - run: python3 scripts/check_gate_coverage.py
 
   doc-check:
     runs-on: ubuntu-latest

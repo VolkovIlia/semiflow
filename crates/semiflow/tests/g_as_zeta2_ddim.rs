@@ -105,11 +105,12 @@ fn make_zeta2_kernel_d2(n: usize) -> AnisotropicShiftZeta2ND<f64, 2> {
     // A_{10}=same as A_{01}
     // A_{11}=1+0.1*x₁  → ∂_0=0, ∂_1=0.1
     type GradBox = Box<dyn Fn(&[f64; 2]) -> [f64; 2] + Send + Sync>;
-    let mut grad_a: Vec<GradBox> = Vec::with_capacity(4);
-    grad_a.push(Box::new(|_x: &[f64; 2]| [0.1_f64, 0.0_f64])); // ∂_m A_{00}
-    grad_a.push(Box::new(|_x: &[f64; 2]| [0.02_f64, 0.02_f64])); // ∂_m A_{01}
-    grad_a.push(Box::new(|_x: &[f64; 2]| [0.02_f64, 0.02_f64])); // ∂_m A_{10}
-    grad_a.push(Box::new(|_x: &[f64; 2]| [0.0_f64, 0.1_f64])); // ∂_m A_{11}
+    let grad_a: Vec<GradBox> = vec![
+        Box::new(|_x: &[f64; 2]| [0.1_f64, 0.0_f64]), // ∂_m A_{00}
+        Box::new(|_x: &[f64; 2]| [0.02_f64, 0.02_f64]), // ∂_m A_{01}
+        Box::new(|_x: &[f64; 2]| [0.02_f64, 0.02_f64]), // ∂_m A_{10}
+        Box::new(|_x: &[f64; 2]| [0.0_f64, 0.1_f64]), // ∂_m A_{11}
+    ];
 
     AnisotropicShiftZeta2ND::new(base, a_ij_copy, grad_a).unwrap()
 }
@@ -249,7 +250,7 @@ fn g_as_zeta2_tau2_scaling() {
     // Gate: each halving ratio ∈ [3.6, 4.4].
     for (i, &ratio) in ratios.iter().enumerate() {
         assert!(
-            ratio >= 3.6 && ratio <= 4.4,
+            (3.6..=4.4).contains(&ratio),
             "G_AS_ZETA2_TAU2: halving ratio[{i}] = {ratio:.4} outside [3.6, 4.4]; \
              expected ≈ 4.0 (genuine O(τ²)). mags = {:?}",
             mags.iter().map(|m| format!("{m:.3e}")).collect::<Vec<_>>(),

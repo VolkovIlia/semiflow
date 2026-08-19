@@ -25,9 +25,18 @@
 //!   sweep ([8,16,32]):      56 × 4096 × 533 ≈  122M ops  ~  3–6 s
 //!   total ≈ 262M ops → ~6–14 s; comfortably ≤ 2 min wall-clock.
 //!
+//! **That estimate is stale.** Measured 2026-08-18, the first execution this
+//! gate ever had: it exceeded a 40 min cap on a 12-core host, not ~14 s. The op counts
+//! above are still right; what changed is the cost per sample. ADR-0191
+//! replaced multilinear N-D sampling with the `K^D` tensor stencil, so each
+//! sample now reads `4^6` nodes instead of `2^6`. The gate is unchanged — only
+//! the budget claim was wrong, and it stayed wrong because this gate ran in no
+//! workflow. It now runs in the `smolyak-d5-d6` job of `nightly.yml`.
+//!
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
 
 use semiflow::{
     grid_nd::{GridFnND, GridND},
@@ -42,19 +51,19 @@ const T: f64 = 0.5;
 
 /// Spatial grid size per axis: 4⁶ = 4096 total grid points.
 ///
-/// N_AXIS=4 is the minimum allowed by the Grid1D septic Hermite stencil
-/// (requires n ≥ 4).  Domain reduced to [−2, 2] (see DOMAIN_LO/HI) so the
+/// `N_AXIS=4` is the minimum allowed by the `Grid1D` septic Hermite stencil
+/// (requires n ≥ 4).  Domain reduced to [−2, 2] (see `DOMAIN_LO/HI`) so the
 /// Gaussian IC is non-trivial on the grid (inner points at ±2/3 have IC ≈ 0.07;
 /// using [-5,5] with 4 pts puts inner points at ±5/3 where IC ≈ 5.6e-8 —
 /// near machine-zero, producing floor-dominated convergence).
 const N_AXIS: usize = 4;
 
-/// Domain bounds per axis.  Reduced from [−5,5] to [−2,2] so N_AXIS=4 gives
+/// Domain bounds per axis.  Reduced from [−5,5] to [−2,2] so `N_AXIS=4` gives
 /// meaningful Gaussian IC values: exp(-(2/3)^2)^6 ≈ 0.069 at inner pts.
 const DOMAIN_LO: f64 = -2.0;
 const DOMAIN_HI: f64 = 2.0;
 
-/// Reference step count.  N_REF=64 gives tau_ref = T/64 ≈ 7.8e-3,
+/// Reference step count.  `N_REF=64` gives `tau_ref` = T/64 ≈ 7.8e-3,
 /// well below the coarsest sweep point (n=8, tau=0.0625).
 const N_REF: u32 = 64;
 
@@ -62,8 +71,8 @@ const N_REF: u32 = 64;
 /// truncation error, giving slope ≈ −1.0 (order-1 gate: ≤ −0.95).
 const N_SWEEP: [u32; 3] = [8, 16, 32];
 
-/// Slope gate: ≤ −0.95 (order-1, consistent with SmolyakGridND::order()=1).
-/// ADR-0123 Amendment 1 explicitly inherits the corrected G_SMOLYAK_D5 gate.
+/// Slope gate: ≤ −0.95 (order-1, consistent with `SmolyakGridND::order()=1`).
+/// ADR-0123 Amendment 1 explicitly inherits the corrected `G_SMOLYAK_D5` gate.
 const SLOPE_GATE: f64 = -0.95;
 
 /// Node count must be below the full tensor 6⁶ = 46656 baseline.
@@ -117,7 +126,7 @@ fn initial_fn(x: &[f64; 6]) -> f64 {
 
 /// Run `n_steps` Chernoff steps from Gaussian IC; return final state.
 fn run_steps(kernel: &SmolyakGridND<f64, 6>, n_steps: u32) -> GridFnND<f64, 6> {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let f0 = GridFnND::from_fn(kernel.grid().clone(), initial_fn);
     let mut src = f0;
     let mut dst = GridFnND::from_fn(kernel.grid().clone(), |_| 0.0_f64);
@@ -140,7 +149,7 @@ fn sup_diff(a: &GridFnND<f64, 6>, b: &GridFnND<f64, 6>) -> f64 {
 
 /// OLS slope of log(err) vs log(n).
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
-    let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
+    let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let n = x.len() as f64;
     let sx: f64 = x.iter().sum();
@@ -152,16 +161,17 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
 
 // ── gate test ─────────────────────────────────────────────────────────────────
 
-/// G_SMOLYAK_D6 gate: D=6 Smolyak sparse-grid kernel.
+/// `G_SMOLYAK_D6` gate: D=6 Smolyak sparse-grid kernel.
 ///
 /// Three sub-tests (all within this `#[ignore]` function):
 ///   1. Node-count gate: `k.n_nodes() < 46656` (tensor 6⁶).
 ///   2. F(0)=I smoke: `‖F(0)·1 − 1‖_∞ < 1e-10`.
 ///   3. Self-convergence slope ≤ −0.95 (order-1; ADR-0123 Amendment 1).
 ///
-/// Prints incremental progress; budget ≤ 3 min on dev HW.
+/// Prints incremental progress. (The old "budget ≤ 3 min on dev HW" no longer
+/// holds — see the measured cost in the module header.)
 #[test]
-#[ignore] // slow-tests: cargo test --features slow-tests -- --ignored g_smolyak_d6
+#[ignore = "RELEASE_BLOCKING slow gate: >40 min on a 12-core host (measured 2026-08-18); run with -- --ignored"]
 fn g_smolyak_d6() {
     println!("G_SMOLYAK_D6: building D=6 Smolyak kernel (ℓ={LEVEL}, N_AXIS={N_AXIS})…");
     let kernel = make_kernel(N_AXIS);
@@ -203,13 +213,13 @@ fn g_smolyak_d6() {
     for &n in &N_SWEEP {
         println!(
             "G_SMOLYAK_D6: running n={n} steps (tau={:.5})…",
-            T / n as f64
+            T / f64::from(n)
         );
         let u_n = run_steps(&kernel, n);
         let err = sup_diff(&u_n, &u_ref);
         println!(
             "G_SMOLYAK_D6: n={n} tau={:.5} sup‖u_n−u_ref‖={err:.4e}",
-            T / n as f64
+            T / f64::from(n)
         );
         errs.push(err);
     }

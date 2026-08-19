@@ -24,6 +24,8 @@
 //! Feature gate: `slow-tests`.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use semiflow::{
     hormander::{HypoellipticChernoff, KolmogorovPhaseSpace},
@@ -32,7 +34,7 @@ use semiflow::{
 
 // ─── Gate constants ───────────────────────────────────────────────────────────
 
-/// Slope gate: OLS ≤ SLOPE_GATE. Gate -1.95 gives 2.5% margin vs theory -2.0.
+/// Slope gate: OLS ≤ `SLOPE_GATE`. Gate -1.95 gives 2.5% margin vs theory -2.0.
 const SLOPE_GATE: f64 = -1.95;
 
 /// Mass conservation gate (v3.1 calibrated; strict 1e-10 deferred).
@@ -41,20 +43,20 @@ const MASS_GATE: f64 = 5e-5;
 /// Total evolution time.
 const T_FINAL: f64 = 0.5;
 
-/// IC evaluation time (oracle at T_IC used as smooth initial condition).
-/// σ_v = sqrt(1.0) = 1.0 >> Δv ≈ 0.031; well-resolved on 384-point grid.
+/// IC evaluation time (oracle at `T_IC` used as smooth initial condition).
+/// `σ_v` = sqrt(1.0) = 1.0 >> Δv ≈ 0.031; well-resolved on 384-point grid.
 const T_IC: f64 = 1.0;
 
-/// Phase-space domain (x,v) ∈ [-L,L]². Wide enough for σ_x ≈ (T_IC)^{3/2}/√3 ≈ 0.58.
+/// Phase-space domain (x,v) ∈ [-L,L]². Wide enough for `σ_x` ≈ `T_IC^{3/2}/√3` ≈ 0.58.
 const DOMAIN_HALF: f64 = 6.0;
 
 /// Fixed grid resolution (both axes).
-/// N_GRID=384 keeps DiffusionChernoff CFL ratio h₀/dx ≥ 5.6 across N_SWEEP.
+/// `N_GRID=384` keeps `DiffusionChernoff` CFL ratio h₀/dx ≥ 5.6 across `N_SWEEP`.
 const N_GRID: usize = 384;
 
 /// Chernoff step sweep for self-convergence probe.
 /// Sweep n ∈ {4,8,16,32}: tau ∈ {0.125, 0.0625, 0.03125, 0.015625}.
-/// Minimum h₀/dx = 2*sqrt(0.5*T_FINAL/32) / (12/(N_GRID-1)) ≈ 5.6.
+/// Minimum h₀/dx = 2*sqrt(0.5*`T_FINAL/32`) / (12/(N_GRID-1)) ≈ 5.6.
 const N_SWEEP: [usize; 4] = [4, 8, 16, 32];
 
 // ─── Kolmogorov 1934 fundamental solution ────────────────────────────────────
@@ -65,7 +67,7 @@ const N_SWEEP: [usize; 4] = [4, 8, 16, 32];
 /// `Q = -3(x−x₀−tv₀)²/t³ + 3(x−x₀−tv₀)(v−v₀)/t² − (v−v₀)²/t`.
 ///
 /// Reference: Kolmogorov 1934 *Math. Annalen* 108; math.md §28.4.A.
-/// Independent oracle: validated against Python sympy in T_HORM sympy sub-checks.
+/// Independent oracle: validated against Python sympy in `T_HORM` sympy sub-checks.
 fn oracle(t: f64, x: f64, v: f64, x0: f64, v0: f64) -> f64 {
     let pi = core::f64::consts::PI;
     let sqrt3 = 3.0_f64.sqrt();
@@ -162,16 +164,10 @@ fn g28_g29_kolmogorov_slope_and_mass() {
         // G29: mass of coarse solution (algorithm mass-conservation check).
         let mass: f64 = u_coarse.values.iter().sum::<f64>() * cell;
         let mass_err = (mass - 1.0).abs();
-        println!(
-            "G29 n={:3}: mass={:.8}  |mass-1|={:.3e}  (gate <= {:.1e})",
-            n, mass, mass_err, MASS_GATE
-        );
+        println!("G29 n={n:3}: mass={mass:.8}  |mass-1|={mass_err:.3e}  (gate <= {MASS_GATE:.1e})");
         assert!(
             mass_err <= MASS_GATE,
-            "G29 FAIL: |mass - 1| = {:.3e} > {:.1e} at n={}",
-            mass_err,
-            MASS_GATE,
-            n
+            "G29 FAIL: |mass - 1| = {mass_err:.3e} > {MASS_GATE:.1e} at n={n}"
         );
 
         // G28: sup-norm self-convergence ||u_n - u_{2n}||_inf.
@@ -182,10 +178,7 @@ fn g28_g29_kolmogorov_slope_and_mass() {
             .map(|(a, b)| (a - b).abs())
             .fold(0.0_f64, f64::max);
         self_errs.push(self_err);
-        println!(
-            "G28 n={:3}: ||u_n-u_{{2n}}||={:.4e}  tau={:.4e}",
-            n, self_err, tau
-        );
+        println!("G28 n={n:3}: ||u_n-u_{{2n}}||={self_err:.4e}  tau={tau:.4e}");
     }
 
     // G28 OLS slope of log(||u_n - u_{2n}||) vs log(n).
@@ -196,16 +189,14 @@ fn g28_g29_kolmogorov_slope_and_mass() {
     let ys: Vec<f64> = self_errs.iter().map(|&e| e.ln()).collect();
     let slope = ols_slope(&xs, &ys);
 
-    println!("\nG28 OLS slope: {:.4}  (gate <= {:.2})", slope, SLOPE_GATE);
+    println!("\nG28 OLS slope: {slope:.4}  (gate <= {SLOPE_GATE:.2})");
     for (&n, &err) in N_SWEEP.iter().zip(self_errs.iter()) {
-        println!("  n={:3}: self_err={:.4e}", n, err);
+        println!("  n={n:3}: self_err={err:.4e}");
     }
 
     assert!(
         slope <= SLOPE_GATE,
-        "G28 FAIL: OLS slope {:.4} > {} (Kolmogorov palindromic-Strang order-2 gate)",
-        slope,
-        SLOPE_GATE
+        "G28 FAIL: OLS slope {slope:.4} > {SLOPE_GATE} (Kolmogorov palindromic-Strang order-2 gate)"
     );
 
     // G28-ABS: absolute error vs Kolmogorov 1934 oracle at finest grid (n=32).
@@ -244,17 +235,15 @@ fn g28_g29_kolmogorov_slope_and_mass() {
             })
             .fold(0.0_f64, f64::max);
         println!(
-            "G28-ABS: ||u_finest - oracle||_inf = {:.4e}  t_oracle={:.2}  (gate <= 5e-2)",
-            abs_err, t_oracle
+            "G28-ABS: ||u_finest - oracle||_inf = {abs_err:.4e}  t_oracle={t_oracle:.2}  (gate <= 5e-2)"
         );
         assert!(
             abs_err <= 5e-2,
-            "G28-ABS FAIL: absolute error vs Kolmogorov oracle = {:.4e} > 5e-2. \
+            "G28-ABS FAIL: absolute error vs Kolmogorov oracle = {abs_err:.4e} > 5e-2. \
              Kernel may be converging to the wrong limit (sign/scale assembly error). \
              Oracle: Kolmogorov 1934 p(T_IC+T_FINAL, x, v; 0, 0). \
              n={n_finest}, T_FINAL={T_FINAL}, t_oracle={t_oracle:.2}. \
-             Observed spatial-discretisation floor ~3.6e-2; wrong-limit errors expected >= 0.1.",
-            abs_err
+             Observed spatial-discretisation floor ~3.6e-2; wrong-limit errors expected >= 0.1."
         );
     }
 }

@@ -10,6 +10,10 @@
 //! M=1 case: scalar a>0, b=0 (skew-symmetric = 0), c scalar.
 
 #![cfg(feature = "slow-tests")]
+#![allow(clippy::cast_possible_truncation)] // deliberate narrowing; bounded by the grid sizes
+#![allow(clippy::cast_precision_loss)] // usize/u32 to f64 in OLS sweeps; values below 2^52
+#![allow(clippy::needless_range_loop)] // matrix loops use cross-index arithmetic
+#![allow(clippy::unusual_byte_groupings)] // mnemonic seed constant
 
 use semiflow::{ChernoffFunction, Grid1D, MatrixDiffusionChernoff, MatrixGridFn1D, ScratchPool};
 
@@ -109,7 +113,7 @@ fn initial_fn(x: f64) -> [f64; M] {
 // ---------------------------------------------------------------------------
 
 fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
-    let tau = T / n_steps as f64;
+    let tau = T / f64::from(n_steps);
     let kernel = make_kernel(N_GRID);
     let f0 = MatrixGridFn1D::<f64, M>::from_fn(kernel.grid, initial_fn);
     let mut pool = ScratchPool::<f64>::new();
@@ -131,9 +135,9 @@ fn run_sweep(n_steps: u32, reference: &MatrixGridFn1D<f64, M>) -> f64 {
     err
 }
 
-/// OLS slope of (ln n_i, ln err_i): negative for convergence.
+/// OLS slope of (ln `n_i`, ln `err_i`): negative for convergence.
 fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
-    let x: Vec<f64> = ns.iter().map(|&n| (n as f64).ln()).collect();
+    let x: Vec<f64> = ns.iter().map(|&n| f64::from(n).ln()).collect();
     let y: Vec<f64> = errs.iter().map(|&e| e.ln()).collect();
     let n = x.len() as f64;
     let sx: f64 = x.iter().sum();
@@ -150,7 +154,7 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
 #[test]
 fn g_matrix_m1_slope() {
     // Reference at N_REF steps.
-    let tau_ref = T / N_REF as f64;
+    let tau_ref = T / f64::from(N_REF);
     let kernel_ref = make_kernel(N_GRID);
     let f0 = MatrixGridFn1D::<f64, M>::from_fn(kernel_ref.grid, initial_fn);
     let mut pool = ScratchPool::<f64>::new();

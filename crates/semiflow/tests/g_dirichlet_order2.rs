@@ -166,7 +166,7 @@ fn ols_slope(ns: &[usize], errs: &[f64]) -> f64 {
 /// for `KillingChernoff`). If this test passes, the odd-image construction
 /// genuinely overcomes the order-1 cap of the killing formulation (§21.2).
 #[test]
-#[ignore]
+#[ignore = "RELEASE_BLOCKING slow gate: Dirichlet order-2 slope sweep; run with -- --ignored"]
 fn g_dirichlet_order2_slope() {
     let mut errs = Vec::with_capacity(N_SWEEP.len());
 

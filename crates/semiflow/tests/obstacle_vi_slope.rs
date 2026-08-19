@@ -47,6 +47,8 @@
     clippy::cast_sign_loss,
     clippy::type_complexity
 )]
+#![allow(clippy::needless_range_loop)] // index addresses defined[i] and grid.x_at(i)
+#![allow(clippy::too_many_lines)] // one linear scenario, kept inline to read top-down
 
 use core::f64::consts::PI;
 
@@ -74,17 +76,17 @@ const STATIONARY_STEPS_PER_T: usize = 2000;
 const MEMBRANE_A: f64 = 0.1;
 const MEMBRANE_B: f64 = 1.0;
 
-/// G_OBSTACLE_SLOPE_SMOOTH gate threshold (≤ −0.95).
+/// `G_OBSTACLE_SLOPE_SMOOTH` gate threshold (≤ −0.95).
 #[cfg(feature = "slow-tests")]
 const SLOPE_SMOOTH_GATE: f64 = -0.95;
-/// G_OBSTACLE_SLOPE_AMERICAN gate threshold (≤ −0.45).
+/// `G_OBSTACLE_SLOPE_AMERICAN` gate threshold (≤ −0.45).
 #[cfg(feature = "slow-tests")]
 const SLOPE_AMERICAN_GATE: f64 = -0.45;
 
 /// Fixed spatial grid size for the slope sweeps.
 #[cfg(feature = "slow-tests")]
 const SLOPE_N: usize = 128;
-/// Finest n_steps (reference solution). Four levels halved: n0, n0/2, n0/4, n0/8.
+/// Finest `n_steps` (reference solution). Four levels halved: n0, n0/2, n0/4, n0/8.
 #[cfg(feature = "slow-tests")]
 const SLOPE_N_STEPS_BASE: usize = 4096;
 /// T for slope sweeps.
@@ -234,17 +236,17 @@ fn g_obstacle_stationary() {
 // G_OBSTACLE_SLOPE_SMOOTH (slow-tests feature gate)
 // ---------------------------------------------------------------------------
 
-/// Smooth-obstacle self-convergence: sweep n_steps, no active free boundary.
+/// Smooth-obstacle self-convergence: sweep `n_steps`, no active free boundary.
 ///
 /// Obstacle g = −10 (far below solution) so projection is identity in practice,
 /// recovering the inner heat order-1 slope ≤ −0.95.
 ///
-/// h0/dx = 2√(0.5·τ)/dx = 2√(0.5·T/(n·dx)) — for SLOPE_N=128, n_steps=512,
+/// h0/dx = 2√(0.5·τ)/dx = 2√(0.5·T/(n·dx)) — for `SLOPE_N=128`, `n_steps=512`,
 /// dx≈8e-3: τ=T/512≈1e-3, h0≈4.5e-2, h0/dx≈5.6. Fine spatial grid
-/// (SLOPE_N=128) keeps spatial error below 1e-3 so temporal error dominates.
+/// (`SLOPE_N=128`) keeps spatial error below 1e-3 so temporal error dominates.
 ///
-/// NOTE: Δτ self-convergence slope is measured vs n_steps (not N). Halving n_steps
-/// doubles Δτ ⇒ slope measured as log(err) vs log(n_steps) ≤ −0.95.
+/// NOTE: Δτ self-convergence slope is measured vs `n_steps` (not N). Halving `n_steps`
+/// doubles Δτ ⇒ slope measured as log(err) vs `log(n_steps)` ≤ −0.95.
 #[test]
 #[cfg(feature = "slow-tests")]
 #[allow(clippy::cast_precision_loss)]
@@ -533,12 +535,12 @@ fn pap_gamma(s: f64) -> f64 {
     }
 }
 
-/// G_OBSTACLE_GAMMA: O(Δx²) convergence of inactive-set Γ + refusal sub-gate.
+/// `G_OBSTACLE_GAMMA`: O(Δx²) convergence of inactive-set Γ + refusal sub-gate.
 ///
-/// Probe: S = S* + 0.40·(S_max - S*) strictly inside the continuation set.
-/// Convergence: |Γ_h − Γ_analytic| at the probe node over Δx-halving sweep;
+/// Probe: S = S* + `0.40·(S_max - S*)` strictly inside the continuation set.
+/// Convergence: |`Γ_h` − `Γ_analytic`| at the probe node over Δx-halving sweep;
 /// OLS slope in Δx ≤ −1.95.
-/// Refusal: for every node S_i ≤ S*, `defined[i] == false`.
+/// Refusal: for every node `S_i` ≤ S*, `defined[i] == false`.
 #[test]
 #[cfg(feature = "slow-tests")]
 #[allow(clippy::cast_precision_loss)]
@@ -568,7 +570,7 @@ fn g_obstacle_gamma() {
         let dx = (S_MAX - S_MIN) / (n - 1) as f64;
 
         // Set V analytically on the grid (already-projected value field).
-        let v = GridFn1D::from_fn(grid, |s| pap_v(s));
+        let v = GridFn1D::from_fn(grid, pap_v);
         // Obstacle: put payoff g(S) = K − S (linear; inactive on continuation set).
         let obs = ClosureObstacle::new(|s: f64| PAP_K - s);
         let diff = DiffusionChernoff::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.5, grid);
@@ -748,12 +750,12 @@ fn sup_error_nd(a: &GridFnND<f64, 2>, b: &GridFnND<f64, 2>) -> f64 {
         .fold(0.0_f64, f64::max)
 }
 
-/// G_OBSTACLE_SLOPE_2D: 2D `ObstacleChernoffND` forward evolution convergence.
+/// `G_OBSTACLE_SLOPE_2D`: 2D `ObstacleChernoffND` forward evolution convergence.
 ///
 /// Two sub-checks (mirrors `G_OBSTACLE_SLOPE_SMOOTH` / `G_OBSTACLE_STATIONARY`):
 ///
 /// (1) Self-convergence slope: smooth initial datum above the obstacle (inactive
-///     projection = identity); OLS slope(log sup_err vs log n_steps) ≤ −0.95.
+///     projection = identity); OLS slope(log `sup_err` vs log `n_steps`) ≤ −0.95.
 ///     Inner: axis-separable explicit Euler heat step (`HeatND2D`, order-1).
 ///
 /// (2) Stationary correctness: V0 = g everywhere → post-projection = g exactly

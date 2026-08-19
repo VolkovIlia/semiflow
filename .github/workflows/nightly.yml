@@ -17,7 +17,9 @@ jobs:
   ddim-d5:
     name: G_DDIM D=5 (RELEASE_BLOCKING, ~5 h)
     runs-on: ubuntu-latest
-    timeout-minutes: 420
+    # 350, not 420: a hosted job is killed at 6 h whatever this says. The gate
+    # itself measures ~4.9 h, so it fits — but only just.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -31,6 +33,82 @@ jobs:
           RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
             --features parallel,simd,slow-tests --release \
             --test anisotropic_shift_nd_d5_slope -- --nocapture
+
+  smolyak-d5:
+    name: G_SMOLYAK_D5 (RELEASE_BLOCKING, hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # One gate per job, deliberately. Both Smolyak gates exceeded a 40 min cap
+      # on a 12-core host — the first measurement either has ever had, since
+      # neither ran in any workflow before 2026-08-18. A hosted runner is ~6x
+      # slower, so each is a multi-hour job on its own and the two of them
+      # sharing a runner would exceed the 6 h hosted limit and be killed with
+      # neither result recorded.
+      #
+      # timeout-minutes is 350, not 420: GitHub caps a hosted job at 6 h
+      # regardless of this value, so a larger number would only misdescribe the
+      # budget. See the `#jobsjob_idtimeout-minutes` note in the workflow-syntax
+      # docs.
+      #
+      # Cause of the cost, for the record: ADR-0191 replaced multilinear N-D
+      # sampling with the `K^D` tensor stencil, so a D=5 sample reads 1024 nodes
+      # against multilinear's 32. ADR-0191 measured that 32x on the D=5 Smolyak
+      # smoke tests (70 s -> 198 s, which is why those were re-sized) and left
+      # this gate alone; the file header still claimed "~10-30 s on release"
+      # until this campaign corrected it.
+      - name: Run G_SMOLYAK_D5
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test g_smolyak_d5 -- --include-ignored --nocapture
+
+  smolyak-d6:
+    name: G_SMOLYAK_D6 (RELEASE_BLOCKING, hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Split from D=5 for the reason given there: each is multi-hour on a
+      # hosted runner and the pair would not fit in one 6 h job.
+      - name: Run G_SMOLYAK_D6
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test g_smolyak_d6 -- --include-ignored --nocapture
+
+  nonseparable-2d:
+    name: G3_NS2D / G3_NS2D_var (RELEASE_BLOCKING, hours)
+    runs-on: ubuntu-latest
+    # 350, not 420: a hosted job is killed at 6 h whatever this says.
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Third gate found to be hours-long by the 2026-08-18 sweep, and like the
+      # two above it had never executed in any workflow, so its cost had never
+      # been measured. It exceeded a 40 min cap on a 12-core host.
+      #
+      # For scale: its sibling `strang_nonseparable_aniso_slope` — same shape,
+      # fixed N=1000 Chernoff steps with a spatial sweep — measures 118 min on a
+      # hosted runner and IS on the tag lane in flagship-gates.yml. This binary
+      # is at least twice that sibling's local cost, which projects past 4 h on
+      # a hosted runner and uncomfortably close to the 6 h job limit. That is
+      # why it sits here on the nightly schedule rather than on the tag lane.
+      #
+      # No regression is implied: the gate is simply expensive by construction.
+      - name: Run G3_NS2D and G3_NS2D_var
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test strang_nonseparable_slope \
+            --no-fail-fast -- --include-ignored --nocapture
 
   miri:
     runs-on: ubuntu-latest

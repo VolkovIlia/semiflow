@@ -41,7 +41,7 @@ const N_CHERNOFF: usize = 64;
 // G30 test
 // ---------------------------------------------------------------------------
 
-/// G30 — First 4 Friedlander eigenmodes on path P_3 reconstructed at ≤ 1e-3.
+/// G30 — First 4 Friedlander eigenmodes on path `P_3` reconstructed at ≤ 1e-3.
 ///
 /// Setup per `contracts/semiflow-core.properties.yaml` G30:
 /// ```text
