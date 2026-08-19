@@ -60,6 +60,33 @@ jobs:
             --test g_smolyak_d6 \
             --no-fail-fast -- --include-ignored --nocapture
 
+  nonseparable-2d:
+    name: G3_NS2D / G3_NS2D_var (RELEASE_BLOCKING, hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Third gate found to be hours-long by the 2026-08-18 sweep, and like the
+      # two above it had never executed in any workflow, so its cost had never
+      # been measured. It exceeded a 40 min cap on a 12-core host.
+      #
+      # For scale: its sibling `strang_nonseparable_aniso_slope` — same shape,
+      # fixed N=1000 Chernoff steps with a spatial sweep — measures 118 min on a
+      # hosted runner and IS on the tag lane in flagship-gates.yml. This binary
+      # is at least twice that sibling's local cost, which projects past 4 h on
+      # a hosted runner and uncomfortably close to the 6 h job limit. That is
+      # why it sits here on the nightly schedule rather than on the tag lane.
+      #
+      # No regression is implied: the gate is simply expensive by construction.
+      - name: Run G3_NS2D and G3_NS2D_var
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test strang_nonseparable_slope \
+            --no-fail-fast -- --include-ignored --nocapture
+
   miri:
     runs-on: ubuntu-latest
     steps:

@@ -409,28 +409,6 @@ jobs:
             --test g_dr_zeta4_truthful_order \
             --no-fail-fast -- --include-ignored --nocapture
 
-  nonseparable-2d-gates:
-    name: Non-separable 2-D slope gates (G3_NS2D, G3_NS2D_var)
-    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
-    continue-on-error: false
-    timeout-minutes: 330
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # Given its own job: this binary fixes N=1000 Chernoff steps and sweeps
-      # the spatial grid, the same shape as `strang_nonseparable_aniso_slope`
-      # in the flagship job, which measures 118 min on a hosted runner. Sharing
-      # a job with the short gates above would let one slow binary time out the
-      # whole group and hide their results.
-      - name: Run G3_NS2D and G3_NS2D_var
-        run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
-            --features parallel,simd,slow-tests --release \
-            --test strang_nonseparable_slope \
-            --no-fail-fast -- --include-ignored --nocapture
-
-
   # ---------------------------------------------------------------------------
   # L-gate: latency floor (L_CEV_PTICK — RELEASE_BLOCKING, ADR-0069).
   #

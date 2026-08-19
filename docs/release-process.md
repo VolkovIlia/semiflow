@@ -132,9 +132,18 @@ and exceeded a 40-minute cap on a 12-core host; `G_SMOLYAK_D6` documents "≤ 2 
 and hit the same cap. Both pass; what went stale is the estimate, because
 ADR-0191's `K^D` sampler made a `D = 5` sample read 1024 nodes instead of 32 and
 nobody re-measured a gate that ran nowhere. They now live in
-`nightly.yml::smolyak-d5-d6` beside `ddim-d5`, off the tag lane. Expect more of
-this kind as the sweep runs: a gate that has never executed has never had its
-documented cost checked either.
+`nightly.yml::smolyak-d5-d6` beside `ddim-d5`, off the tag lane.
+
+That expectation held: the completed sweep turned up a third hours-long gate,
+`strang_nonseparable_slope` (`G3_NS2D`, `G3_NS2D_var`), also over the 40-minute
+cap and also moved to nightly. Nothing was stale about it — it is expensive by
+construction — but it is at least twice the local cost of its tag-lane sibling
+`strang_nonseparable_aniso_slope`, which already takes 118 min hosted.
+
+Final sweep result, 12-core host, `-- --include-ignored`: **52 binaries, 49 PASS
+in 1035 s, 3 over the cap** — the three now on the nightly schedule. Nothing else
+in the newly-covered set is slow; the next-slowest is `g_killing_order2` at 90 s
+and the median is ~13 s. Turning these gates on does not make CI slow or red.
 
 This does **not** retire steps 3/3a: the tag lane is a record bound to the
 released SHA, not a blocker on publication (see the `tags:` comment in

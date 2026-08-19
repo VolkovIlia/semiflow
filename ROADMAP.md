@@ -45,10 +45,14 @@ and the 346-diagnostic lint backlog that second change exposed. Details in
 
 First finding from actually running them: `G_SMOLYAK_D5` exceeds 40 min on a
 12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` hits the same
-cap against a documented "≤ 2 min". Neither gate is failing — ADR-0191's
+cap against a documented "≤ 2 min"; `strang_nonseparable_slope` is a third,
+expensive by construction rather than by drift. Neither Smolyak gate is failing
+— ADR-0191's
 `K^D` sampler made each `D = 5` sample read 1024 nodes instead of 32, and the
-budget claims were never re-measured because the gates ran nowhere. Both moved
-to `nightly.yml::smolyak-d5-d6`, alongside `ddim-d5`.
+budget claims were never re-measured because the gates ran nowhere. All three
+moved to `nightly.yml`, alongside `ddim-d5`.
+
+Full sweep: 52 binaries, 49 PASS in 1035 s, 3 over a 40 min cap. Median ~13 s.
 
 Deliberately NOT done: making publication wait on these jobs. The tag lane is a
 record bound to the released SHA, not a blocker — see the `tags:` comment in

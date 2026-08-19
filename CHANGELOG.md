@@ -50,8 +50,16 @@ alters a gate threshold, tolerance or assertion.
   were re-sized) and recorded the slope gate as "untouched", meaning not
   re-sized — its runtime was never measured, because it ran nowhere.
 
-  Both now run in `nightly.yml::smolyak-d5-d6` next to `ddim-d5`, which was
-  moved out of the flagship workflow for the same reason. They are deliberately
+  The completed sweep found a third of the same kind: `strang_nonseparable_slope`
+  (`G3_NS2D`, `G3_NS2D_var`) also exceeded the 40-minute cap. No estimate was
+  stale there — the gate is expensive by construction, fixing N=1000 Chernoff
+  steps across a spatial sweep — but for scale, its sibling
+  `strang_nonseparable_aniso_slope` is 118 min on a hosted runner and this one
+  is at least twice its local cost, which projects past 4 h and too near the 6 h
+  job limit for the tag lane.
+
+  All three now run in `nightly.yml` next to `ddim-d5`, which was moved out of
+  the flagship workflow for the same reason. They are deliberately
   not on the tag lane: a hosted runner is ~6× slower than the measurement host,
   which would put them near the 6 h job limit. The stale budget claims in both
   file headers are corrected in place rather than deleted.
