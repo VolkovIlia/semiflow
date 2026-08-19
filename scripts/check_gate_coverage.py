@@ -94,6 +94,32 @@ def named_binaries():
     return names
 
 
+def split_specs(field):
+    """Split a `test_file` value into specs on commas OUTSIDE brace groups.
+
+    The field holds either a comma-separated list of paths, or one path using
+    the brace shorthand `..._d{2,3,4,5}_slope.rs`, or both. Splitting on every
+    comma shreds the brace group into `..._d{2`, `3`, `4`, `5}_slope.rs`, none
+    of which resolves — which silently dropped G_DDIM and G_MATRIX out of this
+    check when it was first written.
+    """
+    parts, buf, depth = [], "", 0
+    for ch in field:
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            parts.append(buf); buf = ""
+            continue
+        buf += ch
+    parts.append(buf)
+    out = []
+    for part in parts:
+        out += [p.strip() for p in re.split(r"(?<=\.rs)\s+", part) if p.strip()]
+    return out
+
+
 def expand(spec):
     """`a{1,2}b.rs` -> [a1b.rs, a2b.rs]; anything else -> [itself]."""
     path = spec.split("::")[0]
@@ -118,13 +144,15 @@ def unreached(gates, names):
         if gate.get("severity") != "RELEASE_BLOCKING" or not gate.get("test_file"):
             continue
         verdicts = []
-        for spec in [s.strip().rstrip(",")
-                     for s in re.split(r",|(?<=\.rs)\s+", gate["test_file"])
-                     if s.strip()]:
+        for spec in split_specs(gate["test_file"]):
             fn = spec.split("::")[1].split()[0] if "::" in spec else None
             verdicts += [_verdict(p, fn, names, cache) for p in expand(spec)]
         verdicts = [v for v in verdicts if v]
-        if verdicts and all(v == "UNREACHED" for v in verdicts):
+        if not verdicts:
+            # No pointer resolved to a file. Previously this fell through as a
+            # pass, which is how a shredded brace group hid two gates.
+            bad.append((gate["name"], gate["test_file"] + "   [no pointer resolves]"))
+        elif all(v == "UNREACHED" for v in verdicts):
             bad.append((gate["name"], gate["test_file"]))
     return bad
 
