@@ -212,7 +212,8 @@ fn g_smolyak_d5() {
         println!("G_SMOLYAK_D5: n={n} -> {}  sup‖u_2n−u_n‖={d:.4e}", 2 * n);
     }
 
-    let slope = ols_slope(&ns, &diffs);
+    let slope = ols_slope(ns, &diffs);
+
     println!(
         "G_SMOLYAK_D5: successive-difference OLS slope = {slope:.4}  \
          (gate: {SLOPE_CEILING} <= slope <= {SLOPE_GATE})  nodes={n_nodes}"
