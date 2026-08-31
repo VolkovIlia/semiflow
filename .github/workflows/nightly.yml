@@ -55,6 +55,8 @@ jobs:
     name: G_SMOLYAK_D5 smoke (scheduled hosted lane)
     runs-on: ${{ github.event.inputs.smolyak_runner || 'ubuntu-latest' }}
     timeout-minutes: 60
+    permissions:
+      contents: read
     env:
       RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.smolyak_self_hosted == 'true' && github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
@@ -78,6 +80,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_smolyak_d5 == 'true' && github.event.inputs.smolyak_self_hosted == 'true' }}
     runs-on: ${{ github.event.inputs.smolyak_runner }}
     timeout-minutes: 180
+    permissions:
+      contents: read
     env:
       RUSTFLAGS: ${{ github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
