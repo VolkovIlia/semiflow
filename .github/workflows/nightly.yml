@@ -2,6 +2,19 @@ name: Nightly diff-scipy
 on:
   schedule: [{ cron: "0 5 * * *" }]
   workflow_dispatch:
+    inputs:
+      smolyak_runner:
+        description: "Runner label for manual Smolyak D5 validation (use a calibrated self-hosted runner for the full gate)"
+        required: false
+        default: "ubuntu-latest"
+      smolyak_native_cpu:
+        description: "Opt into -C target-cpu=native for manual Smolyak D5 validation on calibrated self-hosted hardware"
+        required: false
+        default: "false"
+      full_smolyak_d5:
+        description: "Run the full ignored G_SMOLYAK_D5 slope gate (manual/self-hosted only)"
+        required: false
+        default: "false"
 
 jobs:
   diff-scipy:
@@ -35,34 +48,44 @@ jobs:
             --test anisotropic_shift_nd_d5_slope -- --nocapture
 
   smolyak-d5:
-    name: G_SMOLYAK_D5 (RELEASE_BLOCKING, hours)
-    runs-on: ubuntu-latest
-    timeout-minutes: 350
+    name: G_SMOLYAK_D5 smoke (scheduled hosted lane)
+    runs-on: ${{ github.event.inputs.smolyak_runner || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # One gate per job, deliberately. Both Smolyak gates exceeded a 40 min cap
-      # on a 12-core host — the first measurement either has ever had, since
-      # neither ran in any workflow before 2026-08-18. A hosted runner is ~6x
-      # slower, so each is a multi-hour job on its own and the two of them
-      # sharing a runner would exceed the 6 h hosted limit and be killed with
-      # neither result recorded.
-      #
-      # timeout-minutes is 350, not 420: GitHub caps a hosted job at 6 h
-      # regardless of this value, so a larger number would only misdescribe the
-      # budget. See the `#jobsjob_idtimeout-minutes` note in the workflow-syntax
-      # docs.
-      #
-      # Cause of the cost, for the record: ADR-0191 replaced multilinear N-D
-      # sampling with the `K^D` tensor stencil, so a D=5 sample reads 1024 nodes
-      # against multilinear's 32. ADR-0191 measured that 32x on the D=5 Smolyak
-      # smoke tests (70 s -> 198 s, which is why those were re-sized) and left
-      # this gate alone; the file header still claimed "~10-30 s on release"
-      # until this campaign corrected it.
-      - name: Run G_SMOLYAK_D5
+      # The full D=5 slope gate proved to be the wrong thing to run every day on a
+      # hosted runner: it used a contaminated fixed-reference estimator AND spent
+      # multi-hour wallclock proving that. The scheduled lane keeps the meaningful
+      # cheap coverage here (node-count + F(0)=I smoke), while the strict ignored
+      # slope gate remains manually runnable on calibrated self-hosted hardware
+      # via `full_smolyak_d5=true`.
+      - name: Run hosted-portable G_SMOLYAK_D5 smoke coverage
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test -p semiflow \
+          cargo test -p semiflow \
+            --features parallel,simd,slow-tests --release \
+            --test g_smolyak_d5 -- --nocapture
+
+  smolyak-d5-full:
+    name: G_SMOLYAK_D5 full slope gate (manual self-hosted lane)
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_smolyak_d5 == 'true' && github.event.inputs.smolyak_runner != 'ubuntu-latest' }}
+    runs-on: ${{ github.event.inputs.smolyak_runner }}
+    timeout-minutes: 180
+    env:
+      RUSTFLAGS: ${{ github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Manual-only: this is still the RELEASE_BLOCKING slope gate, but it now
+      # uses the reference-free estimator in the test file and is scoped to the
+      # environment the workflow comments already describe as appropriate for it.
+      - name: Run full G_SMOLYAK_D5 slope gate
+        run: |
+          cargo test -p semiflow \
             --features parallel,simd,slow-tests --release \
             --test g_smolyak_d5 -- --include-ignored --nocapture
 

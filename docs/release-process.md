@@ -150,8 +150,9 @@ turned up one stale cost claim. `G_SMOLYAK_D5` documents "~10-30 s on release"
 and exceeded a 40-minute cap on a 12-core host; `G_SMOLYAK_D6` documents "≤ 2 min"
 and hit the same cap. Both pass; what went stale is the estimate, because
 ADR-0191's `K^D` sampler made a `D = 5` sample read 1024 nodes instead of 32 and
-nobody re-measured a gate that ran nowhere. They now live in
-`nightly.yml::smolyak-d5-d6` beside `ddim-d5`, off the tag lane.
+nobody re-measured a gate that ran nowhere. They now live off the tag lane in `nightly.yml`: `G_SMOLYAK_D6` stays on the
+scheduled nightly runner, while `G_SMOLYAK_D5` keeps its cheap hosted smoke there
+and moves the strict ignored slope gate to the manual/self-hosted lane.
 
 That expectation held: the completed sweep turned up a third hours-long gate,
 `strang_nonseparable_slope` (`G3_NS2D`, `G3_NS2D_var`), also over the 40-minute
