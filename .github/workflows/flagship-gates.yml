@@ -11,12 +11,15 @@ name: Flagship Gates (RELEASE_BLOCKING)
 #
 #   workflow_dispatch — manual trigger for maintainer validation runs.
 #                       Supports an optional `runner` input to target a self-
-#                       hosted machine (e.g. the i7-12700K bench host).
+#                       hosted machine (e.g. the i7-12700K bench host), plus
+#                       an explicit native-CPU opt-in for calibrated hardware.
 #
 # GATES COVERED
 # -------------
 # Pattern A  (#![cfg(feature="slow-tests")], no #[ignore])
-#   Runs via: cargo run -p xtask -- test-flagship
+#   Runs via: cargo test --workspace --features parallel,simd,slow-tests --release
+#             --test convergence_rate_6th_2d --test strang_nonseparable_aniso_slope
+#             --test strang_3d_slope --no-fail-fast -- --nocapture
 #   G3⁶-2D         convergence_rate_6th_2d       (strang 6th-order 2-D slope)
 #   G4_NS2D_aniso  strang_nonseparable_aniso_slope (non-separable aniso slope)
 #   G5_3D          strang_3d_slope               (3-D tensor-product slope)
@@ -83,17 +86,24 @@ on:
         description: "Runner label (e.g. ubuntu-latest or self-hosted)"
         required: false
         default: "ubuntu-latest"
+      native_cpu:
+        description: "Opt into -C target-cpu=native (use only on validated self-hosted hardware)"
+        required: false
+        default: "false"
 
 jobs:
   # ---------------------------------------------------------------------------
   # Pattern A: flagship slope gates (slow-tests feature, named test binaries)
-  # cargo run -p xtask -- test-flagship handles this cleanly.
+  # These three binaries are invoked directly so hosted runners can stay on the
+  # portable default target while self-hosted runs can opt into native tuning.
   # ---------------------------------------------------------------------------
   flagship-slope-gates:
     name: Flagship slope gates (G3⁶-2D, G4_NS2D_aniso, G5_3D)
     # Use the runner input when dispatch; fall back to ubuntu-latest for schedule.
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -101,16 +111,17 @@ jobs:
           components: rust-src
       - uses: Swatinem/rust-cache@v2
       - name: Run flagship slope gates
-        # test-flagship wraps: RUSTFLAGS="-C target-cpu=native"
-        #   cargo test --workspace --features parallel,simd,slow-tests --release
-        #   --test convergence_rate_6th_2d
-        #   --test strang_nonseparable_aniso_slope
-        #   --test strang_3d_slope
-        #   --no-fail-fast -- --nocapture
-        run: cargo run -p xtask -- test-flagship
-        env:
-          # Ensure RUSTFLAGS propagates correctly even if xtask sets it internally.
-          RUSTFLAGS: "-C target-cpu=native"
+        # Hosted runners compile for the portable baseline by default: using
+        # `target-cpu=native` there has produced SIGILL in multiple slow-gate
+        # binaries. Maintainers can still opt into native tuning explicitly when
+        # dispatching onto calibrated self-hosted hardware.
+        run: |
+          cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test convergence_rate_6th_2d \
+            --test strang_nonseparable_aniso_slope \
+            --test strang_3d_slope \
+            --no-fail-fast -- --nocapture
 
   # ---------------------------------------------------------------------------
   # Pattern A (continued): d-D anisotropic shift gates (D=2..5)
@@ -120,6 +131,8 @@ jobs:
     name: d-D anisotropic slope gates (G_DDIM D=2-4)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -129,7 +142,7 @@ jobs:
       # most of a 6 h runner budget for one gate. D=2..4 together run in ~20 min.
       - name: Run G_DDIM gates (D=2, D=3, D=4)
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test anisotropic_shift_nd_d2_slope \
             --test anisotropic_shift_nd_d3_slope \
@@ -145,6 +158,8 @@ jobs:
     name: ζ truthful-order gates (zeta4/6/8 RELEASE_BLOCKING)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -153,7 +168,7 @@ jobs:
         # These tests carry #[ignore] so -- --ignored is required in addition to
         # --features slow-tests (which may be needed for type-level compilation).
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test zeta4_truthful_order \
             --test zeta6_truthful_order \
@@ -169,13 +184,15 @@ jobs:
     name: Magnus6 + Schrödinger slope gates (G17, G18)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run G17 (MagnusGraph 6th-order) and G18 (Schrödinger slope)
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test g17_magnus6_slope \
             --test g18_schrodinger_unitarity \
@@ -185,13 +202,15 @@ jobs:
     name: Hörmander + quantum graph slope gates
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run Hörmander (Engel, Heisenberg, Kolmogorov) and quantum-graph gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test hormander_engel_slope \
             --test hormander_heisenberg_slope \
@@ -203,13 +222,15 @@ jobs:
     name: Remaining slow gates (Robin, subordinated, resolvent)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run Robin boundary, subordinated, and resolvent slope gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test robin_heat_slope \
             --test subordinated_order1_slope \
@@ -264,6 +285,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 120
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -273,7 +296,7 @@ jobs:
       # (#21 transverse-varying pencils), G_FROZEN_COEFF_* ×2.
       - name: Run issue-campaign gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test aniso_nd_moment \
             --test conservative_gates \
@@ -287,6 +310,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 180
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -298,7 +323,7 @@ jobs:
       # `matrix_diffusion_m{1,2,3,4}_slope.rs`).
       - name: Run operator and matrix-exponential gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test graph_expmv_dense \
             --test graph_expmv_depth_flat \
@@ -325,6 +350,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 180
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -334,7 +361,7 @@ jobs:
       # G_QSCHROD, G_SCHROD_B.
       - name: Run geometry and hypoelliptic gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test g_kahler_curv \
             --test g_carnot_cplx3_slope \
@@ -353,6 +380,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 90
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -371,7 +400,7 @@ jobs:
       # the 6 h job limit.
       - name: Run resolvent, sampling-floor and sparse-grid gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test g_resolvent_jump_order \
             --test g_resolvent_jump_2d_order \
@@ -390,6 +419,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 180
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -399,7 +430,7 @@ jobs:
       # G_ADJOINT_FP_TIGHTNESS_VAGUE, G_DR_ZETA4_TRUTHFUL_ORDER.
       - name: Run Wentzell, multilayer and AD gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test g_wentzell_stable \
             --test g_wentzell_order \
@@ -415,6 +446,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
     timeout-minutes: 90
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -432,7 +465,7 @@ jobs:
       # trailing comment after `#[ignore = "..."]` broke the attribute scan.
       - name: Run obstacle-VI and parallel bit-equality gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test obstacle_vi_slope \
             --test strang2d_parallel_bit_equal \
@@ -453,18 +486,16 @@ jobs:
     name: L-gate (L_CEV_PTICK latency floor, ADR-0069)
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     continue-on-error: false
+    env:
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build release binary (required by latency-gate bench invocation)
         run: cargo build --release -p semiflow
-        env:
-          RUSTFLAGS: "-C target-cpu=native"
       - name: Run latency gate (L_CEV_PTICK)
         # On hosted runners: emits L-GATE WARN (no i7-12700K profile match) and
         # exits 0 — advisory behaviour is correct per latency_gate.rs is_advisory().
         # On self-hosted i7-12700K: runs with advisory=false, exits 1 on breach.
         run: cargo run -p xtask -- latency-gate --all
-        env:
-          RUSTFLAGS: "-C target-cpu=native"

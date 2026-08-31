@@ -64,8 +64,8 @@ was last audited.
 
 | Job | Gate IDs | Mechanism |
 |-----|----------|-----------|
-| `flagship-slope-gates` | G3⁶-2D, G4\_NS2D\_aniso, G5\_3D | `xtask test-flagship` (Pattern A: `#![cfg(feature="slow-tests")]`) |
-| `anisotropic-ddim-gates` | G\_DDIM D=2–5 | Pattern A: named `--test` binaries |
+| `flagship-slope-gates` | G3⁶-2D, G4\_NS2D\_aniso, G5\_3D | direct `cargo test` of the 3 Pattern A binaries |
+| `anisotropic-ddim-gates` | G\_DDIM D=2–4 | Pattern A: named `--test` binaries |
 | `zeta-truthful-order-gates` | G\_zeta4\_TRUTHFUL\_ORDER, G\_zeta4/6/8 correction slopes | Pattern B: `--features slow-tests -- --ignored` |
 | `magnus-schrodinger-gates` | G17, G18 | Pattern B |
 | `hormander-quantum-gates` | Hörmander Engel/Heisenberg/Kolmogorov, quantum graph | Pattern B (Pattern A + `#[ignore]`) |
@@ -77,6 +77,10 @@ Needs `--features slow-tests`; `-- --ignored` is NOT passed.
 
 **Pattern B** = `#[ignore = "..."]` per test (may or may not also have Pattern A).
 Needs both `--features slow-tests` AND `-- --ignored`.
+
+Hosted GitHub runners now use the portable default target in `flagship-gates.yml`;
+`target-cpu=native` is an explicit `workflow_dispatch` opt-in for calibrated
+self-hosted hardware.
 
 #### Running flagship gates locally
 
