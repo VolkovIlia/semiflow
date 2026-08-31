@@ -7,6 +7,10 @@ on:
         description: "Runner label for manual Smolyak D5 validation (use a calibrated self-hosted runner for the full gate)"
         required: false
         default: "ubuntu-latest"
+      smolyak_self_hosted:
+        description: "Confirm that the chosen Smolyak D5 runner is calibrated self-hosted hardware"
+        required: false
+        default: "false"
       smolyak_native_cpu:
         description: "Opt into -C target-cpu=native for manual Smolyak D5 validation on calibrated self-hosted hardware"
         required: false
@@ -52,7 +56,7 @@ jobs:
     runs-on: ${{ github.event.inputs.smolyak_runner || 'ubuntu-latest' }}
     timeout-minutes: 60
     env:
-      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
+      RUSTFLAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.smolyak_self_hosted == 'true' && github.event.inputs.smolyak_native_cpu == 'true' && '-C target-cpu=native' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -67,11 +71,11 @@ jobs:
         run: |
           cargo test -p semiflow \
             --features parallel,simd,slow-tests --release \
-            --test g_smolyak_d5 -- --nocapture
+            --test g_smolyak_d5 g_smolyak_d5_smoke -- --nocapture
 
   smolyak-d5-full:
     name: G_SMOLYAK_D5 full slope gate (manual self-hosted lane)
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_smolyak_d5 == 'true' && github.event.inputs.smolyak_runner != 'ubuntu-latest' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_smolyak_d5 == 'true' && github.event.inputs.smolyak_self_hosted == 'true' }}
     runs-on: ${{ github.event.inputs.smolyak_runner }}
     timeout-minutes: 180
     env:

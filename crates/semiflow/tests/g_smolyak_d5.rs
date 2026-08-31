@@ -206,7 +206,7 @@ fn g_smolyak_d5() {
     let diffs: Vec<f64> = (0..N_LADDER.len() - 1)
         .map(|k| sup_diff(&us[k], &us[k + 1]))
         .collect();
-    let ns: Vec<u32> = N_LADDER[..N_LADDER.len() - 1].to_vec();
+    let ns = &N_LADDER[..N_LADDER.len() - 1];
 
     for (&n, &d) in ns.iter().zip(diffs.iter()) {
         println!("G_SMOLYAK_D5: n={n} -> {}  sup‖u_2n−u_n‖={d:.4e}", 2 * n);
