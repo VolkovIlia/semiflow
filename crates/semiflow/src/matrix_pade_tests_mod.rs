@@ -106,9 +106,7 @@ fn squarings_zero_for_small_norm() {
 fn squarings_positive_for_large_norm() {
     // Row 0 has ‖row‖ = 100, so ‖A‖_∞ = 100 >> θ₁₃ → need squarings.
     let mut a = [[0.0_f64; 5]; 5];
-    for entry in &mut a[0] {
-        *entry = 20.0_f64;
-    }
+    a[0].fill(20.0_f64);
     let s = compute_squarings::<f64, 5>(&a);
     assert!(s > 0, "expected > 0 squarings for large-norm matrix, got {s}");
 }

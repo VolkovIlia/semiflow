@@ -298,7 +298,16 @@ jobs:
       # `matrix_diffusion_m{1,2,3,4}_slope.rs`).
       - name: Run operator and matrix-exponential gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          # Keep native tuning only on explicit self-hosted runs.
+          # Hosted runners must use portable defaults to avoid ISA mismatches.
+          if [ "${RUNNER_ENVIRONMENT:-github-hosted}" = "self-hosted" ]; then
+            export RUSTFLAGS="-C target-cpu=native"
+            echo "Using self-hosted native tuning: ${RUSTFLAGS}"
+          else
+            unset RUSTFLAGS
+            echo "Using portable target-cpu defaults on ${RUNNER_ENVIRONMENT:-unknown}"
+          fi
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test graph_expmv_dense \
             --test graph_expmv_depth_flat \
