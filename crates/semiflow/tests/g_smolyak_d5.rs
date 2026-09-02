@@ -11,16 +11,21 @@
 //! with `anisotropic_shift_nd_d5_slope.rs` and math §32.5 (ADR-0112).
 //! Honest reporting: do NOT loosen the gate beyond what the kernel achieves.
 //!
-//! Method: same temporal self-convergence protocol as `G_DDIM` (see
-//! `anisotropic_shift_nd_d5_slope.rs`). Fixed spatial grid `N_AXIS=6` per axis;
-//! reference at `n_ref=512` steps; sweep n ∈ {16,32,64,128}.
-//! Error = sup-norm vs reference (spatial error cancels common-mode).
-//! OLS slope of log(err) vs log(n).
+//! Method: temporal self-convergence via *pairwise refinement deltas* on a fixed
+//! spatial grid `N_AXIS=6` per axis and sweep n ∈ {32,64,128}.
+//! We gate the OLS slope of `log(‖u_n - u_{2n}‖∞)` vs `log(n)`.
+//!
+//! Why this form: the previous `u_ref` at `n_ref=512` added a non-negligible
+//! reference floor on hosted runners, flattening the fitted slope and causing
+//! false failures even when the adjacent-doubling order remained first-order.
+//! Pairwise deltas remove that floor contamination while keeping a strict
+//! order-1 regression signal, and they avoid one extra 512-step solve.
 //!
 //! Sub-tests (all within one `#[ignore]` test fn):
 //!   1. Node-count gate: `k.n_nodes() < 3125`.
 //!   2. F(0)=I unit smoke: ‖F(0)·1 − 1‖_∞ < 1e-10 (construction asserts too).
-//!   3. Self-convergence slope ≤ −0.95 (order-1; consistent with kernel order).
+//!   3. Pairwise-delta self-convergence slope ≤ −0.95 (order-1; consistent with
+//!      kernel order).
 //!
 //! Feature gate: `slow-tests`.
 //!
@@ -51,7 +56,6 @@ const N_AXIS: usize = 6;
 // where the floor-to-signal ratio is still ~0.5 and drags the OLS slope above -0.95.
 // At n=32..128 the temporal truncation clearly dominates (floor ratio < 0.1).
 // Measured at n=32→64→128: orders 0.941, 1.005 → slope ≈ -0.97, comfortably below gate.
-const N_REF: u32 = 512;
 const N_SWEEP: [u32; 3] = [32, 64, 128];
 // Gate: -0.95 (order-1). ADR-0123 listed -1.95 but that targets order-2 kernels;
 // SmolyakGridND order()=1 consistent with AnisotropicShiftChernoffND (ADR-0112).
@@ -125,13 +129,45 @@ fn ols_slope(ns: &[u32], errs: &[f64]) -> f64 {
     (n * sxy - sx * sy) / (n * sxx - sx * sx)
 }
 
+fn pairwise_delta_slope(kernel: &SmolyakGridND<f64, 5>) -> f64 {
+    println!("G_SMOLYAK_D5: pairwise refinement sweep n={N_SWEEP:?} (no external reference run)");
+
+    let mut n_prev = N_SWEEP[0];
+    let mut u_prev = run_steps(kernel, n_prev);
+    println!(
+        "G_SMOLYAK_D5: cached n={n_prev} tau={:.5}",
+        T / f64::from(n_prev)
+    );
+
+    let mut delta_ns = Vec::with_capacity(N_SWEEP.len().saturating_sub(1));
+    let mut deltas = Vec::with_capacity(N_SWEEP.len().saturating_sub(1));
+    for &n_curr in N_SWEEP.iter().skip(1) {
+        let u_curr = run_steps(kernel, n_curr);
+        let delta = sup_diff(&u_prev, &u_curr);
+        println!(
+            "G_SMOLYAK_D5: n={n_prev}->{n_curr} tau=({:.5}->{:.5}) Δ‖u_n−u_2n‖={delta:.4e}",
+            T / f64::from(n_prev),
+            T / f64::from(n_curr)
+        );
+        assert!(
+            delta.is_finite() && delta > 0.0,
+            "G_SMOLYAK_D5 pairwise delta must be finite and >0, got {delta:.4e} for n={n_prev}->{n_curr}"
+        );
+        delta_ns.push(n_prev);
+        deltas.push(delta);
+        u_prev = u_curr;
+        n_prev = n_curr;
+    }
+    ols_slope(&delta_ns, &deltas)
+}
+
 /// `G_SMOLYAK_D5` gate: D=5 Smolyak sparse-grid kernel.
 ///
 /// Verifies:
 /// 1. `n_nodes < 3125` (tensor 5⁵ baseline)
 /// 2. F(0)=I unit smoke: `‖F(0)·1 − 1‖_∞ < 1e-10`
-/// 3. Self-convergence slope ≤ −0.95 (order-1; note: ADR-0123 spec listed −1.95
-///    which is inconsistent with kernel order — see file header comment)
+/// 3. Pairwise-delta self-convergence slope ≤ −0.95 (order-1; note: ADR-0123
+///    spec listed −1.95 which is inconsistent with kernel order — see header)
 #[test]
 #[ignore = "RELEASE_BLOCKING slow gate: >40 min on a 12-core host (measured 2026-08-18); run with -- --ignored"]
 fn g_smolyak_d5() {
@@ -165,25 +201,8 @@ fn g_smolyak_d5() {
         );
     }
 
-    // --- Sub-test 3: self-convergence slope ---
-    let u_ref = run_steps(&kernel, N_REF);
-
-    let errs: Vec<f64> = N_SWEEP
-        .iter()
-        .map(|&n| {
-            let u_n = run_steps(&kernel, n);
-            sup_diff(&u_n, &u_ref)
-        })
-        .collect();
-
-    for (&n, &e) in N_SWEEP.iter().zip(errs.iter()) {
-        println!(
-            "G_SMOLYAK_D5: n={n} tau={:.5} sup‖u_n−u_ref‖={e:.4e}",
-            T / f64::from(n)
-        );
-    }
-
-    let slope = ols_slope(&N_SWEEP, &errs);
+    // --- Sub-test 3: pairwise-delta self-convergence slope ---
+    let slope = pairwise_delta_slope(&kernel);
     println!("G_SMOLYAK_D5: OLS slope = {slope:.4}  (gate: <= {SLOPE_GATE})  nodes={n_nodes}");
     // If this fails, check kernel order: SmolyakGridND order()=1 → slope ~= -1.
     // ADR-0123 listed gate -1.95 (order-2) — inconsistent with order-1 kernel.
