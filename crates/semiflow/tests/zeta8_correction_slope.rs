@@ -167,9 +167,13 @@ fn make_zeta8_var_a(grid: Grid1D<f64>) -> Diffusion8thZeta8Chernoff<f64> {
     Diffusion8thZeta8Chernoff::new(zeta6, Some(2.5_f64)).expect("ζ⁸ construction must succeed")
 }
 
-/// Build K5 kernel for reference (var-a).
-fn make_k5_var_a(grid: Grid1D<f64>) -> Diffusion4thChernoff<f64> {
-    Diffusion4thChernoff::new(a_fn, a_prime, a_double_prime, 2.5, grid)
+/// Build K5 kernel for reference (var-a) with Chebyshev ON.
+///
+/// Keep the reference oracle on the same spatial sampler as the ζ⁸ probe; otherwise the
+/// comparison mixes a Chebyshev probe with a lower-floor K5 reference and makes the
+/// advisory slope sensitive to runner-specific drift near the 0.1 gate.
+fn make_k5_var_a_cheb(grid: Grid1D<f64>) -> Diffusion4thChernoff<f64> {
+    Diffusion4thChernoff::new(a_fn, a_prime, a_double_prime, 2.5, grid).with_chebyshev_sampling()
 }
 
 // ---------------------------------------------------------------------------
@@ -195,10 +199,10 @@ fn run_zeta8(
     cur
 }
 
-/// Run n Chernoff steps of the K5 kernel (for var-a reference).
-fn run_k5(n_steps: usize, f0: &GridFn1D<f64>, grid: Grid1D<f64>) -> GridFn1D<f64> {
+/// Run n Chernoff steps of the K5 Chebyshev kernel (for var-a reference).
+fn run_k5_cheb(n_steps: usize, f0: &GridFn1D<f64>, grid: Grid1D<f64>) -> GridFn1D<f64> {
     let tau = T_FINAL / n_steps as f64;
-    let inner = make_k5_var_a(grid);
+    let inner = make_k5_var_a_cheb(grid);
     let mut cur = f0.clone();
     let mut nxt = f0.zeroed_like();
     let mut scratch = ScratchPool::new();
@@ -307,8 +311,8 @@ fn g_zeta8_var_a_slope_cheb() {
     let kernel = make_zeta8_var_a(grid);
     let f0 = GridFn1D::from_fn(grid, |x| libm::exp(-x * x));
 
-    // Reference: K5 at n_ref (high-accuracy reference oracle).
-    let u_ref = run_k5(N_REF, &f0, grid);
+    // Reference: K5 at n_ref with Chebyshev ON so probe and oracle share the same sampler.
+    let u_ref = run_k5_cheb(N_REF, &f0, grid);
 
     eprintln!(
         "G_zeta8_var_a_slope_cheb (ADVISORY): a=tanh² var-coef, N={N_SPATIAL}, T={T_FINAL}, \
