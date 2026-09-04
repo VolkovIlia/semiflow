@@ -398,7 +398,13 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
         Ok(())
     }
 
-    /// Order 1: same order class as `AnisotropicShiftChernoffND` (math §32.5).
+    /// Nominal Chernoff order 1: same constructor-level declaration as
+    /// `AnisotropicShiftChernoffND`.
+    ///
+    /// Heavy variable-coefficient gates may still measure only global order 1/2
+    /// on specific data, for the same `2√τ` frozen-coefficient reason documented
+    /// by the dense anisotropic D=5 gate; callers must not infer every
+    /// variable-`A` datum will slope-test at -1.
     fn order(&self) -> u32 {
         1
     }

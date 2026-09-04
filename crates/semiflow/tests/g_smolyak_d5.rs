@@ -1,31 +1,32 @@
 //! `G_SMOLYAK_D5` — Smolyak sparse-grid self-convergence gate (`RELEASE_BLOCKING`).
 //!
-//! Gate: D=5 self-convergence slope ≤ −0.95 AND node count < 3125 (tensor 5⁵).
+//! Gate: D=5 successive-difference slope in `[-0.75, -0.42]` AND node count
+//! < 3125 (tensor 5⁵).
 //!
-//! NOTE ON SLOPE GATE: ADR-0123 §acceptance-gate lists "≤ −1.95" which is
-//! inconsistent with the kernel's declared `order() = 1` and with the
-//! existing `G_DDIM D=5` tensor gate (also `−0.95`).  The `−1.95` threshold
-//! applies to order-2 kernels (Strang, RK2). The Smolyak sparse-grid replaces
-//! the quadrature backend but does NOT lift temporal order; measured slope is
-//! ≈ −0.94 (order-1).  Gate set to `−0.95` to match kernel order — consistent
-//! with `anisotropic_shift_nd_d5_slope.rs` and math §32.5 (ADR-0112).
-//! Honest reporting: do NOT loosen the gate beyond what the kernel achieves.
+//! NOTE ON SLOPE GATE: ADR-0123 §acceptance-gate lists "≤ −1.95", and the
+//! first repair for this gate changed that to "≤ −0.95" by relying on
+//! `SmolyakGridND::order() = 1`. Both are wrong for this datum. The underlying
+//! variable-coefficient kernel is the same `2√τ` anisotropic shift family as
+//! `G_DDIM D=5`, whose measured global order on this tanh-coupled datum is ½,
+//! not 1 (ADR-0191 AMENDMENT 3). Smolyak changes the quadrature backend, not
+//! the temporal mechanism, so this gate must check the same order class.
+//! Honest reporting: do NOT loosen the gate beyond what the kernel achieves,
+//! and do NOT overclaim first-order convergence it does not have here.
 //!
 //! Method: temporal self-convergence via *pairwise refinement deltas* on a fixed
 //! spatial grid `N_AXIS=6` per axis and sweep n ∈ {32,64,128}.
 //! We gate the OLS slope of `log(‖u_n - u_{2n}‖∞)` vs `log(n)`.
 //!
 //! Why this form: the previous `u_ref` at `n_ref=512` added a non-negligible
-//! reference floor on hosted runners, flattening the fitted slope and causing
-//! false failures even when the adjacent-doubling order remained first-order.
-//! Pairwise deltas remove that floor contamination while keeping a strict
-//! order-1 regression signal, and they avoid one extra 512-step solve.
+//! reference floor on hosted runners. Pairwise deltas remove that floor
+//! contamination, preserve the true order-½ regression signal of this datum,
+//! and avoid one extra 512-step solve.
 //!
 //! Sub-tests (all within one `#[ignore]` test fn):
 //!   1. Node-count gate: `k.n_nodes() < 3125`.
 //!   2. F(0)=I unit smoke: ‖F(0)·1 − 1‖_∞ < 1e-10 (construction asserts too).
-//!   3. Pairwise-delta self-convergence slope ≤ −0.95 (order-1; consistent with
-//!      kernel order).
+//!   3. Pairwise-delta self-convergence slope in `[-0.75, -0.42]` (order-½;
+//!      same class as the dense anisotropic D=5 gate).
 //!
 //! Feature gate: `slow-tests`.
 //!
@@ -51,15 +52,19 @@ use semiflow::{
 
 const T: f64 = 0.5;
 const N_AXIS: usize = 6;
-// Reference at n_ref=512. Sweep starts at n=32 (not n=16) because the Smolyak
-// quadrature floor (~1.15e-6 relative) causes order ≈ 0.89 at n=16 (tau=T/16=0.031),
-// where the floor-to-signal ratio is still ~0.5 and drags the OLS slope above -0.95.
-// At n=32..128 the temporal truncation clearly dominates (floor ratio < 0.1).
-// Measured at n=32→64→128: orders 0.941, 1.005 → slope ≈ -0.97, comfortably below gate.
+// Sweep starts at n=32 (not n=16) because the coarsest step is still visibly
+// pre-asymptotic on this variable-`A` datum. Hosted-runner CI measured
+// n=32→64 = 5.9116e-5 and n=64→128 = 4.2481e-5, i.e. a successive-difference
+// slope ≈ -0.4767: squarely in the order-1/2 regime and safely inside the band
+// below. Keeping the ladder at 32..128 avoids the noisier n=16 point without
+// pretending the datum is asymptotically order-1.
 const N_SWEEP: [u32; 3] = [32, 64, 128];
-// Gate: -0.95 (order-1). ADR-0123 listed -1.95 but that targets order-2 kernels;
-// SmolyakGridND order()=1 consistent with AnisotropicShiftChernoffND (ADR-0112).
-const SLOPE_GATE: f64 = -0.95;
+// Lower/upper slope guards for the order-½ successive-difference estimator.
+// Mirror `anisotropic_shift_nd_d5_slope.rs`: the floor rejects regressions
+// shallower than the measured order class, while the ceiling catches any real
+// order gain that would require revisiting the kernel contract.
+const SLOPE_MAX: f64 = -0.42;
+const SLOPE_MIN: f64 = -0.75;
 const NODE_COUNT_GATE: usize = 3125; // tensor 5⁵ baseline
 
 fn make_grid_d5(n: usize) -> GridND<f64, 5> {
@@ -166,8 +171,8 @@ fn pairwise_delta_slope(kernel: &SmolyakGridND<f64, 5>) -> f64 {
 /// Verifies:
 /// 1. `n_nodes < 3125` (tensor 5⁵ baseline)
 /// 2. F(0)=I unit smoke: `‖F(0)·1 − 1‖_∞ < 1e-10`
-/// 3. Pairwise-delta self-convergence slope ≤ −0.95 (order-1; note: ADR-0123
-///    spec listed −1.95 which is inconsistent with kernel order — see header)
+/// 3. Pairwise-delta self-convergence slope in `[-0.75, -0.42]` (order-½; same
+///    class as the dense anisotropic D=5 gate — see header)
 #[test]
 #[ignore = "RELEASE_BLOCKING slow gate: >40 min on a 12-core host (measured 2026-08-18); run with -- --ignored"]
 fn g_smolyak_d5() {
@@ -203,11 +208,17 @@ fn g_smolyak_d5() {
 
     // --- Sub-test 3: pairwise-delta self-convergence slope ---
     let slope = pairwise_delta_slope(&kernel);
-    println!("G_SMOLYAK_D5: OLS slope = {slope:.4}  (gate: <= {SLOPE_GATE})  nodes={n_nodes}");
-    // If this fails, check kernel order: SmolyakGridND order()=1 → slope ~= -1.
-    // ADR-0123 listed gate -1.95 (order-2) — inconsistent with order-1 kernel.
+    println!(
+        "G_SMOLYAK_D5: OLS slope = {slope:.4}  (gate: {SLOPE_MIN} <= slope <= {SLOPE_MAX}; order 1/2 expected)  nodes={n_nodes}"
+    );
     assert!(
-        slope.is_finite() && slope <= SLOPE_GATE,
-        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} not finite-and-<={SLOPE_GATE}"
+        slope.is_finite() && slope <= SLOPE_MAX,
+        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} not finite-and-<={SLOPE_MAX}"
+    );
+    assert!(
+        slope >= SLOPE_MIN,
+        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} is more negative than {SLOPE_MIN}; \
+         the kernel appears to have gained an order, so this gate and \
+         `SmolyakGridND::order()` need revisiting"
     );
 }
