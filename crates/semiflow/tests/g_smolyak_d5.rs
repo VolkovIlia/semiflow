@@ -63,8 +63,8 @@ const N_SWEEP: [u32; 3] = [32, 64, 128];
 // Mirror `anisotropic_shift_nd_d5_slope.rs`: the floor rejects regressions
 // shallower than the measured order class, while the ceiling catches any real
 // order gain that would require revisiting the kernel contract.
-const SLOPE_FLOOR: f64 = -0.42;
-const SLOPE_CEILING: f64 = -0.75;
+const SLOPE_MAX: f64 = -0.42;
+const SLOPE_MIN: f64 = -0.75;
 const NODE_COUNT_GATE: usize = 3125; // tensor 5⁵ baseline
 
 fn make_grid_d5(n: usize) -> GridND<f64, 5> {
@@ -209,15 +209,15 @@ fn g_smolyak_d5() {
     // --- Sub-test 3: pairwise-delta self-convergence slope ---
     let slope = pairwise_delta_slope(&kernel);
     println!(
-        "G_SMOLYAK_D5: OLS slope = {slope:.4}  (gate: {SLOPE_CEILING} <= slope <= {SLOPE_FLOOR}; order 1/2 expected)  nodes={n_nodes}"
+        "G_SMOLYAK_D5: OLS slope = {slope:.4}  (gate: {SLOPE_MIN} <= slope <= {SLOPE_MAX}; order 1/2 expected)  nodes={n_nodes}"
     );
     assert!(
-        slope.is_finite() && slope <= SLOPE_FLOOR,
-        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} not finite-and-<={SLOPE_FLOOR}"
+        slope.is_finite() && slope <= SLOPE_MAX,
+        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} not finite-and-<={SLOPE_MAX}"
     );
     assert!(
-        slope >= SLOPE_CEILING,
-        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} is steeper than {SLOPE_CEILING}; \
+        slope >= SLOPE_MIN,
+        "G_SMOLYAK_D5 slope gate FAILED: slope={slope:.4} is more negative than {SLOPE_MIN}; \
          the kernel appears to have gained an order, so this gate and \
          `SmolyakGridND::order()` need revisiting"
     );
