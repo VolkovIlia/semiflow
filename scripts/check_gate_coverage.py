@@ -37,6 +37,9 @@ CONTRACT = "contracts/semiflow-core.properties.yaml"
 CRATE_ROOTS = ("crates/semiflow/", "crates/semiflow-py/",
                "crates/semiflow-ffi/", "crates/semiflow-wasm/", "")
 
+#: A pointer looks like a path and ends in a source extension.
+PATH_RE = re.compile(r"^[\w./{}, -]+\.(rs|py)$")
+
 
 def read_gates(path):
     """Yield (name, severity, test_file) for every entry in the contract."""
@@ -94,6 +97,38 @@ def named_binaries():
     return names
 
 
+def split_specs(field):
+    """Split a `test_file` value into specs on commas OUTSIDE brace groups.
+
+    The field holds either a comma-separated list of paths, or one path using
+    the brace shorthand `..._d{2,3,4,5}_slope.rs`, or both. Splitting on every
+    comma shreds the brace group into `..._d{2`, `3`, `4`, `5}_slope.rs`, none
+    of which resolves — which silently dropped G_DDIM and G_MATRIX out of this
+    check when it was first written.
+    """
+    parts, buf, depth = [], "", 0
+    for ch in field:
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            parts.append(buf); buf = ""
+            continue
+        buf += ch
+    parts.append(buf)
+    out = []
+    for part in parts:
+        out += [p.strip() for p in re.split(r"(?<=\.rs)\s+", part) if p.strip()]
+    # Several entries append a prose note to the path, e.g.
+    #   "…/g_adjoint_fp_order.rs (sub-gate 1; entry superseded by …)".
+    # Splitting leaves the note as a second "spec". A fragment that is not
+    # shaped like a path is a comment, not a pointer — drop it, so that a
+    # pointer which IS path-shaped but does not resolve can be treated as the
+    # error it is (see `unreached`).
+    return [p for p in out if PATH_RE.match(p.split("::")[0])]
+
+
 def expand(spec):
     """`a{1,2}b.rs` -> [a1b.rs, a2b.rs]; anything else -> [itself]."""
     path = spec.split("::")[0]
@@ -117,14 +152,27 @@ def unreached(gates, names):
     for gate in gates:
         if gate.get("severity") != "RELEASE_BLOCKING" or not gate.get("test_file"):
             continue
-        verdicts = []
-        for spec in [s.strip().rstrip(",")
-                     for s in re.split(r",|(?<=\.rs)\s+", gate["test_file"])
-                     if s.strip()]:
+        verdicts, missing = [], []
+        for spec in split_specs(gate["test_file"]):
             fn = spec.split("::")[1].split()[0] if "::" in spec else None
-            verdicts += [_verdict(p, fn, names, cache) for p in expand(spec)]
-        verdicts = [v for v in verdicts if v]
-        if verdicts and all(v == "UNREACHED" for v in verdicts):
+            for rel in expand(spec):
+                verdict = _verdict(rel, fn, names, cache)
+                if verdict is None:
+                    missing.append(rel)      # path-shaped, but no such file
+                else:
+                    verdicts.append(verdict)
+        if missing:
+            # A pointer that names a file which does not exist is contract
+            # drift, and silently dropping it lets part of a gate go unchecked.
+            bad.append((gate["name"], f"{gate['test_file']}   [no such file: "
+                                      f"{', '.join(missing)}]"))
+        elif not verdicts:
+            bad.append((gate["name"], gate["test_file"] + "   [no pointer resolves]"))
+        elif any(v == "UNREACHED" for v in verdicts):
+            # EVERY pointer must be reachable, not merely one of them. A
+            # binding-parity gate names its Rust and Python halves; running only
+            # the Python half executes only half the assertion, and "some
+            # pointer runs" would score that as covered.
             bad.append((gate["name"], gate["test_file"]))
     return bad
 
@@ -139,7 +187,11 @@ def _verdict(rel, fn, names, cache):
     if fn and fn in fns:
         blocked = file_slow or fns[fn]
     else:
-        blocked = file_slow or (bool(fns) and all(fns.values()))
+        # Whole-file pointer: blocked if ANY test in it is blocked, not only if
+        # every test is. A file where 1 of 2 tests carries `#[ignore]` is half
+        # covered by plain CI, and the ignored half is exactly the part a gate
+        # tends to live in.
+        blocked = file_slow or any(fns.values())
     if not blocked:
         return "OK"
     stem = os.path.splitext(os.path.basename(full))[0]

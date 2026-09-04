@@ -448,6 +448,60 @@ jobs:
             --test chernoff1d_parallel_bit_equal \
             --no-fail-fast -- --include-ignored --nocapture
 
+  binding-parity-gates:
+    name: Binding-parity gates (Rust halves)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # G_BINDING_{ADJOINT_FP,CARNOT_CPLX3,RESOLVENT_JUMP,RESOLVENT_JUMP_ND,
+      # SMOLYAK}_PARITY.
+      #
+      # These gates name a Rust half and a Python half. `py-smoke` runs the
+      # Python half, which is why the coverage check first scored them as
+      # covered while their Rust assertions ran nowhere — half a parity claim
+      # is not the claim. `check_gate_coverage.py` now requires EVERY pointer of
+      # a gate to be reachable, and this job supplies the missing half.
+      #
+      # Measured 2026-08-19 on a 12-core host: 13-15 s each. G_BINDING_SMOLYAK
+      # _PARITY is NOT here — see the job below; it is 637 s, three orders of
+      # magnitude away from its siblings.
+      - name: Run the Rust half of the binding-parity gates
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test binding_adjoint_fp_parity \
+            --test binding_carnot_cplx3_parity \
+            --test binding_resolvent_jump_parity \
+            --test binding_resolvent_jump_nd_parity \
+            --no-fail-fast -- --include-ignored --nocapture
+
+  binding-smolyak-parity-gate:
+    name: G_BINDING_SMOLYAK_PARITY (Rust half)
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    continue-on-error: false
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Split from its four siblings after measuring it: 637 s on a 12-core
+      # host against their 13-15 s. Same cause as G_SMOLYAK_D5/D6 — ADR-0191's
+      # `K^D` tensor stencil — reaching a binding-parity test this time.
+      #
+      # This split is not cosmetic. At the ~6x hosted-runner factor it lands
+      # near 64 min, which would have blown the 60 min budget the shared job
+      # was given and taken the four fast gates down with it.
+      - name: Run the Rust half of G_BINDING_SMOLYAK_PARITY
+        run: |
+          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+            --features parallel,simd,slow-tests --release \
+            --test binding_smolyak_parity \
+            --no-fail-fast -- --include-ignored --nocapture
+
   # ---------------------------------------------------------------------------
   # L-gate: latency floor (L_CEV_PTICK — RELEASE_BLOCKING, ADR-0069).
   #
