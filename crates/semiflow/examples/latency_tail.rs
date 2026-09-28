@@ -697,9 +697,11 @@ fn build_json(
     let rc = rustc_version();
     let host = hostname();
     let ts = timestamp();
+    // schema_version 0.2: "library" is "semiflow" (0.1 emitted the pre-rebrand
+    // "semiflow-core"); the bump makes consumers pinned to 0.1 fail loudly.
     format!(
         concat!(
-            r#"{{"schema_version":"0.1","library":"semiflow-core","variant":"reuse","#,
+            r#"{{"schema_version":"0.2","library":"semiflow","variant":"reuse","#,
             r#""n_grid":{ng},"n_steps":{ns},"n_ticks":{nt},"warmup_ticks":{wt},"#,
             r#""stress_dram":{st},"rep":{rep},"host":"{h}","#,
             r#""preflight":{{"price_at_S0":{pa:.6},"oracle_value":{ov:.6},"abs_err_at_S0":{ae:.2e},"passed":{pf}}},"#,
@@ -744,7 +746,7 @@ fn build_json(
 fn emit_abort_json(a: &Args, price: f64, err: f64) {
     let json = format!(
         concat!(
-            r#"{{"schema_version":"0.1","library":"semiflow-core","variant":"reuse","#,
+            r#"{{"schema_version":"0.2","library":"semiflow","variant":"reuse","#,
             r#""n_grid":{ng},"n_steps":{ns},"n_ticks":{nt},"#,
             r#""preflight":{{"price_at_S0":{pa:.6},"oracle_value":{ov:.6},"abs_err_at_S0":{ae:.2e},"passed":false}},"#,
             r#""result":"ABORT_CALIBRATION"}}"#,
