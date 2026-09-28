@@ -55,7 +55,11 @@ def read_gates(path):
         for key in ("severity", "test_file"):
             m = re.match(rf"\s+{key}:\s*(.+)$", line)
             if m:
-                entry[key] = m.group(1).strip().strip("\"'")
+                val = m.group(1).strip()
+                if not val.startswith(("\"", "'")):
+                    # YAML trailing comment: `severity: RELEASE_BLOCKING  # note`
+                    val = re.sub(r"\s+#.*$", "", val)
+                entry[key] = val.strip("\"'")
     if entry.get("name"):
         out.append(entry)
     return out

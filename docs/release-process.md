@@ -47,7 +47,8 @@ RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR=target-flagship \
     cargo run -p xtask -- test-flagship
 ```
 
-Acceptance gates:
+Acceptance gates (the first three are `RELEASE_BLOCKING` in
+`properties.yaml`; G4_NS2D_aniso and G5_3D since ADR-0199):
 
 | Gate | Threshold |
 |------|-----------|

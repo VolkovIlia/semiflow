@@ -3818,7 +3818,7 @@ properties:
 
   - name: G4_NS2D_aniso
     cases: 1
-    severity: NORMATIVE
+    severity: RELEASE_BLOCKING   # was NORMATIVE; ADR-0199
     gate: "slope <= -1.95"
     purpose: |
       G4_NS2D_aniso (spatial self-convergence, variable anisotropic β):
@@ -3841,7 +3841,7 @@ properties:
 
   - name: G5_3D
     cases: 1
-    severity: NORMATIVE
+    severity: RELEASE_BLOCKING   # was NORMATIVE; ADR-0199
     gate: "slope <= -1.95"
     recalibrated_at: "2026-05-09 (v0.11.0 prod-HW first run; see ADR-0024 Amendment 2026-05-09 and math.md §10.8.7 'Pre-asymptote diagnosis')"
     purpose: |
