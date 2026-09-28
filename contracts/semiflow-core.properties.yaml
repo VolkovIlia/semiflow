@@ -2554,7 +2554,11 @@ properties:
       let r = DriftReactionChernoff::with_closure(move |_| b, move |_| c, c.abs(), grid);
       let phi = StrangSplit::new(m, r);
       let lhs = step(&phi, tau, &f).norm_sup();
-      let rhs = (1.0 + c.abs() * tau + 20.0 * tau * tau) * f.norm_sup();
+      // ‖f‖_∞ = sup of the continuous Gaussian datum (its amplitude), not of
+      // its grid samples: a sub-cell drift shift can move an off-node peak onto
+      // a node and raise the grid max with no overshoot at all (issue #29).
+      let f_sup = amplitude.max(f.norm_sup());
+      let rhs = (1.0 + c.abs() * tau + 20.0 * tau * tau) * f_sup;
       assert!(lhs <= rhs,
               "G4-strang (TruncatedExp): lhs = {}, rhs = {}, tau = {}, c = {}, a = {}",
               lhs, rhs, tau, c, a);

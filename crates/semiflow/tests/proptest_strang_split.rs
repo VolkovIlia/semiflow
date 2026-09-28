@@ -110,6 +110,7 @@ proptest! {
     /// violates `τ·a < dx²/2`, which would exhaust proptest's global reject
     /// budget. So `tau` is drawn as a fraction of the CFL limit instead; the
     /// reject guard is kept as the contract requires, but never fires.
+    /// `‖f‖_∞` on the right-hand side is the continuous datum's sup (see below).
     #[test]
     fn truncated_exp_strang_quasi_contractivity(
         a in 0.01_f64..=5.0,
@@ -133,7 +134,14 @@ proptest! {
         let phi = StrangSplit::new(m, r);
 
         let lhs = step(&phi, tau, &f)?.norm_sup();
-        let rhs = (1.0 + c.abs() * tau + 20.0 * tau * tau) * f.norm_sup();
+        // ‖f‖_∞ is the sup of the Gaussian datum (= amplitude), not of its grid
+        // samples: with the peak between nodes, R's sub-cell shift (|b·τ| < dx)
+        // can move it onto a node, and the grid max grows by up to
+        // ~(dx/2)²/(2σ²) without any overshoot. Shrunk counterexample under
+        // the grid norm: a=0.01, b≈3.63, c=0, mu=0, sigma²=0.1 →
+        // 0.4997746 > 0.4997500 = grid max, < 0.5 = amplitude.
+        let f_sup = amplitude.max(f.norm_sup());
+        let rhs = (1.0 + c.abs() * tau + 20.0 * tau * tau) * f_sup;
         prop_assert!(
             lhs <= rhs,
             "TruncatedExp G4-strang FAIL: ‖Φ(τ)f‖_∞ = {lhs:.6e} > {rhs:.6e} \
