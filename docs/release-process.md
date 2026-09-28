@@ -170,6 +170,20 @@ released SHA, not a blocker on publication (see the `tags:` comment in
 `flagship-gates.yml`), and hosted runners are not the calibrated bench hardware.
 It does mean a skipped manual run is now visible within a day instead of never.
 
+**Below RELEASE_BLOCKING (issue #31).** The check above says nothing about
+NORMATIVE, ADVISORY or unlabelled tests. A test behind `slow-tests` or
+`#[ignore]` that no workflow names could still run nowhere. The nightly
+`catch-all-gated` job in `nightly.yml` runs exactly that set:
+`python3 scripts/check_gate_coverage.py --list-unnamed` computes it from the tree
+on every run, so the list cannot drift. The two exclusions are in the script's
+`NEVER_RUN`, each with its reason (an OOM stub and a fixture-overwriting
+capture). Its wallclock is not yet measured. If it nears the 6 h cap, split the
+job; do not skip tests.
+
+The coverage check also strips YAML trailing comments from `severity:` and
+`test_file:` values since ADR-0199. Before that, `severity: RELEASE_BLOCKING  #
+note` was read as a different severity and silently dropped out of the check.
+
 ### 4. Test suite and lints clean
 
 ```bash

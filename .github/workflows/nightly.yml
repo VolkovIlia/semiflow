@@ -124,6 +124,47 @@ jobs:
             --test strang_nonseparable_slope \
             --no-fail-fast -- --include-ignored --nocapture
 
+  catch-all-gated:
+    name: Blocked tests no other workflow names (catch-all)
+    runs-on: ubuntu-latest
+    # 350, not 420: a hosted job is killed at 6 h whatever this says.
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Issue #31. `check_gate_coverage.py` guards RELEASE_BLOCKING gates only;
+      # a NORMATIVE / ADVISORY / unlabelled test behind `slow-tests` or
+      # `#[ignore]` could still run in no workflow at all. This job runs every
+      # such binary: the list is computed from the tree on each run
+      # (`--list-unnamed`), never hand-maintained, so a new gated test cannot
+      # hide by omission and nothing already run by flagship-gates.yml or the
+      # jobs above is run twice. Exclusions live in `NEVER_RUN` in the script,
+      # each with its reason.
+      #
+      # Cost is NOT yet measured (the set includes the MLMC / TT experiments).
+      # If the first runs approach the 6 h cap, split this job rather than
+      # skipping tests. The `--test` flags are built at run time on purpose, so
+      # this job does not count as "naming" a binary to the coverage check.
+      - name: Run unnamed gated test binaries
+        run: |
+          python3 scripts/check_gate_coverage.py --list-unnamed > unnamed.txt
+          cat unnamed.txt
+          status=0
+          for crate in $(cut -d' ' -f1 unnamed.txt | sort -u); do
+            args=()
+            for stem in $(awk -v c="$crate" '$1 == c { print $2 }' unnamed.txt); do
+              args+=(--test "$stem")
+            done
+            features=()
+            if [ "$crate" = semiflow ]; then
+              features=(--features parallel,simd,slow-tests)
+            fi
+            cargo test -p "$crate" "${features[@]}" --release --no-fail-fast \
+              "${args[@]}" -- --include-ignored || status=1
+          done
+          exit "$status"
+
   miri:
     runs-on: ubuntu-latest
     steps:
