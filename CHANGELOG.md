@@ -6,10 +6,48 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-CI-only. No library, ABI or numerical change: of the Rust lines touched, none
-alters a gate threshold, tolerance or assertion.
+Mostly CI and contract hygiene. The one library change is the `no_std` build
+fix (#40), and it changes no numerics in the default `std` build. No ABI change,
+and no gate threshold or tolerance changes.
 
 ### Fixed
+
+- **The `no_std` build (`--no-default-features`) did not compile (#40).** Plain
+  `f64` receivers called `std`-only methods (`sqrt`, `ceil`, `floor`, `round`,
+  `powf`, `ln`, `log2`, `sin`, `cos`, `rem_euclid`), and several modules used
+  `vec!`, `Vec` or `to_owned` without importing them from `alloc`. The
+  `std`-only methods now resolve through `num_traits::Float` (libm) only when
+  `std` is off, so `std` builds keep calling exactly the same functions.
+  `rem_euclid` became a local helper with the same arithmetic. At the 1.78 MSRV,
+  `f64::abs` is not in `core`, so those calls use `libm::fabs`, which is exact.
+  A new `ci.yml` job, `no-std`, checks the build on the host, on
+  `thumbv7em-none-eabihf`, and at 1.78. Until now no job compiled it, because
+  the default `simd` feature always turns on `std`.
+
+- **`G4_NS2D_aniso` and `G5_3D` are now `RELEASE_BLOCKING` in the contract
+  (#34, ADR-0199).** They were `NORMATIVE`, while `release-process.md`, the
+  `flagship-gates.yml` title and ADR-0024 all treated them as blocking. That
+  also left them outside the coverage check. `check_gate_coverage.py` now strips
+  YAML trailing comments from `severity:`/`test_file:`. Before this,
+  `severity: RELEASE_BLOCKING  # note` silently fell out of the check.
+
+- **`latency_tail` emitted `"library":"semiflow-core"` (#32)**, a crate name that
+  no longer exists. It now emits `"semiflow"`, and `schema_version` goes from
+  `0.1` to `0.2`, so a consumer pinned to 0.1 fails loudly instead of matching
+  nothing. Nothing in the repo reads either field.
+
+- **Two contract properties had no test (#29).** They now do:
+  `strang_split_palindrome_consistency` and
+  `truncated_exp_strang_quasi_contractivity`, in
+  `tests/proptest_strang_split.rs`. Both run the library `StrangSplit` through
+  `apply_into`. Their `invariant:` blocks are ported off the removed v0.3 API,
+  and they now have `test_file:` pointers.
+
+- **Gated tests below `RELEASE_BLOCKING` could run in no workflow (#31).**
+  `check_gate_coverage.py --list-unnamed` computes the set: 43 binaries today.
+  The new nightly job `catch-all-gated` runs it with `-- --include-ignored`. Two
+  binaries are excluded, each with a reason recorded in `NEVER_RUN`: an OOM stub
+  and a fixture-overwriting capture.
 
 - **62 of the 117 `RELEASE_BLOCKING` gates were executed by no workflow at
   all.** `ci.yml` runs `cargo test --workspace --release` — no
