@@ -1118,6 +1118,8 @@ generators:
 #   ns2d_shape_preservation                    tests/proptest_nonseparable2d_consistency.rs::shape_preserved
 #   ns2d_linearity                             tests/proptest_nonseparable2d_consistency.rs::linearity
 #   ns2d_cfl_boundary                          tests/proptest_nonseparable2d_consistency.rs::cfl_boundary_returned
+#   strang_split_palindrome_consistency        tests/proptest_strang_split.rs::strang_split_palindrome_consistency
+#   truncated_exp_strang_quasi_contractivity   tests/proptest_strang_split.rs::truncated_exp_strang_quasi_contractivity
 #
 # UNRESOLVED — a plausible home exists but the mapping was NOT confirmed against
 # the test body. Treat each as an open question, not as evidence of coverage;
@@ -1125,12 +1127,8 @@ generators:
 # coverage gap:
 #   drift_reaction_exact_characteristic        ? tests/proptest_contractivity.rs (apply_drift_reaction /
 #                                                consistency_with_pure_decay)
-#   strang_split_palindrome_consistency        ? no test found asserting the palindrome/self-adjoint
-#                                                composition property specifically
 #   truncated_exp_diffusion_constant_fast_path_close
 #                                              ? tests/truncated_exp_constant_a_regression.rs
-#   truncated_exp_strang_quasi_contractivity   ? no TruncatedExp analogue of
-#                                                g4_strang_quasi_contractivity found
 #   strang2d_separable_order_2                 ? tests/order_contract_v0_6_1.rs or
 #                                                tests/strang_fused_order_2d.rs
 #
@@ -2060,23 +2058,19 @@ properties:
       tau: small_tau
       f: gaussian_state
     invariant: |
-      // v0.3.0 (ADR-0008 Amendment 1, ζ-A): pass `|_| 0.0_f64` for BOTH
-      // a_prime AND a_double_prime (constant a ⇒ a' ≡ a'' ≡ 0).
-      let d = DiffusionChernoff::new(|_| a, |_| 0.0_f64, |_| 0.0_f64, a, f.grid.clone());
-      let r = DriftReactionChernoff::new(|_| b, |_| c, c.abs());
-      let phi = StrangSplit::new(d, r);
+      // Ported to the ADR-0074 `apply_into` API (issue #29). Closure
+      // constructors capture the proptest-drawn coefficients; constant a ⇒
+      // a' ≡ a'' ≡ 0. `step(op, t, f)` = `op.apply_into(t, f, &mut dst, &mut pool)`.
+      let d = DiffusionChernoff::with_closure(move |_| a, |_| 0.0, |_| 0.0, a, grid);
+      let r = DriftReactionChernoff::with_closure(move |_| b, move |_| c, c.abs(), grid);
+      let phi = StrangSplit::new(d.clone(), r.clone());
 
-      let result_phi = phi.apply(tau, &f).unwrap();
+      let result_phi = step(&phi, tau, &f);
+      let manual_result = step(&d, tau / 2.0, &step(&r, tau, &step(&d, tau / 2.0, &f)));
 
-      let manual_step1 = d.apply(tau / 2.0, &f).unwrap();
-      let manual_step2 = r.apply(tau, &manual_step1).unwrap();
-      let manual_result = d.apply(tau / 2.0, &manual_step2).unwrap();
-
-      let mut diff = result_phi.clone();
-      diff.axpy(-1.0, &manual_result);
-      assert!(diff.norm_sup() <= 1e-12 * (1.0 + f.norm_sup()),
-              "StrangSplit::apply deviates from D(tau/2) o R(tau) o D(tau/2): diff = {}",
-              diff.norm_sup());
+      let diff = max_i |result_phi[i] - manual_result[i]|;
+      assert!(diff <= 1e-12 * (1.0 + f.norm_sup()));
+    test_file: "tests/proptest_strang_split.rs::strang_split_palindrome_consistency"
 
 # ---------------------------------------------------------------------------
 # v0.2.1 properties — boundary policies (ADR-0007).
@@ -2544,22 +2538,22 @@ properties:
       tau: small_tau
       f: gaussian_state
     invariant: |
-      // CFL gate (skip CFL violations — separate property covers them):
-      let dx = f.grid.dx();
-      let cfl_safe = tau * a < 0.5 * dx * dx;
-      if !cfl_safe {
-          return Err(proptest::test_runner::TestCaseError::reject("CFL violation"));
+      // Ported to the ADR-0074 `apply_into` API (issue #29). The harness draws
+      // tau as a fraction of the CFL limit (tau = frac * dx^2 / (2a)): drawing
+      // from small_tau on standard_grid rejects nearly every case and exhausts
+      // proptest's reject budget. The reject guard is kept regardless.
+      let dx = grid.dx();
+      if !(tau * a < 0.5 * dx * dx) {
+          return Err(TestCaseError::reject("CFL violation"));
       }
 
-      // v0.4.0 (ADR-0011): pass `|_| 0.0_f64` for both a_prime and
-      // a_double_prime (constant a ⇒ a' ≡ a'' ≡ 0).
-      let m = TruncatedExpDiffusionChernoff::new(
-          |_| a, |_| 0.0_f64, |_| 0.0_f64, a, f.grid.clone()
-      );
-      let r = DriftReactionChernoff::new(|_| b, |_| c, c.abs());
+      // TruncatedExpDiffusionChernoff::new takes `fn` pointers only, so the
+      // harness passes the drawn `a` through a thread-local Cell (constant a
+      // ⇒ a' ≡ a'' ≡ 0).
+      let m = TruncatedExpDiffusionChernoff::new(a_cell, zero, zero, a, grid);
+      let r = DriftReactionChernoff::with_closure(move |_| b, move |_| c, c.abs(), grid);
       let phi = StrangSplit::new(m, r);
-      let result = phi.apply(tau, &f).unwrap();
-      let lhs = result.norm_sup();
+      let lhs = step(&phi, tau, &f).norm_sup();
       let rhs = (1.0 + c.abs() * tau + 20.0 * tau * tau) * f.norm_sup();
       assert!(lhs <= rhs,
               "G4-strang (TruncatedExp): lhs = {}, rhs = {}, tau = {}, c = {}, a = {}",
@@ -2583,6 +2577,7 @@ properties:
 
       Cross-reference: math.md §9.6 (G4-strang quasi-contractivity
       derivation), §9.2.3.C (TruncatedExp L^∞-stability under CFL).
+    test_file: "tests/proptest_strang_split.rs::truncated_exp_strang_quasi_contractivity"
 
   - name: truncated_exp_cfl_violation_returns_error
     cases: 100    # v0.4.0 (ADR-0011) — CFL gate boundary check
