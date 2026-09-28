@@ -6,6 +6,9 @@
 
 use alloc::vec::Vec;
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::{adjoint_fp::MeasureState, error::SemiflowError, float::SemiflowFloat};
 
 // ---------------------------------------------------------------------------

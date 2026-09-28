@@ -42,6 +42,9 @@
 
 extern crate alloc;
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion4::Diffusion4thChernoff,

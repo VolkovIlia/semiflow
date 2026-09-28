@@ -43,6 +43,9 @@ extern crate alloc;
 
 use num_complex::Complex;
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::{
     carnot_complex_helpers::{cplx_diffuse_x1, cplx_diffuse_x2},
     chernoff::{ChernoffFunction, Growth},

@@ -134,7 +134,7 @@ impl PalindromicStrang {
         let residual = x_euler - x - tau * b_mid;
         // g'(x_euler) = 1 - (tau/2)*b'(x_mid)
         let g_prime = 1.0 - 0.5 * tau * b_prime_mid;
-        let x_foot = if g_prime.abs() > 1e-15 {
+        let x_foot = if libm::fabs(g_prime) > 1e-15 {
             x_euler - residual / g_prime
         } else {
             x_euler // fallback: near-degenerate

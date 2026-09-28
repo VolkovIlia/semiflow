@@ -48,10 +48,10 @@ impl HypoellipticChernoff<f64, 3, 2> {
         let eps = 1e-8_f64;
         let expected = [0.0_f64, 0.0_f64, 1.0_f64];
         for (i, (&got, &exp)) in bracket_12.iter().zip(expected.iter()).enumerate() {
-            if (got - exp).abs() > eps {
+            if libm::fabs(got - exp) > eps {
                 return Err(SemiflowError::DomainViolation {
                     what: "Heisenberg step-2 check: [X₁,X₂] component deviates",
-                    value: (got - exp).abs(),
+                    value: libm::fabs(got - exp),
                 });
             }
             let _ = i;

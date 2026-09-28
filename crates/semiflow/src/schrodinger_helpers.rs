@@ -3,6 +3,9 @@
 
 use alloc::vec::Vec;
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::float::SemiflowFloat;
 
 /// First half-step V-rotation: `src → w[0] (r_d), w[1] (m_d)` (f64).

@@ -11,7 +11,10 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
 
 // ─── Symmetric tridiagonal eigensolver (Golub-Welsch) ────────────────────────
 

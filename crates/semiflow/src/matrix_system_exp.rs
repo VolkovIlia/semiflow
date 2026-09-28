@@ -14,6 +14,9 @@
     clippy::cast_possible_truncation
 )]
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::{error::SemiflowError, float::SemiflowFloat, matrix_pade::mat_exp_pade13};
 
 // ---------------------------------------------------------------------------

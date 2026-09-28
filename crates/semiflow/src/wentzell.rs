@@ -254,7 +254,7 @@ fn cayley_boundary_step(u_bulk: &mut f64, u_bnd: &mut f64, block: [[f64; 2]; 2],
     // Solve L * [new_bulk, new_bnd]ᵀ = [rb, rd] via closed-form 2×2 inverse.
     let det = l00 * l11 - l01 * l10;
     // If det ≈ 0 (pathological), leave state unchanged to avoid NaN propagation.
-    if det.abs() < f64::EPSILON {
+    if libm::fabs(det) < f64::EPSILON {
         return;
     }
     let inv_det = det.recip();

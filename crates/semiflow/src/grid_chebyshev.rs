@@ -95,6 +95,19 @@ pub(crate) mod chebyshev_generic;
 // Out-of-domain helper (ADR-0104 H3 fix)
 // ---------------------------------------------------------------------------
 
+/// `f64::rem_euclid` for a positive modulus, available without `std`.
+///
+/// Same arithmetic as the std implementation (`r = x % m; r < 0 → r + m`),
+/// so results are bit-identical in `std` builds.
+fn rem_euclid_pos(x: f64, m: f64) -> f64 {
+    let r = x % m;
+    if r < 0.0 {
+        r + m
+    } else {
+        r
+    }
+}
+
 /// Reflect `x` into `[xmin, xmax]` using the mirror-fold formula.
 ///
 /// Period = 2·(xmax − xmin). One application is sufficient: after folding,
@@ -104,7 +117,7 @@ fn reflect_into_domain(x: f64, xmin: f64, xmax: f64) -> f64 {
     debug_assert!(width > 0.0, "reflect_into_domain: xmin must be < xmax");
     let period = 2.0 * width;
     // Shift to [0, 2*width) using rem_euclid.
-    let t = (x - xmin).rem_euclid(period);
+    let t = rem_euclid_pos(x - xmin, period);
     // Fold the upper half back: t in [width, 2*width) → mirror to [0, width).
     let folded = if t > width { period - t } else { t };
     xmin + folded
@@ -114,9 +127,9 @@ fn reflect_into_domain(x: f64, xmin: f64, xmax: f64) -> f64 {
 fn wrap_periodic(x: f64, xmin: f64, xmax: f64) -> f64 {
     let width = xmax - xmin;
     debug_assert!(width > 0.0, "wrap_periodic: xmin must be < xmax");
-    let t = (x - xmin).rem_euclid(width);
+    let t = rem_euclid_pos(x - xmin, width);
     // Clamp to xmax - epsilon to stay strictly inside the closed interval.
-    xmin + t.min(width - f64::EPSILON * width.abs())
+    xmin + t.min(width - f64::EPSILON * libm::fabs(width))
 }
 
 /// Linear extrapolation at `x` outside `[xmin, xmax]`.
@@ -131,7 +144,7 @@ fn linear_extrapolate_chebyshev(values: &[f64], grid: &Grid1D, x: f64, m: usize)
     let x1 = mid + half * libm::cos(core::f64::consts::PI / m as f64); // k=1
     let f0 = sample_virtual_node(values, grid, x0);
     let f1 = sample_virtual_node(values, grid, x1);
-    let slope = if (x0 - x1).abs() > f64::EPSILON {
+    let slope = if libm::fabs(x0 - x1) > f64::EPSILON {
         (f0 - f1) / (x0 - x1)
     } else {
         0.0
@@ -145,7 +158,7 @@ fn linear_extrapolate_chebyshev(values: &[f64], grid: &Grid1D, x: f64, m: usize)
         let xl1 = mid + half * libm::cos((m as f64 - 1.0) * core::f64::consts::PI / m as f64);
         let fl = sample_virtual_node(values, grid, xl);
         let fl1 = sample_virtual_node(values, grid, xl1);
-        let slope_l = if (xl - xl1).abs() > f64::EPSILON {
+        let slope_l = if libm::fabs(xl - xl1) > f64::EPSILON {
             (fl - fl1) / (xl - xl1)
         } else {
             0.0
@@ -237,7 +250,7 @@ fn barycentric_lobatto_eval(
 ) -> f64 {
     let mid = (grid.xmax + grid.xmin) * 0.5;
     let half = (grid.xmax - grid.xmin) * 0.5;
-    let dx_abs = grid.dx().abs();
+    let dx_abs = libm::fabs(grid.dx());
     let guard = EPSILON_FACTOR * f64::EPSILON * dx_abs;
 
     let mut num = 0.0_f64;
@@ -248,7 +261,7 @@ fn barycentric_lobatto_eval(
         let x_k = mid + half * nodes_ref[k];
         let w_k = weights_ref[k];
         let diff = x - x_k;
-        if diff.abs() < guard {
+        if libm::fabs(diff) < guard {
             // Removable singularity: x ≈ x_k → return f_k directly.
             return sample_virtual_node(values, grid, x_k);
         }

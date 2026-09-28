@@ -18,7 +18,10 @@
 //!       K>1: matrix-explicit F^⊤ via unit-vector probing (§51.10 ADR-0177 Amdt 1).
 //!            F is time-homogeneous; F^⊤ is built ONCE per `backward_sweep` call.
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
 
 use crate::{
     diffusion::DiffusionChernoff,

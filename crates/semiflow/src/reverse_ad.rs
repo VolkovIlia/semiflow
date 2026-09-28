@@ -29,6 +29,9 @@ use alloc::vec::Vec;
 
 // Backward sweep internals live in the sibling crate-root module `reverse_sweep`
 // (additive split — keeps this file ≤500 lines; declared in lib.rs).
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::reverse_sweep::backward_sweep;
 use crate::{
     diffusion::DiffusionChernoff, dual::Dual, error::SemiflowError, float::SemiflowFloat,

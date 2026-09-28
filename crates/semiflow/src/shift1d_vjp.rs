@@ -68,6 +68,9 @@ extern crate alloc;
 
 use alloc::{vec, vec::Vec};
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::{error::SemiflowError, float::SemiflowFloat, grid::Grid1D};
 
 /// Candidate support half-width probed around the containing cell.

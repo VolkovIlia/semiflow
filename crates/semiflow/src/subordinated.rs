@@ -19,7 +19,7 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 
 use num_traits::Float;

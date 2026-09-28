@@ -547,8 +547,9 @@ fn bench_parallel() -> Result<()> {
 ///   Strang2D/3D etc. Bit-identical to serial per ADR-0018 regression tests.
 /// - `simd` feature: engages AVX2/NEON hot paths.
 ///
-/// Debug assertions are preserved. For a pure no_std serial run use
-/// `cargo test --workspace` (bare) directly.
+/// Debug assertions are preserved. For a serial run use `cargo test --workspace`
+/// (bare) directly — note the default `simd` feature still enables `std`; the
+/// `no_std` build is `cargo check -p semiflow --no-default-features`.
 fn test_fast() -> Result<()> {
     let root = workspace_root()?;
     let cmd_args = ["test", "--workspace", "--features", "parallel,simd"];

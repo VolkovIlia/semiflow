@@ -7,7 +7,10 @@
 //!
 //! `order()` returns `u32::MAX` (tolerance-driven; NOT fixed-order).
 
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
 
 use crate::{
     chernoff::{ChernoffFunction, Growth},

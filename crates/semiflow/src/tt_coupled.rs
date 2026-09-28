@@ -22,7 +22,7 @@
 #![allow(clippy::cast_precision_loss)]
 
 extern crate alloc;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{
     float::SemiflowFloat,

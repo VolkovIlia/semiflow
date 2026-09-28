@@ -4,7 +4,7 @@
 //! Propagation via [`multilayer_evolve`] (Krylov expmv, §55.3) or per-step via
 //! [`MassWeightedConservativeChernoff`] (CN Thomas, order 2). Authority: ADR-0188 §57.
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::{
     boundary::BoundaryPolicy,

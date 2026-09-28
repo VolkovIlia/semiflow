@@ -73,6 +73,22 @@ jobs:
       # require rustc > 1.78; their own MSRV is gated by those upstreams.
       - run: cargo +1.78 test -p semiflow --lib
 
+  no-std:
+    # The default feature set pulls in `std` (simd → std), so no other job ever
+    # compiled the `#![no_std]` configuration the READMEs advertise (issue #40).
+    # Check it on the host, on a bare-metal target, and at MSRV (where
+    # `f64::abs` is not yet in `core`).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: thumbv7em-none-eabihf }
+      - uses: dtolnay/rust-toolchain@1.78
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +stable check -p semiflow --no-default-features
+      - run: cargo +stable check -p semiflow --no-default-features --target thumbv7em-none-eabihf
+      - run: cargo +1.78 check -p semiflow --no-default-features
+
   doc:
     runs-on: ubuntu-latest
     steps:
