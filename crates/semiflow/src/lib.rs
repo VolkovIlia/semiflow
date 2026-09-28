@@ -118,6 +118,21 @@
 
 extern crate alloc;
 
+// The engines share coefficient closures through `alloc::sync::Arc`, which needs
+// pointer-sized atomics (ADR-0200). Say so instead of failing with dozens of
+// unresolved `alloc::sync` imports on targets such as `thumbv6m-none-eabi`.
+#[cfg(not(target_has_atomic = "ptr"))]
+compile_error!(
+    "semiflow requires a target with pointer-sized atomics (it uses alloc::sync::Arc); \
+     e.g. thumbv7m/thumbv7em/riscv32imac work, thumbv6m does not"
+);
+
+// Unit tests run on the host; when the crate is built `no_std` (`--no-default-features`)
+// they still need `std` for the test harness, printing and `format!`/`vec!`.
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
 pub mod adaptive;
 pub mod adjoint;
 pub mod adjoint_fp;

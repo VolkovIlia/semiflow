@@ -150,6 +150,14 @@ fn sharp_ic(grid: Grid1D) -> GridFn1D {
 
 /// Compare Wave 4 reference trajectory (re-derived from v1.0.0 logic) to
 /// the JSON fixture captured before Wave 4 landed.
+///
+/// The fixture holds exact τ bits recorded from a default-feature (`simd`)
+/// build. Without `simd` the Catmull-Rom interpolant evaluates its polynomial
+/// in a different (mathematically equal) arrangement (`grid_cubic.rs`), which
+/// moves the last bits and hence the accepted τ at step 2 of `heat_smooth`.
+/// The comparison is therefore only meaningful in the configuration the
+/// fixture was captured in; the `no_std` CI job builds without `simd`.
+#[cfg(feature = "simd")]
 #[test]
 fn fixture_matches_v1_trajectory() {
     let fixture_path = concat!(

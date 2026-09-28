@@ -27,6 +27,9 @@
 //!
 //! Uses `a(x) = |sin(x)| + 0.5` (non-constant) so the stencil is non-trivial.
 
+// SIMD-vs-scalar comparison: meaningless without the `simd` feature.
+#![cfg(feature = "simd")]
+
 use semiflow::{chernoff::ApplyChernoffExt, Grid1D, GridFn1D, TruncatedExp4WithCache};
 
 // ---------------------------------------------------------------------------

@@ -377,6 +377,8 @@ where
 // while keeping this file within the 500-line suckless limit.
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
     use crate::{Diffusion4thChernoff, Grid1D, GridFn1D, ScratchPool};
     include!("drift_reaction_zeta4_tests.rs");

@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-nostd-check", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+# Standalone bare-metal (Cortex-M / QEMU) harness with its own lockfile and target.
+exclude = ["nostd-qemu"]
 
 [workspace.package]
 version = "0.13.1-beta"

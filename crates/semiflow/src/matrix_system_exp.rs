@@ -14,7 +14,11 @@
     clippy::cast_possible_truncation
 )]
 
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
 #[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
 use num_traits::Float;
 
 use crate::{error::SemiflowError, float::SemiflowFloat, matrix_pade::mat_exp_pade13};

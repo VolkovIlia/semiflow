@@ -312,6 +312,8 @@ pub(crate) fn sample_chebyshev_1d(
 // Exact float comparisons in tests verify round-trip identity or sentinel values.
 #[allow(clippy::float_cmp)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
     use crate::{boundary::InterpKind, grid::OobPolicy, BoundaryPolicy, Grid1D};
 

@@ -1,0 +1,22 @@
+[package]
+name = "semiflow-nostd-check"
+description = "Runs semiflow scenarios with closed-form oracles in a no_std build, so f64 math goes through libm (host and bare-metal)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+# Only `semiflow`, with default features off, so nothing in this package's
+# dependency graph enables `num-traits/std`: the arithmetic under test is the
+# `libm` backend. Do NOT add dependencies or dev-dependencies here — any crate
+# that turns on `num-traits/std` (statrs, nalgebra, criterion, ...) silently
+# switches semiflow back to the platform math library. CI checks this with
+# `cargo tree -p semiflow-nostd-check -e features,no-dev -i num-traits`.
+[dependencies]
+semiflow = { path = "../semiflow", default-features = false }
+
+[lints]
+workspace = true

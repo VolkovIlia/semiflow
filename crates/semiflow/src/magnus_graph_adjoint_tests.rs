@@ -4,7 +4,7 @@
 // k (usize loop counter) cast to f64 for time coordinate; k ≪ 2^52.
 #[allow(clippy::cast_precision_loss)]
 mod tests {
-    use alloc::sync::Arc;
+    use alloc::{boxed::Box, sync::Arc};
 
     use crate::{
         chernoff::ChernoffFunction,

@@ -74,20 +74,85 @@ jobs:
       - run: cargo +1.78 test -p semiflow --lib
 
   no-std:
-    # The default feature set pulls in `std` (simd → std), so no other job ever
-    # compiled the `#![no_std]` configuration the READMEs advertise (issue #40).
-    # Check it on the host, on a bare-metal target, and at MSRV (where
-    # `f64::abs` is not yet in `core`).
+    # The default feature set pulls in `std` (simd → std), so before issue #40
+    # nothing compiled the `#![no_std]` configuration the READMEs advertise.
+    # Build (with codegen, not just check) for the host and bare-metal targets,
+    # with the optional non-std features, and at MSRV (where `f64::abs` is not
+    # yet in `core`). Targets without pointer-sized atomics must hit the
+    # explicit `compile_error!` (ADR-0200), not a wall of `alloc::sync` errors.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with: { targets: thumbv7em-none-eabihf }
+        with:
+          targets: "thumbv7em-none-eabihf,thumbv7m-none-eabi,riscv32imac-unknown-none-elf,thumbv6m-none-eabi"
       - uses: dtolnay/rust-toolchain@1.78
       - uses: Swatinem/rust-cache@v2
-      - run: cargo +stable check -p semiflow --no-default-features
-      - run: cargo +stable check -p semiflow --no-default-features --target thumbv7em-none-eabihf
+      - run: cargo +stable build -p semiflow --no-default-features
+      - run: cargo +stable build -p semiflow --no-default-features --features linear-interp,s3-poc
+      - run: cargo +stable build -p semiflow --no-default-features --target thumbv7em-none-eabihf
+      - run: cargo +stable build -p semiflow --no-default-features --target thumbv7m-none-eabi
+      - run: cargo +stable build -p semiflow --no-default-features --target riscv32imac-unknown-none-elf
       - run: cargo +1.78 check -p semiflow --no-default-features
+      - name: thumbv6m (no atomic CAS) fails with the explicit message
+        run: |
+          if cargo +stable check -p semiflow --no-default-features --target thumbv6m-none-eabi 2> v6m.log; then
+            echo "::error::thumbv6m unexpectedly builds; update the README no_std section"; exit 1
+          fi
+          grep -q "requires a target with pointer-sized atomics" v6m.log
+
+  no-std-test:
+    # The whole semiflow test suite (unit + integration) with the crate compiled
+    # `#![no_std]`. The test harness links `std`, so this exercises the no_std
+    # code paths, not the libm math backend — that is `no-std-libm` below.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p semiflow --no-default-features --release
+
+  no-std-libm:
+    # `no-std` above only compiles. This job runs semiflow scenarios in a
+    # `no_std` build (crates/semiflow-nostd-check depends on semiflow alone,
+    # default features off), so f64 math really goes through `libm`. The
+    # feature check guards that: any dependency enabling `num-traits/std`
+    # would silently switch the check back to the platform math library.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: num-traits must resolve without `std` (libm backend)
+        run: |
+          tree="$(cargo tree -p semiflow-nostd-check -e features,no-dev -i num-traits)"
+          echo "$tree"
+          if grep -q 'num-traits feature "std"' <<<"$tree"; then
+            echo "::error::semiflow-nostd-check enables num-traits/std; the libm path is not being tested"
+            exit 1
+          fi
+          grep -q 'num-traits feature "libm"' <<<"$tree"
+      - run: cargo test -p semiflow-nostd-check --release
+
+  no-std-qemu:
+    # The same scenarios on bare-metal Cortex-M3 (soft-float) and Cortex-M4F
+    # under QEMU; see nostd-qemu/README.md. The binary exits non-zero on any
+    # failed tolerance, panic, allocation failure or HardFault.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "thumbv7m-none-eabi,thumbv7em-none-eabihf" }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: nostd-qemu }
+      - name: Cortex-M3 (mps2-an385)
+        working-directory: nostd-qemu
+        run: timeout 600 cargo run --release --target thumbv7m-none-eabi
+      - name: Cortex-M4F (mps2-an386)
+        working-directory: nostd-qemu
+        run: timeout 600 cargo run --release --target thumbv7em-none-eabihf
 
   doc:
     runs-on: ubuntu-latest

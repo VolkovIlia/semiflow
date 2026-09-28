@@ -195,6 +195,8 @@ pub(crate) fn scatter_z_3d_from<F: SemiflowFloat>(
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
 
     fn make_vals(n: usize) -> Vec<f64> {

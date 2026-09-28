@@ -345,6 +345,8 @@ pub(crate) mod septic_generic;
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
 
     /// Helper: uniform grid [0,1] with n nodes, values = `f(x_i)`.

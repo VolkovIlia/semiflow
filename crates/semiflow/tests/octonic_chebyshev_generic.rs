@@ -39,9 +39,15 @@
 // Integration test/bench/example: allows for numerical patterns.
 #![allow(clippy::cast_possible_wrap)]
 
-use semiflow::{
-    boundary::InterpKind, grid::OobPolicy, simd::with_force_scalar, BoundaryPolicy, Grid1D,
-};
+#[cfg(feature = "simd")]
+use semiflow::simd::with_force_scalar;
+use semiflow::{boundary::InterpKind, grid::OobPolicy, BoundaryPolicy, Grid1D};
+
+/// Without `simd` every f64 path is already the scalar reference.
+#[cfg(not(feature = "simd"))]
+fn with_force_scalar<R>(f: impl FnOnce() -> R) -> R {
+    f()
+}
 
 // ---------------------------------------------------------------------------
 // Shared constants

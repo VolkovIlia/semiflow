@@ -1,7 +1,7 @@
 //! Unit smoke tests for [`super::MagnusGraphHeatChernoff`].
 #![allow(clippy::unwrap_used)]
 
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc};
 
 use crate::{
     chernoff::ChernoffFunction,

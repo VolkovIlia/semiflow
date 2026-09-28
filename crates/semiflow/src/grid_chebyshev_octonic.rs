@@ -368,6 +368,8 @@ pub(crate) fn sample_octonic_1d(values: &[f64], grid: &Grid1D, x: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
 
     fn make_grid_and_values(n: usize, f: impl Fn(f64) -> f64) -> (Grid1D, Vec<f64>) {
