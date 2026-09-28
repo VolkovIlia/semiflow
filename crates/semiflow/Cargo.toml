@@ -7,13 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 readme = "README.md"
 keywords = ["pde", "semigroup", "numerical", "diffusion", "simulation"]
 categories = ["mathematics", "science", "no-std", "algorithms", "simulation"]
 
 [features]
 default = ["simd"]  # ADR-0019: simd default-on; v2_compat removed at v4.0 (ADR-0084)
-std = []
+# `std` also switches num-traits / num-complex to the platform math library, so a
+# std build computes exactly what the test suite (whose dev-dependencies always
+# enable `num-traits/std`) verifies. Without `std` both fall back to `libm`.
+std = ["num-traits/std", "num-complex/std"]
 parallel = ["std"]               # ADR-0018: parallel Strang2D::apply via std::thread::scope (std-only)
 simd = ["std"]                   # ADR-0019: AVX2 + NEON intrinsics, scalar fallback elsewhere
 linear-interp = []
