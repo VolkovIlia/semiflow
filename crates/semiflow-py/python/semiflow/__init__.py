@@ -128,6 +128,8 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     phi_action,
     phi_action_batched,
     Etdrk4,
+    # reverse-mode AD (ADR-0156) — registered natively but was never re-exported
+    ReverseHeat1D,
 )
 
 __all__ = [
@@ -256,4 +258,5 @@ __all__ = [
     "phi_action",
     "phi_action_batched",
     "Etdrk4",
+    "ReverseHeat1D",
 ]

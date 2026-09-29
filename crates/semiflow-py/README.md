@@ -511,31 +511,36 @@ Python boundary.
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
 | `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
-**Example — stiff FEM operator with the implicit path.** The explicit Krylov
+**Example — stiff operator with the implicit path.** The explicit Krylov
 paths sub-step `O(λ_max·t)` times; `path="implicit"` (Jacobi-preconditioned
-backward-Euler PCG, accuracy `O(t/n_steps)`, cost `~√κ` per sub-step) handles
-stiffness such as `λ_max ≈ 4·10⁷`:
+backward-Euler PCG, accuracy `O(t/n_steps)`, about `√κ` CG iterations per
+sub-step with `κ ≈ 1 + (t/n_steps)·λ_max`) handles stiffness such as
+`λ_max ≈ 4·10⁷` for smooth data. Rough data (e.g. white noise) at this
+stiffness needs more CG iterations than the fixed cap of 400 and raises
+`SemiflowError` with `kind == "ConvergenceFailed"`.
 
 ```python
 import numpy as np
 import semiflow
 
-# 1-D FEM stiffness tridiag(-1, 2, -1) * 1e7 in CSR form (N = 400).
+# Stiff 1-D Neumann Laplacian (tridiag(-1, 2, -1), boundary rows 1, -1) * 1e7, N = 400.
 n, scale = 400, 1e7
 indptr, indices, data = [0], [], []
 for i in range(n):
-    for j, v in ((i - 1, -1.0), (i, 2.0), (i + 1, -1.0)):
+    for j in (i - 1, i, i + 1):
         if 0 <= j < n:
             indices.append(j)
-            data.append(v * scale)
+            data.append(scale * ((1.0 if i in (0, n - 1) else 2.0) if j == i else -1.0))
     indptr.append(len(indices))
 
 op = semiflow.SymmetricOperator.from_csr(
     np.array(indptr, dtype=np.int64), np.array(indices, dtype=np.int32),
-    np.array(data), n)
-v0 = np.random.default_rng(0).standard_normal((n, 4))   # 4 right-hand sides
+    np.array(data), n, 1e-6)
+v0 = np.linspace(1.0 / n, 1.0, n).reshape(n, 1)
 u = op.evolve_batched(1.0, v0, path="implicit", n_steps=100)
-assert u.shape == (n, 4) and np.all(np.isfinite(u))
+
+# Everything but the constant (null-space) mode has decayed: u -> mean(v0).
+assert np.max(np.abs(u - v0.mean())) < 1e-6
 ```
 
 `mass_lumped_evolve` and `MassKOperator.evolve` accept the same `path=` keyword.
