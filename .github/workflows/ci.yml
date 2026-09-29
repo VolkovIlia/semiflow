@@ -184,6 +184,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- doc-check
+      # The four published READMEs are generated from docs/readme/ — fail if
+      # someone edited a generated file or forgot to regenerate.
+      - run: cargo run -p xtask -- readme --check
 
   changelog-check:
     # Advisory only on PRs/pushes: a version bump may happen before notes are written.
@@ -414,6 +417,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - run: cargo run -p xtask -- wasm-test
+      # Execute the npm README's Node.js examples against the package exactly
+      # as `release-wasm.yml` assembles it (dist/npm).
+      - name: README examples (npm package)
+        if: runner.os == 'Linux'
+        run: |
+          cargo run -p xtask -- wasm-pack-npm
+          cargo run -p xtask -- readme-examples-js dist/npm
 
   wasm-test-chrome:
     needs: wasm-build

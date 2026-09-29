@@ -3,3 +3,5 @@ cognitive-complexity-threshold = 25
 type-complexity-threshold = 250
 too-many-arguments-threshold = 6
 too-many-lines-threshold = 50
+# Proper names used in prose (the crate docs include README.md); ".." keeps the defaults.
+doc-valid-idents = ["SemiFlow", "PyPI", "SciPy", "NumPy", "CPython", "x86_64", ".."]

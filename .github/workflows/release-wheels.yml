@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p xtask -- doc-check
+      - run: cargo run -p xtask -- readme --check   # published README is current
 
   changelog-check:
     name: CHANGELOG gate
