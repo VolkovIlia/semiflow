@@ -123,12 +123,12 @@ fn heisenberg_integrand<F: SemiflowFloat>(lam: F, h: F, r2: F, tc: F) -> F {
         // L'Hôpital limit: (2/h) · exp(-r²/(2h))
         let two = from_f64::<F>(2.0_f64);
         let exp_arg = -(r2 / (two * h));
-        return (two / h) * exp_arg.exp();
+        return (two / h) * exp_arg.libm_exp();
     }
 
     let half = from_f64::<F>(0.5_f64);
     let lam_h_half = lam * h * half; // λh/2
-    let sinh_lhh = lam_h_half.sinh();
+    let sinh_lhh = lam_h_half.libm_sinh();
 
     // Guard against numerical underflow near sinh=0 (defensive; only triggers
     // at very large |λ| where the exponential decays the integrand to zero).
@@ -137,13 +137,13 @@ fn heisenberg_integrand<F: SemiflowFloat>(lam: F, h: F, r2: F, tc: F) -> F {
         return F::zero();
     }
 
-    let cosh_lhh = lam_h_half.cosh();
+    let cosh_lhh = lam_h_half.libm_cosh();
     let coth_lhh = cosh_lhh / sinh_lhh; // coth(λh/2)
     let four = from_f64::<F>(4.0_f64);
     let exp_arg = -(lam / four) * coth_lhh * r2;
     let cos_arg = lam * tc;
 
-    (lam / sinh_lhh) * exp_arg.exp() * cos_arg.cos()
+    (lam / sinh_lhh) * exp_arg.libm_exp() * cos_arg.libm_cos()
 }
 
 // ─── Public surface ───────────────────────────────────────────────────────────

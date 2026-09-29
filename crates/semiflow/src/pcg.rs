@@ -321,7 +321,7 @@ fn compute_max_iter<F: SemiflowFloat>(
         .unwrap_or(1e-10)
         .clamp(1e-15, 1.0 - f64::EPSILON);
     let kappa_sqrt = (1.0_f64 + dt_f * lam).sqrt();
-    let ln_factor = (2.0_f64 / tol_f).ln().max(1.0);
+    let ln_factor = (2.0_f64 / tol_f).libm_ln().max(1.0);
     // ceil() ≥ 0 (both factors ≥ 1); value bounded by n < usize::MAX in practice.
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let raw = (kappa_sqrt * ln_factor).ceil() as usize;

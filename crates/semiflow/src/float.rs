@@ -55,6 +55,9 @@ use num_traits::Float;
 /// assert_eq!(sum_two(1.0_f32, 2.0_f32), 3.0_f32);
 /// ```
 #[allow(clippy::module_name_repetitions)]
+// The provided bodies are the generic fallback (used by `Dual<F>`, whose own
+// `Float` impl routes through the `libm_*` methods of its components).
+#[allow(clippy::disallowed_methods)]
 pub trait SemiflowFloat:
     Float
     + AddAssign
@@ -69,10 +72,315 @@ pub trait SemiflowFloat:
     + PartialOrd
     + 'static
 {
+    /// `eˣ` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_exp(self) -> Self {
+        Float::exp(self)
+    }
+    /// `2ˣ` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_exp2(self) -> Self {
+        Float::exp2(self)
+    }
+    /// `eˣ − 1` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_exp_m1(self) -> Self {
+        Float::exp_m1(self)
+    }
+    /// `ln x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_ln(self) -> Self {
+        Float::ln(self)
+    }
+    /// `ln(1 + x)` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_ln_1p(self) -> Self {
+        Float::ln_1p(self)
+    }
+    /// `log₂ x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_log2(self) -> Self {
+        Float::log2(self)
+    }
+    /// `log₁₀ x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_log10(self) -> Self {
+        Float::log10(self)
+    }
+    /// `log_base x = ln x / ln base` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_log(self, base: Self) -> Self {
+        Float::log(self, base)
+    }
+    /// `xᵉ` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_powf(self, e: Self) -> Self {
+        Float::powf(self, e)
+    }
+    /// `xⁿ` by exponentiation by squaring: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_powi(self, n: i32) -> Self {
+        Float::powi(self, n)
+    }
+    /// `sin x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_sin(self) -> Self {
+        Float::sin(self)
+    }
+    /// `cos x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_cos(self) -> Self {
+        Float::cos(self)
+    }
+    /// `tan x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_tan(self) -> Self {
+        Float::tan(self)
+    }
+    /// `(sin x, cos x)` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_sin_cos(self) -> (Self, Self) {
+        Float::sin_cos(self)
+    }
+    /// `arcsin x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_asin(self) -> Self {
+        Float::asin(self)
+    }
+    /// `arccos x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_acos(self) -> Self {
+        Float::acos(self)
+    }
+    /// `arctan x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_atan(self) -> Self {
+        Float::atan(self)
+    }
+    /// `atan2(self, other)` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_atan2(self, other: Self) -> Self {
+        Float::atan2(self, other)
+    }
+    /// `sinh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_sinh(self) -> Self {
+        Float::sinh(self)
+    }
+    /// `cosh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_cosh(self) -> Self {
+        Float::cosh(self)
+    }
+    /// `tanh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_tanh(self) -> Self {
+        Float::tanh(self)
+    }
+    /// `arsinh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_asinh(self) -> Self {
+        Float::asinh(self)
+    }
+    /// `arcosh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_acosh(self) -> Self {
+        Float::acosh(self)
+    }
+    /// `artanh x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_atanh(self) -> Self {
+        Float::atanh(self)
+    }
+    /// `∛x` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_cbrt(self) -> Self {
+        Float::cbrt(self)
+    }
+    /// `√(x² + y²)` via `libm`: identical bits in `std` and `no_std` builds.
+    #[inline]
+    #[must_use]
+    fn libm_hypot(self, other: Self) -> Self {
+        Float::hypot(self, other)
+    }
 }
 
-impl SemiflowFloat for f32 {}
-impl SemiflowFloat for f64 {}
+/// `xⁿ` by exponentiation by squaring — the algorithm of compiler-rt
+/// `__powidf2`, written out so it is the same in every build.
+macro_rules! powi_by_squaring {
+    ($x:expr, $n:expr) => {{
+        let mut acc = 1.0;
+        let mut base = $x;
+        let mut e = $n.unsigned_abs();
+        loop {
+            if e & 1 == 1 {
+                acc *= base;
+            }
+            e >>= 1;
+            if e == 0 {
+                break;
+            }
+            base *= base;
+        }
+        if $n < 0 {
+            1.0 / acc
+        } else {
+            acc
+        }
+    }};
+}
+
+/// Override every `libm_*` method with the concrete `libm` function.
+macro_rules! impl_libm_methods {
+    (
+        $t:ty,
+        $exp:ident, $exp2:ident, $expm1:ident, $log:ident, $log1p:ident, $log2:ident,
+        $log10:ident, $pow:ident, $sin:ident, $cos:ident, $tan:ident, $asin:ident,
+        $acos:ident, $atan:ident, $atan2:ident, $sinh:ident, $cosh:ident, $tanh:ident,
+        $asinh:ident, $acosh:ident, $atanh:ident, $cbrt:ident, $hypot:ident
+    ) => {
+        impl SemiflowFloat for $t {
+            #[inline]
+            fn libm_exp(self) -> Self {
+                libm::$exp(self)
+            }
+            #[inline]
+            fn libm_exp2(self) -> Self {
+                libm::$exp2(self)
+            }
+            #[inline]
+            fn libm_exp_m1(self) -> Self {
+                libm::$expm1(self)
+            }
+            #[inline]
+            fn libm_ln(self) -> Self {
+                libm::$log(self)
+            }
+            #[inline]
+            fn libm_ln_1p(self) -> Self {
+                libm::$log1p(self)
+            }
+            #[inline]
+            fn libm_log2(self) -> Self {
+                libm::$log2(self)
+            }
+            #[inline]
+            fn libm_log10(self) -> Self {
+                libm::$log10(self)
+            }
+            #[inline]
+            fn libm_log(self, base: Self) -> Self {
+                libm::$log(self) / libm::$log(base)
+            }
+            #[inline]
+            fn libm_powf(self, e: Self) -> Self {
+                libm::$pow(self, e)
+            }
+            #[inline]
+            fn libm_powi(self, n: i32) -> Self {
+                powi_by_squaring!(self, n)
+            }
+            #[inline]
+            fn libm_sin(self) -> Self {
+                libm::$sin(self)
+            }
+            #[inline]
+            fn libm_cos(self) -> Self {
+                libm::$cos(self)
+            }
+            #[inline]
+            fn libm_tan(self) -> Self {
+                libm::$tan(self)
+            }
+            #[inline]
+            fn libm_sin_cos(self) -> (Self, Self) {
+                (libm::$sin(self), libm::$cos(self))
+            }
+            #[inline]
+            fn libm_asin(self) -> Self {
+                libm::$asin(self)
+            }
+            #[inline]
+            fn libm_acos(self) -> Self {
+                libm::$acos(self)
+            }
+            #[inline]
+            fn libm_atan(self) -> Self {
+                libm::$atan(self)
+            }
+            #[inline]
+            fn libm_atan2(self, other: Self) -> Self {
+                libm::$atan2(self, other)
+            }
+            #[inline]
+            fn libm_sinh(self) -> Self {
+                libm::$sinh(self)
+            }
+            #[inline]
+            fn libm_cosh(self) -> Self {
+                libm::$cosh(self)
+            }
+            #[inline]
+            fn libm_tanh(self) -> Self {
+                libm::$tanh(self)
+            }
+            #[inline]
+            fn libm_asinh(self) -> Self {
+                libm::$asinh(self)
+            }
+            #[inline]
+            fn libm_acosh(self) -> Self {
+                libm::$acosh(self)
+            }
+            #[inline]
+            fn libm_atanh(self) -> Self {
+                libm::$atanh(self)
+            }
+            #[inline]
+            fn libm_cbrt(self) -> Self {
+                libm::$cbrt(self)
+            }
+            #[inline]
+            fn libm_hypot(self, other: Self) -> Self {
+                libm::$hypot(self, other)
+            }
+        }
+    };
+}
+
+impl_libm_methods!(
+    f32, expf, exp2f, expm1f, logf, log1pf, log2f, log10f, powf, sinf, cosf, tanf, asinf, acosf,
+    atanf, atan2f, sinhf, coshf, tanhf, asinhf, acoshf, atanhf, cbrtf, hypotf
+);
+impl_libm_methods!(
+    f64, exp, exp2, expm1, log, log1p, log2, log10, pow, sin, cos, tan, asin, acos, atan, atan2,
+    sinh, cosh, tanh, asinh, acosh, atanh, cbrt, hypot
+);
 
 // ---------------------------------------------------------------------------
 // Small numeric helpers used by generic kernels

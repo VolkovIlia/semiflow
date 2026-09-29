@@ -202,7 +202,7 @@ where
         let t_j = n_to_f::<F>(j) * dt;
         let tau = t_j / n_f;
         // complex weight: e^{-(lam_re + i*lam_im)*t_j} * trapezoid_weight
-        let damp = (-lam_re * t_j).exp();
+        let damp = (-lam_re * t_j).libm_exp();
         let phase_arg = -lam_im * t_j;
         let phase: Cx = Cx::from_polar(F::one(), phase_arg);
         let tw = trap_weight(j, m, dt);

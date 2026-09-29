@@ -19,6 +19,8 @@ pub(super) use diffusion_zeta_common::{
 };
 use num_traits::Float;
 
+use crate::float::SemiflowFloat;
+
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
 #[cfg(feature = "simd")]
 use crate::simd::{F32x8, SimdF32x8};
@@ -113,7 +115,7 @@ pub(super) fn fd9_scalar_f32(
     let sum_ab = lo + hi;
     let tail = c4 * sample_f32(f, x)?;
 
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
 }
 
@@ -159,7 +161,7 @@ pub(super) fn fd9_simd_f32(
     let sum_ab = vv.mul(vw).horizontal_sum();
 
     let tail = (coeffs[4] as f32) * sample_f32(f, x)?;
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
 }
 

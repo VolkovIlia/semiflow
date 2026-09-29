@@ -118,8 +118,8 @@ impl<F: SemiflowFloat> StepController<F> for ClassicalPI<F> {
         // Changing this order breaks bit-equality with v1.0.0 (ADR-0044 §Risk 1).
         let floor = F::from(1e-300).unwrap_or(F::min_positive_value());
         let safe_err = err_norm.max(floor);
-        let e = (tol / safe_err).powf(self.alpha);
-        let e_prev = (self.err_prev / safe_err).powf(self.beta);
+        let e = (tol / safe_err).libm_powf(self.alpha);
+        let e_prev = (self.err_prev / safe_err).libm_powf(self.beta);
         let factor = safety * e * e_prev; // NORMATIVE: left-to-right
         self.err_prev = err_norm; // I-term update on accept
         factor
@@ -129,7 +129,7 @@ impl<F: SemiflowFloat> StepController<F> for ClassicalPI<F> {
         // I-term only; err_prev NOT updated on reject (matches v1.0.0).
         let floor = F::from(1e-300).unwrap_or(F::min_positive_value());
         let safe_err = err_norm.max(floor);
-        safety * (tol / safe_err).powf(self.alpha)
+        safety * (tol / safe_err).libm_powf(self.alpha)
     }
 
     fn reset(&mut self) {
@@ -186,9 +186,9 @@ impl<F: SemiflowFloat> StepController<F> for H211bFilter<F> {
         let floor = F::from(1e-300).unwrap_or(F::min_positive_value());
         let safe_e = err_norm.max(floor);
         let safe_ep = self.err_prev.max(floor);
-        let term_e = (tol / safe_e).powf(exp_e);
-        let term_ep = (tol / safe_ep).powf(exp_e);
-        let term_r = self.r_prev.powf(exp_r);
+        let term_e = (tol / safe_e).libm_powf(exp_e);
+        let term_ep = (tol / safe_ep).libm_powf(exp_e);
+        let term_r = self.r_prev.libm_powf(exp_r);
         let factor = safety * term_e * term_ep * term_r; // left-to-right
                                                          // Update state on accept only:
         self.err_prev = err_norm;
@@ -204,7 +204,7 @@ impl<F: SemiflowFloat> StepController<F> for H211bFilter<F> {
         let alpha = F::from(0.7).unwrap_or(F::one()) / p;
         let floor = F::from(1e-300).unwrap_or(F::min_positive_value());
         let safe_e = err_norm.max(floor);
-        safety * (tol / safe_e).powf(alpha)
+        safety * (tol / safe_e).libm_powf(alpha)
     }
 
     fn reset(&mut self) {

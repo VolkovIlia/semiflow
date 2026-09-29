@@ -26,6 +26,8 @@ use core::marker::PhantomData;
 
 use num_traits::{Float, One, ToPrimitive, Zero};
 
+use crate::float::SemiflowFloat;
+
 use crate::{
     approximation::ApproximationSubspace,
     chernoff::{ChernoffFunction, Growth},
@@ -376,7 +378,7 @@ fn taylor_scale<C: SemiflowComplex, const M: usize>(
         } else {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             {
-                (nf.log2().ceil() as u32).min(30)
+                (nf.libm_log2().ceil() as u32).min(30)
             }
         }
     };

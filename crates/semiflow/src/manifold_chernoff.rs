@@ -211,7 +211,7 @@ impl ChernoffFunction<f64> for ManifoldChernoff<Sphere2<f64>, f64> {
         for row in 0..ny {
             for col in 0..nx {
                 let theta = src.grid.x.x_at(col);
-                let sin_theta = theta.sin().max(1e-10); // guard pole
+                let sin_theta = theta.libm_sin().max(1e-10); // guard pole
                 let scale_phi = 2.0 * sqrt_tau / (r * sin_theta);
                 let val = apply_at_node(
                     &self.manifold,

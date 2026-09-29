@@ -141,8 +141,8 @@ where
             let (lam, dlam) = contour_node(scale, k, step);
             let r = self.resolve_lhp(lam, g)?;
             // weight = e^{λ t} · λ'(θ) · (2π/M) / (2π i) = e^{λt} λ' / (i M)
-            let weight =
-                (lam * t_f64).exp() * dlam * step / Complex::new(0.0, 2.0 * core::f64::consts::PI);
+            let weight = crate::complex_libm::exp(lam * t_f64) * dlam * step
+                / Complex::new(0.0, 2.0 * core::f64::consts::PI);
             for i in 0..n {
                 acc[i] += weight * r[i];
             }
@@ -228,10 +228,10 @@ fn lhp_thomas<F: SemiflowFloat>(
     let mut d_prime: Vec<Complex<f64>> = vec![Complex::new(0.0, 0.0); n];
     // Row 0 (boundary, no sub-diagonal).
     let piv0 = d_bnd;
-    if piv0.norm() < 1e-300 {
+    if crate::complex_libm::norm(piv0) < 1e-300 {
         return Err(SemiflowError::DomainViolation {
             what: "resolve_lhp: pivot near zero (λ on spectrum)",
-            value: piv0.norm(),
+            value: crate::complex_libm::norm(piv0),
         });
     }
     c_prime[0] = sup / piv0;
@@ -239,10 +239,10 @@ fn lhp_thomas<F: SemiflowFloat>(
     for k in 1..n {
         let dk = if k == n - 1 { d_bnd } else { d_int };
         let piv = dk - sub * c_prime[k - 1];
-        if piv.norm() < 1e-300 {
+        if crate::complex_libm::norm(piv) < 1e-300 {
             return Err(SemiflowError::DomainViolation {
                 what: "resolve_lhp: pivot near zero (λ on spectrum)",
-                value: piv.norm(),
+                value: crate::complex_libm::norm(piv),
             });
         }
         c_prime[k] = sup / piv;

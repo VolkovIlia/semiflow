@@ -48,7 +48,7 @@ pub(crate) fn cplx_diffuse_x1(
         g.axes[3].n,
         g.axes[4].n,
     ];
-    let sqrt2s = (sigma + sigma).sqrt();
+    let sqrt2s = crate::complex_libm::sqrt(sigma + sigma);
     let pi_inv_sqrt = 1.0 / libm::sqrt(core::f64::consts::PI);
     for i4 in 0..n4 {
         for i3 in 0..n3 {
@@ -104,7 +104,7 @@ pub(crate) fn cplx_diffuse_x2(
         g.axes[3].n,
         g.axes[4].n,
     ];
-    let sqrt2s = (sigma + sigma).sqrt();
+    let sqrt2s = crate::complex_libm::sqrt(sigma + sigma);
     let pi_inv_sqrt = 1.0 / libm::sqrt(core::f64::consts::PI);
     for i4 in 0..n4 {
         for i3 in 0..n3 {

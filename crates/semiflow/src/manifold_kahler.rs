@@ -121,8 +121,8 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for FubiniStudyCp1<F> {
             return Ok(());
         }
         // 4. Q = P·cos(α) + (V/|V|)·sin(α).
-        let ca = Float::cos(norm_v);
-        let sa = Float::sin(norm_v);
+        let ca = SemiflowFloat::libm_cos(norm_v);
+        let sa = SemiflowFloat::libm_sin(norm_v);
         let inv = F::one() / norm_v;
         let q = [
             p[0] * ca + v3[0] * inv * sa,
@@ -162,7 +162,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for FubiniStudyCp1<F> {
         let dot = (px[0] * qy[0] + px[1] * qy[1] + px[2] * qy[2])
             .min(F::one())
             .max(-F::one());
-        let psi = Float::acos(dot);
+        let psi = SemiflowFloat::libm_acos(dot);
         if Float::abs(psi) < F::epsilon() {
             out[0] = v[0];
             out[1] = v[1];
@@ -171,7 +171,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for FubiniStudyCp1<F> {
         let cx = px[1] * qy[2] - px[2] * qy[1];
         let cy = px[2] * qy[0] - px[0] * qy[2];
         let cz = px[0] * qy[1] - px[1] * qy[0];
-        let inv_sin = F::one() / Float::sin(psi);
+        let inv_sin = F::one() / SemiflowFloat::libm_sin(psi);
         let n = [cx * inv_sin, cy * inv_sin, cz * inv_sin];
         let w3 = rodrigues_3d::<F>(v3, n, psi);
         // Project w3 from T_y S² back to chart tangent at y.
@@ -191,9 +191,9 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for FubiniStudyCp1<F> {
         // √det g = 4/(1+r²)² for g_FS = 4/σ² * I; log = 2·log(2) - 2·log(1+r²).
         let two = F::one() + F::one();
         let r_sq = x[0] * x[0] + x[1] * x[1];
-        let log_two = Float::ln(two);
+        let log_two = SemiflowFloat::libm_ln(two);
         let sigma = F::one() + r_sq;
-        let log_sigma = Float::ln(sigma.max(F::epsilon()));
+        let log_sigma = SemiflowFloat::libm_ln(sigma.max(F::epsilon()));
         two * log_two - two * log_sigma
     }
 }

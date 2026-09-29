@@ -71,7 +71,7 @@ pub(super) fn fd9_generic<F: SemiflowFloat>(
         let k = from_f64::<F>(ks[j]);
         sum += c * f.sample_generic(x + k * delta)?;
     }
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok(sum / denom)
 }
 

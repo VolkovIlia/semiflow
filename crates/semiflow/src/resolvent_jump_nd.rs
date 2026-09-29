@@ -204,7 +204,8 @@ where
     for k in 0..m {
         let (lam, dlam) = contour_node(scale, k, step);
         let r = resolve_fn(lam, b)?;
-        let weight = (lam * t).exp() * dlam * step / Complex::new(0.0, 2.0 * core::f64::consts::PI);
+        let weight = crate::complex_libm::exp(lam * t) * dlam * step
+            / Complex::new(0.0, 2.0 * core::f64::consts::PI);
         for i in 0..n {
             acc[i] += weight * r[i];
         }

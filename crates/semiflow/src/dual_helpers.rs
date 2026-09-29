@@ -144,18 +144,18 @@ impl<F: SemiflowFloat> Float for Dual<F> {
     #[inline]
     fn powi(self, n: i32) -> Self {
         Self::new(
-            self.value.powi(n),
-            F::from(n).unwrap_or_else(F::zero) * self.value.powi(n - 1) * self.tangent,
+            self.value.libm_powi(n),
+            F::from(n).unwrap_or_else(F::zero) * self.value.libm_powi(n - 1) * self.tangent,
         )
     }
 
     /// powf: chain rule `p·u^(p-1)·u'`.
     #[inline]
     fn powf(self, p: Self) -> Self {
-        let v = self.value.powf(p.value);
+        let v = self.value.libm_powf(p.value);
         Self::new(
             v,
-            p.value * self.value.powf(p.value - F::one()) * self.tangent,
+            p.value * self.value.libm_powf(p.value - F::one()) * self.tangent,
         )
     }
 
@@ -169,39 +169,39 @@ impl<F: SemiflowFloat> Float for Dual<F> {
     /// §46.2 exp: `(eᵘ, eᵘ·u')`.
     #[inline]
     fn exp(self) -> Self {
-        let v = self.value.exp();
+        let v = self.value.libm_exp();
         Self::new(v, v * self.tangent)
     }
 
     /// exp2: `2^u·ln2·u'`.
     #[inline]
     fn exp2(self) -> Self {
-        let v = self.value.exp2();
-        let ln2 = F::from(2.0_f64.ln()).unwrap_or_else(F::zero);
+        let v = self.value.libm_exp2();
+        let ln2 = F::from(2.0_f64.libm_ln()).unwrap_or_else(F::zero);
         Self::new(v, v * ln2 * self.tangent)
     }
 
     /// §46.2 ln: `(ln u, u'/u)`.
     #[inline]
     fn ln(self) -> Self {
-        Self::new(self.value.ln(), self.tangent / self.value)
+        Self::new(self.value.libm_ln(), self.tangent / self.value)
     }
 
     /// log base b = ln/ln(base).
     #[inline]
     fn log(self, base: Self) -> Self {
-        self.ln() / base.ln()
+        self.libm_ln() / base.libm_ln()
     }
 
     #[inline]
     fn log2(self) -> Self {
-        let ln2 = F::from(2.0_f64.ln()).unwrap_or_else(F::zero);
-        Self::new(self.value.log2(), self.tangent / (self.value * ln2))
+        let ln2 = F::from(2.0_f64.libm_ln()).unwrap_or_else(F::zero);
+        Self::new(self.value.libm_log2(), self.tangent / (self.value * ln2))
     }
     #[inline]
     fn log10(self) -> Self {
-        let ln10 = F::from(10.0_f64.ln()).unwrap_or_else(F::zero);
-        Self::new(self.value.log10(), self.tangent / (self.value * ln10))
+        let ln10 = F::from(10.0_f64.libm_ln()).unwrap_or_else(F::zero);
+        Self::new(self.value.libm_log10(), self.tangent / (self.value * ln10))
     }
 
     #[allow(deprecated)]
@@ -213,7 +213,7 @@ impl<F: SemiflowFloat> Float for Dual<F> {
     /// cbrt: `u'/(3·u^(2/3))`.
     #[inline]
     fn cbrt(self) -> Self {
-        let v = self.value.cbrt();
+        let v = self.value.libm_cbrt();
         let three = F::from(3.0_f64).unwrap_or_else(F::one);
         Self::new(v, self.tangent / (three * v * v))
     }
@@ -221,44 +221,44 @@ impl<F: SemiflowFloat> Float for Dual<F> {
     /// hypot: `(x·x' + y·y')/hypot`.
     #[inline]
     fn hypot(self, o: Self) -> Self {
-        let v = self.value.hypot(o.value);
+        let v = self.value.libm_hypot(o.value);
         Self::new(v, (self.value * self.tangent + o.value * o.tangent) / v)
     }
 
     /// §46.2 sin: `(sin u, cos(u)·u')`.
     #[inline]
     fn sin(self) -> Self {
-        Self::new(self.value.sin(), self.value.cos() * self.tangent)
+        Self::new(self.value.libm_sin(), self.value.libm_cos() * self.tangent)
     }
     /// §46.2 cos: `(cos u, -sin(u)·u')`.
     #[inline]
     fn cos(self) -> Self {
-        Self::new(self.value.cos(), -self.value.sin() * self.tangent)
+        Self::new(self.value.libm_cos(), -self.value.libm_sin() * self.tangent)
     }
     /// tan: `u'/cos²(u)`.
     #[inline]
     fn tan(self) -> Self {
-        let c = self.value.cos();
-        Self::new(self.value.tan(), self.tangent / (c * c))
+        let c = self.value.libm_cos();
+        Self::new(self.value.libm_tan(), self.tangent / (c * c))
     }
     #[inline]
     fn asin(self) -> Self {
         Self::new(
-            self.value.asin(),
+            self.value.libm_asin(),
             self.tangent / (F::one() - self.value * self.value).sqrt(),
         )
     }
     #[inline]
     fn acos(self) -> Self {
         Self::new(
-            self.value.acos(),
+            self.value.libm_acos(),
             -self.tangent / (F::one() - self.value * self.value).sqrt(),
         )
     }
     #[inline]
     fn atan(self) -> Self {
         Self::new(
-            self.value.atan(),
+            self.value.libm_atan(),
             self.tangent / (F::one() + self.value * self.value),
         )
     }
@@ -267,55 +267,55 @@ impl<F: SemiflowFloat> Float for Dual<F> {
     fn atan2(self, o: Self) -> Self {
         let d = self.value * self.value + o.value * o.value;
         Self::new(
-            self.value.atan2(o.value),
+            self.value.libm_atan2(o.value),
             (o.value * self.tangent - self.value * o.tangent) / d,
         )
     }
     #[inline]
     fn sin_cos(self) -> (Self, Self) {
-        (self.sin(), self.cos())
+        (self.libm_sin(), self.libm_cos())
     }
 
     #[inline]
     fn exp_m1(self) -> Self {
-        Self::new(self.value.exp_m1(), self.value.exp() * self.tangent)
+        Self::new(self.value.libm_exp_m1(), self.value.libm_exp() * self.tangent)
     }
     #[inline]
     fn ln_1p(self) -> Self {
-        Self::new(self.value.ln_1p(), self.tangent / (F::one() + self.value))
+        Self::new(self.value.libm_ln_1p(), self.tangent / (F::one() + self.value))
     }
     #[inline]
     fn sinh(self) -> Self {
-        Self::new(self.value.sinh(), self.value.cosh() * self.tangent)
+        Self::new(self.value.libm_sinh(), self.value.libm_cosh() * self.tangent)
     }
     #[inline]
     fn cosh(self) -> Self {
-        Self::new(self.value.cosh(), self.value.sinh() * self.tangent)
+        Self::new(self.value.libm_cosh(), self.value.libm_sinh() * self.tangent)
     }
     /// tanh: `(1 - tanh²(u))·u'`.
     #[inline]
     fn tanh(self) -> Self {
-        let v = self.value.tanh();
+        let v = self.value.libm_tanh();
         Self::new(v, (F::one() - v * v) * self.tangent)
     }
     #[inline]
     fn asinh(self) -> Self {
         Self::new(
-            self.value.asinh(),
+            self.value.libm_asinh(),
             self.tangent / (self.value * self.value + F::one()).sqrt(),
         )
     }
     #[inline]
     fn acosh(self) -> Self {
         Self::new(
-            self.value.acosh(),
+            self.value.libm_acosh(),
             self.tangent / (self.value * self.value - F::one()).sqrt(),
         )
     }
     #[inline]
     fn atanh(self) -> Self {
         Self::new(
-            self.value.atanh(),
+            self.value.libm_atanh(),
             self.tangent / (F::one() - self.value * self.value),
         )
     }

@@ -396,7 +396,7 @@ fn trapezoid_weight<F: SemiflowFloat>(j: usize, m: usize, dt: F) -> F {
 /// Compute `exp(-x)`.
 #[inline]
 fn exp_neg<F: SemiflowFloat>(x: F) -> F {
-    (-x).exp()
+    (-x).libm_exp()
 }
 
 /// Run `n` Chernoff steps `(C(tau))^n g`, ping-ponging `buf_a`/`buf_b`.

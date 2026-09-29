@@ -117,13 +117,13 @@ fn axis_symbols<F: SemiflowFloat>(n: usize, dx: F) -> (Vec<F>, Vec<F>) {
     let sym_d2: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / nf;
-            (two * omega.cos() - two) / (dx * dx)
+            (two * omega.libm_cos() - two) / (dx * dx)
         })
         .collect();
     let sym_d1r: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / nf;
-            omega.sin() / dx
+            omega.libm_sin() / dx
         })
         .collect();
     (sym_d2, sym_d1r)
@@ -176,10 +176,10 @@ pub(crate) fn dense_expsym_nd<F: SemiflowFloat>(
         let sym_im = compute_sym_im(&modes, d, &sym_d1r, b);
 
         // expsym = exp(τ·sym_re) · (cos(τ·sym_im) + i·sin(τ·sym_im))
-        let exp_re = (tau * sym_re).exp();
+        let exp_re = (tau * sym_re).libm_exp();
         let phase = tau * sym_im;
-        out[2 * flat] = exp_re * phase.cos();
-        out[2 * flat + 1] = exp_re * phase.sin();
+        out[2 * flat] = exp_re * phase.libm_cos();
+        out[2 * flat + 1] = exp_re * phase.libm_sin();
     }
     out
 }

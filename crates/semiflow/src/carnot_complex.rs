@@ -157,7 +157,10 @@ impl State<f64> for CplxGridFn5 {
     }
 
     fn norm_sup(&self) -> f64 {
-        self.values.iter().map(|c| c.norm()).fold(0.0_f64, f64::max)
+        self.values
+            .iter()
+            .map(|c| crate::complex_libm::norm(*c))
+            .fold(0.0_f64, f64::max)
     }
 }
 

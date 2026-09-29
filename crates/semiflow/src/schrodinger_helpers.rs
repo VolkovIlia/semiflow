@@ -33,8 +33,8 @@ pub(crate) fn strang_first_v_rotation<F: SemiflowFloat>(
         let re_in = psi_re[i].to_f64().unwrap_or(0.0);
         let im_in = psi_im[i].to_f64().unwrap_or(0.0);
         let alpha = v_at_node[i].to_f64().unwrap_or(0.0) * half_tau_d;
-        let c = alpha.cos();
-        let s = alpha.sin();
+        let c = alpha.libm_cos();
+        let s = alpha.libm_sin();
         w[0][i] = c * re_in + s * im_in;
         w[1][i] = -s * re_in + c * im_in;
     }
@@ -55,8 +55,8 @@ pub(crate) fn strang_last_v_rotation_cast<F: SemiflowFloat>(
 ) {
     for i in 0..n {
         let alpha = v_at_node[i].to_f64().unwrap_or(0.0) * half_tau_d;
-        let c = alpha.cos();
-        let s = alpha.sin();
+        let c = alpha.libm_cos();
+        let s = alpha.libm_sin();
         let r_i = w[0][i];
         let m_i = w[1][i];
         dst_re[i] = F::from(c * r_i + s * m_i).unwrap_or_else(F::zero);

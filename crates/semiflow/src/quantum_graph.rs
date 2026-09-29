@@ -160,7 +160,7 @@ impl<F: SemiflowFloat> QuantumGraphSignal<F> {
             .map(|(e, g)| {
                 let off = offset;
                 offset += graph.edge_lengths[e];
-                GridFn1D::from_fn_generic(*g, |x| (k_f * pi * (off + x) / total).cos())
+                GridFn1D::from_fn_generic(*g, |x| (k_f * pi * (off + x) / total).libm_cos())
             })
             .collect();
         Self { per_edge }

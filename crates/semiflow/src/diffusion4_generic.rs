@@ -73,7 +73,7 @@ pub(super) fn fd7_generic<F: SemiflowFloat>(
         let k = from_f64::<F>(ks[j]);
         sum += c * f.sample_generic(x + k * delta)?;
     }
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok(sum / denom)
 }
 
@@ -88,7 +88,10 @@ pub(super) fn zeta4_correction_generic<F: SemiflowFloat>(
     let three = from_f64::<F>(3.0);
     let half_v = half::<F>();
     let quarter = half_v * half_v;
-    let delta = Float::max(three * dc.grid.dx(), Float::powf(tau, from_f64::<F>(0.75)));
+    let delta = Float::max(
+        three * dc.grid.dx(),
+        SemiflowFloat::libm_powf(tau, from_f64::<F>(0.75)),
+    );
 
     let a_x = (dc.a)(x);
     let a_prime_x = (dc.a_prime)(x);

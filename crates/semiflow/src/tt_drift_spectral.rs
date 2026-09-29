@@ -57,13 +57,13 @@ fn axis_symbols_drift<F: SemiflowFloat>(n: usize, dx: F) -> (Vec<F>, Vec<F>) {
     let sym_d2: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / from_f64::<F>(n as f64);
-            (two * omega.cos() - two) / (dx * dx)
+            (two * omega.libm_cos() - two) / (dx * dx)
         })
         .collect();
     let sym_d1r: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / from_f64::<F>(n as f64);
-            omega.sin() / dx
+            omega.libm_sin() / dx
         })
         .collect();
     (sym_d2, sym_d1r)
@@ -117,11 +117,11 @@ pub(crate) fn drift_pair_expsym_cplx<F: SemiflowFloat>(
             // Imaginary part: drift (i·b·σ_D1r on each axis).
             let sym_im = bj * sym_d1r_j[mj] + bk * sym_d1r_k[mk];
             // expsym = exp(τ·(sym_re + i·sym_im)) = e^(τ·sym_re)·e^(i·τ·sym_im)
-            let exp_re = (tau_eff * sym_re).exp();
+            let exp_re = (tau_eff * sym_re).libm_exp();
             let phase = tau_eff * sym_im;
             let idx = mj * n_k + mk;
-            out[2 * idx] = exp_re * phase.cos();
-            out[2 * idx + 1] = exp_re * phase.sin();
+            out[2 * idx] = exp_re * phase.libm_cos();
+            out[2 * idx + 1] = exp_re * phase.libm_sin();
         }
     }
     out
@@ -273,12 +273,12 @@ pub(crate) fn apply_drift_spectral_axis<F: SemiflowFloat>(
     for m in 0..n {
         let sym_re = a * sym_d2[m];
         let sym_im = b * sym_d1r[m];
-        let exp_re = (tau * sym_re).exp();
+        let exp_re = (tau * sym_re).libm_exp();
         let phase = tau * sym_im;
         let fre = cplx[2 * m];
         let fim = cplx[2 * m + 1];
-        let ere = exp_re * phase.cos();
-        let eim = exp_re * phase.sin();
+        let ere = exp_re * phase.libm_cos();
+        let eim = exp_re * phase.libm_sin();
         cplx[2 * m] = fre * ere - fim * eim;
         cplx[2 * m + 1] = fre * eim + fim * ere;
     }

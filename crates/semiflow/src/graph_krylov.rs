@@ -319,7 +319,7 @@ fn validate_tau<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
 /// Minimum degree m such that `e^{-z} · I_{m+1}(z) ≤ tol/4` (Bessel tail bound).
 fn chebyshev_degree<F: SemiflowFloat>(z: F, tol: F) -> usize {
     let threshold = tol / F::from(4.0_f64).unwrap();
-    let em_z = (-z).exp();
+    let em_z = (-z).libm_exp();
     let mut m = MIN_CHEB_DEGREE;
     while m < MAX_CHEB_DEGREE {
         if em_z * bessel_i_k(m + 1, z) <= threshold {

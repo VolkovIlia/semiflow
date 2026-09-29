@@ -20,7 +20,7 @@
         // Reference: compute separable symbol manually.
         let two_pi = core::f64::consts::TAU;
         let sym_d2: Vec<f64> = (0..n)
-            .map(|m| (2.0 * (two_pi * m as f64 / n as f64).cos() - 2.0) / (dx * dx))
+            .map(|m| (2.0 * (two_pi * m as f64 / n as f64).libm_cos() - 2.0) / (dx * dx))
             .collect();
         let nd = n.pow(d as u32);
         for flat in 0..nd {
@@ -31,7 +31,7 @@
                 sym_re += a_diag[j] * sym_d2[mj];
                 f /= n;
             }
-            let expected_re = (tau * sym_re).exp();
+            let expected_re = (tau * sym_re).libm_exp();
             let re = es_dense[2 * flat];
             let im = es_dense[2 * flat + 1];
             assert!(im.abs() < 1e-14, "im nonzero at flat={flat}: {im:.3e}");
@@ -82,9 +82,9 @@
         sym_re -= 2.0 * rho * sd1r[modes[0]] * sd1r[modes[1]];
         sym_re -= 2.0 * rho * sd1r[modes[1]] * sd1r[modes[2]];
         let sym_im: f64 = b.iter().zip(modes.iter()).map(|(&bj, &m)| bj * sd1r[m]).sum();
-        let exp_re = (tau * sym_re).exp();
+        let exp_re = (tau * sym_re).libm_exp();
         let phase = tau * sym_im;
-        (exp_re * phase.cos(), exp_re * phase.sin())
+        (exp_re * phase.libm_cos(), exp_re * phase.libm_sin())
     }
 
     /// Compare expsym against the adjacent-only reference formula (d=3 case).
@@ -102,8 +102,8 @@
         let two_pi = core::f64::consts::TAU;
         let nf = n as f64;
         let sd2: Vec<f64> =
-            (0..n).map(|m| (2.0 * (two_pi * m as f64 / nf).cos() - 2.0) / (dx * dx)).collect();
-        let sd1r: Vec<f64> = (0..n).map(|m| (two_pi * m as f64 / nf).sin() / dx).collect();
+            (0..n).map(|m| (2.0 * (two_pi * m as f64 / nf).libm_cos() - 2.0) / (dx * dx)).collect();
+        let sd1r: Vec<f64> = (0..n).map(|m| (two_pi * m as f64 / nf).libm_sin() / dx).collect();
         let nd = n.pow(d as u32);
         for flat in 0..nd {
             let mut f = flat;

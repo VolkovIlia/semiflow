@@ -384,7 +384,7 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
             let mut b_val = [F::zero(); D];
             (self.b_i)(&xk, &mut b_val);
             let c_val = (self.c)(&xk);
-            let exp_factor = (tau * c_val).exp();
+            let exp_factor = (tau * c_val).libm_exp();
             let l_k = &self.cholesky_cache[flat];
             let mut acc = F::zero();
             for qi in 0..n_q {

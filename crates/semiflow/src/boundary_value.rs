@@ -73,7 +73,7 @@ pub(crate) fn bc_value_from_hit<F: SemiflowFloat, G: Fn(usize) -> F>(
             let two = F::from(2.0_f64).unwrap_or_else(F::zero);
             let d_f = F::from(f64::from(depth)).unwrap_or_else(F::zero);
             let exponent = -(two * (alpha / beta) * d_f * dx);
-            exponent.exp() * get(reflected)
+            exponent.libm_exp() * get(reflected)
         }
         // Odd-image: negate the mirrored interior value (ADR-0176, math §21.9).
         BoundaryHit::OddReflected { reflected } => F::zero() - get(reflected),

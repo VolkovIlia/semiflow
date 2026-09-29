@@ -3,6 +3,10 @@
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// ADR-0200: every transcendental goes through `SemiflowFloat::libm_*` /
+// `complex_libm`, so std and no_std builds produce identical bits. Unit tests
+// may use platform math for their oracles.
+#![cfg_attr(not(test), deny(clippy::disallowed_methods))]
 
 extern crate alloc;
 
@@ -34,6 +38,7 @@ pub mod carnot_stepk;
 pub(crate) mod carnot_stepk_helpers;
 pub mod chernoff;
 pub mod complex;
+pub(crate) mod complex_libm;
 pub mod conservative;
 pub mod conservative_assemble;
 pub mod controller;

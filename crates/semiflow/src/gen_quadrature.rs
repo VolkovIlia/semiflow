@@ -20,6 +20,8 @@ use alloc::{vec, vec::Vec};
 #[allow(unused_imports)]
 use num_traits::Float;
 
+use crate::float::SemiflowFloat;
+
 // ─── Symmetric tridiagonal eigensolver (Golub-Welsch) ────────────────────────
 
 /// QL with implicit Wilkinson shifts for a symmetric n×n tridiagonal (n ≤ 32).
@@ -229,5 +231,5 @@ pub(crate) fn ig_density_std(v: f64, kappa: f64) -> f64 {
     if exponent < -700.0 {
         return 0.0;
     }
-    (kappa / (2.0 * core::f64::consts::PI)).sqrt() * v.powf(-1.5) * libm::exp(exponent)
+    (kappa / (2.0 * core::f64::consts::PI)).sqrt() * v.libm_powf(-1.5) * libm::exp(exponent)
 }
