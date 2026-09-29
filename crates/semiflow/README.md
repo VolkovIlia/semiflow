@@ -90,9 +90,10 @@ What that means in practice:
   `a` extension, `x86_64-unknown-none` and similar work; `thumbv6m` does not.
 - `SemiflowError` implements `Debug` and `Display`; the `std::error::Error`
   impl needs the `std` feature.
-- `f32`/`f64` transcendentals come from the pure-Rust [`libm`](https://crates.io/crates/libm);
-  with `std` they come from the platform math library. Results can differ in
-  the last bits between the two builds; every accuracy guarantee holds for both.
+- `f32`/`f64` transcendentals come from the pure-Rust [`libm`](https://crates.io/crates/libm)
+  in every build, and the SIMD kernels use the same lane arithmetic with or
+  without intrinsics, so `std`, `no_std`, `simd` and non-`simd` builds give
+  bit-identical results on every CPU.
 - `simd` and `parallel` require `std`.
 
 This is verified on every pull request, not just type-checked:
@@ -101,15 +102,16 @@ This is verified on every pull request, not just type-checked:
 |--------|----------------|
 | `no-std` | `cargo build --no-default-features` for the host, `thumbv7em-none-eabihf`, `thumbv7m-none-eabi`, and at MSRV 1.78 |
 | `no-std-test` | the full `semiflow` test suite passes with the crate built `no_std` |
-| `no-std-libm` | [`semiflow-nostd-check`](https://github.com/VolkovIlia/semiflow/blob/master/crates/semiflow-nostd-check) — closed-form oracle checks with the math provably routed through `libm` (the job fails if anything enables `num-traits/std`) |
-| `no-std-qemu` | the same checks as a bare-metal `#![no_main]` binary on Cortex-M3 (soft float) and Cortex-M4F (hard float) under QEMU — see [`nostd-qemu`](https://github.com/VolkovIlia/semiflow/blob/master/nostd-qemu/README.md) |
+| `no-std-libm` | [`semiflow-nostd-check`](https://github.com/VolkovIlia/semiflow/blob/master/crates/semiflow-nostd-check) — closed-form oracle checks plus per-scenario output digests: the `no_std` build (the job fails if anything enables `num-traits/std`), the default `std` + `simd` build and its AVX2 lanes must all produce the committed bits |
+| `no-std-libm-neon` | the same digests from the default build on aarch64 (NEON lanes) |
+| `no-std-qemu` | the same checks and digests as a bare-metal `#![no_main]` binary on Cortex-M3 (soft float) and Cortex-M4F (hard float) under QEMU — see [`nostd-qemu`](https://github.com/VolkovIlia/semiflow/blob/master/nostd-qemu/README.md) |
 
 ## Feature flags
 
 | Feature | Default | Effect |
 |---------|---------|--------|
-| `simd` | yes | AVX2 (x86_64) / NEON (aarch64) kernels, scalar fallback elsewhere. Results agree with a non-`simd` build to rounding, not always bit for bit. Implies `std`. |
-| `std` | no | Links `std`: `std::error::Error` for `SemiflowError` and the platform math library for `f32`/`f64`. Without it the crate is `no_std + alloc` and uses `libm`. |
+| `simd` | yes | AVX2 (x86_64) / NEON (aarch64) kernels, scalar lanes elsewhere. Results are bit-identical to a non-`simd` build. Implies `std`. |
+| `std` | no | Links `std`: `std::error::Error` for `SemiflowError`. Math is `libm` either way, so results do not change. Without it the crate is `no_std + alloc`. |
 | `parallel` | no | Multi-threaded `apply` for 1D kernels and 2D/3D compositions via `std::thread::scope`; bit-identical across thread counts. Implies `std`; not for `wasm32`. |
 | `linear-interp` | no | Enables `InterpKind::Linear` grid sampling (otherwise it returns `SemiflowError::Unsupported`). |
 | `s3-poc` | no | Experimental S³ evolvers with a proven-boundary API (ADR-0169). |

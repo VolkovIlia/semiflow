@@ -7,18 +7,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 CI, documentation and contract hygiene, plus two library changes: the `no_std`
-build fix (#40) and the `std` feature now selecting the platform math library
-(see Changed). No ABI change, and no gate threshold or tolerance changes.
+build fix (#40) and one math backend for every build, so `std` and `no_std`
+results are bit-identical (see Changed). No ABI change, and no gate threshold
+or tolerance changes.
 
 ### Changed
 
-- **The `std` feature now enables `num-traits/std` and `num-complex/std`
-  (ADR-0200).** Before this, a default-feature build computed every generic
-  transcendental (`exp`, `powf`, `sin`, … via `num_traits::Float`) with the
-  pure-Rust `libm`, while the test suite ran with the platform math library,
-  which its dev-dependencies switch on. Shipped builds now compute exactly
-  what the tests verify. Results for `std` users can change in the last bits
-  compared with 0.13.1-beta. `no_std` builds are unchanged (they use `libm`).
+- **`std` and `no_std` builds produce identical bits (ADR-0200).** Before
+  this, `std` builds computed generic transcendentals (`exp`, `powf`, `sin`, …
+  via `num_traits::Float`, and `num_complex::Complex::{exp, sqrt, norm}`) with
+  whichever backend num-traits resolved to — the platform library in test
+  builds, CPU-dependent through glibc IFUNC — and `no_std` builds with `libm`;
+  without the `simd` feature, the lane kernels (Catmull-Rom, 9-point FD,
+  septic/octonic Hermite derivatives, cached G⁴ stencil) ran separate scalar
+  code that summed in a different order. Now:
+  - every transcendental goes through the new `SemiflowFloat::libm_*` methods
+    (`libm` for `f32`/`f64`; `Dual<F>` applies them to its components) and
+    complex ones through num-complex's formulas on top of them;
+    `clippy::disallowed_methods` forbids the platform-dependent originals;
+  - the portable lanes compile in every build, and the G⁴ scalar fallback
+    mirrors the AVX2/NEON arithmetic operation for operation;
+  - `crates/semiflow-nostd-check` hashes each scenario's output and CI
+    requires the same committed digests from the `no_std` build, the `std` +
+    `simd` build (`--features std-ref`), AVX2, aarch64 NEON and QEMU
+    Cortex-M3/M4F.
+
+  `std` results can change in the last bits compared with 0.13.1-beta. The
+  `std` feature still enables `num-traits/std` and `num-complex/std`; that now
+  only affects downstream code calling `Float` directly.
 
 - **One source for every published README.** `docs/readme/` is rendered by
   `cargo xtask readme` into the GitHub, crates.io/docs.rs, PyPI and npm
@@ -46,7 +62,9 @@ build fix (#40) and the `std` feature now selecting the platform math library
   New CI jobs:
   - `no-std-test` runs the full suite with the crate built `#![no_std]`.
   - `no-std-libm` runs `crates/semiflow-nostd-check` (closed-form oracle
-    scenarios) with `num-traits` provably without `std`.
+    scenarios plus output digests) with `num-traits` provably without `std`,
+    then with `--features std-ref` and with AVX2; `no-std-libm-neon` repeats
+    it on aarch64.
   - `no-std-qemu` runs the same scenarios as a bare-metal binary on Cortex-M3
     and Cortex-M4F under QEMU (`nostd-qemu/`).
   - `no-std` now builds for the host, `thumbv7em-none-eabihf`,
