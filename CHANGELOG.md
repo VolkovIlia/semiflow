@@ -6,11 +6,80 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Mostly CI and contract hygiene. The one library change is the `no_std` build
-fix (#40), and it changes no numerics in the default `std` build. No ABI change,
-and no gate threshold or tolerance changes.
+CI, documentation and contract hygiene, plus two library changes: the `no_std`
+build fix (#40) and the `std` feature now selecting the platform math library
+(see Changed). No ABI change, and no gate threshold or tolerance changes.
+
+### Changed
+
+- **The `std` feature now enables `num-traits/std` and `num-complex/std`
+  (ADR-0200).** Before this, a default-feature build computed every generic
+  transcendental (`exp`, `powf`, `sin`, … via `num_traits::Float`) with the
+  pure-Rust `libm`, while the test suite ran with the platform math library,
+  which its dev-dependencies switch on. Shipped builds now compute exactly
+  what the tests verify. Results for `std` users can change in the last bits
+  compared with 0.13.1-beta. `no_std` builds are unchanged (they use `libm`).
+
+- **One source for every published README.** `docs/readme/` is rendered by
+  `cargo xtask readme` into the GitHub, crates.io/docs.rs, PyPI and npm
+  READMEs. Versions, MSRV, dependencies, feature flags, the Python
+  class/function inventory and the WASM class tables (lite vs `full`) are
+  computed from the manifests and sources. `cargo xtask readme --check` fails
+  CI on drift. The docs.rs front page is the crate README (its Rust examples
+  are doctests). The Python and Node.js examples are executed in CI
+  (`test_readme_examples.py`, `xtask readme-examples-js`).
+
+- **`doc-check` covers names and versions across user docs.** It now covers
+  top-level `docs/*.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CITATION.cff` and
+  `.zenodo.json`. It rejects the pre-rebrand names (`semiflow_core`,
+  `semiflow-core`, `remizovcore`), stale `semiflow = "…"` requirements, and
+  install commands naming anything but `@semiflow/wasm` / `semiflow-pde`.
 
 ### Fixed
+
+- **`no_std` is now verified by execution, not just type-checked.** The
+  previous state:
+  - `cargo test --no-default-features` did not compile.
+  - Nothing executed the `libm` math that `no_std` users get, because test
+    builds always load `std` through dev-dependencies.
+
+  New CI jobs:
+  - `no-std-test` runs the full suite with the crate built `#![no_std]`.
+  - `no-std-libm` runs `crates/semiflow-nostd-check` (closed-form oracle
+    scenarios) with `num-traits` provably without `std`.
+  - `no-std-qemu` runs the same scenarios as a bare-metal binary on Cortex-M3
+    and Cortex-M4F under QEMU (`nostd-qemu/`).
+  - `no-std` now builds for the host, `thumbv7em-none-eabihf`,
+    `thumbv7m-none-eabi` and at MSRV.
+
+  Targets without pointer-sized atomics (e.g. `thumbv6m`) now get a clear
+  `compile_error!` instead of dozens of `alloc::sync` errors.
+
+- **User documentation matched reality again.** Fixes include:
+  - `use semiflow_core::…` in the front-page quickstart and guides.
+  - Stale versions: `semiflow = "0.9"`, `"9"`, `v0.9.0-beta`.
+  - `npm install semiflow` → `@semiflow/wasm`.
+  - Wrong Python signatures and kernel names.
+  - "Rust-only" claims about classes Python exports.
+  - Stale SECURITY/CITATION/Zenodo metadata.
+  - A "Production/Stable" PyPI classifier on a beta.
+  - The claim that `simd` is bit-identical to the scalar path. The Catmull-Rom
+    interpolant evaluates the same polynomial in a different arrangement, so
+    builds with and without `simd` agree to rounding only.
+  - A C build recipe using `--release` (`panic = "abort"`, which defeats the
+    `catch_unwind` boundary) instead of `--profile release-ffi`.
+
+  Executing the README examples found a JS quickstart that was a syntax error
+  (`-x ** 2`).
+
+- **Python: `SemiflowError.kind` now exists.** The class docstring, the `.pyi`
+  stub and the README all document a `kind` attribute; it was only ever present
+  as the `[Kind] ` message prefix (kept for compatibility).
+
+- **Python: `ReverseHeat1D` was not importable.** It was registered in the
+  native module but missing from `semiflow/__init__.py`, so
+  `from semiflow import ReverseHeat1D` raised `ImportError`. The new
+  `tests/test_public_exports.py` fails if any native class is not re-exported.
 
 - **The `no_std` build (`--no-default-features`) did not compile (#40).** Plain
   `f64` receivers called `std`-only methods (`sqrt`, `ceil`, `floor`, `round`,
