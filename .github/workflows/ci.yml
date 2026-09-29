@@ -42,6 +42,10 @@ jobs:
       # too slow for every PR. Actually BUILDING and RUNNING the gates is the
       # `gate-sweep` job in flagship-gates.yml (nightly + release tags).
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # ADR-0200: clippy.toml's `disallowed_methods` ban on platform-dependent
+      # transcendentals must also hold in the no_std configuration, where every
+      # concrete-f64 math call resolves through `num_traits::Float`.
+      - run: cargo clippy -p semiflow -p semiflow-nostd-check --no-default-features --features semiflow/linear-interp,semiflow/s3-poc --lib -- -D warnings
 
   test:
     runs-on: ${{ matrix.os }}
@@ -115,9 +119,10 @@ jobs:
   no-std-libm:
     # `no-std` above only compiles. This job runs semiflow scenarios in a
     # `no_std` build (crates/semiflow-nostd-check depends on semiflow alone,
-    # default features off), so f64 math really goes through `libm`. The
-    # feature check guards that: any dependency enabling `num-traits/std`
-    # would silently switch the check back to the platform math library.
+    # default features off) and compares each scenario's output digest with
+    # the committed table. The same table must come out of the `std-ref`
+    # build (semiflow's default std + simd features, `num-traits/std` on) and
+    # of the AVX2 lanes: std and no_std are bit-identical (ADR-0200).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,11 +138,31 @@ jobs:
           fi
           grep -q 'num-traits feature "libm"' <<<"$tree"
       - run: cargo test -p semiflow-nostd-check --release
+      - name: std-ref really enables num-traits/std
+        run: |
+          tree="$(cargo tree -p semiflow-nostd-check --features std-ref -e features,no-dev -i num-traits)"
+          echo "$tree"
+          grep -q 'num-traits feature "std"' <<<"$tree"
+      - run: cargo test -p semiflow-nostd-check --release --features std-ref
+      - name: std-ref with AVX2 lanes
+        # RUSTFLAGS replaces .cargo/config.toml's rustflags, hence `-D warnings` here.
+        run: |
+          grep -q avx2 /proc/cpuinfo || { echo "::error::runner lacks AVX2"; exit 1; }
+          RUSTFLAGS="-D warnings -C target-cpu=x86-64-v3" cargo test -p semiflow-nostd-check --release --features std-ref
+
+  no-std-libm-neon:
+    # The digest table again, with semiflow's NEON lanes (aarch64 std build).
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p semiflow-nostd-check --release --features std-ref
 
   no-std-qemu:
     # The same scenarios on bare-metal Cortex-M3 (soft-float) and Cortex-M4F
     # under QEMU; see nostd-qemu/README.md. The binary exits non-zero on any
-    # failed tolerance, panic, allocation failure or HardFault.
+    # failed tolerance, digest mismatch, panic, allocation failure or HardFault.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

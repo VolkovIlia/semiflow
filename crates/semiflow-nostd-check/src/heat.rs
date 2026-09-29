@@ -1,11 +1,12 @@
 //! 1-D heat-equation scenarios against the Gaussian / cosine closed forms.
 
 use semiflow::{
-    chernoff::ApplyChernoffExt, ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff,
-    Grid1D, GridFn1D, ShiftChernoff1D, StrangSplit, TruncatedExpDiffusionChernoff,
+    chernoff::ApplyChernoffExt, ChernoffSemigroup, Diffusion6thChernoff, DiffusionChernoff,
+    DriftReactionChernoff, Evolver, Grid1D, GridFn1D, InterpKind, SemiflowFloat, ShiftChernoff1D,
+    StrangSplit, TruncatedExp4WithCache, TruncatedExpDiffusionChernoff,
 };
 
-use crate::{check, m, sup_diff, ScenarioResult};
+use crate::{check, digest_of, m, sup_diff, Digest, ScenarioResult};
 
 /// Diffusion coefficient: `∂_t u = A ∂_xx u` with `A = ½`.
 const A: f64 = 0.5;
@@ -44,7 +45,7 @@ pub(crate) fn shift1d_heat() -> ScenarioResult {
     let func = ShiftChernoff1D::new(|_| A, |_| 0.0, |_| 0.0, 0.0, grid);
     let semi = ChernoffSemigroup::new(func, 100)?;
     let u = semi.evolve(T, &gauss0(grid))?;
-    check(err_vs(&u, |x| gauss_heat(T, x)), 5e-4)
+    check(err_vs(&u, |x| gauss_heat(T, x)), 5e-4, digest_of(&u.values))
 }
 
 /// `DiffusionChernoff` heat flow vs the same Gaussian oracle.
@@ -59,7 +60,7 @@ pub(crate) fn diffusion_heat() -> ScenarioResult {
     let func = DiffusionChernoff::new(|_| A, |_| 0.0, |_| 0.0, A, grid);
     let semi = ChernoffSemigroup::new(func, 20)?;
     let u = semi.evolve(T, &gauss0(grid))?;
-    check(err_vs(&u, |x| gauss_heat(T, x)), 1e-4)
+    check(err_vs(&u, |x| gauss_heat(T, x)), 1e-4, digest_of(&u.values))
 }
 
 /// Constant decay rate for the Strang scenario (`c(x) = -½`).
@@ -78,7 +79,11 @@ pub(crate) fn strang_heat_decay() -> ScenarioResult {
     let react = DriftReactionChernoff::new(|_| 0.0, |_| DECAY, -DECAY, grid);
     let semi = ChernoffSemigroup::new(StrangSplit::new(diff, react), 20)?;
     let u = semi.evolve(T, &gauss0(grid))?;
-    check(err_vs(&u, |x| gauss_heat(T, x) * m::exp(DECAY * T)), 2e-5)
+    check(
+        err_vs(&u, |x| gauss_heat(T, x) * m::exp(DECAY * T)),
+        2e-5,
+        digest_of(&u.values),
+    )
 }
 
 /// `TruncatedExpDiffusionChernoff` heat flow of `cos(πx)` on `[-1, 1]`.
@@ -106,5 +111,121 @@ pub(crate) fn truncated_exp_heat() -> ScenarioResult {
         u = func.apply_chernoff(tau, &u)?;
     }
     let decay = m::exp(-PI * PI * A * T_TE);
-    check(err_vs(&u, |x| decay * m::cos(PI * x)), 5e-4)
+    check(
+        err_vs(&u, |x| decay * m::cos(PI * x)),
+        5e-4,
+        digest_of(&u.values),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Lane kernels (`semiflow::simd` portable lanes; AVX2/NEON under `simd`).
+// Each runs in every build, so its digest pins the lane arithmetic too.
+// ---------------------------------------------------------------------------
+
+/// Gaussian heat flow of `func` with `steps` steps to `T`, checked against
+/// [`gauss_heat`].
+fn gauss_flow<C>(func: C, grid: Grid1D, steps: usize, tol: f64) -> ScenarioResult
+where
+    C: semiflow::ChernoffFunction<f64, S = GridFn1D>,
+{
+    let semi = ChernoffSemigroup::new(func, steps)?;
+    let u = semi.evolve(T, &gauss0(grid))?;
+    check(err_vs(&u, |x| gauss_heat(T, x)), tol, digest_of(&u.values))
+}
+
+/// `TruncatedExp4WithCache` (cached G⁴ stencil: 4-node lane kernel
+/// `apply_g4_4nodes_simd`; default `SepticHermite` sampling at the ends).
+///
+/// Constructor of `tests/truncated_exp4_simd_bit_equal.rs` with constant
+/// `a = ½`; `[-10, 10]`, 201 nodes. The 4th-order CFL `τ < 3dx²/(8A) = 0.0075`
+/// needs `n ≥ 134` steps for `T = 1`; `n = 200` (`τ = 0.005`). Measured
+/// `1.42e-6`; tolerance `3e-6`.
+pub(crate) fn texp4_cached_heat() -> ScenarioResult {
+    let grid = Grid1D::new(-L, L, NODES)?;
+    let func = TruncatedExp4WithCache::with_cached_coefficients(|_| A, |_| 0.0, |_| 0.0, A, grid);
+    gauss_flow(func, grid, 200, 3e-6)
+}
+
+/// Amplitude of the `a(x)` perturbation that makes `a′, a″ ≠ 0`, so
+/// `Diffusion6thChernoff` evaluates its ζ⁶ correction (9-point FD lanes).
+const EPS: f64 = 1e-3;
+
+/// `Diffusion6thChernoff<f64>` (`fd9_simd`: `F64x4` 4+4+1 stencil).
+///
+/// Constructor of `tests/simd_bit_equal.rs` (`a = ½ + ε sin x`, `ε = 10⁻³`
+/// keeps the correction term live); oracle is the constant-`A` Gaussian flow,
+/// so the error includes the `O(ε)` model difference. `[-10, 10]`, 201 nodes,
+/// `n = 20`. Measured `1.71e-4`; tolerance `4e-4`.
+pub(crate) fn diffusion6_heat_f64() -> ScenarioResult {
+    let grid = Grid1D::new(-L, L, NODES)?;
+    let func = Diffusion6thChernoff::new(
+        |x| A + EPS * m::sin(x),
+        |x| EPS * m::cos(x),
+        |x| -EPS * m::sin(x),
+        A + EPS,
+        grid,
+    );
+    gauss_flow(func, grid, 20, 4e-4)
+}
+
+/// `Diffusion6thChernoff<f32>` on a `CubicHermite` grid (`catmull_rom_f32`:
+/// `F32x4` lanes; `fd9_simd_f32`: `F32x8` 8+1 stencil).
+///
+/// Constructor of `tests/simd_bit_equal_f32.rs` (`new_generic`,
+/// `InterpKind::CubicHermite`) with the `a` of [`diffusion6_heat_f64`];
+/// error measured in `f64` against [`gauss_heat`]. `[-10, 10]`, 201 nodes,
+/// `n = 20`. Measured `1.84e-4`; tolerance `4e-4`.
+pub(crate) fn diffusion6_catmull_f32() -> ScenarioResult {
+    const A32: f32 = 0.5;
+    const EPS32: f32 = 1e-3;
+    const L32: f32 = 10.0;
+    let grid = Grid1D::<f32>::new_generic(-L32, L32, NODES)?.with_interp(InterpKind::CubicHermite);
+    let func = Diffusion6thChernoff::<f32>::new_generic(
+        |x: f32| A32 + EPS32 * x.libm_sin(),
+        |x: f32| EPS32 * x.libm_cos(),
+        |x: f32| -EPS32 * x.libm_sin(),
+        A + EPS,
+        grid,
+    );
+    let evolver = Evolver::new(func, 20)?;
+    #[allow(clippy::cast_possible_truncation)]
+    let u0 =
+        GridFn1D::<f32>::from_fn_generic(grid, |x| m::exp(-f64::from(x) * f64::from(x)) as f32);
+    #[allow(clippy::cast_possible_truncation)] // T = 1
+    let state = evolver.evolve(T as f32, &u0)?;
+    let mut digest = Digest::new();
+    let mut err: f64 = 0.0;
+    for (i, &val) in state.values.iter().enumerate() {
+        let val = f64::from(val);
+        digest.push(val);
+        let diff = m::abs(val - gauss_heat(T, f64::from(grid.x_at(i))));
+        err = if diff.is_nan() || err.is_nan() {
+            f64::NAN
+        } else {
+            err.max(diff)
+        };
+    }
+    check(err, 4e-4, digest.finish())
+}
+
+/// `ShiftChernoff1D` on a `CubicHermite` grid (`catmull_rom`: `F64x4` lanes).
+///
+/// [`shift1d_heat`] with `InterpKind::CubicHermite` and `n = 20`. Measured
+/// `1.58e-3`; tolerance `4e-3`.
+pub(crate) fn cubic_hermite_heat() -> ScenarioResult {
+    let grid = Grid1D::new(-L, L, NODES)?.with_interp(InterpKind::CubicHermite);
+    let func = ShiftChernoff1D::new(|_| A, |_| 0.0, |_| 0.0, 0.0, grid);
+    gauss_flow(func, grid, 20, 4e-3)
+}
+
+/// `ShiftChernoff1D` on an `OctonicHermite` grid (`fd_scaled_prime` of
+/// `grid_chebyshev_octonic.rs`: `F64x4` 4+4+1 stencil).
+///
+/// [`shift1d_heat`] with `InterpKind::OctonicHermite` and `n = 20`. Measured
+/// `1.61e-3`; tolerance `4e-3`.
+pub(crate) fn octonic_heat() -> ScenarioResult {
+    let grid = Grid1D::new(-L, L, NODES)?.with_interp(InterpKind::OctonicHermite);
+    let func = ShiftChernoff1D::new(|_| A, |_| 0.0, |_| 0.0, 0.0, grid);
+    gauss_flow(func, grid, 20, 4e-3)
 }

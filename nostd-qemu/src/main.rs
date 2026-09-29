@@ -95,10 +95,11 @@ fn report(
 ) {
     match result {
         Ok(o) => hprintln!(
-            "PASS {} err={:e} tol={:e} heap_peak={} leaked={} time={}",
+            "PASS {} err={:e} tol={:e} digest=0x{:016x} heap_peak={} leaked={} time={}",
             scenario.name,
             o.err,
             o.tol,
+            o.digest,
             peak,
             HEAP.used(),
             elapsed

@@ -10,7 +10,7 @@ use semiflow::{
     ScratchPool, SmolyakGridND,
 };
 
-use crate::{check, m, sup_diff, Failure, ScenarioResult};
+use crate::{check, digest_of, m, sup_diff, Digest, Failure, ScenarioResult};
 
 /// Reaction coefficient `c(x)` as a plain function pointer.
 type Reaction = fn(f64) -> f64;
@@ -42,8 +42,10 @@ pub(crate) fn subordinated_gamma() -> ScenarioResult {
     let sub = GammaSubordinator::new(1.0)?;
     let cases: [(Reaction, f64); 2] = [(|_| -4.0, 4.0), (|_| -16.0, 16.0)];
     let mut err: f64 = 0.0;
+    let mut digest = Digest::new();
     for (c_fn, lam) in cases {
         let f = subordinated_run(c_fn, lam)?;
+        digest.push(f);
         let exact = m::exp(-sub.laplace_exponent(lam));
         let wrong = m::exp(-sub.laplace_exponent(1.0) * lam);
         let e = m::abs(f - exact);
@@ -54,7 +56,7 @@ pub(crate) fn subordinated_gamma() -> ScenarioResult {
         }
         err = err.max(e);
     }
-    check(err, 5e-3)
+    check(err, 5e-3, digest.finish())
 }
 
 /// `GridlessChernoff` particle ensemble in D = 2 (`WeightedVoronoi`
@@ -85,10 +87,22 @@ pub(crate) fn gridless_moments() -> ScenarioResult {
         return Err(Failure::Invariant("gridless: Dirac count outside [2, cap]"));
     }
     let mean = src.first_moment();
+    let var = src.variance_per_axis();
     let err = m::abs(src.total_variation() - 1.0)
         .max(m::abs(mean[0] - B[0]))
         .max(m::abs(mean[1] - B[1]));
-    check(err, 1e-12)
+    #[allow(clippy::cast_precision_loss)] // n_diracs ≤ cap = 64
+    let count = src.n_diracs() as f64;
+    let digest = digest_of(&[
+        src.total_variation(),
+        mean[0],
+        mean[1],
+        src.second_moment(),
+        var[0],
+        var[1],
+        count,
+    ]);
+    check(err, 1e-12, digest)
 }
 
 /// Step size and count for the Smolyak scenario (`t = 0.2`).
@@ -129,7 +143,11 @@ pub(crate) fn smolyak_heat_d2() -> ScenarioResult {
     }
     let s = 1.0 + 4.0 * SM_TAU * f64::from(SM_STEPS);
     let exact = GridFnND::from_fn(grid, |x| m::exp(-(x[0] * x[0] + x[1] * x[1]) / s) / s);
-    check(sup_diff(&src.values, &exact.values), 1e-3)
+    check(
+        sup_diff(&src.values, &exact.values),
+        1e-3,
+        digest_of(&src.values),
+    )
 }
 
 /// Parameters of `tests/g_reverse_ad.rs`, except 64 grid nodes instead of 128
@@ -207,11 +225,12 @@ pub(crate) fn reverse_ad_sqrt_n() -> ScenarioResult {
         - 8.0 * loss_at(THETA0 - h, tau)?
         + loss_at(THETA0 - 2.0 * h, tau)?)
         / (12.0 * h);
-    check(m::abs(rev - fd) / m::abs(fd), 1e-9)?;
+    let digest = digest_of(&[rev, fwd, fd]);
+    check(m::abs(rev - fd) / m::abs(fd), 1e-9, digest)?;
     if rev.to_bits() == fwd.to_bits() {
         return Err(Failure::Invariant(
             "reverse == forward bit-exactly (tautology)",
         ));
     }
-    check(m::abs(rev - fwd) / m::abs(fwd), 1e-12)
+    check(m::abs(rev - fwd) / m::abs(fwd), 1e-12, digest)
 }

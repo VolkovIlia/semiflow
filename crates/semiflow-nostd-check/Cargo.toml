@@ -1,6 +1,6 @@
 [package]
 name = "semiflow-nostd-check"
-description = "Runs semiflow scenarios with closed-form oracles in a no_std build, so f64 math goes through libm (host and bare-metal)"
+description = "Runs semiflow scenarios with closed-form oracles in a no_std build (host and bare-metal) and proves std/no_std bit-identity by output digests"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,14 +9,20 @@ authors.workspace = true
 repository.workspace = true
 publish = false
 
-# Only `semiflow`, with default features off, so nothing in this package's
-# dependency graph enables `num-traits/std`: the arithmetic under test is the
-# `libm` backend. Do NOT add dependencies or dev-dependencies here — any crate
-# that turns on `num-traits/std` (statrs, nalgebra, criterion, ...) silently
-# switches semiflow back to the platform math library. CI checks this with
-# `cargo tree -p semiflow-nostd-check -e features,no-dev -i num-traits`.
+# Only `semiflow`, with default features off, so the default run is the true
+# `no_std` configuration: nothing in this package's dependency graph enables
+# `std` or `num-traits/std`. Do NOT add dependencies or dev-dependencies here —
+# a crate that turns on `num-traits/std` (statrs, nalgebra, criterion, ...)
+# would make the default run a std run and the digest comparison vacuous. CI
+# checks this with `cargo tree -p semiflow-nostd-check -e features,no-dev -i num-traits`,
+# and checks that `--features std-ref` does turn it on.
 [dependencies]
 semiflow = { path = "../semiflow", default-features = false }
+
+[features]
+# Proof mode: semiflow with its default features (std + simd, num-traits/std on).
+# Digests must equal the no_std ones (ADR-0200).
+std-ref = ["semiflow/default"]
 
 [lints]
 workspace = true

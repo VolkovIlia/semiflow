@@ -8,7 +8,7 @@ use semiflow::{
     SchrodingerChernoff, SchrodingerState, ScratchPool,
 };
 
-use crate::{check, m, sup_diff, Failure, ScenarioResult};
+use crate::{check, digest_of, m, sup_diff, Digest, Failure, ScenarioResult};
 
 /// Chebyshev grid of `tests/grid_chebyshev_bc_dispatch.rs`: 64 nodes on
 /// `[-1, 1]`, `m = 16`, `OobPolicy::Inherit`, datum `exp(-x²)`.
@@ -34,17 +34,20 @@ fn cheb_grid(bc: BoundaryPolicy) -> Result<(Grid1D, Vec<f64>), Failure> {
 fn mirror_err(bc: BoundaryPolicy, pairs: &[(f64, f64)]) -> ScenarioResult {
     let (grid, values) = cheb_grid(bc)?;
     let (mut mirror, mut accuracy): (f64, f64) = (0.0, 0.0);
+    let mut digest = Digest::new();
     for &(x_out, x_in) in pairs {
         let out = grid.interp(&values, x_out)?;
         let inside = grid.interp(&values, x_in)?;
+        digest.extend(&[out, inside]);
         if !out.is_finite() || !inside.is_finite() {
-            return check(f64::NAN, 0.0);
+            return check(f64::NAN, 0.0, digest.finish());
         }
         mirror = mirror.max(m::abs(out - inside));
         accuracy = accuracy.max(m::abs(inside - m::exp(-x_in * x_in)));
     }
-    check(accuracy, 1e-3)?;
-    check(mirror, 1e-12)
+    let digest = digest.finish();
+    check(accuracy, 1e-3, digest)?;
+    check(mirror, 1e-12, digest)
 }
 
 /// Out-of-domain Chebyshev query with `Reflect` equals the mirrored query
@@ -106,7 +109,15 @@ pub(crate) fn schrodinger_unitarity() -> ScenarioResult {
     if im_max.is_nan() || im_max < 1e-3 {
         return Err(Failure::Invariant("Schrödinger evolution left ψ real"));
     }
-    check(m::abs(cur.norm_l2_sq() - psi0.norm_l2_sq()), 1e-12)
+    let mut digest = Digest::new();
+    for (&re, &im) in cur.psi_re.values.iter().zip(&cur.psi_im.values) {
+        digest.extend(&[re, im]);
+    }
+    check(
+        m::abs(cur.norm_l2_sq() - psi0.norm_l2_sq()),
+        1e-12,
+        digest.finish(),
+    )
 }
 
 /// `a(x) = 1 + 0.3 sin(2πx/20)` — `tests/expmv_div_form_action_accuracy.rs`.
@@ -166,5 +177,5 @@ pub(crate) fn expmv_div_form() -> ScenarioResult {
     let kernel = DiffusionExpmvChernoff::new(inner);
     let mut u = GridFn1D::from_fn(grid, |_| 0.0);
     kernel.apply_into(tau, &f0, &mut u, &mut ScratchPool::new())?;
-    check(sup_diff(&u.values, &reference), 1e-11)
+    check(sup_diff(&u.values, &reference), 1e-11, digest_of(&u.values))
 }

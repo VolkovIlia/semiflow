@@ -7,7 +7,7 @@ use semiflow::{
     GraphKrylovChernoff, GraphSignal, KrylovPath, Laplacian, ScratchPool, SymmetricOperator,
 };
 
-use crate::{check, m, sup_diff, ScenarioResult};
+use crate::{check, digest_of, m, sup_diff, ScenarioResult};
 
 /// `GraphKrylovChernoff` (Chebyshev path) vs `dense_graph_expmv_ref`.
 ///
@@ -26,7 +26,11 @@ pub(crate) fn krylov_chebyshev() -> ScenarioResult {
     krylov.apply_into(1.0, &src, &mut dst, &mut ScratchPool::new())?;
     let mut dense = alloc::vec![0.0; 10];
     dense_graph_expmv_ref(&lap, 1.0, src.values(), &mut dense)?;
-    check(sup_diff(dst.values(), &dense), 1e-10)
+    check(
+        sup_diff(dst.values(), &dense),
+        1e-10,
+        digest_of(dst.values()),
+    )
 }
 
 /// CSR of the N = 10 Robin 1-D Laplacian of `tests/g_symop_implicit_dense.rs`:
@@ -77,5 +81,5 @@ pub(crate) fn implicit_euler_pcg() -> ScenarioResult {
         1e-12,
         &mut ScratchPool::new(),
     )?;
-    check(sup_diff(&approx, &exact), 1e-6)
+    check(sup_diff(&approx, &exact), 1e-6, digest_of(&approx))
 }
