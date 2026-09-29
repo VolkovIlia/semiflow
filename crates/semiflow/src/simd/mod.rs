@@ -10,6 +10,11 @@
 //! this module sits inside `x86_64.rs` and `aarch64.rs` (intrinsic shims).
 //!
 //! Cross-ref: ADR-0019, contracts/semiflow-core.tensor.yaml `simd` block.
+//!
+//! The portable lanes (traits + `scalar.rs`) compile in every build, so the
+//! lane kernels sum in the same order with or without the `simd` feature and
+//! `std`/`no_std` results are bit-identical (ADR-0200). Only the intrinsic
+//! backends and the std-only `FORCE_SCALAR` test hook need `feature = "simd"`.
 
 #![allow(unsafe_code)]
 
@@ -17,10 +22,10 @@
 // Arch-specific implementations (only one compiles per target).
 // ---------------------------------------------------------------------------
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
 mod x86_64;
 
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
 mod aarch64;
 
 // Scalar is always compiled. On x86_64+avx2, F32x4Scalar is still needed
@@ -36,37 +41,41 @@ mod scalar;
 // ---------------------------------------------------------------------------
 // Wave B3: G⁴ stencil SIMD kernels re-exported for truncated_exp4_cached.
 // ---------------------------------------------------------------------------
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) use aarch64::apply_g4_stencil_neon_4nodes;
 /// 4-lane f32 alias — NEON impl on aarch64+neon, scalar fallback elsewhere.
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) use aarch64::F32x4Neon as F32x4;
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) use aarch64::F64x4Neon as F64x4;
-#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+#[cfg(not(all(feature = "simd", target_arch = "aarch64", target_feature = "neon")))]
 pub(crate) use scalar::F32x4Scalar as F32x4;
-#[cfg(not(all(target_arch = "x86_64", target_feature = "avx2")))]
+#[cfg(not(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2")))]
 pub(crate) use scalar::F32x8Scalar as F32x8;
-#[cfg(not(any(
-    all(target_arch = "x86_64", target_feature = "avx2"),
-    all(target_arch = "aarch64", target_feature = "neon")
+#[cfg(not(all(
+    feature = "simd",
+    any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        all(target_arch = "aarch64", target_feature = "neon")
+    )
 )))]
 pub(crate) use scalar::F64x4Scalar as F64x4;
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
 pub(crate) use x86_64::apply_g4_stencil_avx2_4nodes;
 // ---------------------------------------------------------------------------
 // Type alias: F32x8 (AVX2: 8 lanes) / F32x4 (NEON: 4 lanes).
 // ---------------------------------------------------------------------------
 /// 8-lane f32 alias — AVX2 impl on x86_64+avx2, scalar fallback elsewhere.
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
 pub(crate) use x86_64::F32x8Avx2 as F32x8;
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
 pub(crate) use x86_64::F64x4Avx2 as F64x4;
 
 // ---------------------------------------------------------------------------
 // Test-hook: thread-local flag to force scalar path even on x86_64/aarch64.
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "simd")]
 thread_local! {
     /// When `true`, hot-path SIMD call sites use `F64x4Scalar`.
     ///
@@ -82,6 +91,7 @@ thread_local! {
 /// Run `closure` with the SIMD force-scalar flag active; resets afterwards.
 ///
 /// Integration-test hook. Not part of the stable API.
+#[cfg(feature = "simd")]
 pub fn with_force_scalar<T, F: FnOnce() -> T>(closure: F) -> T {
     FORCE_SCALAR.with(|c| c.set(true));
     let result = closure();

@@ -175,8 +175,6 @@ pub mod shift_nd;
 pub mod shift_nd_adaptive;
 pub(crate) mod shift_nd_gauss;
 pub mod shift_nd_zeta2;
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 #[doc(hidden)]
 pub mod simd;
 pub mod smolyak;

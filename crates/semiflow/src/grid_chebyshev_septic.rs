@@ -42,7 +42,6 @@
 use num_traits::float::FloatCore;
 
 use crate::grid::{bc_value, BoundaryPolicy, Grid1D};
-#[cfg(feature = "simd")]
 use crate::simd::{F64x4, SimdF64x4};
 
 // ---------------------------------------------------------------------------
@@ -151,7 +150,7 @@ fn h_b3(s: f64) -> f64 {
 /// Leading error: O(dx⁹) on the scaled derivative `dx·f'`, i.e. O(dx⁸) on `f'`,
 /// which keeps the septic-Hermite interpolant genuinely O(dx⁸).
 #[allow(clippy::similar_names)]
-#[allow(dead_code)] // used under #[cfg(not(feature = "simd"))] and test force-scalar path
+#[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
 fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
     let fm4 = bc_value(bnd, values, n, idx - 4, dx);
@@ -174,7 +173,6 @@ fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Result: `(sum_a + sum_b) / 840`.
 ///
 /// Bit-equality with scalar path tested in `septic_hermite_floor.rs`.
-#[cfg(feature = "simd")]
 #[allow(clippy::similar_names)]
 #[inline]
 fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
@@ -203,20 +201,16 @@ fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64,
 
 /// Scaled first derivative `dx * f'` at grid index `idx`.
 ///
-/// Dispatches to SIMD path when feature `simd` is active.
+/// Always runs the lane path (intrinsics under `simd`, portable lanes otherwise).
 #[allow(clippy::similar_names)]
 #[inline]
 fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
+    // cfg!(test) collapses to false in release builds → branch eliminated.
     #[cfg(feature = "simd")]
-    {
-        // cfg!(test) collapses to false in release builds → branch eliminated.
-        if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-            return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
-        }
-        fd_scaled_prime_simd(values, bnd, n, idx, dx)
+    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+        return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
     }
-    #[cfg(not(feature = "simd"))]
-    fd_scaled_prime_scalar(values, bnd, n, idx, dx)
+    fd_scaled_prime_simd(values, bnd, n, idx, dx)
 }
 
 /// Scaled second derivative `dx² * f''` at grid index `idx`.
