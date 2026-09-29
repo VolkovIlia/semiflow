@@ -1,6 +1,6 @@
 ---
-version: 1.7.0
-last_updated: 2026-08-14
+version: 1.8.0
+last_updated: 2026-09-28
 freshness_score: 1.0
 dependencies:
   - crates/semiflow/src/lib.rs
@@ -35,18 +35,25 @@ changelog:
   - 1.7.0: 0.13.0-beta issue campaign #17/#19/#21-#26 — GeneralOperator, shift1d_coeff_grad,
     Shift1D.evolve_batched / evolve_with_coefficient_schedule, AdaptivePI.with_arrays,
     Heat2DVarA.with_grid_arrays (pencil backend), ND boundary= kwarg
+  - 1.8.0: 0.13.1-beta de-stale — FFI and WASM columns re-derived from include/semiflow.h and
+    #[wasm_bindgen] exports; TT / gridless / GraphTraj / StrangSplitGraph rows corrected
+    (all bound); internal-scheme versions replaced by public 0.x releases
 graph-unverified: false
 ---
 
 # Python Coverage Matrix
 
 This document tracks binding parity across the four public surfaces of the
-`semiflow` workspace. It was created at **v2.3.0** and has been updated
-through **v9.2.0** (ADR-0169, 2026-06-19). The Python expansion follows the
-lockstep SemVer rule of ADR-0035: all four crates (`semiflow`, `semiflow-ffi`,
-`semiflow-py`, `semiflow-wasm`) bump together at the final tag. See
-[`docs/audit-findings-v2_3_0.md`](audit-findings-v2_3_0.md) for the companion
-math-fidelity and gate report.
+`semiflow` workspace: the Rust crate `semiflow`, the C ABI `semiflow-ffi`, the
+Python wheel `semiflow-pde` (import name `semiflow`, crate `semiflow-py`) and
+the npm package `@semiflow/wasm` (crate `semiflow-wasm`). It reflects
+**0.13.1-beta**. All four crates share one workspace version (ADR-0035).
+
+The authoritative lists are generated artefacts, not this page: the C header
+[`crates/semiflow-ffi/include/semiflow.h`](../crates/semiflow-ffi/include/semiflow.h),
+the Python stubs `crates/semiflow-py/python/semiflow/__init__.pyi`, and the
+TypeScript declarations shipped in the npm package. The tables below map Rust
+types to their binding names.
 
 **Legend**
 
@@ -54,135 +61,140 @@ math-fidelity and gate report.
 |--------|---------|
 | ✅ stable | Exposed and covered by an acceptance gate |
 | 🚧 experimental | Exposed; API may change in a MINOR release |
-| ❌ not exposed | Implemented in core; not yet surfaced in this crate |
+| ❌ not exposed | Implemented in core; not surfaced in this binding |
+| *(full)* | WASM only: needs a `--features full` build; not in the npm (lite) package |
 
-All cells are for `f64` unless noted. `f32` is now opt-in for PyO3 on four
+All cells are for `f64` unless noted. `f32` is opt-in for PyO3 on four
 kernels (`GraphHeat`, `MagnusGraphHeat`, `VarCoefGraphHeat`, `Heat1D`) via the
-`dtype="f32"` kwarg (v6.2.2, ADR-0115). FFI and WASM f32 paths remain out of
+`dtype="f32"` kwarg (ADR-0115). FFI and WASM f32 paths remain out of
 scope (ADR-0115).
 
 ---
 
-## 1. 1D Kernels
+## 1. 1D Kernels and carriers
 
-| Rust type | Rust rlib | FFI (`semiflow-ffi`) | PyO3 (`semiflow-py`) | WASM (`@semiflow/wasm`) |
-|-----------|-----------|---------------------|---------------------|------------------------|
-| `DiffusionChernoff` | ✅ stable | ✅ stable (`Heat1D`, unit-a) | ✅ stable (`Heat1D`, var-a via `with_a_array` / `with_a_function`) | ✅ stable (`Heat1D`) |
-| `Diffusion4thChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`Heat1D4th`, `with_arrays`) | ❌ not exposed |
-| `Diffusion6thChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`Heat1D6th`, `with_arrays`) | ❌ not exposed |
-| `DriftReactionChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`DriftReaction1D`, `with_arrays`) | ❌ not exposed |
-| `ShiftChernoff1D` | ✅ stable | ❌ not exposed | ✅ stable (`Shift1D`, `with_arrays`) | ❌ not exposed |
-| `TruncatedExpDiffusionChernoff` | ✅ stable | ❌ not exposed | ❌ not exposed | ❌ not exposed |
-| `TruncatedExp4thDiffusionChernoff` | ✅ stable | ❌ not exposed | ❌ not exposed | ❌ not exposed |
-| `ReverseChernoff<F>` + `CheckpointSchedule` | ✅ stable | ❌ not exposed | ✅ stable (`ReverseHeat1D`, constant-a narrow scope, ADR-0156) | ✅ stable (`ReverseHeat1D`, ADR-0154) |
-| `TtChernoff<F>` + `TtState<F>` | ✅ stable | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `GridlessChernoff<F, D>` + `ParticleReduction` | ✅ stable | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `CoupledTtChernoff<F>` (v9.1.0, ADR-0162) | ✅ stable | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3DriftSpectralEvolver<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3DenseCouplingEvolver<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3VarCoefEvolver<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3NonSepVarCoefEvolver<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3BurgersColeHopf<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
-| `S3ReactionDiffusion<F>` (v9.2.0, `s3-poc`) | ✅ experimental | ❌ not exposed | ❌ not exposed (Rust-only) | ❌ not exposed (Rust-only) |
+| Rust type | FFI (`smf_…` prefix) | PyO3 class | WASM class |
+|-----------|----------------------|------------|------------|
+| `DiffusionChernoff` | ✅ `smf_state_new_heat_1d_unit`, `smf_state_new_with_closure` (var-a callback) | ✅ `Heat1D` (var-a via `with_a_array` / `with_a_function`) | ✅ `Heat1D` |
+| `Diffusion4thChernoff` | ✅ `smf_heat1d_4th_*` | ✅ `Heat1D4th` (`with_a_array`) | ✅ `Heat1D4th` *(full)* |
+| `Diffusion6thChernoff` | ✅ `smf_heat1d_6th_*` | ✅ `Heat1D6th` (`with_a_array`) | ✅ `Heat1D6th` *(full)* |
+| `Diffusion4thZeta4/6thZeta6/8thZeta8Chernoff` | ✅ `smf_heat1d_zeta{4,6,8}_*` | ✅ `Heat1DZeta4/6/8` | ✅ `Heat1DZeta4/6/8` *(full)* |
+| `DriftReactionChernoff` | ✅ `smf_drift_reaction_*` | ✅ `DriftReaction1D` (`with_arrays`) | ✅ `DriftReaction1D` *(full)* |
+| `DriftReactionZeta4Chernoff` | ✅ `smf_drift_reaction_zeta4_*` | ✅ `DriftReaction4th1D` | ✅ `DriftReaction4th1D` *(full)* |
+| `ShiftChernoff1D` | ✅ `smf_shift1d_*` | ✅ `Shift1D` (`with_arrays`) | ✅ `Shift1D` *(full)* |
+| `TruncatedExpDiffusionChernoff` | ✅ `smf_trunc_exp_*` | ✅ `TruncatedExp1D` | ✅ `TruncatedExp1D` *(full)* |
+| `TruncatedExp4thDiffusionChernoff` | ✅ `smf_trunc_exp4_*` | ✅ `TruncatedExp4th1D` | ✅ `TruncatedExp4th1D` *(full)* |
+| `DiffusionExpmvChernoff` | ✅ `smf_expmv1d_*` | ✅ `DiffusionExpmv1D` | ✅ `DiffusionExpmv1D` *(full)* |
+| `ReverseChernoff<F>` + `CheckpointSchedule` | ❌ not exposed | ✅ `ReverseHeat1D` (constant-a narrow scope, ADR-0156) | ✅ `ReverseHeat1D` |
+| `TtChernoff<F>` + `TtState<F>` | ✅ `smf_tt_*`, `smf_ttstate_*` | ✅ `TtEvolver`, `TtState` | ✅ `TtEvolver`, `TtState` |
+| `CoupledTtChernoff<F>` (ADR-0162) | ✅ `smf_tt_coupled_*` | ✅ `TtCoupledEvolver` | ✅ `TtCoupledEvolver` |
+| `VarCoefTt<F>` (ADR-0178) | ✅ `smf_varcoef_tt_*` | ✅ `VarCoefTtEvolver` | ✅ `VarCoefTtEvolver` |
+| `GridlessChernoff<F, D>` + `ParticleReduction` | ✅ `smf_gridless_*`, `smf_measurestate_*` | ✅ `GridlessEvolver`, `MeasureState` | ✅ `GridlessEvolver`, `MeasureState` (D=1) |
+| `S3DriftSpectralEvolver`, `S3DenseCouplingEvolver`, `S3VarCoefEvolver`, `S3NonSepVarCoefEvolver`, `S3BurgersColeHopf`, `S3ReactionDiffusion` (`s3-poc` feature) | ❌ not exposed | ❌ not exposed | ❌ not exposed |
 
 **Notes**
 
 - `Heat1D` in PyO3 exposes the `boundary` kwarg (`'reflect'` / `'periodic'` /
-  `'zero'` / `'linear'`; default `'reflect'`) since Phase 1.
+  `'zero'` / `'linear'`; default `'reflect'`).
 - Pre-sampled coefficient path (`with_a_array`) performs cubic-Hermite
   interpolation inside Rust, achieving zero GIL re-acquires during `evolve`.
   See ADR-0061 §"Pre-sampled coefficients".
-- `TruncatedExpDiffusionChernoff` and `TruncatedExp4thDiffusionChernoff` remain
-  Rust-only; no user demand has been expressed for these through bindings.
-  Deferred to a future MINOR release.
+- The `s3-poc` evolvers are a research-track surface behind a non-default
+  feature (ADR-0169); binding design is deferred.
 
 ---
 
 ## 2. 2D / 3D Composition
 
-| Rust type | Rust rlib | FFI | PyO3 | WASM |
-|-----------|-----------|-----|------|------|
-| `Strang2D` | ✅ stable | ❌ not exposed | ✅ stable (`Heat2D`, `boundary` kwarg) | ❌ not exposed |
-| `Strang3D` | ✅ stable | ❌ not exposed | ✅ stable (`Heat3D`, `boundary` kwarg) | ❌ not exposed |
-| `NonSeparableMixedChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`NonSeparable2D`, `with_beta_array`) | ❌ not exposed |
-| `NonSeparable2DChernoff` (alias) | ✅ stable | ❌ not exposed | ✅ stable (via `NonSeparable2D`) | ❌ not exposed |
-| `NonSeparable2DAnisotropicChernoff` (alias) | ✅ stable | ❌ not exposed | ✅ stable (via `NonSeparable2D`) | ❌ not exposed |
+| Rust type | FFI | PyO3 | WASM |
+|-----------|-----|------|------|
+| `Strang2D` | ✅ `smf_heat2d_*` | ✅ `Heat2D` (`boundary` kwarg) | ✅ `Heat2D` *(full)* |
+| `Strang3D` | ✅ `smf_heat3d_*` | ✅ `Heat3D` (`boundary` kwarg) | ✅ `Heat3D` *(full)* |
+| `Strang2D`/`Strang3D` with variable `a` | ✅ `smf_heat2d_vara_*`, `smf_heat3d_vara_*` | ✅ `Heat2DVarA`, `Heat3DVarA` | ✅ `Heat2DVarA`, `Heat3DVarA` *(full)* |
+| `NonSeparableMixedChernoff` / `NonSeparable2DChernoff` | ✅ `smf_nonsep2d_*` | ✅ `NonSeparable2D` (`with_beta_array`) | ✅ `NonSeparable2D` *(full)* |
+| `NonSeparable2DAnisotropicChernoff` | ✅ `smf_nonsep2d_aniso_*` | ✅ `NonSeparable2DAniso` | ✅ `NonSeparable2DAniso` *(full)* |
+| `AnisotropicShiftChernoffND<F, 2/3>` | ✅ `smf_aniso_nd2_*`, `smf_aniso_nd3_*` | ✅ `AnisotropicShiftND2/3` | ✅ `AnisotropicShiftND2/3` *(full)* |
+| `MatrixDiffusionChernoff` (1D/2D/3D) | ✅ `smf_matrix_diffusion_*`, `smf_matrix2d_*`, `smf_matrix3d_*` | ✅ `MatrixDiffusion1D/2D/3D` | ✅ `MatrixDiffusion1D/2D/3D` *(full)* |
 
 **Notes**
 
-- `Heat2D` and `Heat3D` gained the `boundary` kwarg in Phase 1; internally
-  wired through `Grid1D::new(...)?.with_boundary(...)` on each axis
-  (there is no `Grid1D::new_with_policy`; boundary is a builder step).
+- `Heat2D` and `Heat3D` take the `boundary` kwarg; internally wired through
+  `Grid1D::new(...)?.with_boundary(...)` on each axis (there is no
+  `Grid1D::new_with_policy`; boundary is a builder step).
 - `NonSeparable2D` wraps the unified `NonSeparableMixedChernoff` type
   (ADR-0058). The constant-`c` path and the `with_beta_array` pre-sampled
   β(x,y) path via bilinear interpolation are both exposed. See `coeff2d.rs`.
-- `StrangSplitGraph` (bipartite graph Strang) is Rust-only; no Python surface
-  is planned for v2.3 — the expected use pattern is `GraphHeat4th` + manual
-  Strang composition by the caller.
 
 ---
 
 ## 3. Adjoint / Schrödinger / Adaptive Wrappers
 
-| Rust type | Rust rlib | FFI | PyO3 | WASM |
-|-----------|-----------|-----|------|------|
-| `AdjointChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`Adjoint`, 5-variant enum dispatch) | ❌ not exposed |
-| `SchrodingerChernoff` + `SchrodingerState` | ✅ stable | ❌ not exposed | ✅ stable (`Schrodinger1D`) | ❌ not exposed |
-| `AdaptivePI` | ✅ stable | ❌ not exposed | ✅ stable (`AdaptivePI`, 5-variant enum dispatch) | ❌ not exposed |
+| Rust type | FFI | PyO3 | WASM |
+|-----------|-----|------|------|
+| `AdjointChernoff` | ✅ `smf_adjoint1d_*` | ✅ `Adjoint` (enum dispatch over inner kernels) | ✅ `Adjoint1D` *(full)* |
+| `SchrodingerChernoff` + `SchrodingerState` | ✅ `smf_schrodinger_*` | ✅ `Schrodinger1D` | ✅ `Schrodinger1D` *(full)* |
+| `SchrödingerChernoffComplex` | ✅ `smf_schrodinger_cx_*` | ✅ `SchrodingerComplex1D` | ✅ `SchrodingerComplex1D` *(full)* |
+| `AdaptivePI` | ✅ `smf_adaptive_pi_*` | ✅ `AdaptivePI` (enum dispatch; `with_arrays`) | ✅ `AdaptivePI1D` *(full)* |
 
-**Adjoint dispatch variants** (Phase 4): `Heat1D`, `Heat1D4th`, `Heat1D6th`,
-`DriftReaction1D`, `Shift1D`. Adding a new inner kernel requires extending the
-enum in `crates/semiflow-py/src/adjoint.rs`; this is a known rigidity trade-off
+**Adjoint dispatch**: the Python `Adjoint` takes a `kernel=` string selecting the
+inner kernel (`"heat2"` default, `"heat4"`, `"heat6"`, …; see the stub).
+Adding a new inner kernel requires extending the enum in
+`crates/semiflow-py/src/adjoint.rs`; this is a known rigidity trade-off
 documented in ADR-0061 §"Consequences".
 
-**AdaptivePI dispatch variants** (Phase 4): same 5 kernels as Adjoint.
-Return value is a dict `{final_state, steps_accepted, steps_rejected, last_tau}`.
+**AdaptivePI**: return value is a dict
+`{final_state, steps_accepted, steps_rejected, last_tau}`.
 
-**Schrödinger** (Phase 3): 4 constructors — default-V, `from_parts`
+**Schrödinger**: 4 constructors — default-V, `from_parts`
 (psi\_re / psi\_im), `with_potential` (pre-sampled V array), and
 `with_potential_parts`. Methods: `evolve(t, n_steps=200)`, `values()` →
 complex128 ndarray, `values_parts()` → (float64, float64) ndarrays,
 `norm_squared()`, `__len__()`. Unitarity gate: `‖ψ‖²/‖ψ₀‖² − 1 < 1e-6` over
-500 steps on the harmonic oscillator (Phase 3 acceptance gate).
+500 steps on the harmonic oscillator.
 
 ---
 
 ## 4. Graph PDE
 
-| Rust type | Rust rlib | FFI | PyO3 | WASM |
-|-----------|-----------|-----|------|------|
-| `Graph` | ✅ stable | ✅ stable (opaque `smf_graph_t`) | ✅ stable (`Graph` pyclass) | ✅ stable (`Graph` JS class) |
-| `Laplacian` | ✅ stable | ✅ stable (opaque `smf_laplacian_t`) | ✅ stable (`Laplacian` pyclass) | ✅ stable (`Laplacian` JS class) |
-| `GraphHeatChernoff` | ✅ stable | ✅ stable | ✅ stable (`GraphHeat`) | ✅ stable (`GraphHeat`) |
-| `GraphHeat4thChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`GraphHeat4th`) | ❌ not exposed |
-| `MagnusGraphHeatChernoff` | ✅ stable | ✅ stable | ✅ stable (`MagnusGraphHeat`) | ✅ stable (`MagnusGraphHeat`) |
-| `MagnusGraphHeat6thChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`MagnusGraphHeat6`) | ❌ not exposed |
-| `VarCoefGraphHeatChernoff` | ✅ stable | ❌ not exposed | ✅ stable (`VarCoefGraphHeat`, `with_beta_array`) | ❌ not exposed |
-| `GraphTraj` | ✅ stable | ❌ not exposed | ❌ not exposed | ❌ not exposed |
-| `StrangSplitGraph` | ✅ stable | ❌ not exposed | ❌ not exposed | ❌ not exposed |
+| Rust type | FFI | PyO3 | WASM |
+|-----------|-----|------|------|
+| `Graph` | ✅ opaque `SmfGraph` (`smf_graph_path`, …) | ✅ `Graph` (and `GraphPath`) | ✅ `GraphPath` (path graphs only) |
+| `Laplacian` | ✅ opaque `SmfLaplacian` (`smf_graph_laplacian_*`, `smf_laplacian_*`) | ✅ `Laplacian` | ✅ `Laplacian` *(full)* |
+| `GraphHeatChernoff` | ✅ `smf_ghc_*` | ✅ `GraphHeat` | ✅ `GraphHeat` |
+| `GraphHeat4thChernoff` | ✅ `smf_ghc4_*` | ✅ `GraphHeat4th` | ✅ `GraphHeat4th` *(full)* |
+| `GraphHeat6thChernoff` | ✅ `smf_ghc6_*` | ✅ `GraphHeat6` | ✅ `GraphHeat6` |
+| `MagnusGraphHeatChernoff` | ✅ `smf_mghc_*` | ✅ `MagnusGraphHeat` | ✅ `MagnusGraphHeat` *(full)* |
+| `MagnusGraphHeat6thChernoff` | ✅ `smf_mghc6_*` | ✅ `MagnusGraphHeat6` | ✅ `MagnusGraphHeat6` *(full)* |
+| `VarCoefGraphHeatChernoff` | ✅ `smf_vc_ghc_*` | ✅ `VarCoefGraphHeat(graph, a, rho_bar=…)` | ✅ `VarCoefGraphHeat` *(full)* |
+| `VarCoefMagnusGraphHeatChernoff` | ✅ `smf_vc_mghc_*` | ✅ `VarCoefMagnusGraph` | ✅ `VarCoefMagnusGraph` *(full)* |
+| `GraphTraj` | ✅ `smf_graph_traj_*` | ✅ `GraphTraj` | ✅ `GraphTraj` *(full)* |
+| `StrangSplitGraph` | ✅ `smf_strang_graph_*` | ✅ `StrangGraph` (`from_path` / `from_cycle`) | ✅ `StrangGraph` *(full)* |
+| `QuantumGraphHeatChernoff` | ✅ `smf_qgraph_*`, `smf_qgheat_*` | ✅ `QuantumGraph`, `QuantumGraphHeat` | ✅ `QuantumGraph`, `QuantumGraphHeat` *(full)* |
+| `GraphKrylovChernoff`, `graph_expmv_frechet` | ❌ not exposed | ✅ `GraphKrylov`, `graph_expmv_frechet` | ❌ not exposed |
 
-**Python `Graph` factory methods** (Phase 5): `Graph.path(n)`, `Graph.cycle(n)`,
-`Graph.from_edges(n_nodes, edges)` where `edges` is a flat float64 ndarray of
-(u, v, w) triples, and `Graph.erdos_renyi(n, p, seed)`.
-`GraphPath(n)` is retained as a deprecated alias for `Graph.path(n)`.
+**Python `Graph` factory methods**: `Graph.path(n)`, `Graph.cycle(n)`,
+`Graph.from_edges(n, edges)` where `edges` is a list of `(u, v, w)` triples or a
+flat float64 ndarray of them, and `Graph.erdos_renyi(n, p, seed)`.
+`GraphPath(n)` is retained as an alias for `Graph.path(n)`.
 
-**Python `Laplacian` factory methods** (Phase 5): `Laplacian.combinatorial(graph)`,
-`Laplacian.normalized(graph)`. Introspection properties: `n_nodes`,
-`is_combinatorial`, `is_normalized`, `spectral_bound`.
+**Python `Laplacian` factory methods**: `Laplacian.combinatorial(graph)`,
+`Laplacian.normalized(graph)`. Introspection: `n_nodes()`,
+`is_combinatorial()`, `is_normalized()`, `spectral_bound()`.
 
-**`MagnusGraphHeat6` callback** (Phase 5): the time-varying `L_G(t)` callback
+**`MagnusGraphHeat6` callback**: the time-varying `L_G(t)` callback
 accepts either a `Graph` (auto-assembled to combinatorial Laplacian) or a
 `Laplacian` (used directly). This matches the Rust `LaplacianAtTime` API.
 
 **Cross-binding sup-error gate** (ADR-0059): Python vs FFI sup-error ≤ 3 ULP
 for `P_64` path graph, combinatorial Laplacian, `t = 0.5`, `n = 50`.
 
-**v6.2.2 additions** (ADR-0115, Issue #2 + #1 + #3 + #5):
+**Adjoint-state sensitivity** (ADR-0115):
 
 | Rust symbol | PyO3 surface | Status | Notes |
 |-------------|-------------|--------|-------|
 | `MagnusGraphHeatChernoff::evolve_state_adjoint_into` | `GraphAdjoint.evolve_state_adjoint(lambda_n, t, n_steps)` | ✅ stable | kernel="magnus_graph"; math §42 T42.1 |
 | `VarCoefMagnusGraphHeatChernoff::evolve_state_adjoint_into` | `GraphAdjoint(kernel="varcoef_magnus_graph")` | ✅ stable | a= callback required |
+| `MagnusGraphHeatChernoff::from_presampled` | `GraphAdjointPresampled` | ✅ stable | also FFI `smf_graph_adjoint_new_presampled[_varcoef]` and WASM `GraphAdjointPresampled` *(full)* |
 | `adjoint_state_gradient` + `EdgeWeightSensitivity` | `edge_weight_grad(graph, a, *, u0, dj_du_n, t, n_steps, rho_bar, params)` | ✅ stable | params: list[(i,j)] or "all_edges" |
 | `GraphHeatChernoff<f32>` path | `GraphHeat(dtype="f32")` | ✅ stable | f64 default; f32 opt-in |
 | `MagnusGraphHeatChernoff<f32>` path | `MagnusGraphHeat(dtype="f32")` | ✅ stable | f64 default; f32 opt-in |
@@ -190,11 +202,6 @@ for `P_64` path graph, combinatorial Laplacian, `t = 0.5`, `n = 50`.
 | `DiffusionChernoff<f32>` path (1D) | `Heat1D(dtype="f32")` | ✅ stable | f64 default; f32 opt-in |
 | `Laplacian::row_ptr` / `col_idx` / `vals` (CSR) | `Laplacian.row_ptr()` / `.col_idx()` / `.vals()` | ✅ stable | copy; frozen-topology invariant |
 | `Laplacian` dense reconstruction | `Laplacian.to_dense()` | ✅ stable | O(n²) copy; raises OutOfDomain on overflow |
-| `Graph::from_edges` (flat 3M array) | `Graph.from_edges(n, edges)` — both list and flat array | ✅ stable (fix) | was broken for flat array; error message corrected |
-
-**Gaps (unchanged)**: `GraphTraj` and `StrangSplitGraph` are Rust-only. `GraphTraj` requires
-mutable closure lifetimes that are difficult to express safely in PyO3 without a
-GIL-hold; deferred to v2.4+.
 
 ---
 
@@ -207,24 +214,27 @@ GIL-hold; deferred to v2.4+.
 | Zero-extend | `BoundaryPolicy::ZeroExtend` | `'zero'` |
 | Linear extrapolation | `BoundaryPolicy::LinearExtrapolate` | `'linear'` |
 
-The `boundary` kwarg is accepted by `Heat1D`, `Heat1D4th`, `Heat1D6th`,
-`DriftReaction1D`, `Shift1D`, `Heat2D`, `Heat3D`. Unknown string values raise
-`SemiflowError(kind='OutOfDomain')` with the list of accepted values.
+The `boundary` kwarg is accepted by the grid-based kernels — among others
+`Heat1D`, `Heat1D4th`, `Heat1D6th`, `Heat1DZeta4/6/8`, `DriftReaction1D`,
+`Shift1D`, `Heat2D`, `Heat3D`, `Heat2DVarA`, `Heat3DVarA`,
+`AnisotropicShiftND2/3` and the boundary-condition kernels (the stubs list the
+full set). Unknown string values raise `SemiflowError` with the message
+`[OutOfDomain] unknown boundary policy …` listing the accepted values.
 Implemented in `crates/semiflow-py/src/boundary.rs`.
 
 ---
 
 ## 6. Variable-Coefficient Paths
 
-| Kernel | fn-ptr `::new` | closure `with_closure` (Rust only) | Pre-sampled `with_arrays` (Python) |
+| Kernel | fn-ptr `::new` | closure `with_closure` (Rust only) | Pre-sampled arrays (Python) |
 |--------|---------------|------------------------------------|------------------------------------|
-| `DiffusionChernoff` | ✅ Rust | ✅ Rust (`DiffusionChernoff::with_closure`) | ✅ Python (`Heat1D(a=a_values, ...)`) |
-| `Diffusion4thChernoff` | ✅ Rust | ✅ Rust (`with_closure`) | ✅ Python (`Heat1D4th.with_arrays(...)`) |
-| `Diffusion6thChernoff` | ✅ Rust | ✅ Rust (`with_closure`) | ✅ Python (`Heat1D6th.with_arrays(...)`) |
+| `DiffusionChernoff` | ✅ Rust | ✅ Rust (`DiffusionChernoff::with_closure`) | ✅ Python (`Heat1D.with_a_array(...)`) |
+| `Diffusion4thChernoff` | ✅ Rust | ✅ Rust (`with_closure`) | ✅ Python (`Heat1D4th.with_a_array(...)`) |
+| `Diffusion6thChernoff` | ✅ Rust | ✅ Rust (`with_closure`) | ✅ Python (`Heat1D6th.with_a_array(...)`) |
 | `DriftReactionChernoff` | ✅ Rust | ✅ Rust (`with_closure`) | ✅ Python (`DriftReaction1D.with_arrays(...)`) |
-| `ShiftChernoff1D` | ✅ Rust | — (no separate closure variant) | ✅ Python (`Shift1D.with_arrays(...)`) |
-| `VarCoefGraphHeatChernoff` | ✅ Rust | ✅ Rust (`with_closure_beta`) | ✅ Python (`VarCoefGraphHeat.with_beta_array(...)`) |
-| `NonSeparableMixedChernoff` | ✅ Rust | ✅ Rust (`with_closure_beta`) | ✅ Python (`NonSeparable2D.with_beta_array(...)`) |
+| `ShiftChernoff1D` | ✅ Rust | ✅ Rust (`ShiftChernoff1D::with_closure`, `f64`) | ✅ Python (`Shift1D.with_arrays(...)`) |
+| `VarCoefGraphHeatChernoff` | ✅ Rust (`new(graph, a, rho_bar)`, node array) | — | ✅ Python (`VarCoefGraphHeat(graph, a, rho_bar=…)`) |
+| `NonSeparableMixedChernoff` | ✅ Rust | ✅ Rust (`nonseparable_mixed_closure::with_closure_beta` / `with_closure_c`) | ✅ Python (`NonSeparable2D.with_beta_array(...)`) |
 
 **Performance note**: the pre-sampled array path performs cubic-Hermite (1D) or
 bilinear (2D) interpolation inside Rust with zero GIL re-acquires. Measured
@@ -235,17 +245,21 @@ is not the recommended path for performance-sensitive code.
 
 ---
 
-## 7. Reverse-mode AD (v9.0.0, ADR-0154/0156)
+## 7. Reverse-mode AD (since 0.9.0-beta, ADR-0154/0156)
 
 **`ReverseHeat1D`** is the Python (PyO3) and JavaScript (WASM) binding for
-`semiflow_core::ReverseChernoff<f64>` with constant-a `DiffusionChernoff`.
+`semiflow::ReverseChernoff<f64>` with constant-a `DiffusionChernoff`. There is
+no C (FFI) surface for it.
 
 **Python (`semiflow-py`) — `ReverseHeat1D`:**
 
 ```python
-from semiflow import ReverseHeat1D
+import numpy as np
+from semiflow import ReverseHeat1D   # see note below
 
-rc = ReverseHeat1D(theta=0.4, xmin=-4.0, xmax=4.0, n_grid=24, n_steps=8)
+n_grid = 24
+x = np.linspace(-4.0, 4.0, n_grid)
+rc = ReverseHeat1D(theta=0.4, xmin=-4.0, xmax=4.0, n_grid=n_grid, n_steps=8)
 u0     = np.exp(-x**2)       # float64, shape (n_grid,)
 target = np.zeros(n_grid)    # float64, shape (n_grid,)
 value, grad = rc.value_and_grad(tau=0.05, u0=u0, target=target)
@@ -261,33 +275,19 @@ const result = rc.valueAndGrad(0.05, u0, target);
 // result: Float64Array[2] — [value, grad]
 ```
 
+> **Note:** in 0.13.1-beta `ReverseHeat1D` is registered in the native module
+> but missing from the package's re-export list, so `from semiflow import
+> ReverseHeat1D` raises `ImportError`; use `from semiflow.semiflow import
+> ReverseHeat1D` until that is fixed.
+
 **NARROW scope (§51.5, ADR-0156):** constant-a `DiffusionChernoff` ONLY.
-Variable-coefficient and nonlinear kernels are out of scope at v9.0.0.
+Variable-coefficient and nonlinear kernels are out of scope.
 Gradient parity: 0-ULP between PyO3 and WASM implementations
 (`G_BINDING_REVERSE_AD_PARITY`).
 
-**v9.0.0 Rust-only types (not bound):**
-
-| Rust type | Reason |
-|-----------|--------|
-| `TtChernoff<F>` + `TtState<F>` | Multi-core TT contraction and SVD-based rounding require a well-typed ND array interface; deferred pending design work |
-| `GridlessChernoff<F, D>` + `ParticleReduction` | Particle ensemble API (variable-length `MeasureState`) is awkward to express safely in PyO3/WASM without a design pass; deferred |
-
-**v9.1.0 Rust-only types (not bound):**
-
-| Rust type | Reason |
-|-----------|--------|
-| `CoupledTtChernoff<F>` | TT contraction interface design for multi-core adjacent-pair coupling deferred (same design dependency as `TtChernoff`) |
-
-**v9.2.0 Rust-only types (not bound, `s3-poc` feature only):**
-
-| Rust type | Reason |
-|-----------|--------|
-| `S3DriftSpectralEvolver<F>` | S³ POC — binding design deferred; Rust-only at v9.2.0 |
-| `S3DenseCouplingEvolver<F>` | S³ POC — binding design deferred |
-| `S3VarCoefEvolver<F>`, `AxisCoef<F>` | S³ POC — binding design deferred |
-| `S3NonSepVarCoefEvolver<F>`, `CpTerm/CpCoef/CoefRole` | S³ POC — CP-coefficient interface complex to represent in Python safely; deferred |
-| `S3BurgersColeHopf<F>`, `S3ReactionDiffusion<F>`, `Reaction<F>` | S³ POC — binding design deferred |
+The tensor-train and gridless carriers that shipped alongside reverse-mode AD
+(`TtChernoff`, `CoupledTtChernoff`, `VarCoefTt`, `GridlessChernoff`) are bound
+in all three bindings — see §1. Only the `s3-poc` evolvers remain Rust-only.
 
 ---
 
@@ -346,19 +346,16 @@ Behaviour changes on the existing Python surface, not additions:
 | `DiffusionExpmv1D`, graph Lanczos | corrected θ_m table changes the substep count | ADR-0198 |
 ## 10. Known Gaps and Deferred Items
 
-The following items are Rust-only as of v9.2.0 and are not exposed through any
-binding:
+The following items are not exposed through the named bindings as of
+0.13.1-beta:
 
-| Item | Reason for gap | Target release |
-|------|----------------|----------------|
-| `TruncatedExpDiffusionChernoff` | No expressed user demand | Unscheduled |
-| `TruncatedExp4thDiffusionChernoff` | No expressed user demand | Unscheduled |
-| `StrangSplitGraph` | Bipartite edge-set API awkward in Python; caller can compose manually | Unscheduled |
-| `GraphTraj` | Mutable closure lifetimes unsafe across GIL boundary; needs design work | v2.4+ |
-| `f32` Python path (FFI/WASM) | FFI and WASM f32 surfaces remain out of scope (ADR-0115) | Unscheduled |
-| `CoupledTtChernoff<F>` | TT interface design pending | v9.x |
-| `S3*` evolvers (`s3-poc`) | POC track — binding design deferred | v10.0+ |
-| Async / yield PyO3 API | Insufficient telemetry on GIL-release saturation (ADR-0034 §"Out of scope") | Unscheduled |
-| FFI/WASM surface for 4th/6th-order, Schrödinger, Adjoint, AdaptivePI | Large LoC cost; FFI/WASM callers can use Python or Rust directly | Unscheduled |
-| `TtChernoff<F>` + `TtState<F>` | ND array / TT binding design deferred | Unscheduled |
-| `GridlessChernoff<F, D>` + `ParticleReduction` | Particle ensemble binding design deferred | Unscheduled |
+| Item | Missing from | Reason for gap |
+|------|--------------|----------------|
+| `S3*` evolvers (`s3-poc` feature) | FFI, PyO3, WASM | Research-track surface; binding design deferred (ADR-0169) |
+| `ReverseChernoff` | FFI | Bound as `ReverseHeat1D` in PyO3 and WASM only |
+| Symmetric-operator / `(M, K)` / general-operator / Krylov / φ-function / ETD surface (§8, §9) | FFI, WASM | PyO3-only (ADR-0186 and the 0.13.0-beta campaign ADRs) |
+| `boundary=` selection | FFI, WASM | Neither surface exposes boundary selection for any kernel (ADR-0191 AMENDMENT 2) |
+| `f32` paths | FFI, WASM | Out of scope (ADR-0115) |
+| Heavy-grid engines in the npm package | WASM (npm) | The published package is the lite build; build with `--features full` |
+| Live-callback `GraphAdjoint` | FFI, WASM | Closures are not ABI-safe; use the pre-sampled `GraphAdjointPresampled` path |
+| Async / yield PyO3 API | PyO3 | Insufficient telemetry on GIL-release saturation (ADR-0034 §"Out of scope") |

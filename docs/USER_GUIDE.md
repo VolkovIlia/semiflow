@@ -1,10 +1,10 @@
 # SemiFlow User Guide
 
 This guide is organized by **what you want to solve**. Each section names the
-types to reach for and points at a runnable example. For the full type catalogue
-and cargo feature flags, see
-[`crates/semiflow/README.md`](../crates/semiflow/README.md); for the
-API reference, see [docs.rs/semiflow](https://docs.rs/semiflow).
+types to reach for and points at a runnable example. For installation, the
+[engine catalogue](../README.md#engine-catalogue) and
+[cargo feature flags](../README.md#feature-flags), see the project README; for
+the API reference, see [docs.rs/semiflow](https://docs.rs/semiflow).
 
 ## Core concepts (read once)
 
@@ -23,7 +23,7 @@ scalar type via the sealed `SemiflowFloat` trait (`f64` by default; `f32`, and
 `Dual<F>` for automatic differentiation).
 
 ```rust
-use semiflow_core::{Grid1D, GridFn1D, ShiftChernoff1D, ChernoffSemigroup};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
 
 let grid = Grid1D::new(-10.0, 10.0, 1000).expect("valid grid");
 let u0   = GridFn1D::from_fn(grid, |x| (-x * x).exp());
@@ -79,14 +79,17 @@ Two things worth knowing before you trust the numbers:
 
 The ζ-ladder kernels raise the spatial order: `Diffusion4thZeta4Chernoff` (order 4),
 `Diffusion6thZeta6Chernoff` (order 6), `Diffusion8thZeta8Chernoff` (order 8). Pick
-the interpolation degree via `InterpKind` (default `OctonicHermite`). See
+the interpolation degree via `InterpKind` on the grid (default `SepticHermite`;
+`OctonicHermite` is the degree-9 option). See
 [precision-policy.md](precision-policy.md) for the accuracy/cost trade-offs and the
 gated floors.
 
 ## I want boundary conditions
 
-Set a `BoundaryPolicy` on the grid: `Reflect` (default, Neumann), `Dirichlet`,
-`Robin { alpha, beta }`. For operator-level treatments:
+Set a `BoundaryPolicy` on the grid with `Grid1D::with_boundary`: `Reflect`
+(default, zero-flux), `Periodic`, `ZeroExtend`, `LinearExtrapolate`, `Neumann`,
+`Dirichlet { value }`, `Robin { alpha, beta }`, `OddReflect`. For
+operator-level treatments:
 
 - `KillingChernoff` — absorbing / Dirichlet via Feynman–Kac.
 - `ReflectedHeatChernoff` — Neumann via Walsh 1986 image method.
@@ -209,16 +212,24 @@ accepts a closure is available in PyO3 only.
 
 ## I want gridless (particle-ensemble) diagnostics
 
-After each evolution step with `GridlessChernoff`, inspect the `MeasureState`
-output to monitor convergence:
+`GridlessChernoff<F, D>` evolves a particle ensemble (`MeasureState<F, D>`)
+instead of a grid function. Inspect the resulting `MeasureState` to monitor the
+evolution:
 
 ```rust
-use semiflow_core::{MeasureState, GridlessChernoff, ChernoffSemigroup};
+use semiflow::{ChernoffSemigroup, GridlessChernoff, MeasureState, ParticleReduction};
 
-// ... build evolver and evolve to get `state: MeasureState<f64, 2>` ...
+// Isotropic heat (a = ½, b = c = 0) in 2D, particle cap 256.
+let kernel = GridlessChernoff::<f64, 2>::isotropic(
+    0.5, 0.0, 0.0, ParticleReduction::WeightedVoronoi { cap: 256 },
+);
+let u0 = MeasureState::dirac([0.0, 0.0], 1.0);
+let state = ChernoffSemigroup::new(kernel, 8).expect("n >= 1")
+    .evolve(0.5, &u0).expect("evolve ok");
+
 let mean:         [f64; 2] = state.first_moment();
 let total_var:    f64      = state.variance();          // E[|x|²] − |E[x]|² (§38.12)
-let per_axis_var: [f64; 2] = state.variance_per_axis(); // per-component variance
+let per_axis_var: [f64; 2] = state.variance_per_axis(); // ≈ [0.5, 0.5] = 2·a·t per axis
 ```
 
 `variance` is the total scalar variance (§38.12). `variance_per_axis` returns each
@@ -229,20 +240,32 @@ the evolution.
 
 The `TtEvolver`, `TtCoupledEvolver`, `TtState`, `VarCoefTtEvolver`, `MeasureState`,
 and `GridlessEvolver` types are importable directly from the `semiflow` package
-(Python wheel `semiflow-pde`):
+(Python wheel `semiflow-pde`). The evolvers update the state **in place**:
 
 ```python
-from semiflow import TtState, TtEvolver, TtCoupledEvolver
-from semiflow import MeasureState, GridlessEvolver
-from semiflow import VarCoefTtEvolver
+import numpy as np
+from semiflow import TtState, TtEvolver, VarCoefTtEvolver
 
-# TtEvolver: TT-Chernoff for the diagonal-A Gaussian class
-ev = TtEvolver(d=4, n=32, a_diag=[0.5, 0.5, 0.5, 0.5], n_steps=50)
-state_out = ev.evolve(t=1.0, state_in=initial_tt_state)
+d, n = 4, 32
+xs = np.linspace(-3.0, 3.0, n)
 
-# VarCoefTtEvolver: separable diagonal variable coefficients
-# Raises SemiflowError (VarCoefOutOfClass) if coefficients are non-separable
-ev2 = VarCoefTtEvolver(d=2, n=64, a_seqs=a_seqs_list, n_steps=100)
+# TtEvolver: TT-Chernoff for the diagonal-A Gaussian class.
+# TtEvolver(a, b, c, dom_min, dom_max, eps_round) — per-axis a/b, scalar c.
+ev = TtEvolver(a=[0.5] * d, b=[0.0] * d, c=0.0,
+               dom_min=[-3.0] * d, dom_max=[3.0] * d, eps_round=1e-10)
+state = TtState([np.exp(-xs**2) for _ in range(d)])   # rank-1 separable IC
+ev.evolve(state, t_final=1.0, n_steps=50)
+print(state.peak_rank(), state.storage_size())
+
+# VarCoefTtEvolver: additive-separable variable coefficients, sampled per axis.
+# VarCoefTtEvolver(a_axis, b_axis, v_axis, domain, eps_round); raises
+# SemiflowError(kind="OutOfDomain") for inputs outside the separable class.
+ev2 = VarCoefTtEvolver([0.5 + 0.1 * np.tanh(xs) for _ in range(2)],   # a_j(x_j) > 0
+                       [np.zeros(n) for _ in range(2)],               # b_j(x_j)
+                       [np.zeros(n) for _ in range(2)],               # v_j(x_j)
+                       [(-3.0, 3.0)] * 2, eps_round=1e-10)
+state2 = TtState([np.exp(-xs**2) for _ in range(2)])
+ev2.evolve(state2, t_final=0.1, n_steps=100)
 ```
 
 `TtState` holds the tensor-train grid function; `MeasureState` holds the
@@ -285,14 +308,14 @@ cargo run --release -p semiflow --example rough_heston_pricer \
 - See [precision-policy.md](precision-policy.md) and
   [api-stability.md](api-stability.md) for guarantees and gated floors.
 
-### Honest benchmark summary (iter-8, HEAD b923777, 45 families)
+### Honest benchmark summary (45 engine families)
 
 SemiFlow's primary measured advantage is **memory frugality**: flat ~3 MB working
 set across all 1D/2D/3D families, vs 50–418 MB for heavy frameworks (KIOPS 418 MB,
-Dedalus ~146 MB, scipy-mol-3d 90 MB). 33/43 head-to-head pairs show RC using less
-memory than the competitor.
+Dedalus ~146 MB, scipy-mol-3d 90 MB). 33/43 head-to-head pairs show SemiFlow using
+less memory than the competitor.
 
-**Wallclock** is honestly not a general strength. RC is uniformly slower than
+**Wallclock** is honestly not a general strength. SemiFlow is uniformly slower than
 adaptive ODE solvers and spectral methods at matched accuracy (e.g. 730× slower
 than SUNDIALS-CVODE on 1D heat at 5e-5 accuracy; 7303× slower than QuantLib
 FDM-CEV). If raw solve speed is the primary concern, an adaptive solver is likely
@@ -308,18 +331,19 @@ ceiling for small-grid 2D work).
   practical alternative.
 - Tail-latency-sensitive HFT pricing (niche): `Diffusion4thChernoff` achieves
   **41 ns p99.9** vs QuantLib V3 CEV 9573 ns (**233× advantage**, 95% CI [227×,
-  236×]) clean; **284×** [272×, 335×] under DRAM stress (p99.9 RC 53 ns vs QL
+  236×]) clean; **284×** [272×, 335×] under DRAM stress (p99.9 SemiFlow 53 ns vs QL
   15032 ns). Matched accuracy err=8e-6 < 5e-4 gate; 0 heap allocs in hot loop;
-  1M ticks × 5 reps, core-0 pinned, i7-12700K. RC tail degrades only 1.29× clean
-  → DRAM-stressed vs QL's 1.57× ("gold under stress"). Source:
-  `benchmarks/hft-latency-tail/data/phase-e-summary.md`, `examples/latency_tail.rs`.
+  1M ticks × 5 reps, core-0 pinned, i7-12700K. SemiFlow's tail degrades only 1.29×
+  clean → DRAM-stressed vs QL's 1.57× ("gold under stress"). Reproduce with
+  [`latency_tail.rs`](../crates/semiflow/examples/latency_tail.rs).
   **This is a niche win.** Wallclock H-WALL is FALSIFIED for general PDE solving.
 - S³ flagship capabilities: TtChernoff 524288× storage advantage at d=4
   (H-CURSE SUPPORT); ReverseChernoff O(√n) checkpoint memory (slope 0.4956,
   r²=0.999); GridlessChernoff N-independent 13.9/22.5 KB working set at d=1/2.
   S³ low-rank carriers are **L1-resident**: TtChernoff 0.0008% L1d-miss,
-  ReverseChernoff 0.0019% (confirmed via perf cpu_core/ counters, b923777) —
+  ReverseChernoff 0.0019% (confirmed via perf cpu_core/ counters) —
   approximately 4 orders of magnitude below a dense 256 KB working set (80.9%
   L1d-miss). This applies to the low-rank carriers only, not dense-grid engines.
 
-Source: `remizov-publications/benchmarks/results/aggregate-iter8/iter8-cross-wave.md`.
+These figures come from the maintainer's cross-framework benchmark campaign on
+an i7-12700K; they are measurements, not guarantees.

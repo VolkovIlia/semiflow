@@ -1,19 +1,23 @@
 # Contributing to SemiFlow
 
 Thank you for contributing. This guide covers the full workflow for the SemiFlow
-workspace (repository directory `remizovcore`; the crates were renamed
-`remizov-*` -> `semiflow-*`, and the core crate is `semiflow`).
+workspace (repository [`VolkovIlia/semiflow`](https://github.com/VolkovIlia/semiflow);
+the core crate is `semiflow`).
 
 ## Repository Layout
 
-Four-crate workspace:
+Workspace crates:
 
 | Crate | Kind | Purpose |
 |-------|------|---------|
-| `crates/semiflow` | `rlib` | Core math: Chernoff operator semigroup approximations |
-| `crates/semiflow-ffi` | `cdylib` (C ABI) | C-facing bindings; design in ADR-0028 |
-| `crates/semiflow-py` | PyO3 wheel | Python bindings via maturin |
-| `crates/semiflow-wasm` | wasm-bindgen | WebAssembly bindings |
+| `crates/semiflow` | `rlib` | Core math: Chernoff operator semigroup approximations (crates.io `semiflow`) |
+| `crates/semiflow-ffi` | `cdylib` (C ABI) | C-facing bindings; design in ADR-0028 (built from source) |
+| `crates/semiflow-py` | PyO3 wheel | Python bindings via maturin (PyPI `semiflow-pde`) |
+| `crates/semiflow-wasm` | wasm-bindgen | WebAssembly bindings (npm `@semiflow/wasm`) |
+| `crates/semiflow-nostd-check` | test crate | `no_std` + `libm` oracle checks (not published) |
+
+`nostd-qemu/` (excluded from the workspace) runs the same `no_std` checks as a
+bare-metal binary under QEMU.
 
 Key directories:
 
@@ -53,7 +57,7 @@ Two workflow files cover the full gate set:
 
 | Workflow | Trigger | Gates |
 |----------|---------|-------|
-| `ci.yml` | every push + PR | fmt, clippy, test (fast), doc, suckless, **unsafe-scope** (NEW), deny, coverage, ffi/py/wasm builds and smokes |
+| `ci.yml` | every push + PR | fmt, clippy, test (fast), doc, doc-check, suckless, **unsafe-scope**, deny, coverage, `no_std` builds, ffi/py/wasm builds and smokes |
 | `flagship-gates.yml` | nightly + `workflow_dispatch` | **all RELEASE_BLOCKING slow gates** (see below) |
 
 `unsafe-scope` (C-C3 fix) — `cargo run -p xtask -- check-unsafe-scope` — is now
@@ -137,8 +141,8 @@ New `unsafe` outside these paths requires an ADR.
 
 1. Add a module file: `crates/semiflow/src/<name>.rs`.
 2. Implement `ChernoffFunction<F: SemiflowFloat = f64>` — methods `apply_into`,
-   `order`, `growth`. (`apply` was removed at v3.0, ADR-0074; `order` has been
-   required since the same wave.)
+   `order`, `growth`. (`apply` was removed by ADR-0074; `order` has been
+   required since the same change.)
 3. Re-export from `crates/semiflow/src/lib.rs`.
 4. Add a unit test in the same file (≤50 LoC).
 5. If order > 2 or the type introduces 2D/3D coupling: write an ADR and add a
@@ -241,6 +245,16 @@ intentional asymmetry.
 
 ## Documentation Updates
 
+- **READMEs are generated.** `README.md`, `crates/semiflow/README.md`,
+  `crates/semiflow-py/README.md` and `crates/semiflow-wasm/README.md` are built
+  from the sources in `docs/readme/` — do not edit them by hand. Edit
+  `docs/readme/` and regenerate with `cargo run -p xtask -- readme`; CI runs
+  `cargo run -p xtask -- readme --check` and fails on drift.
+- The README is the single place for install commands, versions, feature flags,
+  the `no_std` guide and the engine catalogue; other docs link to it
+  (e.g. `README.md#feature-flags`) instead of repeating those facts.
+- `cargo run -p xtask -- doc-check` guards the user-facing docs (package names,
+  versions, binding-surface claims); CI runs it on every push.
 - Public API changes require rustdoc updates with at least one runnable
   `doctest` or a reference to `examples/`.
 - Math spec changes require updating `contracts/semiflow-core.math.md` and, if

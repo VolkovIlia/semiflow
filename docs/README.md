@@ -10,22 +10,24 @@ reference, see [docs.rs/semiflow](https://docs.rs/semiflow).
 |----------|---------|
 | [Quickstart](QUICKSTART.md) | Smallest runnable heat-equation program |
 | [User Guide](USER_GUIDE.md) | Use-case-driven tour ("I want to solve …") |
-| [Install](INSTALL.md) | Installation and feature flags |
+| [Install](INSTALL.md) | Toolchain and installation pointers |
 | [Bindings Guide](BINDINGS.md) | C, Python, and WASM usage |
-| [`semiflow/README.md`](../crates/semiflow/README.md) | Full type catalogue + cargo features |
+| [Project README](../README.md) | Install commands, [feature flags](../README.md#feature-flags), [`no_std`](../README.md#no_std), [engine catalogue](../README.md#engine-catalogue), bindings overview |
 | [`examples/`](../crates/semiflow/examples/README.md) | Worked examples, beginner → advanced |
 | [precision-policy.md](precision-policy.md) | Accuracy / performance trade-offs |
-| [python-coverage.md](python-coverage.md) | Python binding parity matrix |
+| [python-coverage.md](python-coverage.md) | Binding parity matrix (Rust / C / Python / WASM) |
+| [api-stability.md](api-stability.md) | Versioning and API-stability policy |
+| [Role and roadmap](semiflow_role_and_roadmap.md) | Positioning, honest scope limits, roadmap pointers |
 
 ## For developers & contributors
 
 | Document | Purpose |
 |----------|---------|
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Workflow, conventions, ADR process |
-| [api-stability.md](api-stability.md) | Semantic-versioning and API-stability policy |
 | [release-process.md](release-process.md) | How releases are cut |
+| [`readme/`](readme) | Sources of the generated READMEs — edit here, then `cargo run -p xtask -- readme` |
 | [`adr/`](adr) | Architecture Decision Records (the "why" behind the design) |
-| [`migration/`](migration) | API-evolution notes across development versions |
+| [`migration/`](migration) | API-evolution notes across versions |
 | [`audit-findings-*.md`](.) | Per-release math-fidelity audit records |
 | [SECURITY.md](../SECURITY.md) | Vulnerability disclosure |
 | [`contracts/`](../contracts) | Contract-first IDL / property specs |

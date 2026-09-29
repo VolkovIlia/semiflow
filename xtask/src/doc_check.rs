@@ -27,6 +27,18 @@
 //!      authoritative, exhaustive class list is the wasm-pack-generated `semiflow_wasm.d.ts`
 //!      (mirroring Check 3c / FFI policy; enumerating 50+ classes in prose is unmaintainable).
 //!
+//! 5. **Name / version consistency** (all READMEs, top-level `docs/*.md`, `SECURITY.md`,
+//!    `CONTRIBUTING.md`, `CITATION.cff`, `.zenodo.json`):
+//!    - 5a. Pre-rebrand names (`semiflow_core`, `semiflow-core`, `remizovcore`); the real
+//!      contract filenames `contracts/semiflow-core.*` are allowed.
+//!    - 5b. A `semiflow = "…"` / `semiflow = { version = "…" }` requirement that is not
+//!      the workspace version.
+//!    - 5c. `npm install` / `pip install` of anything but `@semiflow/wasm` / `semiflow-pde`.
+//!    - 5d. `CITATION.cff` / `.zenodo.json` version differing from the workspace version.
+//!
+//!    Historical records (`docs/adr/`, `docs/audit-findings-*`, `docs/migration/`,
+//!    `docs/perf*`) are not scanned: they describe the past on purpose.
+//!
 //! ## Fragility ledger
 //!
 //! - Check 1a: unconditional denylist; `allow-unpublished` inline marker as escape hatch.
@@ -96,6 +108,7 @@ pub fn run() -> Result<()> {
     check_exposed_classes(&root, &mut violations, &mut warnings)?;
     check_ffi_surface(&root, &mut violations, &mut warnings)?;
     check_wasm_surface(&root, &mut violations, &mut warnings)?;
+    check_names_and_versions(&root, &mut violations)?;
 
     for w in &warnings {
         eprintln!("doc-check: warn: {w}");
@@ -970,4 +983,167 @@ fn strip_front_matter(src: &str) -> &str {
         }
     }
     src
+}
+
+// ---------------------------------------------------------------------------
+// Check 5 — package names and versions across user-facing docs
+// ---------------------------------------------------------------------------
+
+/// User-facing documents: READMEs, top-level `docs/*.md` (minus historical
+/// records), `SECURITY.md`, `CONTRIBUTING.md`.
+fn user_doc_paths(root: &Path) -> Vec<PathBuf> {
+    let mut paths = readme_paths(root);
+    for name in ["SECURITY.md", "CONTRIBUTING.md"] {
+        paths.push(root.join(name));
+    }
+    if let Ok(entries) = fs::read_dir(root.join("docs")) {
+        let mut docs: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                p.extension().is_some_and(|e| e == "md")
+                    && !name.starts_with("audit-findings-")
+                    && !name.starts_with("perf-")
+            })
+            .collect();
+        docs.sort();
+        paths.extend(docs);
+    }
+    paths.retain(|p| p.exists());
+    paths
+}
+
+fn workspace_version(root: &Path) -> Result<String> {
+    let src = fs::read_to_string(root.join("Cargo.toml"))?;
+    src.lines()
+        .skip_while(|l| l.trim() != "[workspace.package]")
+        .skip(1)
+        .take_while(|l| !l.trim_start().starts_with('['))
+        .find_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            (k.trim() == "version").then(|| v.trim().trim_matches('"').to_owned())
+        })
+        .ok_or_else(|| anyhow::anyhow!("doc-check: no [workspace.package] version"))
+}
+
+fn check_names_and_versions(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let version = workspace_version(root)?;
+    for path in user_doc_paths(root) {
+        let src = fs::read_to_string(&path)?;
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        for (no, line) in src.lines().enumerate() {
+            let at = format!("doc-check: {rel}:{}", no + 1);
+            check_legacy_names(&at, line, violations);
+            check_dependency_version(&at, line, &version, violations);
+            check_install_names(&at, line, violations);
+        }
+    }
+    check_citation_versions(root, &version, violations)
+}
+
+/// 5a: pre-rebrand crate / directory names.
+fn check_legacy_names(at: &str, line: &str, violations: &mut Vec<Violation>) {
+    let without_contract_files = line.replace("semiflow-core.", "");
+    for legacy in ["semiflow_core", "semiflow-core", "remizovcore"] {
+        if without_contract_files.contains(legacy) {
+            violations.push(Violation::new(format!(
+                "{at}: pre-rebrand name `{legacy}` — the crate is `semiflow`"
+            )));
+        }
+    }
+}
+
+/// 5b: `semiflow = "X"` and `semiflow = { version = "X", … }` must name the current version.
+fn check_dependency_version(at: &str, line: &str, version: &str, violations: &mut Vec<Violation>) {
+    let t = line.trim();
+    let Some(rest) = t.strip_prefix("semiflow") else {
+        return;
+    };
+    let Some(rest) = rest.trim_start().strip_prefix('=') else {
+        return;
+    };
+    let rest = rest.trim_start();
+    let quoted = if let Some(r) = rest.strip_prefix('"') {
+        r.split('"').next()
+    } else if rest.starts_with('{') {
+        rest.split("version")
+            .nth(1)
+            .and_then(|r| r.split('"').nth(1))
+    } else {
+        None
+    };
+    if let Some(req) = quoted {
+        if req != version {
+            violations.push(Violation::new(format!(
+                "{at}: dependency snippet requires semiflow \"{req}\", workspace version is \"{version}\""
+            )));
+        }
+    }
+}
+
+/// 5c: install commands must use the published package names.
+fn check_install_names(at: &str, line: &str, violations: &mut Vec<Violation>) {
+    for (cmd, expected) in [
+        ("npm install ", "@semiflow/wasm"),
+        ("pip install ", "semiflow-pde"),
+    ] {
+        for (i, _) in line.match_indices(cmd) {
+            let args = &line[i + cmd.len()..];
+            let Some(pkg) = args
+                .split_whitespace()
+                .map(|w| w.trim_matches(|c: char| "`\"',.;:()".contains(c)))
+                .find(|w| !w.starts_with('-'))
+            else {
+                continue;
+            };
+            // Drop a version specifier: `@scope/pkg@1.2.3`, `pkg==1.2.3`, `pkg>=1`.
+            let pkg = pkg.split(['=', '>', '<', '~', '!']).next().unwrap_or(pkg);
+            let pkg = match pkg.rfind('@') {
+                Some(i) if i > 0 => &pkg[..i],
+                _ => pkg,
+            };
+            if pkg.contains("semiflow") && pkg != expected && !pkg.ends_with(".whl") {
+                violations.push(Violation::new(format!(
+                    "{at}: `{cmd}{pkg}` — the published package is `{expected}`"
+                )));
+            }
+        }
+    }
+}
+
+/// 5d: citation metadata carries the workspace version.
+fn check_citation_versions(
+    root: &Path,
+    version: &str,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    for (file, key) in [
+        ("CITATION.cff", "version:"),
+        (".zenodo.json", "\"version\":"),
+    ] {
+        let path = root.join(file);
+        let Ok(src) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let found = src.lines().find_map(|l| {
+            let t = l.trim();
+            t.strip_prefix(key)
+                .map(|v| v.trim().trim_end_matches(',').trim_matches('"').to_owned())
+        });
+        match found {
+            Some(v) if v == version => {}
+            Some(v) => violations.push(Violation::new(format!(
+                "doc-check: {file}: version \"{v}\" differs from workspace version \"{version}\""
+            ))),
+            None => violations.push(Violation::new(format!(
+                "doc-check: {file}: no version field"
+            ))),
+        }
+    }
+    Ok(())
 }
