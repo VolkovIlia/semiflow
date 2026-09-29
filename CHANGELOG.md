@@ -6,12 +6,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-CI, documentation and contract hygiene, plus two library changes: the `no_std`
-build fix (#40) and one math backend for every build, so `std` and `no_std`
-results are bit-identical (see Changed). No ABI change, and no gate threshold
-or tolerance changes.
+CI, documentation and contract hygiene, plus three library changes: the
+`no_std` build fix (#40), one math backend for every build so `std` and
+`no_std` results are bit-identical, and `no_std` as the default build (see
+Changed). No ABI change, and no gate threshold or tolerance changes.
 
 ### Changed
+
+- **BREAKING: the default build is `#![no_std]` + `alloc` (ADR-0201); MSRV
+  1.78 → 1.81.** `simd` no longer implies `std` (its intrinsics come from
+  `core::arch`), so `semiflow = "…"` gives a `no_std` build with SIMD kernels.
+  `std` is opt-in and needed only for `parallel`. `SemiflowError` implements
+  `core::error::Error` (stable since 1.81, the same trait as
+  `std::error::Error`) in every build, so `?` into `Box<dyn Error>` keeps
+  working without the `std` feature. Code that relied on semiflow's default
+  features to enable `num-traits/std` must enable it itself. The binding
+  crates already name their features and are unaffected.
 
 - **`std` and `no_std` builds produce identical bits (ADR-0200).** Before
   this, `std` builds computed generic transcendentals (`exp`, `powf`, `sin`, …

@@ -96,8 +96,9 @@ independently versioned after 1.0.0.
 
 ## 3. MSRV Policy
 
-**1.0.0 MSRV**: Rust **1.78**, as declared in `[workspace.package]
-rust-version = "1.78"` in the root `Cargo.toml`.
+**1.0.0 MSRV**: Rust **1.81**, as declared in `[workspace.package]
+rust-version = "1.81"` in the root `Cargo.toml` (1.81 stabilised
+`core::error::Error`, which `SemiflowError` implements in `no_std` builds).
 
 MSRV increases are **MINOR** version bumps, not MAJOR. Rationale: Rust's
 compatibility model guarantees that older compilers reject code using newer

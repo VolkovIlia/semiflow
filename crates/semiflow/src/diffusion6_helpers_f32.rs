@@ -176,8 +176,8 @@ pub(super) fn fd9_f32(
     coeffs: &[f64; 9],
     deriv: i32,
 ) -> Result<f32, SemiflowError> {
-    #[cfg(feature = "simd")]
-    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
         return fd9_scalar_f32(f, x, delta, coeffs, deriv);
     }
     fd9_simd_f32(f, x, delta, coeffs, deriv)

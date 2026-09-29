@@ -29,7 +29,7 @@ Key directories:
 
 ## MSRV & Toolchain
 
-Minimum Supported Rust Version: **1.78**.
+Minimum Supported Rust Version: **1.81**.
 
 The `rust-toolchain.toml` at repo root pins `channel = "stable"`. No env-var
 override is needed; `cargo run -p xtask -- <command>` works as-is on rustc ≥1.85

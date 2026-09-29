@@ -1,8 +1,8 @@
 //! `no_std` execution and bit-identity check for [`semiflow`].
 //!
-//! `semiflow` builds `#![no_std]` (with `alloc`) when its default features are
-//! off. This crate depends on `semiflow` alone, with default features off, and
-//! runs every scenario below in that build — on the host
+//! `semiflow`'s default build is `#![no_std]` (with `alloc`, ADR-0201). This
+//! crate depends on `semiflow` alone, with its default features, and runs every
+//! scenario below in that build — on the host
 //! (`cargo test -p semiflow-nostd-check`) and on bare-metal Cortex-M
 //! (`nostd-qemu/` at the repository root, run under QEMU).
 //!
@@ -17,7 +17,7 @@
 //! the committed table in `expected.rs`. `semiflow` evaluates every
 //! transcendental through `libm` and runs the same lane arithmetic in every
 //! build (ADR-0200), so the table must be reproduced unchanged by the `no_std`
-//! build, by the `std-ref` feature (semiflow's default `std` + `simd` build,
+//! build, by the `std-ref` feature (semiflow with `std` + `simd`,
 //! `num-traits/std` on), with AVX2 or NEON intrinsics, and on Cortex-M.
 
 #![no_std]

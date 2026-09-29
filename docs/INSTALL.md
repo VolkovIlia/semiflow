@@ -13,7 +13,7 @@ Install Rust via [rustup](https://rustup.rs/):
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-MSRV: **1.78**. The repository includes a `rust-toolchain.toml` that pins the
+MSRV: **1.81**. The repository includes a `rust-toolchain.toml` that pins the
 toolchain automatically when building from a checkout.
 
 ## Adding to a project
@@ -22,12 +22,13 @@ toolchain automatically when building from a checkout.
 cargo add semiflow
 ```
 
-Default features include `simd` (AVX2/NEON auto-selected; scalar fallback on
-other architectures), which implies `std`.
+The default build is `#![no_std]` + `alloc` with `simd` (AVX2/NEON
+auto-selected; scalar lanes on other architectures). `std` is needed only for
+`parallel`.
 
 - Feature flags (`simd`, `std`, `parallel`, `linear-interp`, …): see
   [README § Feature flags](../README.md#feature-flags).
-- Embedded / bare-metal use (`default-features = false`, `#![no_std]` + `alloc`):
+- Embedded / bare-metal use (the default: `#![no_std]` + `alloc`):
   see [README § no_std](../README.md#no_std).
 
 ## Bindings

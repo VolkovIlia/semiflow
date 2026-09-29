@@ -112,9 +112,9 @@ not allocate.
 semiflow = "{{version}}"
 ```
 
-MSRV: **Rust {{msrv}}**. The default feature `simd` enables AVX2/NEON kernels
-(scalar fallback elsewhere) and implies `std`. For `no_std`, see
-[below](#no_std).
+MSRV: **Rust {{msrv}}**. The default build is `#![no_std]` + `alloc` with
+AVX2/NEON kernels (feature `simd`, scalar lanes elsewhere); `std` is needed
+only for `parallel`. See [below](#no_std).
 
 <!-- /only -->
 <!-- only: pypi -->
@@ -188,33 +188,34 @@ the runnable [examples](crates/semiflow/examples/README.md)
 
 ```toml
 [dependencies]
-semiflow = { version = "{{version}}", default-features = false }
+semiflow = "{{version}}"   # no_std + alloc, SIMD kernels
 ```
 
-Without default features the crate is `#![no_std]` and needs only `alloc`.
-What that means in practice:
+The crate is `#![no_std]` by default and needs only `alloc`; the `std`
+feature is needed only for `parallel`. What that means in practice:
 
 - Your binary provides a `#[global_allocator]` and a `#[panic_handler]`, as
-  for any `no_std + alloc` program.
+  for any `no_std + alloc` program (a `std` program already has both).
 - The target needs pointer-sized atomics (the engines share coefficient
   closures through `alloc::sync::Arc`): Cortex-M3/M4/M7/M33, RISC-V with the
   `a` extension, `x86_64-unknown-none` and similar work; `thumbv6m` does not.
-- `SemiflowError` implements `Debug` and `Display`; the `std::error::Error`
-  impl needs the `std` feature.
+- `SemiflowError` implements `Debug`, `Display` and `core::error::Error`
+  (the same trait as `std::error::Error`) in every build.
 - `f32`/`f64` transcendentals come from the pure-Rust [`libm`](https://crates.io/crates/libm)
   in every build, and the SIMD kernels use the same lane arithmetic with or
   without intrinsics, so `std`, `no_std`, `simd` and non-`simd` builds give
   bit-identical results on every CPU.
-- `simd` and `parallel` require `std`.
+- `simd` works without `std` (the intrinsics come from `core::arch`);
+  `parallel` requires `std`.
 
 This is verified on every pull request, not just type-checked:
 
 | CI job | What it proves |
 |--------|----------------|
-| `no-std` | `cargo build --no-default-features` for the host, `thumbv7em-none-eabihf`, `thumbv7m-none-eabi`, and at MSRV {{msrv}} |
-| `no-std-test` | the full `semiflow` test suite passes with the crate built `no_std` |
-| `no-std-libm` | [`semiflow-nostd-check`](crates/semiflow-nostd-check) — closed-form oracle checks plus per-scenario output digests: the `no_std` build (the job fails if anything enables `num-traits/std`), the default `std` + `simd` build and its AVX2 lanes must all produce the committed bits |
-| `no-std-libm-neon` | the same digests from the default build on aarch64 (NEON lanes) |
+| `no-std` | the default and the featureless build for the host, `thumbv7em-none-eabihf`, `thumbv7m-none-eabi`, `riscv32imac-unknown-none-elf`, and at MSRV {{msrv}} |
+| `no-std-test` | the full `semiflow` test suite passes in the default (`no_std`) configuration |
+| `no-std-libm` | [`semiflow-nostd-check`](crates/semiflow-nostd-check) — closed-form oracle checks plus per-scenario output digests: the default `no_std` build (the job fails if anything enables `num-traits/std`), the `std` build and its AVX2 lanes must all produce the committed bits |
+| `no-std-libm-neon` | the same digests from the `std` build on aarch64 (NEON lanes) |
 | `no-std-qemu` | the same checks and digests as a bare-metal `#![no_main]` binary on Cortex-M3 (soft float) and Cortex-M4F (hard float) under QEMU — see [`nostd-qemu`](nostd-qemu/README.md) |
 
 ## Feature flags

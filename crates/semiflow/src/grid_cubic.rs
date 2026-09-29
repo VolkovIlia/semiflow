@@ -47,11 +47,11 @@ fn catmull_rom_simd(pm1: f64, p0: f64, p1: f64, p2: f64, s: f64) -> f64 {
 /// Catmull-Rom dispatcher — portable lanes in every build (ADR-0200), with
 /// intrinsics behind the lane alias when `simd` is active.
 ///
-/// `cfg!(test) && FORCE_SCALAR` collapses to false in release builds (zero cost).
+/// The `FORCE_SCALAR` branch exists only in the library's unit tests.
 #[inline]
 pub(crate) fn catmull_rom(pm1: f64, p0: f64, p1: f64, p2: f64, s: f64) -> f64 {
-    #[cfg(feature = "simd")]
-    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
         return catmull_rom_scalar(pm1, p0, p1, p2, s);
     }
     catmull_rom_simd(pm1, p0, p1, p2, s)
@@ -103,11 +103,11 @@ fn catmull_rom_simd_f32(pm1: f32, p0: f32, p1: f32, p2: f32, s: f32) -> f32 {
 /// Catmull-Rom f32 dispatcher — portable lanes in every build (ADR-0200).
 ///
 /// Used by f32 leaf kernels' sampling paths (ADR-0175, Phase 5b).
-/// `cfg!(test) && FORCE_SCALAR` collapses to false in release builds (zero cost).
+/// The `FORCE_SCALAR` branch exists only in the library's unit tests.
 #[inline]
 pub(crate) fn catmull_rom_f32(pm1: f32, p0: f32, p1: f32, p2: f32, s: f32) -> f32 {
-    #[cfg(feature = "simd")]
-    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
         return catmull_rom_scalar_f32(pm1, p0, p1, p2, s);
     }
     catmull_rom_simd_f32(pm1, p0, p1, p2, s)

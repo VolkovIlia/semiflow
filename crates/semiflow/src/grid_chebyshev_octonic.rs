@@ -210,8 +210,8 @@ fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64,
 #[allow(clippy::similar_names)]
 #[inline]
 fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    #[cfg(feature = "simd")]
-    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
         return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
     }
     fd_scaled_prime_simd(values, bnd, n, idx, dx)

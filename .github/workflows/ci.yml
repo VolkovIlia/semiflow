@@ -1,7 +1,7 @@
 name: CI
 # Toolchain note: all jobs use stable. rustfmt.toml was cleaned of nightly-only
 # options (imports_granularity/group_imports removed in ADR-0182) so fmt now
-# runs on stable. MSRV documented in Cargo.toml rust-version = "1.78" is for
+# runs on stable. MSRV documented in Cargo.toml rust-version = "1.81" is for
 # downstream users; CI pins stable (≥1.85) to keep clap_lex/edition2024 deps
 # building correctly — edition 2024 was stabilised in 1.85 (rustc 1.96 on Artix).
 on:
@@ -43,9 +43,10 @@ jobs:
       # `gate-sweep` job in flagship-gates.yml (nightly + release tags).
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       # ADR-0200: clippy.toml's `disallowed_methods` ban on platform-dependent
-      # transcendentals must also hold in the no_std configuration, where every
+      # transcendentals must also hold in the no_std configurations, where every
       # concrete-f64 math call resolves through `num_traits::Float`.
-      - run: cargo clippy -p semiflow -p semiflow-nostd-check --no-default-features --features semiflow/linear-interp,semiflow/s3-poc --lib -- -D warnings
+      - run: cargo clippy -p semiflow -p semiflow-nostd-check --features semiflow/linear-interp,semiflow/s3-poc --lib -- -D warnings
+      - run: cargo clippy -p semiflow --no-default-features --lib -- -D warnings
 
   test:
     runs-on: ${{ matrix.os }}
@@ -70,59 +71,63 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.78
+      - uses: dtolnay/rust-toolchain@1.81
       - uses: Swatinem/rust-cache@v2
       # MSRV applies to the core library only. Binding crates (semiflow-ffi,
       # semiflow-py, semiflow-wasm) depend on cbindgen/pyo3/wasm-bindgen which
-      # require rustc > 1.78; their own MSRV is gated by those upstreams.
-      - run: cargo +1.78 test -p semiflow --lib
+      # require rustc > 1.81; their own MSRV is gated by those upstreams.
+      - run: cargo +1.81 test -p semiflow --lib
 
   no-std:
-    # The default feature set pulls in `std` (simd → std), so before issue #40
-    # nothing compiled the `#![no_std]` configuration the READMEs advertise.
-    # Build (with codegen, not just check) for the host and bare-metal targets,
-    # with the optional non-std features, and at MSRV (where `f64::abs` is not
-    # yet in `core`). Targets without pointer-sized atomics must hit the
-    # explicit `compile_error!` (ADR-0200), not a wall of `alloc::sync` errors.
+    # The default build is `#![no_std]` + `alloc` (ADR-0201): `simd` needs only
+    # `core::arch`, and `std` is opt-in (for `parallel`). Build (with codegen,
+    # not just check) the default and the featureless configuration for the
+    # host and bare-metal targets, the optional non-std features, and check at
+    # MSRV. Targets without pointer-sized atomics must hit the explicit
+    # `compile_error!` (ADR-0200), not a wall of `alloc::sync` errors.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: "thumbv7em-none-eabihf,thumbv7m-none-eabi,riscv32imac-unknown-none-elf,thumbv6m-none-eabi"
-      - uses: dtolnay/rust-toolchain@1.78
+      - uses: dtolnay/rust-toolchain@1.81
       - uses: Swatinem/rust-cache@v2
+      - run: cargo +stable build -p semiflow
       - run: cargo +stable build -p semiflow --no-default-features
-      - run: cargo +stable build -p semiflow --no-default-features --features linear-interp,s3-poc
-      - run: cargo +stable build -p semiflow --no-default-features --target thumbv7em-none-eabihf
+      - run: cargo +stable build -p semiflow --features linear-interp,s3-poc
+      - run: cargo +stable build -p semiflow --target thumbv7em-none-eabihf
+      - run: cargo +stable build -p semiflow --target thumbv7m-none-eabi
+      - run: cargo +stable build -p semiflow --target riscv32imac-unknown-none-elf
       - run: cargo +stable build -p semiflow --no-default-features --target thumbv7m-none-eabi
-      - run: cargo +stable build -p semiflow --no-default-features --target riscv32imac-unknown-none-elf
-      - run: cargo +1.78 check -p semiflow --no-default-features
+      - run: cargo +1.81 check -p semiflow
+      - run: cargo +1.81 check -p semiflow --no-default-features
       - name: thumbv6m (no atomic CAS) fails with the explicit message
         run: |
-          if cargo +stable check -p semiflow --no-default-features --target thumbv6m-none-eabi 2> v6m.log; then
+          if cargo +stable check -p semiflow --target thumbv6m-none-eabi 2> v6m.log; then
             echo "::error::thumbv6m unexpectedly builds; update the README no_std section"; exit 1
           fi
           grep -q "requires a target with pointer-sized atomics" v6m.log
 
   no-std-test:
-    # The whole semiflow test suite (unit + integration) with the crate compiled
-    # `#![no_std]`. The test harness links `std`, so this exercises the no_std
-    # code paths, not the libm math backend — that is `no-std-libm` below.
+    # The whole semiflow test suite (unit + integration) in the default
+    # configuration, which is `#![no_std]` (ADR-0201). `-p semiflow` alone keeps
+    # the binding crates from unifying `std`/`parallel` into the library, as they
+    # do in the workspace-wide `test` job. The test harness itself links `std`.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p semiflow --no-default-features --release
+      - run: cargo test -p semiflow --release
 
   no-std-libm:
-    # `no-std` above only compiles. This job runs semiflow scenarios in a
-    # `no_std` build (crates/semiflow-nostd-check depends on semiflow alone,
-    # default features off) and compares each scenario's output digest with
+    # `no-std` above only compiles. This job runs semiflow scenarios in the
+    # default `no_std` build (crates/semiflow-nostd-check depends on semiflow
+    # alone, default features) and compares each scenario's output digest with
     # the committed table. The same table must come out of the `std-ref`
-    # build (semiflow's default std + simd features, `num-traits/std` on) and
-    # of the AVX2 lanes: std and no_std are bit-identical (ADR-0200).
+    # build (semiflow `std` + `simd`, `num-traits/std` on) and of the AVX2
+    # lanes: std and no_std are bit-identical (ADR-0200, ADR-0201).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

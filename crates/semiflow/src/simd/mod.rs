@@ -14,7 +14,8 @@
 //! The portable lanes (traits + `scalar.rs`) compile in every build, so the
 //! lane kernels sum in the same order with or without the `simd` feature and
 //! `std`/`no_std` results are bit-identical (ADR-0200). Only the intrinsic
-//! backends and the std-only `FORCE_SCALAR` test hook need `feature = "simd"`.
+//! backends need `feature = "simd"`; they use `core::arch`, so `simd` does not
+//! need `std` (ADR-0201).
 
 #![allow(unsafe_code)]
 
@@ -75,26 +76,26 @@ pub(crate) use x86_64::F64x4Avx2 as F64x4;
 // Test-hook: thread-local flag to force scalar path even on x86_64/aarch64.
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "simd")]
+#[cfg(test)]
 thread_local! {
-    /// When `true`, hot-path SIMD call sites use `F64x4Scalar`.
+    /// When `true`, hot-path SIMD call sites use their scalar reference.
     ///
-    /// The `cfg!(test)` guard in consumer call sites makes this zero-cost in
-    /// release builds (branch is eliminated by the optimizer).
-    ///
-    /// Exposed as `pub` (not `pub(crate)`) so integration tests in `tests/`
-    /// can set/clear it. Not part of the stable public API.
-    pub static FORCE_SCALAR: core::cell::Cell<bool> =
+    /// Exists only in the library's unit tests (`cfg(test)`, where the harness
+    /// links `std`); release and integration-test builds have no branch.
+    pub(crate) static FORCE_SCALAR: core::cell::Cell<bool> =
         const { core::cell::Cell::new(false) };
 }
 
 /// Run `closure` with the SIMD force-scalar flag active; resets afterwards.
 ///
-/// Integration-test hook. Not part of the stable API.
-#[cfg(feature = "simd")]
+/// The flag is read only by the library's own unit tests. Anywhere else —
+/// integration tests included — this just runs `closure` on the lane path
+/// (ADR-0200 Honest limits). Not part of the stable API.
 pub fn with_force_scalar<T, F: FnOnce() -> T>(closure: F) -> T {
+    #[cfg(test)]
     FORCE_SCALAR.with(|c| c.set(true));
     let result = closure();
+    #[cfg(test)]
     FORCE_SCALAR.with(|c| c.set(false));
     result
 }

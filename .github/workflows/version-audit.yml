@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.78
+        uses: dtolnay/rust-toolchain@1.81
 
       - name: Run version-audit (advisory — exit 0 always)
         # Pipe to tee so the output appears in the log AND in the job summary.

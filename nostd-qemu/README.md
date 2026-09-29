@@ -5,11 +5,11 @@ microcontroller with no operating system, and that the results are correct
 there. Compiling for a bare-metal target only shows that the code builds. This
 harness runs it and compares the output with known answers.
 
-With default features off, `semiflow` is `#![no_std]`; its math goes through
-the `libm` crate in every build. `semiflow`'s own test suite cannot run that
+By default `semiflow` is `#![no_std]` (ADR-0201); its math goes through the
+`libm` crate in every build. `semiflow`'s own test suite cannot run that
 configuration, because the suite's dev-dependencies link `std`. The scenarios
 live in [`crates/semiflow-nostd-check`](../crates/semiflow-nostd-check). That
-crate depends on `semiflow` alone, with default features off. Each scenario is
+crate depends on `semiflow` alone, with its default features. Each scenario is
 a small problem with a closed-form or independent answer: heat flow checked
 against the exact Gaussian (also through the SIMD lane kernels: cubic, septic
 and octonic Hermite sampling, 9-point FD stencils in `f64` and `f32`, the

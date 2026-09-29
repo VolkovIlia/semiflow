@@ -240,8 +240,8 @@ fn apply_g4_stencil_cached(
     let dx_sq = dx * dx;
     let mut out = prev.zeroed_like();
 
-    #[cfg(feature = "simd")]
-    if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
         apply_g4_stencil_cached_scalar(mc, cache, prev, &mut out, n, dx, dx_sq)?;
         return Ok(out);
     }

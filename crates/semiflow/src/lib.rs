@@ -19,7 +19,7 @@ compile_error!(
      e.g. thumbv7m/thumbv7em/riscv32imac work, thumbv6m does not"
 );
 
-// Unit tests run on the host; when the crate is built `no_std` (`--no-default-features`)
+// Unit tests run on the host; when the crate is built `no_std` (the default)
 // they still need `std` for the test harness, printing and `format!`/`vec!`.
 #[cfg(test)]
 #[macro_use]
