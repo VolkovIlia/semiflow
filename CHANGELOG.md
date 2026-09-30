@@ -4,12 +4,25 @@ All notable changes to SemiFlow are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.14.0-beta] — 2026-09-30
 
-CI, documentation and contract hygiene, plus three library changes: the
-`no_std` build fix (#40), one math backend for every build so `std` and
-`no_std` results are bit-identical, and `no_std` as the default build (see
-Changed). No ABI change, and no gate threshold or tolerance changes.
+Minor release over `0.13.1-beta`, **breaking** for Rust users (allowed in a
+`0.x` minor): the default build is now `#![no_std]` + `alloc`, and the MSRV
+rises from 1.78 to 1.81. `std` and `no_std` builds now produce bit-identical
+results on every CPU, proven in CI by output digests on x86-64, AVX2, aarch64
+NEON and QEMU Cortex-M3/M4F. The remaining changes are CI, documentation and
+contract hygiene. Closes #29, #31, #32, #34 and #40.
+
+No C ABI change, no Python or JavaScript API break, and no gate threshold or
+tolerance change. `std` results can move in the last bits compared with
+`0.13.1-beta` (platform math → `libm`). Every exact-bits golden passed
+unchanged.
+
+Migration:
+- You used `parallel`: nothing changes; it still enables `std`.
+- You relied on `semiflow`'s default features to enable `num-traits/std` for
+  your own `Float` calls: enable it in your manifest.
+- Your toolchain is older than Rust 1.81: upgrade.
 
 ### Changed
 
@@ -91,9 +104,10 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
   - "Rust-only" claims about classes Python exports.
   - Stale SECURITY/CITATION/Zenodo metadata.
   - A "Production/Stable" PyPI classifier on a beta.
-  - The claim that `simd` is bit-identical to the scalar path. The Catmull-Rom
-    interpolant evaluates the same polynomial in a different arrangement, so
-    builds with and without `simd` agree to rounding only.
+  - The claim that `simd` is bit-identical to the scalar path. It was false
+    until this release: the Catmull-Rom interpolant evaluated the same
+    polynomial in a different arrangement. Since ADR-0200 the lanes run in
+    every build, so the claim now holds and is proven by CI.
   - A C build recipe using `--release` (`panic = "abort"`, which defeats the
     `catch_unwind` boundary) instead of `--profile release-ffi`.
 
@@ -113,13 +127,14 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
   `f64` receivers called `std`-only methods (`sqrt`, `ceil`, `floor`, `round`,
   `powf`, `ln`, `log2`, `sin`, `cos`, `rem_euclid`), and several modules used
   `vec!`, `Vec` or `to_owned` without importing them from `alloc`. The
-  `std`-only methods now resolve through `num_traits::Float` (libm) only when
-  `std` is off, so `std` builds keep calling exactly the same functions.
-  `rem_euclid` became a local helper with the same arithmetic. At the 1.78 MSRV,
-  `f64::abs` is not in `core`, so those calls use `libm::fabs`, which is exact.
-  A new `ci.yml` job, `no-std`, checks the build on the host, on
-  `thumbv7em-none-eabihf`, and at 1.78. Until now no job compiled it, because
-  the default `simd` feature always turns on `std`.
+  exactly-rounded methods now resolve through `num_traits::Float` when `std`
+  is off. Every transcendental goes through `SemiflowFloat::libm_*` (see
+  Changed). `rem_euclid` became a local helper with the same arithmetic. The
+  `no-std` job builds the default and the featureless configurations on the
+  host, `thumbv7em-none-eabihf`, `thumbv7m-none-eabi` and
+  `riscv32imac-unknown-none-elf`, and checks both at MSRV 1.81. Until now no
+  job compiled a `no_std` build, because the default `simd` feature turned on
+  `std`.
 
 - **`G4_NS2D_aniso` and `G5_3D` are now `RELEASE_BLOCKING` in the contract
   (#34, ADR-0199).** They were `NORMATIVE`, while `release-process.md`, the
