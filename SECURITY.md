@@ -73,7 +73,7 @@ packages (they share one version number).
   dev; production builds use workspace `panic = "abort"` (ADR-0028 Am. 1).
 - Workspace dependency licensing enforced by `deny.toml` (allowlist;
   `unlicensed = deny`).
-- MSRV pinned at Rust 1.78.
+- MSRV pinned at Rust 1.81.
 
 ## Update Channels
 

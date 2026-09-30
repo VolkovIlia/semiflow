@@ -17,7 +17,7 @@
 //!
 //! ## Layer 3 — [`Discrete<F>`]
 //!
-//! Graph/manifold/lattice extension. Uses GATs (stable Rust 1.65, MSRV 1.78)
+//! Graph/manifold/lattice extension. Uses GATs (stable Rust 1.65, MSRV 1.81)
 //! to eliminate `Box<dyn Iterator>` per the v0.14.0 spike finding. Tensor
 //! grid types (`GridFn{1,2,3}D`) do **not** implement `Discrete<F>`.
 //!
@@ -167,7 +167,7 @@ pub trait HilbertState<F: SemiflowFloat = f64>: State<F> {
 /// pipelines use slice pencils (Wave 2).
 ///
 /// The GAT `type Neighbours<'a>` eliminates the `Box<dyn Iterator>` allocation
-/// flagged by the v0.14.0 spike (stable since Rust 1.65; MSRV is 1.78).
+/// flagged by the v0.14.0 spike (stable since Rust 1.65; MSRV is 1.81).
 ///
 /// ## Boundary conditions
 ///

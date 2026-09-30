@@ -1,6 +1,6 @@
 ---
-version: 1.8.0
-last_updated: 2026-09-28
+version: 1.9.0
+last_updated: 2026-09-30
 freshness_score: 1.0
 dependencies:
   - crates/semiflow/src/lib.rs
@@ -38,6 +38,8 @@ changelog:
   - 1.8.0: 0.13.1-beta de-stale — FFI and WASM columns re-derived from include/semiflow.h and
     #[wasm_bindgen] exports; TT / gridless / GraphTraj / StrangSplitGraph rows corrected
     (all bound); internal-scheme versions replaced by public 0.x releases
+  - 1.9.0: 0.14.0-beta — ReverseHeat1D importable from `semiflow` (ImportError note removed);
+    no binding surface change otherwise
 graph-unverified: false
 ---
 
@@ -47,7 +49,7 @@ This document tracks binding parity across the four public surfaces of the
 `semiflow` workspace: the Rust crate `semiflow`, the C ABI `semiflow-ffi`, the
 Python wheel `semiflow-pde` (import name `semiflow`, crate `semiflow-py`) and
 the npm package `@semiflow/wasm` (crate `semiflow-wasm`). It reflects
-**0.13.1-beta**. All four crates share one workspace version (ADR-0035).
+**0.14.0-beta**. All four crates share one workspace version (ADR-0035).
 
 The authoritative lists are generated artefacts, not this page: the C header
 [`crates/semiflow-ffi/include/semiflow.h`](../crates/semiflow-ffi/include/semiflow.h),
@@ -275,10 +277,10 @@ const result = rc.valueAndGrad(0.05, u0, target);
 // result: Float64Array[2] — [value, grad]
 ```
 
-> **Note:** in 0.13.1-beta `ReverseHeat1D` is registered in the native module
-> but missing from the package's re-export list, so `from semiflow import
-> ReverseHeat1D` raises `ImportError`; use `from semiflow.semiflow import
-> ReverseHeat1D` until that is fixed.
+> **Note:** up to 0.13.1-beta `ReverseHeat1D` was registered in the native
+> module but missing from the package's re-export list, so `from semiflow import
+> ReverseHeat1D` raised `ImportError`. Fixed in 0.14.0-beta;
+> `tests/test_public_exports.py` guards it.
 
 **NARROW scope (§51.5, ADR-0156):** constant-a `DiffusionChernoff` ONLY.
 Variable-coefficient and nonlinear kernels are out of scope.
@@ -347,7 +349,7 @@ Behaviour changes on the existing Python surface, not additions:
 ## 10. Known Gaps and Deferred Items
 
 The following items are not exposed through the named bindings as of
-0.13.1-beta:
+0.14.0-beta:
 
 | Item | Missing from | Reason for gap |
 |------|--------------|----------------|

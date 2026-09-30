@@ -12,6 +12,18 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## `no_std` by default, bit-identical to `std` — DONE (0.14.0-beta, ADRs 0200–0201)
+
+`#![no_std]` + `alloc` is the default build (`simd` needs only `core::arch`;
+`std` is opt-in for `parallel`; MSRV 1.81 for `core::error::Error`). Every
+transcendental goes through `SemiflowFloat::libm_*`, and the portable SIMD lanes
+run in every build. `std` and `no_std` therefore give identical bits.
+`crates/semiflow-nostd-check` proves this with committed output digests on
+x86-64, AVX2, aarch64 NEON and QEMU Cortex-M3/M4F. Closed issues #29, #31, #32,
+#34 and #40.
+
+---
+
 ## Gate-coverage campaign — DONE (CI only, no ADR: no math or contract change)
 
 An audit of `properties.yaml` against the workflow files on 2026-08-18 found
@@ -44,7 +56,7 @@ check (`scripts/check_gate_coverage.py`) that fails CI if the enumeration drifts
 again — it already had, four binaries' worth, within a day of being written (nightly + every
 `v*` tag, `-- --include-ignored`), `--all-features` on the `ci.yml` clippy job,
 and the 346-diagnostic lint backlog that second change exposed. Details in
-`docs/release-process.md` §3b and the `[Unreleased]` CHANGELOG section.
+`docs/release-process.md` §3b and the `[0.14.0-beta]` CHANGELOG section.
 
 First finding from actually running them: `G_SMOLYAK_D5` exceeds 40 min on a
 12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` hits the same

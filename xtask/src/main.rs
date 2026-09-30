@@ -555,8 +555,8 @@ fn bench_parallel() -> Result<()> {
 /// - `simd` feature: engages AVX2/NEON hot paths.
 ///
 /// Debug assertions are preserved. For a serial run use `cargo test --workspace`
-/// (bare) directly — note the default `simd` feature still enables `std`; the
-/// `no_std` build is `cargo check -p semiflow --no-default-features`.
+/// (bare) directly. The default build of `semiflow` is `no_std` (ADR-0201);
+/// the featureless one is `cargo check -p semiflow --no-default-features`.
 fn test_fast() -> Result<()> {
     let root = workspace_root()?;
     let cmd_args = ["test", "--workspace", "--features", "parallel,simd"];
