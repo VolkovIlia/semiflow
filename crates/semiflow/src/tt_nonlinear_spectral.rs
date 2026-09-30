@@ -89,7 +89,7 @@ pub(crate) fn react_flow<F: SemiflowFloat>(u: &mut [F], reaction: &Reaction<F>, 
 
 #[cfg(feature = "s3-poc")]
 fn react_logistic<F: SemiflowFloat>(u: &mut [F], r: F, s: F) {
-    let e = (r * s).exp();
+    let e = (r * s).libm_exp();
     for ui in u.iter_mut() {
         debug_assert!(
             *ui > F::zero() && *ui < F::one(),
@@ -101,7 +101,7 @@ fn react_logistic<F: SemiflowFloat>(u: &mut [F], r: F, s: F) {
 
 #[cfg(feature = "s3-poc")]
 fn react_linear<F: SemiflowFloat>(u: &mut [F], c: F, s: F) {
-    let e = (c * s).exp();
+    let e = (c * s).libm_exp();
     for ui in u.iter_mut() {
         *ui *= e;
     }
@@ -134,7 +134,7 @@ fn react_quad_degenerate<F: SemiflowFloat>(u: &mut [F], b: F, c: F, s: F, eps: F
         if b.abs() < eps {
             *ui += c * s;
         } else {
-            let e = (b * s).exp();
+            let e = (b * s).libm_exp();
             *ui = *ui * e + c * (e - F::one()) / b;
         }
     }
@@ -159,7 +159,7 @@ fn react_quad_real_roots<F: SemiflowFloat>(u: &mut [F], a: F, b: F, s: F, disc: 
     let sq = disc.sqrt();
     let rp = (-b + sq) / (two * a);
     let rm = (-b - sq) / (two * a);
-    let eas = (a * (rp - rm) * s).exp();
+    let eas = (a * (rp - rm) * s).libm_exp();
     for ui in u.iter_mut() {
         let ratio_t = (((*ui) - rp) / ((*ui) - rm)) * eas;
         let denom = ratio_t - F::one();
@@ -180,8 +180,8 @@ fn react_quad_complex_roots<F: SemiflowFloat>(u: &mut [F], a: F, b: F, s: F, dis
     let aq = a * q;
     for ui in u.iter_mut() {
         let w0 = *ui - p;
-        let theta = (w0 / q).atan() + aq * s;
-        *ui = q * theta.tan() + p;
+        let theta = (w0 / q).libm_atan() + aq * s;
+        *ui = q * theta.libm_tan() + p;
     }
 }
 
@@ -365,7 +365,7 @@ pub(crate) fn burgers_cole_hopf_evolve<F: SemiflowFloat>(
     let u_zm: Vec<F> = u0.iter().map(|&x| x - mean).collect();
     let psi = spectral_antideriv_1d(&u_zm, n, dx);
     let two_nu = from_f64::<F>(2.0) * nu;
-    let mut phi: Vec<F> = psi.iter().map(|&p| (-p / two_nu).exp()).collect();
+    let mut phi: Vec<F> = psi.iter().map(|&p| (-p / two_nu).libm_exp()).collect();
     let _ = apply_drift_spectral_axis(&mut phi, n, dx, nu, F::zero(), t_final);
     let phi_x = spectral_deriv_1d(&phi, n, dx);
     phi_x

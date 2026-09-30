@@ -1,9 +1,11 @@
-//! C ABI bindings for `semiflow` (experimental, v0.10.0).
+//! C ABI bindings for `semiflow` (experimental).
 //!
 //! ## Status
 //!
-//! This crate is **experimental**: the ABI is not stabilised until v1.0.0
-//! (see ADR-0028, `docs/adr/0028-ffi-pyo3-wasm-v0_10.md`).
+//! This crate is **experimental**: the ABI is not stabilised until 1.0.0
+//! (see ADR-0028, `docs/adr/0028-ffi-pyo3-wasm-v0_10.md`). It is not published
+//! to a registry; build it from source. The crate version follows the
+//! workspace version (`smf_version()` returns it at run time).
 //!
 //! ## Build requirement
 //!
@@ -17,39 +19,48 @@
 //! `catch_unwind` into a no-op, breaking the FFI panic boundary.
 //! `[profile.release-ffi]` overrides this to `panic = "unwind"`.
 //!
-//! ## Scope (v0.9.0-beta binding-parity wave)
+//! ## Scope
 //!
-//! Near-full parity with `semiflow` across the following families:
+//! The authoritative list of exported functions is the cbindgen-generated
+//! header `crates/semiflow-ffi/include/semiflow.h`. Families covered (C prefix
+//! in parentheses):
 //!
-//! - **1D diffusion** — standard (`smf_heat1d_*`), higher-order ζ-ladder
-//!   (`Diffusion4th/6th/8th`, `Zeta4/6th`), truncated-exp (`TruncExp/4th`),
-//!   drift-reaction (`DriftReaction1D`), shift (`Shift1D`), Strang split.
-//! - **2D/3D Strang tensor product** — `Heat2D/3D`, variable-coef (`VarA`).
-//! - **Non-separable** — `NonSeparable2D`, `NonSeparable2DAniso`,
-//!   `AnisotropicShiftND2/3`.
-//! - **High-dimensional sparse grid** — `SmolyakD6`.
-//! - **Boundary conditions** — `Killing1D`, `Reflected1D`, `Robin1D`,
-//!   `Resolvent1D`, `KilledDirichlet1D`, `ObstacleChernoff` (1D).
-//! - **Schrödinger** — real (`Schrodinger1D`) and complex
-//!   (`SchrodingerComplex1D`).
-//! - **Matrix diffusion** — `MatrixDiffusion1D`.
-//! - **Nonautonomous / resolvent** — `Howland1D`, `Subordinated1D`,
-//!   `ResolventJumpChernoff` (1D/2D/3D).
-//! - **Manifold** — `ManifoldChernoff` (Torus, Sphere2, Hyperbolic2).
-//! - **Hypoelliptic / sub-Riemannian** — Heisenberg, Kolmogorov, Engel.
-//! - **Graph** — `GraphHeatChernoff`, `GraphHeat4th`,
-//!   `MagnusGraphHeat`, `VarCoefGraphHeat`, `VarCoefMagnusGraphHeat`,
-//!   `QuantumGraphHeatChernoff`, `StrangGraph`.
-//! - **S³ flagship carriers** (ADR-0171) — `TtEvolver/TtState`,
-//!   `TtCoupledEvolver`, `GridlessEvolver/MeasureState`.
-//! - **Adjoint / Greeks / adaptive** — `AdjointFokkerPlanck`,
-//!   `EvolverHeat1DGreeksV3`, `AdaptivePI`, `Adjoint1D`.
-//! - **Carnot / point evaluation** — `ComplexTripleJump`, `PointEval`.
+//! - **1D diffusion** — unit and variable-`a` heat (`smf_state_*`, including
+//!   the callback constructor `smf_state_new_with_closure`), higher-order and
+//!   ζ-ladder (`smf_heat1d_4th/6th/zeta4/zeta6/zeta8_*`), truncated-exp
+//!   (`smf_trunc_exp[4]_*`), drift–reaction (`smf_drift_reaction[_zeta4]_*`),
+//!   shift (`smf_shift1d_*`), Strang split (`smf_strang1d_*`), expmv
+//!   (`smf_expmv1d_*`).
+//! - **2D/3D** — Strang tensor product (`smf_heat2d/3d[_vara]_*`),
+//!   non-separable (`smf_nonsep2d[_aniso]_*`), anisotropic N-D
+//!   (`smf_aniso_nd2/3_*`), matrix diffusion (`smf_matrix_diffusion_*`,
+//!   `smf_matrix2d/3d_*`), sparse grid (`smf_smolyak_d6_*`).
+//! - **Boundary conditions** — killing, soft killing, reflected, Robin,
+//!   resolvent, killed-Dirichlet, order-2 Dirichlet, obstacle 1D/2D and the
+//!   obstacle inactive set (`smf_obstacle1d_*`, `smf_obstacle_nd2_*`,
+//!   `smf_obstacle_gamma_*`).
+//! - **Schrödinger** — real (`smf_schrodinger_*`) and complex
+//!   (`smf_schrodinger_cx_*`).
+//! - **Nonautonomous / resolvent** — Howland, subordinated, resolvent jump
+//!   1D/2D/3D, Wentzell boundary.
+//! - **Manifold / hypoelliptic / Carnot** — `smf_manifold2d_*`,
+//!   `smf_hypo_{heisenberg,kolmogorov,engel}_*`, `smf_carnot_ctj_*`,
+//!   point evaluation (`smf_point_*`).
+//! - **Graph** — graphs, signals and Laplacians (`smf_graph_*`,
+//!   `smf_graphsig_*`, `smf_laplacian_*`), graph heat orders 2/4/6
+//!   (`smf_ghc[4|6]_*`), Magnus (`smf_mghc[6]_*`), variable-coefficient
+//!   (`smf_vc_ghc_*`, `smf_vc_mghc_*`), trajectories (`smf_graph_traj_*`),
+//!   Strang graph (`smf_strang_graph_*`), quantum graphs (`smf_qgraph_*`,
+//!   `smf_qgheat_*`), pre-sampled graph adjoint (`smf_graph_adjoint_*`).
+//! - **S³ carriers** (ADR-0171) — tensor train (`smf_tt_*`, `smf_ttstate_*`,
+//!   `smf_tt_coupled_*`, `smf_varcoef_tt_*`) and gridless particles
+//!   (`smf_gridless_*`, `smf_measurestate_*`).
+//! - **Adjoint / Greeks / adaptive** — `smf_adjoint1d_*`, `smf_adjoint_fp_*`,
+//!   `smf_greeks_*`, `smf_adaptive_pi_*`.
 //!
-//! **Documented deferrals (ABI-unsafe or closure-capture surfaces):**
-//! `ObstacleND`, `ObstacleGamma`, `GraphTraj`, Laplacian introspection,
-//! and `GraphAdjoint` read-back — dense-matrix / closure reads are not
-//! expressible in a stable C ABI.
+//! No C entry points exist for reverse-mode AD (Python and WASM only), the
+//! Python-only surfaces (symmetric / general sparse-operator actions, graph
+//! Krylov, φ-functions, ETDRK4), or the `s3-poc` research evolvers.
 //!
 //! See ADR-0028 for the binding split rationale and ABI stability roadmap.
 

@@ -7,7 +7,14 @@
 //!
 //! `order()` returns `u32::MAX` (tolerance-driven; NOT fixed-order).
 
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
+
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
 
 use crate::{
     chernoff::{ChernoffFunction, Growth},
@@ -312,7 +319,7 @@ fn validate_tau<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
 /// Minimum degree m such that `e^{-z} · I_{m+1}(z) ≤ tol/4` (Bessel tail bound).
 fn chebyshev_degree<F: SemiflowFloat>(z: F, tol: F) -> usize {
     let threshold = tol / F::from(4.0_f64).unwrap();
-    let em_z = (-z).exp();
+    let em_z = (-z).libm_exp();
     let mut m = MIN_CHEB_DEGREE;
     while m < MAX_CHEB_DEGREE {
         if em_z * bessel_i_k(m + 1, z) <= threshold {

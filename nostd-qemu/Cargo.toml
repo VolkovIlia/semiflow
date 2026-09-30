@@ -1,0 +1,38 @@
+[package]
+name = "semiflow-nostd-qemu"
+description = "Bare-metal Cortex-M harness: runs the semiflow-nostd-check scenarios (no_std + libm) under QEMU"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Standalone: excluded from the repository workspace (root Cargo.toml `exclude`)
+# because it only builds for `thumbv7*-none-*` targets and carries its own lockfile.
+[workspace]
+
+[dependencies]
+semiflow-nostd-check = { path = "../crates/semiflow-nostd-check" }
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+cortex-m-semihosting = "0.5"
+embedded-alloc = { version = "0.7", default-features = false, features = ["llff"] }
+
+# Same lint policy as the repository workspace (`[workspace.lints]`), minus
+# `unsafe_code`: a bare-metal binary needs it for the heap and the allocator.
+[lints.rust]
+missing_docs = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+all = { level = "deny", priority = -1 }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = true      # symbols only; nothing extra is loaded onto the target
+panic = "abort"
+
+[profile.dev]
+opt-level = 1     # debug-build float code is too slow to finish under emulation
+panic = "abort"

@@ -5,6 +5,8 @@
 //!                        optional: `--crate NAME` to scope to one crate
 //!   check-unsafe-scope — enforce that `unsafe` appears only in allowed files (ADR-0019)
 //!   doc-check          — README ↔ reality drift gate: version truth + exposed-class truth
+//!   readme [--check]   — render every published README from docs/readme/ (single source)
+//!   readme-examples-js — run the npm README's Node.js examples against a built package
 //!   gen-stubs          — emit placeholder Rust stubs from contracts/semiflow-core.traits.yaml
 //!   bench-baseline     — run cargo bench and capture criterion baseline
 //!   bench-parallel     — run the 4 parallel benches with features parallel,simd (ADR-0060)
@@ -46,6 +48,7 @@ mod doc_check;
 mod ffi_tasks;
 mod latency_gate;
 mod py_tasks;
+mod readme;
 mod size_check;
 mod unsafe_scope;
 mod version_audit;
@@ -59,7 +62,8 @@ fn main() {
         None => {
             eprintln!(
                 "Usage: cargo xtask \
-                 <changelog-check|check-lints|check-unsafe-scope|doc-check|gen-stubs|\
+                 <changelog-check|check-lints|check-unsafe-scope|doc-check|readme [--check]|\
+                 readme-examples-js <pkg-dir>|gen-stubs|\
                  bench-baseline|test-fast|test-full|test-flagship|test-ignored-gates|\
                  ffi-headers|ffi-smoke|ffi-graph-smoke|\
                  py-build|py-bench|py-smoke|py-graph-smoke|\
@@ -84,6 +88,8 @@ fn main() {
         }
         "check-unsafe-scope" => unsafe_scope::check_unsafe_scope(),
         "doc-check" => doc_check::run(),
+        "readme" => readme::run(&rest),
+        "readme-examples-js" => readme::run_js_examples(&rest),
         "gen-stubs" => gen_stubs(),
         "bench-baseline" => bench_baseline(),
         "bench-parallel" => bench_parallel(),
@@ -109,6 +115,7 @@ fn main() {
             eprintln!("Unknown subcommand: {other}");
             eprintln!(
                 "Available: changelog-check, check-lints, check-unsafe-scope, doc-check, \
+                 readme [--check], readme-examples-js <pkg-dir>, \
                  gen-stubs, bench-baseline, bench-parallel, \
                  test-fast, test-full, test-flagship, test-ignored-gates, \
                  ffi-headers, ffi-smoke, ffi-graph-smoke, \
@@ -547,8 +554,9 @@ fn bench_parallel() -> Result<()> {
 ///   Strang2D/3D etc. Bit-identical to serial per ADR-0018 regression tests.
 /// - `simd` feature: engages AVX2/NEON hot paths.
 ///
-/// Debug assertions are preserved. For a pure no_std serial run use
-/// `cargo test --workspace` (bare) directly.
+/// Debug assertions are preserved. For a serial run use `cargo test --workspace`
+/// (bare) directly — note the default `simd` feature still enables `std`; the
+/// `no_std` build is `cargo check -p semiflow --no-default-features`.
 fn test_fast() -> Result<()> {
     let root = workspace_root()?;
     let cmd_args = ["test", "--workspace", "--features", "parallel,simd"];

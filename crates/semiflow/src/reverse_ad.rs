@@ -29,6 +29,13 @@ use alloc::vec::Vec;
 
 // Backward sweep internals live in the sibling crate-root module `reverse_sweep`
 // (additive split — keeps this file ≤500 lines; declared in lib.rs).
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
+
 use crate::reverse_sweep::backward_sweep;
 use crate::{
     diffusion::DiffusionChernoff, dual::Dual, error::SemiflowError, float::SemiflowFloat,

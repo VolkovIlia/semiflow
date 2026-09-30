@@ -1,8 +1,11 @@
 # Security Policy
 
-`semiflow` ships four packages: `semiflow-core` (rlib, pure math, no I/O,
-no networking), `semiflow-ffi` (C ABI cdylib via cbindgen), `semiflow-py`
-(PyO3 wheel via maturin, abi3-py310), and `semiflow-wasm` (`wasm-bindgen`).
+SemiFlow ships four packages: the Rust crate `semiflow` (crates.io; rlib,
+pure math, no I/O, no networking), the Python wheel `semiflow-pde` (PyPI;
+PyO3 via maturin, abi3-py310, crate `semiflow-py`), the npm package
+`@semiflow/wasm` (`wasm-bindgen`, crate `semiflow-wasm`), and the C ABI
+`semiflow-ffi` (cdylib/staticlib + cbindgen header, built from source — no
+prebuilt binaries are distributed).
 The library performs no network I/O, authentication, or PII handling. The
 relevant attack surface is **boundary safety** (panic propagation, NULL
 pointers, memory ownership at FFI / Python / WASM edges) plus **supply-chain**
@@ -10,11 +13,14 @@ integrity of dependencies.
 
 ## Supported Versions
 
-| Version | Status                                             |
-|---------|----------------------------------------------------|
-| 9.x     | Supported                                          |
-| 8.x     | Security fixes only (90 days post v9.0.0 release)  |
-| < 8.0   | Unsupported                                        |
+SemiFlow is in beta (`0.x`). Only the latest minor release line receives
+security fixes; fixes ship as a new patch or minor release of all four
+packages (they share one version number).
+
+| Version  | Status      |
+|----------|-------------|
+| 0.13.x   | Supported   |
+| < 0.13   | Unsupported — upgrade to the latest 0.13.x |
 
 ## Reporting a Vulnerability
 
@@ -73,8 +79,9 @@ integrity of dependencies.
 
 - **crates.io**: `cargo update -p semiflow`. Security advisories on
   RustSec (<https://rustsec.org>).
-- **PyPI**: `pip install --upgrade semiflow-py`. Security notices via
+- **PyPI**: `pip install --upgrade semiflow-pde`. Security notices via
   maintainer email if a PyPI advisory is filed.
 - **npm**: `npm update @semiflow/wasm`.
+- **C ABI** (`semiflow-ffi`): rebuild from the latest tagged source.
 - **GitHub releases**: <https://github.com/VolkovIlia/semiflow/releases>
   (use *Watch -> Custom -> Releases*).

@@ -231,7 +231,7 @@ where
         let mut tmp = src.zeroed_like();
         for i in 0..n {
             let x = self.grid.x_at(i);
-            let w = (-half_tau * self.rate.kappa(x)).exp();
+            let w = (-half_tau * self.rate.kappa(x)).libm_exp();
             tmp.values[i] = src.values[i] * w;
         }
 
@@ -242,7 +242,7 @@ where
         // Stage 3: half-step kill → dst
         for i in 0..n {
             let x = self.grid.x_at(i);
-            let w = (-half_tau * self.rate.kappa(x)).exp();
+            let w = (-half_tau * self.rate.kappa(x)).libm_exp();
             dst.values[i] = mid.values[i] * w;
         }
         Ok(())

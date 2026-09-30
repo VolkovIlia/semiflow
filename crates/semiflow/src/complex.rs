@@ -150,7 +150,7 @@ impl SemiflowComplex for num_complex::Complex<f64> {
 
     #[inline]
     fn abs(self) -> f64 {
-        num_complex::Complex::norm(self)
+        crate::complex_libm::norm(self)
     }
 
     #[inline]
@@ -170,17 +170,17 @@ impl SemiflowComplex for num_complex::Complex<f64> {
 
     #[inline]
     fn from_polar(r: f64, theta: f64) -> Self {
-        num_complex::Complex::from_polar(r, theta)
+        crate::complex_libm::from_polar(r, theta)
     }
 
     #[inline]
     fn exp(self) -> Self {
-        num_complex::Complex::exp(self)
+        crate::complex_libm::exp(self)
     }
 
     #[inline]
     fn sqrt(self) -> Self {
-        num_complex::Complex::sqrt(self)
+        crate::complex_libm::sqrt(self)
     }
 }
 
@@ -203,7 +203,7 @@ impl SemiflowComplex for num_complex::Complex<f32> {
 
     #[inline]
     fn abs(self) -> f32 {
-        num_complex::Complex::norm(self)
+        crate::complex_libm::norm(self)
     }
 
     #[inline]
@@ -223,17 +223,17 @@ impl SemiflowComplex for num_complex::Complex<f32> {
 
     #[inline]
     fn from_polar(r: f32, theta: f32) -> Self {
-        num_complex::Complex::from_polar(r, theta)
+        crate::complex_libm::from_polar(r, theta)
     }
 
     #[inline]
     fn exp(self) -> Self {
-        num_complex::Complex::exp(self)
+        crate::complex_libm::exp(self)
     }
 
     #[inline]
     fn sqrt(self) -> Self {
-        num_complex::Complex::sqrt(self)
+        crate::complex_libm::sqrt(self)
     }
 }
 

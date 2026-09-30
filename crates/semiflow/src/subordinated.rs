@@ -19,7 +19,7 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::marker::PhantomData;
 
 use num_traits::Float;
@@ -96,7 +96,7 @@ impl<F: SemiflowFloat> StableSubordinator<F> {
 
 impl<F: SemiflowFloat> LevySubordinator<F> for StableSubordinator<F> {
     fn laplace_exponent(&self, lambda: F) -> F {
-        Float::powf(lambda, self.alpha)
+        SemiflowFloat::libm_powf(lambda, self.alpha)
     }
 
     fn quadrature(&self, tau: F, n_nodes: usize) -> (Vec<F>, Vec<F>) {
@@ -161,7 +161,7 @@ impl<F: SemiflowFloat> GammaSubordinator<F> {
 
 impl<F: SemiflowFloat> LevySubordinator<F> for GammaSubordinator<F> {
     fn laplace_exponent(&self, lambda: F) -> F {
-        Float::ln_1p(lambda / self.c)
+        SemiflowFloat::libm_ln_1p(lambda / self.c)
     }
 
     fn quadrature(&self, tau: F, n_nodes: usize) -> (Vec<F>, Vec<F>) {

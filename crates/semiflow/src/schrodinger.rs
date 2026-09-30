@@ -46,9 +46,6 @@
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-#[cfg(not(feature = "std"))]
-use num_traits::Float;
-
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion4::Diffusion4thChernoff,

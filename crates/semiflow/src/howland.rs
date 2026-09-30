@@ -311,7 +311,7 @@ where
         let m_c = gc.multiplier;
         let omega_c = gc.omega;
         Growth {
-            multiplier: m_c * (t_h * omega_c.abs()).exp(),
+            multiplier: m_c * (t_h * omega_c.abs()).libm_exp(),
             omega: F::zero(),
         }
     }

@@ -1,122 +1,29 @@
-//! # `semiflow` — Chernoff approximations of operator semigroups
-//!
-//! Implements formula (6) of Theorem 6 from I. D. Remizov, *Vladikavkaz Math. J.*
-//! **27**(4) (2025) 124–135, [DOI 10.46698/a3908-1212-5385-q](https://doi.org/10.46698/a3908-1212-5385-q)
-//! / [arXiv:2301.06765](https://arxiv.org/abs/2301.06765).
-//!
-//! `no_std`-compatible (requires `alloc`). Features: `std` (error trait), `simd`
-//! (AVX2/NEON, default-on), `parallel` (multi-thread `Strang2D`), `linear-interp`.
-//!
-//! ## Quickstart
-//!
-//! See the [crate README](https://docs.rs/semiflow) for a fuller introduction
-//! and a worked advection-diffusion example.
-//!
-//! ## Exports
-//! ### v0.1.0
-//!
-//! - **Formula (6)** via [`ShiftChernoff1D`]: the four-term Chernoff function
-//!   for `L = a(x)∂²_x + b(x)∂_x + c(x)`.
-//! - **Chernoff iteration** via [`ChernoffSemigroup`]: `(S(t/n))^n f`.
-//! - **Heat-kernel oracle** (G1/G2-legacy regression tests):
-//!   `ShiftChernoff1D { a: |_| 0.5, b: |_| 0.0, c: |_| 0.0 }`, datum `exp(-x²)`,
-//!   oracle `(1+2t)^{-1/2} exp(-x²/(1+2t))`.
-//! ### v0.2.0 — operator splitting `L = A + B` (ADR-0006)
-//!
-//! - **Diffusion Chernoff** via [`DiffusionChernoff`]: 5-point order-2 formula
-//!   for `A = a(x)∂²_x`.
-//! - **Drift-reaction Chernoff** via [`DriftReactionChernoff`]: exact
-//!   characteristic-flow formula for `B = b(x)∂_x + c(x)`.
-//! - **Strang composition** via [`StrangSplit`]: `Φ(τ) = D(τ/2) ∘ R(τ) ∘ D(τ/2)`,
-//!   global order 2 (G3-strang gate: slope ≤ −1.95).
-//! - **Advection-diffusion oracle** (G1/G2/G3-strang): `∂_t u = ½∂_xx u + ½∂_x u`,
-//!   oracle `u(1,x) = 3^{-1/2} exp(-(x+0.5)²/3)`.
-//! ### v0.5.0 — 2D tensor-product (ADR-0012)
-//!
-//! - Tensor geometry [`Grid2D`] (row-major, x fast axis).
-//! - 2D state [`GridFn2D`] (`impl State`, single `Vec<f64>`).
-//! - Per-axis lift adapter [`AxisLift`] with [`Axis::X`] / [`Axis::Y`].
-//! - 2D palindromic Strang [`Strang2D`]: `Sx(τ/2) ∘ Sy(τ) ∘ Sx(τ/2)`,
-//!   global order 2 for separable `L = Lx ⊗ I + I ⊗ Ly`.
-//! - Closed-form 2D heat oracle in `tests/heat_2d_oracle.rs`.
-//!
-//! See `contracts/semiflow-core.math.md` §10 (Theorem 7), `tensor.yaml`,
-//! and `docs/adr/0012-tensor-product-2d.md`.
-//! ### v0.9.0 — 3D tensor-product, generic-over-float, non-separable 2D (ADR-0024, ADR-0023, ADR-0025)
-//!
-//! - 3D tensor geometry [`Grid3D`] (x-fastest, `idx(i,j,k) = k·nx·ny + j·nx + i`).
-//! - 3D state [`GridFn3D`] (`impl State`, single `Vec<f64>`).
-//! - Per-axis lift adapter [`AxisLift3D`] with extended [`Axis::Z`] variant.
-//! - 3D palindromic Strang [`Strang3D`]:
-//!   `Sx(τ/2) ∘ Sy(τ/2) ∘ Sz(τ) ∘ Sy(τ/2) ∘ Sx(τ/2)`,
-//!   global order = min(order per axis) by Theorem 7' (Lemma 10.1, BCH residue = 0).
-//! - Closed-form 3D heat oracle in `tests/heat_3d_oracle.rs`.
-//! - Anisotropic non-separable 2D via [`NonSeparable2DAnisotropicChernoff`] (ADR-0023).
-//! - All grid and Chernoff types are now generic over [`SemiflowFloat`] (`f32`/`f64`).
-//!
-//! See `contracts/semiflow-core.math.md` §10.7-ter, §10.8; `docs/adr/0024-tensor-3d.md`.
-//! ### v9.0.0 — third S-curve: reverse AD, tensor-train carrier, gridless particle
-//!
-//! - **Shift B — [`ReverseChernoff`] + [`CheckpointSchedule`]** (§51, ADR-0156):
-//!   reverse-mode Chernoff via binomial checkpointing; O(√n) peak memory, 0 ULP gradient.
-//!   Narrow scope: `LinearChernoffFamily` only; transpose-exactness not claimed otherwise.
-//!
-//! - **Shift C — [`TtChernoff`] + [`TtState`]** (§52, ADR-0159):
-//!   tensor-train carrier for the linear diagonal-`A` Gaussian class; rank ≤ d/2, O(d³·n).
-//!   Validated d ∈ {4,6,8,10} (`G_TT_CHERNOFF_DIMSCALING`). Non-diagonal: research-track.
-//!
-//! - **[`GridlessChernoff`] + [`ParticleReduction`]** (§50, ADR-0155):
-//!   branching particle evolver on `MeasureState`; O(d·P)/step, grid-free.
-//!   d=2 PASS (sup 1.197e-3). Variance NO-GO (1.417× < ≥2× gate); curse re-enters d≥3
-//!   — documented negative; high-d is research-track (ADR-0155 Amendment 1).
-//!
-//! See `contracts/semiflow-core.math.md` §50–52; `docs/adr/0155`, `0156`, `0159`.
-//! ### v9.2.0 — S³ honest-scope public API (ADR-0169, `s3-poc` feature)
-//!
-//! Promotes the five S³ POC evolvers from `pub(crate)` to a curated public surface
-//! behind the non-default `s3-poc` feature.  Three honesty layers are enforced:
-//!
-//! 1. **Type wall** — boundary-as-type wrapper constructors accept only in-class
-//!    arguments; out-of-class operators are unconstructible at the type level.
-//! 2. **Feature gate** — all six tokens are `#[cfg(feature = "s3-poc")]`; a build
-//!    without the feature sees none of them.
-//! 3. **Rustdoc stanza** — every public S³ type carries a normative
-//!    `## Proven boundary` section citing the RELEASE-BLOCKING gate and the
-//!    mathematical scope.
-//!
-//! See `docs/adr/0169-s3-honest-scope-public-api-promotion.md` for the six public tokens.
-//!
-//! See `contracts/semiflow-core.math.md` for the full mathematical specification.
-//!
-//! ## Quick start
-//!
-//! ```rust
-//! use semiflow::{Grid1D, GridFn1D, ShiftChernoff1D, ChernoffSemigroup};
-//!
-//! // Heat equation: ∂_t u = 0.5 ∂_xx u
-//! let grid  = Grid1D::new(-10.0, 10.0, 1000)
-//!     .expect("grid bounds and node count are valid");
-//! let func  = ShiftChernoff1D::new(|_| 0.5, |_| 0.0, |_| 0.0, 0.0, grid);
-//! let semi  = ChernoffSemigroup::new(func, 100)
-//!     .expect("n=100 satisfies the n >= 1 precondition");
-//! let u0    = GridFn1D::from_fn(grid, |x| (-x * x).exp());
-//! let u1    = semi.evolve(1.0, &u0)
-//!     .expect("evolve should not fail for valid inputs");
-//!
-//! // Oracle: u(1,x) = (3)^{-1/2} exp(-x²/3)
-//! let oracle = GridFn1D::from_fn(grid, |x| (3.0_f64).sqrt().recip() * (-(x*x)/3.0).exp());
-//! use semiflow::State;
-//! let mut diff = u1.clone();
-//! diff.axpy(-1.0, &oracle);
-//! assert!(diff.norm_sup() < 5e-4, "G1 tolerance exceeded: {}", diff.norm_sup());
-//! ```
-
+#![doc = include_str!("../README.md")]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// ADR-0200: every transcendental goes through `SemiflowFloat::libm_*` /
+// `complex_libm`, so std and no_std builds produce identical bits. Unit tests
+// may use platform math for their oracles.
+#![cfg_attr(not(test), deny(clippy::disallowed_methods))]
 
 extern crate alloc;
+
+// The engines share coefficient closures through `alloc::sync::Arc`, which needs
+// pointer-sized atomics (ADR-0200). Say so instead of failing with dozens of
+// unresolved `alloc::sync` imports on targets such as `thumbv6m-none-eabi`.
+#[cfg(not(target_has_atomic = "ptr"))]
+compile_error!(
+    "semiflow requires a target with pointer-sized atomics (it uses alloc::sync::Arc); \
+     e.g. thumbv7m/thumbv7em/riscv32imac work, thumbv6m does not"
+);
+
+// Unit tests run on the host; when the crate is built `no_std` (the default)
+// they still need `std` for the test harness, printing and `format!`/`vec!`.
+#[cfg(test)]
+#[macro_use]
+extern crate std;
 
 pub mod adaptive;
 pub mod adjoint;
@@ -131,6 +38,7 @@ pub mod carnot_stepk;
 pub(crate) mod carnot_stepk_helpers;
 pub mod chernoff;
 pub mod complex;
+pub(crate) mod complex_libm;
 pub mod conservative;
 pub mod conservative_assemble;
 pub mod controller;
@@ -267,8 +175,6 @@ pub mod shift_nd;
 pub mod shift_nd_adaptive;
 pub(crate) mod shift_nd_gauss;
 pub mod shift_nd_zeta2;
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 #[doc(hidden)]
 pub mod simd;
 pub mod smolyak;

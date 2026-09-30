@@ -6,10 +6,145 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-CI-only. No library, ABI or numerical change: of the Rust lines touched, none
-alters a gate threshold, tolerance or assertion.
+CI, documentation and contract hygiene, plus three library changes: the
+`no_std` build fix (#40), one math backend for every build so `std` and
+`no_std` results are bit-identical, and `no_std` as the default build (see
+Changed). No ABI change, and no gate threshold or tolerance changes.
+
+### Changed
+
+- **BREAKING: the default build is `#![no_std]` + `alloc` (ADR-0201); MSRV
+  1.78 → 1.81.** `simd` no longer implies `std` (its intrinsics come from
+  `core::arch`), so `semiflow = "…"` gives a `no_std` build with SIMD kernels.
+  `std` is opt-in and needed only for `parallel`. `SemiflowError` implements
+  `core::error::Error` (stable since 1.81, the same trait as
+  `std::error::Error`) in every build, so `?` into `Box<dyn Error>` keeps
+  working without the `std` feature. Code that relied on semiflow's default
+  features to enable `num-traits/std` must enable it itself. The binding
+  crates already name their features and are unaffected.
+
+- **`std` and `no_std` builds produce identical bits (ADR-0200).** Before
+  this, `std` builds computed generic transcendentals (`exp`, `powf`, `sin`, …
+  via `num_traits::Float`, and `num_complex::Complex::{exp, sqrt, norm}`) with
+  whichever backend num-traits resolved to — the platform library in test
+  builds, CPU-dependent through glibc IFUNC — and `no_std` builds with `libm`;
+  without the `simd` feature, the lane kernels (Catmull-Rom, 9-point FD,
+  septic/octonic Hermite derivatives, cached G⁴ stencil) ran separate scalar
+  code that summed in a different order. Now:
+  - every transcendental goes through the new `SemiflowFloat::libm_*` methods
+    (`libm` for `f32`/`f64`; `Dual<F>` applies them to its components) and
+    complex ones through num-complex's formulas on top of them;
+    `clippy::disallowed_methods` forbids the platform-dependent originals;
+  - the portable lanes compile in every build, and the G⁴ scalar fallback
+    mirrors the AVX2/NEON arithmetic operation for operation;
+  - `crates/semiflow-nostd-check` hashes each scenario's output and CI
+    requires the same committed digests from the `no_std` build, the `std` +
+    `simd` build (`--features std-ref`), AVX2, aarch64 NEON and QEMU
+    Cortex-M3/M4F.
+
+  `std` results can change in the last bits compared with 0.13.1-beta. The
+  `std` feature still enables `num-traits/std` and `num-complex/std`; that now
+  only affects downstream code calling `Float` directly.
+
+- **One source for every published README.** `docs/readme/` is rendered by
+  `cargo xtask readme` into the GitHub, crates.io/docs.rs, PyPI and npm
+  READMEs. Versions, MSRV, dependencies, feature flags, the Python
+  class/function inventory and the WASM class tables (lite vs `full`) are
+  computed from the manifests and sources. `cargo xtask readme --check` fails
+  CI on drift. The docs.rs front page is the crate README (its Rust examples
+  are doctests). The Python and Node.js examples are executed in CI
+  (`test_readme_examples.py`, `xtask readme-examples-js`).
+
+- **`doc-check` covers names and versions across user docs.** It now covers
+  top-level `docs/*.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CITATION.cff` and
+  `.zenodo.json`. It rejects the pre-rebrand names (`semiflow_core`,
+  `semiflow-core`, `remizovcore`), stale `semiflow = "…"` requirements, and
+  install commands naming anything but `@semiflow/wasm` / `semiflow-pde`.
 
 ### Fixed
+
+- **`no_std` is now verified by execution, not just type-checked.** The
+  previous state:
+  - `cargo test --no-default-features` did not compile.
+  - Nothing executed the `libm` math that `no_std` users get, because test
+    builds always load `std` through dev-dependencies.
+
+  New CI jobs:
+  - `no-std-test` runs the full suite with the crate built `#![no_std]`.
+  - `no-std-libm` runs `crates/semiflow-nostd-check` (closed-form oracle
+    scenarios plus output digests) with `num-traits` provably without `std`,
+    then with `--features std-ref` and with AVX2; `no-std-libm-neon` repeats
+    it on aarch64.
+  - `no-std-qemu` runs the same scenarios as a bare-metal binary on Cortex-M3
+    and Cortex-M4F under QEMU (`nostd-qemu/`).
+  - `no-std` now builds for the host, `thumbv7em-none-eabihf`,
+    `thumbv7m-none-eabi` and at MSRV.
+
+  Targets without pointer-sized atomics (e.g. `thumbv6m`) now get a clear
+  `compile_error!` instead of dozens of `alloc::sync` errors.
+
+- **User documentation matched reality again.** Fixes include:
+  - `use semiflow_core::…` in the front-page quickstart and guides.
+  - Stale versions: `semiflow = "0.9"`, `"9"`, `v0.9.0-beta`.
+  - `npm install semiflow` → `@semiflow/wasm`.
+  - Wrong Python signatures and kernel names.
+  - "Rust-only" claims about classes Python exports.
+  - Stale SECURITY/CITATION/Zenodo metadata.
+  - A "Production/Stable" PyPI classifier on a beta.
+  - The claim that `simd` is bit-identical to the scalar path. The Catmull-Rom
+    interpolant evaluates the same polynomial in a different arrangement, so
+    builds with and without `simd` agree to rounding only.
+  - A C build recipe using `--release` (`panic = "abort"`, which defeats the
+    `catch_unwind` boundary) instead of `--profile release-ffi`.
+
+  Executing the README examples found a JS quickstart that was a syntax error
+  (`-x ** 2`).
+
+- **Python: `SemiflowError.kind` now exists.** The class docstring, the `.pyi`
+  stub and the README all document a `kind` attribute; it was only ever present
+  as the `[Kind] ` message prefix (kept for compatibility).
+
+- **Python: `ReverseHeat1D` was not importable.** It was registered in the
+  native module but missing from `semiflow/__init__.py`, so
+  `from semiflow import ReverseHeat1D` raised `ImportError`. The new
+  `tests/test_public_exports.py` fails if any native class is not re-exported.
+
+- **The `no_std` build (`--no-default-features`) did not compile (#40).** Plain
+  `f64` receivers called `std`-only methods (`sqrt`, `ceil`, `floor`, `round`,
+  `powf`, `ln`, `log2`, `sin`, `cos`, `rem_euclid`), and several modules used
+  `vec!`, `Vec` or `to_owned` without importing them from `alloc`. The
+  `std`-only methods now resolve through `num_traits::Float` (libm) only when
+  `std` is off, so `std` builds keep calling exactly the same functions.
+  `rem_euclid` became a local helper with the same arithmetic. At the 1.78 MSRV,
+  `f64::abs` is not in `core`, so those calls use `libm::fabs`, which is exact.
+  A new `ci.yml` job, `no-std`, checks the build on the host, on
+  `thumbv7em-none-eabihf`, and at 1.78. Until now no job compiled it, because
+  the default `simd` feature always turns on `std`.
+
+- **`G4_NS2D_aniso` and `G5_3D` are now `RELEASE_BLOCKING` in the contract
+  (#34, ADR-0199).** They were `NORMATIVE`, while `release-process.md`, the
+  `flagship-gates.yml` title and ADR-0024 all treated them as blocking. That
+  also left them outside the coverage check. `check_gate_coverage.py` now strips
+  YAML trailing comments from `severity:`/`test_file:`. Before this,
+  `severity: RELEASE_BLOCKING  # note` silently fell out of the check.
+
+- **`latency_tail` emitted `"library":"semiflow-core"` (#32)**, a crate name that
+  no longer exists. It now emits `"semiflow"`, and `schema_version` goes from
+  `0.1` to `0.2`, so a consumer pinned to 0.1 fails loudly instead of matching
+  nothing. Nothing in the repo reads either field.
+
+- **Two contract properties had no test (#29).** They now do:
+  `strang_split_palindrome_consistency` and
+  `truncated_exp_strang_quasi_contractivity`, in
+  `tests/proptest_strang_split.rs`. Both run the library `StrangSplit` through
+  `apply_into`. Their `invariant:` blocks are ported off the removed v0.3 API,
+  and they now have `test_file:` pointers.
+
+- **Gated tests below `RELEASE_BLOCKING` could run in no workflow (#31).**
+  `check_gate_coverage.py --list-unnamed` computes the set: 43 binaries today.
+  The new nightly job `catch-all-gated` runs it with `-- --include-ignored`. Two
+  binaries are excluded, each with a reason recorded in `NEVER_RUN`: an OOM stub
+  and a fixture-overwriting capture.
 
 - **62 of the 117 `RELEASE_BLOCKING` gates were executed by no workflow at
   all.** `ci.yml` runs `cargo test --workspace --release` — no

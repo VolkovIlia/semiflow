@@ -51,11 +51,15 @@ semiflow ships two classes of correctness gate:
 ## Cross-precision composition
 
 Mixed-precision composition (f32 grid + f64 internal compute, or vice versa)
-is **not supported in v2.0**. A `Strang2D<X, Y, f32>` instance produces f32
+is **not supported**. A `Strang2D<X, Y, f32>` instance produces f32
 output; a `Strang2D<X, Y, f64>` instance produces f64 output. They cannot be
 chained.
 
-## Gate Calibration Record (post-v4.2.0)
+## Gate Calibration Record
+
+Version numbers in this record (`v4.7.0` … `v9.2.0`) are internal development
+numbers. All of them predate the first public release, 0.9.0-beta, and every
+gate listed here is part of 0.9.0-beta and later.
 
 ### v7.0.0 — OctonicHermite keystone + ζ⁶/ζ⁸ TRUTHFUL_ORDER PASS (ADR-0117–0120; all f64)
 

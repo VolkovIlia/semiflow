@@ -30,14 +30,30 @@ kind : str
 );
 
 /// Build a `PyErr` for `SemiflowError` with an explicit `kind` and `msg`.
+///
+/// The message keeps its `[Kind] ` prefix (backward compatible); the documented
+/// `kind` attribute is set on the exception instance.
 pub(crate) fn new_pyerr(kind: &str, msg: &str) -> PyErr {
-    let full = format!("[{kind}] {msg}");
-    SemiflowError::new_err(full)
+    with_kind(SemiflowError::new_err(format!("[{kind}] {msg}")), kind)
 }
 
 /// Build a `PyErr` for a Rust panic caught at the `PyO3` boundary.
 pub(crate) fn new_panic_pyerr() -> PyErr {
-    SemiflowError::new_err("[Panic] internal Rust panic — please file an issue")
+    with_kind(
+        SemiflowError::new_err("[Panic] internal Rust panic — please file an issue"),
+        "Panic",
+    )
+}
+
+/// Attach the `kind` discriminator attribute declared in the class docstring
+/// and in `__init__.pyi` (it used to exist only as the message prefix).
+fn with_kind(err: PyErr, kind: &str) -> PyErr {
+    Python::attach(|py| {
+        // Setting an attribute on a fresh exception instance cannot fail in
+        // practice; if it ever did, the error still carries the `[Kind]` prefix.
+        let _ = err.value(py).setattr("kind", kind);
+    });
+    err
 }
 
 /// Convert a `semiflow::SemiflowError` to a Python `SemiflowError` `PyErr`.

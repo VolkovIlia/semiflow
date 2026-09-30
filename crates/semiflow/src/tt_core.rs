@@ -35,7 +35,7 @@
 //! Non-Gaussian / off-diagonal-A / variable coefs: rank not capped — research track.
 
 extern crate alloc;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::float::SemiflowFloat;
 

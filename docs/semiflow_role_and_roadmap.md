@@ -1,6 +1,7 @@
 # SemiFlow: Backend Role and Roadmap Narrative
 
-> Last updated: 2026-07-02 (issue #16 branch — `path="implicit"` for stiff SymmetricOperator; ADR-0190)
+> Covers 0.13.1-beta. Install commands, feature flags and the full engine
+> catalogue are in the [project README](../README.md).
 
 ## The "BLAS/cuDNN for Semigroups" Positioning
 
@@ -34,7 +35,7 @@ What the analogy captures is:
    `Etdrk4` step → gradient via `GeneratorSensitivity`) from verified pieces rather
    than writing bespoke numerical code per use case.
 
-## What Is Covered (as of v0.13.1-beta)
+## What Is Covered (as of 0.13.1-beta)
 
 ### Linear evolution: `∂ₜu = Lu`
 
@@ -92,8 +93,7 @@ For semilinear `Etdrk4`, `NonlinearityDiff` delivers the adjoint through one ste
 
 ## Honest Scope and Limits
 
-The following are explicit non-goals or deferred items as of v0.13.1-beta
-(updated for issue #16 branch):
+The following are explicit non-goals or deferred items as of 0.13.1-beta:
 
 - **Non-symmetric / directed graphs:** Arnoldi required (stores full Hessenberg);
   deferred. Symmetric `L` only for Krylov/Chebyshev paths.
@@ -134,9 +134,9 @@ reimplementing semigroup numerics.
 | Conservative divergence-form diffusion | ADR-0187 | §56 |
 | Stiff multilayer (mass-weighted Krylov) | ADR-0188 | §57 |
 | ETD φ-functions + ETDRK4 | ADR-0189 | §58 |
-| Graph adjoint state + sensitivity (v6.2.2) | ADR-0115 | §42–§43 |
+| Graph adjoint state + sensitivity | ADR-0115 | §42–§43 |
 | Batched multi-channel (v0.9.1-beta, #10) | ADR-0184 | §43.4 |
-| Reverse-mode AD (v9.0.0) | ADR-0156 | §51 |
+| Reverse-mode AD (0.9.0-beta) | ADR-0156 | §51 |
 
 Open issues tracked in the ROADMAP and ADRs: non-symmetric graph Krylov (Arnoldi),
 consistent-mass Fréchet, 2-D/3-D ETD, exponential Rosenbrock, per-step learned

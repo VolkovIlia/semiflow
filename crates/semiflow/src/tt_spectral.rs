@@ -76,8 +76,8 @@ pub(crate) fn dft_1d_real_to_cplx<F: SemiflowFloat>(x: &[F]) -> Vec<F> {
         for j in 0..n {
             // angle = -2π·j·k/n
             let angle = -two_pi_over_n * from_f64::<F>((j * k) as f64);
-            re += x[j] * angle.cos();
-            im += x[j] * angle.sin();
+            re += x[j] * angle.libm_cos();
+            im += x[j] * angle.libm_sin();
         }
         out[2 * k] = re;
         out[2 * k + 1] = im;
@@ -98,8 +98,8 @@ pub(crate) fn dft_1d_cplx<F: SemiflowFloat>(x: &[F]) -> Vec<F> {
         let mut im = F::zero();
         for j in 0..n {
             let angle = -two_pi_over_n * from_f64::<F>((j * k) as f64);
-            let c = angle.cos();
-            let s = angle.sin();
+            let c = angle.libm_cos();
+            let s = angle.libm_sin();
             let xre = x[2 * j];
             let xim = x[2 * j + 1];
             // (xre + i·xim)·(c + i·s) = (xre·c - xim·s) + i·(xre·s + xim·c)
@@ -127,8 +127,8 @@ pub(crate) fn idft_1d_cplx<F: SemiflowFloat>(x: &[F]) -> Vec<F> {
         for j in 0..n {
             // +2π convention for inverse
             let angle = two_pi_over_n * from_f64::<F>((j * k) as f64);
-            let c = angle.cos();
-            let s = angle.sin();
+            let c = angle.libm_cos();
+            let s = angle.libm_sin();
             let xre = x[2 * j];
             let xim = x[2 * j + 1];
             re = re + xre * c - xim * s;
@@ -165,13 +165,13 @@ fn axis_spectral_symbols<F: SemiflowFloat>(n: usize, dx: F, two_pi: F) -> (Vec<F
     let sym_d2: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / from_f64::<F>(n as f64);
-            (from_f64::<F>(2.0) * omega.cos() - from_f64::<F>(2.0)) / (dx * dx)
+            (from_f64::<F>(2.0) * omega.libm_cos() - from_f64::<F>(2.0)) / (dx * dx)
         })
         .collect();
     let sym_d1: Vec<F> = (0..n)
         .map(|m| {
             let omega = two_pi * from_f64::<F>(m as f64) / from_f64::<F>(n as f64);
-            omega.sin() / dx
+            omega.libm_sin() / dx
         })
         .collect();
     (sym_d2, sym_d1)
@@ -203,7 +203,7 @@ pub(crate) fn pair_expsym_real<F: SemiflowFloat>(
             // cross term: −2r·sym_d1_j[mj]·sym_d1_k[mk]  (since sym_d1 = sin/dx)
             let sym = cj * sym_d2_j[mj] + ck * sym_d2_k[mk]
                 - from_f64::<F>(2.0) * r_cross * sym_d1_j[mj] * sym_d1_k[mk];
-            expsym[mj * n_k + mk] = (tau_eff * sym).exp();
+            expsym[mj * n_k + mk] = (tau_eff * sym).libm_exp();
         }
     }
     expsym

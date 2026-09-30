@@ -43,6 +43,13 @@ extern crate alloc;
 
 use num_complex::Complex;
 
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
+
 use crate::{
     carnot_complex_helpers::{cplx_diffuse_x1, cplx_diffuse_x2},
     chernoff::{ChernoffFunction, Growth},
@@ -150,7 +157,10 @@ impl State<f64> for CplxGridFn5 {
     }
 
     fn norm_sup(&self) -> f64 {
-        self.values.iter().map(|c| c.norm()).fold(0.0_f64, f64::max)
+        self.values
+            .iter()
+            .map(|c| crate::complex_libm::norm(*c))
+            .fold(0.0_f64, f64::max)
     }
 }
 

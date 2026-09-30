@@ -1,0 +1,14 @@
+# Runners boot the ELF directly on QEMU's MPS2 boards; semihosting carries the
+# log to stdout and the exit status back to the host (`debug::exit`).
+# `-D warnings` still comes from the repository's root `.cargo/config.toml`
+# (`build.rustflags`); the linker script is added by build.rs, so no
+# `target.*.rustflags` here (they would replace `build.rustflags`).
+
+[build]
+target = "thumbv7m-none-eabi"
+
+[target.thumbv7m-none-eabi]
+runner = "qemu-system-arm -cpu cortex-m3 -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
+
+[target.thumbv7em-none-eabihf]
+runner = "qemu-system-arm -cpu cortex-m4 -machine mps2-an386 -nographic -semihosting-config enable=on,target=native -kernel"

@@ -1,11 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+members = ["crates/semiflow", "crates/semiflow-ffi", "crates/semiflow-nostd-check", "crates/semiflow-py", "crates/semiflow-wasm", "xtask"]
+# Standalone bare-metal (Cortex-M / QEMU) harness with its own lockfile and target.
+exclude = ["nostd-qemu"]
 
 [workspace.package]
 version = "0.13.1-beta"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.81"
 license = "MIT OR Apache-2.0"
 authors = ["Ilia Volkov <ilia.volkov@outlook.com>"]
 repository = "https://github.com/VolkovIlia/semiflow"
@@ -22,6 +24,9 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 all = { level = "deny", priority = -1 }
+# clippy.toml bans platform-dependent transcendentals; the ban is switched on only
+# in crates/semiflow (non-test) and crates/semiflow-nostd-check (ADR-0200).
+disallowed_methods = "allow"
 
 [profile.release]
 lto = "thin"

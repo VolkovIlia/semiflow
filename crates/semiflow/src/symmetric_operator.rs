@@ -72,9 +72,9 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
         // CSR shape + Gershgorin bound; owned vecs passed to Laplacian.
         let inner = Laplacian::from_csr_parts(
             n,
-            row_ptr.to_owned(),
-            col_idx.to_owned(),
-            vals.to_owned(),
+            row_ptr.to_vec(),
+            col_idx.to_vec(),
+            vals.to_vec(),
             LaplacianKind::GeneralSymmetric,
         )?;
         check_diag_nonneg(n, row_ptr, col_idx, vals)?;

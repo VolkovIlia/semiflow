@@ -7,15 +7,23 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 readme = "README.md"
 keywords = ["pde", "semigroup", "numerical", "diffusion", "simulation"]
 categories = ["mathematics", "science", "no-std", "algorithms", "simulation"]
 
 [features]
-default = ["simd"]  # ADR-0019: simd default-on; v2_compat removed at v4.0 (ADR-0084)
-std = []
+# ADR-0201: the default build is `#![no_std]` + `alloc` with SIMD kernels.
+# ADR-0019: simd default-on; v2_compat removed at v4.0 (ADR-0084).
+default = ["simd"]
+# Links `std` (needed only by `parallel`). semiflow's own math never goes through
+# num-traits/num-complex transcendentals (SemiflowFloat::libm_*), so this flag
+# cannot change semiflow's results; num-traits/std only affects downstream code
+# that calls `Float` directly (ADR-0200).
+std = ["num-traits/std", "num-complex/std"]
 parallel = ["std"]               # ADR-0018: parallel Strang2D::apply via std::thread::scope (std-only)
-simd = ["std"]                   # ADR-0019: AVX2 + NEON intrinsics, scalar fallback elsewhere
+simd = []                        # ADR-0019: AVX2 + NEON intrinsics (core::arch), scalar lanes elsewhere; no std (ADR-0201)
 linear-interp = []
 diff-scipy = []  # gates Python-dependent test
 slow-tests = []  # gates the 135-combo full parameter sweep (cev_european_call_sweep_full)

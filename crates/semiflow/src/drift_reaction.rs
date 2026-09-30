@@ -29,8 +29,6 @@
 
 use alloc::sync::Arc;
 
-use num_traits::Float;
-
 use crate::{
     adjoint::AdjointApply,
     chernoff::{ChernoffFunction, Growth},
@@ -410,7 +408,7 @@ fn apply_at_node_generic<F: SemiflowFloat>(
 
     let c0 = (r.c)(x);
     let c1 = (r.c)(x_foot);
-    let factor = Float::exp(half_v * tau * (c0 + c1));
+    let factor = SemiflowFloat::libm_exp(half_v * tau * (c0 + c1));
 
     let shifted = f.sample_generic(x_foot)?;
     Ok(factor * shifted)

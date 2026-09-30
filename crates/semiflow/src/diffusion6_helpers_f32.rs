@@ -19,8 +19,9 @@ pub(super) use diffusion_zeta_common::{
 };
 use num_traits::Float;
 
+use crate::float::SemiflowFloat;
+
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
-#[cfg(feature = "simd")]
 use crate::simd::{F32x8, SimdF32x8};
 use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
@@ -72,7 +73,7 @@ pub(super) fn gamma6_a_baseline_f32(
 ///
 /// Tree: `(((fa0*c0 + fa1*c1) + (fa2*c2 + fa3*c3)) + ((fb0*c5 + fb1*c6) + (fb2*c7 + fb3*c8)))`
 /// then `+ tail`. Must be identical to `F32x8Scalar::horizontal_sum` applied on the same data.
-#[allow(dead_code)]
+#[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
 pub(super) fn fd9_scalar_f32(
     f: &GridFn1D<f32>,
@@ -113,7 +114,7 @@ pub(super) fn fd9_scalar_f32(
     let sum_ab = lo + hi;
     let tail = c4 * sample_f32(f, x)?;
 
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
 }
 
@@ -122,7 +123,6 @@ pub(super) fn fd9_scalar_f32(
 // ---------------------------------------------------------------------------
 
 /// SIMD 9-pt stencil for f32: 8+1 split using `F32x8` (ADR-0175, Phase 5b).
-#[cfg(feature = "simd")]
 #[allow(clippy::similar_names)]
 #[inline]
 pub(super) fn fd9_simd_f32(
@@ -159,7 +159,7 @@ pub(super) fn fd9_simd_f32(
     let sum_ab = vv.mul(vw).horizontal_sum();
 
     let tail = (coeffs[4] as f32) * sample_f32(f, x)?;
-    let denom = Float::powi(delta, deriv);
+    let denom = SemiflowFloat::libm_powi(delta, deriv);
     Ok((sum_ab + tail) / denom)
 }
 
@@ -176,15 +176,11 @@ pub(super) fn fd9_f32(
     coeffs: &[f64; 9],
     deriv: i32,
 ) -> Result<f32, SemiflowError> {
-    #[cfg(feature = "simd")]
-    {
-        if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-            return fd9_scalar_f32(f, x, delta, coeffs, deriv);
-        }
-        fd9_simd_f32(f, x, delta, coeffs, deriv)
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+        return fd9_scalar_f32(f, x, delta, coeffs, deriv);
     }
-    #[cfg(not(feature = "simd"))]
-    fd9_scalar_f32(f, x, delta, coeffs, deriv)
+    fd9_simd_f32(f, x, delta, coeffs, deriv)
 }
 
 // ---------------------------------------------------------------------------

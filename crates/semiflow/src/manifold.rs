@@ -290,10 +290,10 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
         // Convert (θ, φ) to 3D unit vector P
         let (p0, p1, p2) = spherical_to_cartesian::<F>(theta, phi);
         // Convert (v_θ, v_φ) to 3D tangent V at P (metric g = r²·diag(1, sin²θ))
-        let st = Float::sin(theta);
-        let ct = Float::cos(theta);
-        let sp = Float::sin(phi);
-        let cp = Float::cos(phi);
+        let st = SemiflowFloat::libm_sin(theta);
+        let ct = SemiflowFloat::libm_cos(theta);
+        let sp = SemiflowFloat::libm_sin(phi);
+        let cp = SemiflowFloat::libm_cos(phi);
         // e_θ = (cosθ·cosφ, cosθ·sinφ, -sinθ) and e_φ = (-sinφ, cosφ, 0)
         // V = r · (v_θ · e_θ + v_φ · sin(θ) · e_φ)  [so ‖V‖=r·‖v‖_g]
         let r = self.radius;
@@ -313,15 +313,15 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
         // α = ‖V‖ / r (the geodesic arc length, normalised to unit sphere angle)
         let alpha = norm_v / r;
         // Q = P·cos(α) + (V/‖V‖)·sin(α)
-        let ca = Float::cos(alpha);
-        let sa = Float::sin(alpha);
+        let ca = SemiflowFloat::libm_cos(alpha);
+        let sa = SemiflowFloat::libm_sin(alpha);
         let inv_norm = F::one() / norm_v;
         let q0 = p0 * ca + v3x * inv_norm * sa;
         let q1 = p1 * ca + v3y * inv_norm * sa;
         let q2 = p2 * ca + v3z * inv_norm * sa;
         // Convert Q back to spherical: θ' = arccos(q2), φ' = atan2(q1, q0)
-        let theta_out = Float::acos(q2.min(F::one()).max(-F::one()));
-        let phi_out = canonicalize_phi(Float::atan2(q1, q0));
+        let theta_out = SemiflowFloat::libm_acos(q2.min(F::one()).max(-F::one()));
+        let phi_out = canonicalize_phi(SemiflowFloat::libm_atan2(q1, q0));
         out[0] = theta_out;
         out[1] = phi_out;
         Ok(())
@@ -348,7 +348,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
         let dot_pq = (px * qx + py_3 * qy_3 + pz * qz)
             .min(F::one())
             .max(-F::one());
-        let psi = Float::acos(dot_pq);
+        let psi = SemiflowFloat::libm_acos(dot_pq);
         if Float::abs(psi) < F::epsilon() {
             // x ≈ y → identity transport
             out.copy_from_slice(v);
@@ -358,7 +358,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
         let nx = py_3 * qz - pz * qy_3;
         let ny = pz * qx - px * qz;
         let nz = px * qy_3 - py_3 * qx;
-        let inv_sin = F::one() / Float::sin(psi);
+        let inv_sin = F::one() / SemiflowFloat::libm_sin(psi);
         let nx = nx * inv_sin;
         let ny = ny * inv_sin;
         let nz = nz * inv_sin;
@@ -381,13 +381,13 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
         // √det g = r²·sin(θ); log = 2·log(r) + log(sin(θ))
         // Caller is responsible for avoiding θ = 0, π (polar singularities).
         let two = F::one() + F::one();
-        let log_r = Float::ln(self.radius);
-        let sin_theta = Float::sin(x[0]);
+        let log_r = SemiflowFloat::libm_ln(self.radius);
+        let sin_theta = SemiflowFloat::libm_sin(x[0]);
         // sin(θ) = 0 at poles; return large negative (caller avoids poles).
         let log_sin = if sin_theta <= F::zero() {
             F::from(-1e30_f64).unwrap_or_else(F::zero)
         } else {
-            Float::ln(sin_theta)
+            SemiflowFloat::libm_ln(sin_theta)
         };
         two * log_r + log_sin
     }
@@ -398,10 +398,10 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Sphere2<F> {
 /// Convert spherical (θ, φ) to unit 3D Cartesian (on unit sphere).
 #[inline]
 fn spherical_to_cartesian<F: SemiflowFloat>(theta: F, phi: F) -> (F, F, F) {
-    let st = Float::sin(theta);
-    let ct = Float::cos(theta);
-    let sp = Float::sin(phi);
-    let cp = Float::cos(phi);
+    let st = SemiflowFloat::libm_sin(theta);
+    let ct = SemiflowFloat::libm_cos(theta);
+    let sp = SemiflowFloat::libm_sin(phi);
+    let cp = SemiflowFloat::libm_cos(phi);
     (st * cp, st * sp, ct)
 }
 
@@ -418,20 +418,20 @@ fn canonicalize_phi<F: SemiflowFloat>(phi: F) -> F {
 /// - `e_θ` = (cos θ cos φ, cos θ sin φ, −sin θ)
 /// - `e_φ` = (−sin φ, cos φ, 0)
 fn sphere_tangent_to_3d<F: SemiflowFloat>(theta: F, phi: F, vt: F, vp: F) -> [F; 3] {
-    let st = Float::sin(theta);
-    let ct = Float::cos(theta);
-    let sp = Float::sin(phi);
-    let cp = Float::cos(phi);
+    let st = SemiflowFloat::libm_sin(theta);
+    let ct = SemiflowFloat::libm_cos(theta);
+    let sp = SemiflowFloat::libm_sin(phi);
+    let cp = SemiflowFloat::libm_cos(phi);
     [vt * ct * cp - vp * sp, vt * ct * sp + vp * cp, -vt * st]
 }
 
 /// Project 3D vector onto T_{(θ,φ)} S² and express in (`v_θ`, `v_φ`) coordinates.
 fn sphere_3d_to_tangent<F: SemiflowFloat>(theta: F, phi: F, w: [F; 3]) -> [F; 2] {
     // e_θ and e_φ are orthonormal at (θ, φ); dot with w to get components.
-    let st = Float::sin(theta);
-    let ct = Float::cos(theta);
-    let sp = Float::sin(phi);
-    let cp = Float::cos(phi);
+    let st = SemiflowFloat::libm_sin(theta);
+    let ct = SemiflowFloat::libm_cos(theta);
+    let sp = SemiflowFloat::libm_sin(phi);
+    let cp = SemiflowFloat::libm_cos(phi);
     let vt = w[0] * ct * cp + w[1] * ct * sp - w[2] * st;
     let vp = -w[0] * sp + w[1] * cp;
     [vt, vp]
@@ -439,8 +439,8 @@ fn sphere_3d_to_tangent<F: SemiflowFloat>(theta: F, phi: F, w: [F; 3]) -> [F; 2]
 
 /// Rodrigues rotation: rotate vector `v` by angle `psi` around unit axis `n`.
 pub(crate) fn rodrigues_3d<F: SemiflowFloat>(v: [F; 3], n: [F; 3], psi: F) -> [F; 3] {
-    let cp = Float::cos(psi);
-    let sp = Float::sin(psi);
+    let cp = SemiflowFloat::libm_cos(psi);
+    let sp = SemiflowFloat::libm_sin(psi);
     let dot = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
     // cross = n × v
     let cx = n[1] * v[2] - n[2] * v[1];

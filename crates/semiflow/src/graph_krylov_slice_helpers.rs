@@ -21,7 +21,7 @@ fn expmv_chebyshev<F: SemiflowFloat, Op: SymmetricLinearOp<F>>(
     let step_tau   = tau / F::from(f64::from(s)).unwrap(); // f64::from(u32) exact
     let z_sub      = step_tau * lambda_max / F::from(2.0_f64).unwrap();
     let m          = chebyshev_degree(z_sub, tol);
-    let em_z       = (-z_sub).exp();
+    let em_z       = (-z_sub).libm_exp();
     let scale      = F::from(2.0_f64).unwrap() / lambda_max;
     let two        = F::from(2.0_f64).unwrap();
     let mut t_prev  = scratch.take_vec(n);

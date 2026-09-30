@@ -1,6 +1,6 @@
 ---
-version: 1.4.0
-last_updated: 2026-06-19
+version: 1.5.0
+last_updated: 2026-09-28
 freshness_score: 1.0
 dependencies:
   - docs/adr/0028-ffi-pyo3-wasm-v0_10.md
@@ -26,34 +26,45 @@ changelog:
   - 1.2.0: Add v9.0.0 ADDITIVE surface (ReverseChernoff, CheckpointSchedule, TtChernoff, TtState, GridlessChernoff, ParticleReduction; ReverseHeat1D bindings for PyO3 + WASM)
   - 1.3.0: Add v9.1.0 ADDITIVE surface (CoupledTtChernoff; ADR-0162)
   - 1.4.0: Add v9.2.0 ADDITIVE surface (six S3* types behind s3-poc; AxisCoef, CpTerm, CpCoef, CoefRole, Reaction promoted; ADR-0169; schema 4.14.0/4.15.0)
+  - 1.5.0: 0.13.1-beta de-stale — current pre-1.0 status note; real package names and distribution channels; header is semiflow.h; internal pre-release version numbers labelled as such
 ---
 
 # API Stability Policy
 
-**Effective from**: v1.0.0
+**Effective from**: 1.0.0 (not yet released)
 **Scope**: All four public surfaces — `semiflow` Rust rlib, `semiflow-ffi`
-C ABI, `semiflow-py` PyO3 wheel, `semiflow-wasm` npm package.
+C ABI, `semiflow-pde` Python wheel (crate `semiflow-py`), `@semiflow/wasm` npm
+package (crate `semiflow-wasm`).
+
+> **Current status: 0.13.x beta.** SemiFlow is published as `0.x` betas (first
+> public release 0.9.0-beta). Until 1.0.0, a MINOR bump (0.x → 0.x+1) may carry
+> breaking changes, which are listed under `### Changed` / `### Removed` in
+> [`CHANGELOG.md`](../CHANGELOG.md); PATCH releases stay compatible. The
+> commitments below take effect at the 1.0.0 tag. Version numbers such as
+> `v4.6.0` or `v9.2.0` in §9 and §11 are *internal* development numbers that
+> predate the first public release — everything they describe is part of
+> 0.9.0-beta and later.
 **Cross-refs**: ADR-0028 §"API stability", ADR-0033, ADR-0034, ADR-0035
-(v1.0.0 freeze inventory; written concurrently).
+(1.0.0 freeze inventory; written concurrently).
 
 ---
 
 ## 1. Status and Scope
 
 This document is the authoritative stability contract for the semiflow
-workspace after the v1.0.0 tag. It supersedes the pre-1.0 "research preview"
-disclaimer in `README.md` (which is removed at v1.0.0 by task S2.7).
+workspace after the 1.0.0 tag. It supersedes the pre-1.0 beta disclaimer in
+`README.md` (which is removed at 1.0.0).
 
 Coverage:
 
 | Crate | Artifact | Distribution |
 |-------|----------|-------------|
 | `semiflow` | `rlib` | crates.io |
-| `semiflow-ffi` | `cdylib + staticlib + remizov.h` | GitHub Releases |
-| `semiflow-py` | `abi3-py310` wheel | PyPI / GitHub Releases |
-| `semiflow-wasm` | `wasm-pack` npm package | npm registry |
+| `semiflow-ffi` | `cdylib + staticlib + semiflow.h` | Built from source (no prebuilt binaries) |
+| `semiflow-py` | `abi3-py310` wheel `semiflow-pde` | PyPI |
+| `semiflow-wasm` | `wasm-pack` npm package `@semiflow/wasm` | npm registry |
 
-All four surfaces are frozen simultaneously at v1.0.0.
+All four surfaces are frozen simultaneously at 1.0.0.
 
 ---
 
@@ -79,14 +90,15 @@ kind. Panic message text may change in a PATCH.
 
 All four crates bump in lockstep: a MINOR change to `semiflow` that has
 no binding impact still increments the workspace version. Crates are not
-independently versioned after v1.0.0.
+independently versioned after 1.0.0.
 
 ---
 
 ## 3. MSRV Policy
 
-**v1.0.0 MSRV**: Rust **1.78**, as declared in `[workspace.package]
-rust-version = "1.78"` in the root `Cargo.toml`.
+**1.0.0 MSRV**: Rust **1.81**, as declared in `[workspace.package]
+rust-version = "1.81"` in the root `Cargo.toml` (1.81 stabilised
+`core::error::Error`, which `SemiflowError` implements in `no_std` builds).
 
 MSRV increases are **MINOR** version bumps, not MAJOR. Rationale: Rust's
 compatibility model guarantees that older compilers reject code using newer
@@ -126,14 +138,14 @@ Rules:
   that lags notes the gap in its own `CHANGELOG` entry.
 
 - Binding crates are not published to crates.io (`publish = false` in their
-  `Cargo.toml`). Their stability is enforced via GitHub Releases and the
-  npm/PyPI artifact, not via crates.io yanking. A MAJOR bump to the
+  `Cargo.toml`). Their stability is enforced via the PyPI and npm packages
+  and, for the C ABI, the committed header — not via crates.io yanking. A MAJOR bump to the
   workspace version is the signal to consumers of all four surfaces.
 
 Note on C ABI: `semiflow-ffi` does not make guarantees about ABI
 compatibility across different Rust toolchain versions or different host
 platforms. The C API types (`SemiflowStatus`, opaque handle, function
-signatures in `remizov.h`) are covered by this policy; the physical ABI of
+signatures in `semiflow.h`) are covered by this policy; the physical ABI of
 the compiled `cdylib` is a property of the Rust compiler and is not frozen
 by this document.
 
@@ -156,7 +168,7 @@ Such items will be listed in the release CHANGELOG.
 
 **ADR-0033 cross-reference**: both `NonSeparable2DChernoff<X, Y, F>` and
 `NonSeparable2DAnisotropicChernoff<X, Y, F>` are first-class public APIs at
-v1.0.0 with no deprecation marker. ADR-0033 records the rationale; the
+1.0.0 with no deprecation marker. ADR-0033 records the rationale; the
 summary is that scalar-c is the correct, simpler API for isotropic callers
 and the aniso type is an additive sibling, not a replacement. Neither will
 be deprecated unless a future caller-survey at a MAJOR milestone reveals no
@@ -204,12 +216,12 @@ The following are explicitly outside the stability guarantee:
 
 ---
 
-## 7. Surfaces Frozen at v1.0.0
+## 7. Surfaces Frozen at 1.0.0
 
-The following are covered by this policy starting at v1.0.0:
+The following are covered by this policy starting at 1.0.0:
 
 **`semiflow` Rust rlib** — all `pub use` re-exports in
-`crates/semiflow/src/lib.rs` (lines 134–157 at v1.0.0), which include:
+`crates/semiflow/src/lib.rs`, which include at least:
 
 | Export | Module |
 |--------|--------|
@@ -244,13 +256,13 @@ change.
 
 **`semiflow-ffi` C ABI** — all `extern "C"` functions in
 `crates/semiflow-ffi/src/ffi.rs` and all declarations in the
-cbindgen-generated `crates/semiflow-ffi/include/remizov.h`, including the
+cbindgen-generated `crates/semiflow-ffi/include/semiflow.h`, including the
 `SemiflowStatus` enum and the opaque `SemiflowState` handle.
 
-**`semiflow-py` PyO3 wheel** — all `#[pyclass]` types and `#[pymethods]`
+**`semiflow-pde` Python wheel** — all `#[pyclass]` types and `#[pymethods]`
 blocks in `crates/semiflow-py/src/`, including `Heat1D` and `SemiflowError`.
 
-**`semiflow-wasm` npm package** — all `#[wasm_bindgen]` items in
+**`@semiflow/wasm` npm package** — all `#[wasm_bindgen]` items in
 `crates/semiflow-wasm/src/`, including the `Heat1D` JS class and
 `panic_hook_init`.
 
@@ -274,9 +286,9 @@ in their respective ADRs. Accessing them directly is supported usage.
 
 ---
 
-## 8. Surfaces Not Frozen at v1.0.0
+## 8. Surfaces Not Frozen at 1.0.0
 
-The following are explicitly experimental or internal at v1.0.0:
+The following are explicitly experimental or internal at 1.0.0:
 
 - **`mod diffusion_storage`** (`pub(crate)` — the `Storage<F>` enum backing
   `DiffusionChernoff`; its layout and variants may change without notice).
@@ -304,9 +316,10 @@ The following are explicitly experimental or internal at v1.0.0:
 
 ## 9. Pre-1.0 SemVer Record
 
-Before v1.0.0, the workspace operated under pre-1.0 SemVer conventions where
-MINOR bumps were allowed to carry breaking changes. The breaking changes made
-during that period are:
+Before 1.0.0, the workspace operates under pre-1.0 SemVer conventions where
+MINOR bumps may carry breaking changes. Breaking changes made during internal
+development, before the first public release (0.9.0-beta), include (internal
+version numbers):
 
 - **v0.3.0**: `DiffusionChernoff::new` constructor extended from 3 to 5
   arguments (`a_prime` and `a_double_prime` inserted). Existing callers must
@@ -319,18 +332,17 @@ during that period are:
   change). Clean-break rename per ADR-0013 Amendment 2. (CHANGELOG §"Changed
   — BREAKING (D2 full fix)")
 
-- **v0.12.0** (planned, per ADR-0034): `DiffusionChernoff` loses the `Copy`
-  auto-trait. `Clone` is preserved. Migration: replace implicit copy sites
-  with `.clone()`. The `with_closure` sibling constructor is added
-  simultaneously (additive).
+- **ADR-0034** (done): `DiffusionChernoff` lost the `Copy` auto-trait;
+  `Clone` is preserved. Migration: replace implicit copy sites with
+  `.clone()`. The `with_closure` sibling constructor was added at the same
+  time (additive).
 
-All other changes in v0.x.y releases were additive or restricted to
-internal implementation details. The full history of `### Changed` and
-`### Removed` entries is in `CHANGELOG.md`.
+Breaking changes in the public `0.x` betas are recorded in `CHANGELOG.md`
+(`### Changed` / `### Removed`).
 
 ---
 
-## 10. Process for Changes After v1.0.0
+## 10. Process for Changes After 1.0.0
 
 **Breaking change (MAJOR)**:
 
@@ -367,7 +379,14 @@ previous MINOR if the removal is of a previously-public item.
 
 ---
 
-## 11. Surface Changes by Release (post-v1.0.0)
+## 11. Surface Changes by Internal Release (pre-0.9.0-beta)
+
+The entries below use internal development version numbers. All of them predate
+the first public release and are included in 0.9.0-beta. Several types marked
+"Rust-only" here have since gained bindings (for example `TtChernoff`,
+`CoupledTtChernoff` and `GridlessChernoff` are bound in the C, Python and WASM
+surfaces); see [python-coverage.md](python-coverage.md) for the current
+binding matrix. Public releases are recorded in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ### v5.0.0 — BREAKING (2026-05-29, commit 1ba9960)
 

@@ -180,7 +180,7 @@ fn row_sum_norm<F: SemiflowFloat>(n: usize, row_ptr: &[usize], vals: &[F]) -> f6
     for i in 0..n {
         let mut acc = 0.0_f64;
         for v in &vals[row_ptr[i]..row_ptr[i + 1]] {
-            acc += v.to_f64().unwrap_or(f64::NAN).abs();
+            acc += libm::fabs(v.to_f64().unwrap_or(f64::NAN));
         }
         if acc > best {
             best = acc;

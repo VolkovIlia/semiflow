@@ -6,7 +6,6 @@
 pub(super) use diffusion_zeta_common::{validate_a_x_f64, validate_tau_f64};
 
 use super::{Diffusion6thChernoff, C1_9, C2_9, C3_9, K7_P, K7_W0, K7_W1, K7_W2, K7_W3};
-#[cfg(feature = "simd")]
 use crate::simd::{F64x4, SimdF64x4};
 use crate::{diffusion_zeta_common, error::SemiflowError, grid_fn::GridFn1D};
 
@@ -46,8 +45,7 @@ pub(super) fn gamma6_a_baseline_f64(
 }
 
 /// Apply 9-point Fornberg FD stencil for `f^(deriv)` at `x` (scalar path, f64).
-// used under #[cfg(not(feature = "simd"))] fallback path in fd9_f64
-#[allow(dead_code)]
+#[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
 pub(super) fn fd9_scalar(
     f: &GridFn1D<f64>,
@@ -66,7 +64,6 @@ pub(super) fn fd9_scalar(
 }
 
 /// SIMD 9-pt stencil: 4+4+1 split (f64).
-#[cfg(feature = "simd")]
 #[allow(clippy::similar_names)]
 #[inline]
 pub(super) fn fd9_simd(
@@ -112,15 +109,11 @@ pub(super) fn fd9_f64(
     coeffs: &[f64; 9],
     deriv: u32,
 ) -> Result<f64, SemiflowError> {
-    #[cfg(feature = "simd")]
-    {
-        if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-            return fd9_scalar(f, x, delta, coeffs, deriv);
-        }
-        fd9_simd(f, x, delta, coeffs, deriv)
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+        return fd9_scalar(f, x, delta, coeffs, deriv);
     }
-    #[cfg(not(feature = "simd"))]
-    fd9_scalar(f, x, delta, coeffs, deriv)
+    fd9_simd(f, x, delta, coeffs, deriv)
 }
 
 /// ζ⁶ τ²-correction with 9-point Fornberg FD (math.md §9.2.6, NORMATIVE, f64).

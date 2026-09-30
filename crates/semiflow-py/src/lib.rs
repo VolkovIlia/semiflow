@@ -1,67 +1,74 @@
 //! `semiflow` — `PyO3` Python bindings for `semiflow`.
 //!
+//! Distributed on PyPI as **`semiflow-pde`** (abi3 wheel, CPython ≥ 3.10) and
+//! imported as `import semiflow`. The complete, typed surface is the stub file
+//! `python/semiflow/__init__.pyi`; the parity matrix against the Rust, C and
+//! WASM surfaces is `docs/python-coverage.md`.
+//!
 //! ## Contents
 //!
-//! - `Heat1D` — 1-D heat-equation state (unit diffusion `a = 1.0`).
-//! - `SemiflowError` — discriminated exception class with a `kind: str`
-//!   attribute.
-//! - `version()` — crate version string.
+//! - **1D diffusion** — `Heat1D` (unit or variable `a`, optional `dtype="f32"`),
+//!   `Heat1D4th/6th`, `Heat1DZeta4/6/8`, `TruncatedExp1D`, `TruncatedExp4th1D`,
+//!   `DriftReaction1D`, `DriftReaction4th1D`, `Shift1D`, `Strang1D`,
+//!   `DiffusionExpmv1D`, `ConservativeDiffusionChernoff`.
+//! - **2D/3D and N-D** — `Heat2D/3D`, `Heat2DVarA/3DVarA`, `NonSeparable2D`,
+//!   `NonSeparable2DAniso`, `AnisotropicShiftND2/3`, `MatrixDiffusion1D/2D/3D`,
+//!   `SmolyakD6V8`.
+//! - **Boundary conditions** — `Killing1D`, `Killing2nd1D`, `Reflected1D`,
+//!   `Robin1D`, `Resolvent1D`, `KilledDirichlet1D`, `DirichletHeat2nd1D`,
+//!   `WentzellV8` / `GammaFamily`, `ObstacleChernoff`, `ObstacleGammaV8`,
+//!   `ObstacleNDV8`.
+//! - **Schrödinger** — `Schrodinger1D`, `SchrodingerComplex1D`.
+//! - **Nonautonomous / resolvent** — `Howland1D`, `Subordinated1D`,
+//!   `ResolventJumpV8`, `ResolventJump2DV8`, `ResolventJump3DV8`.
+//! - **Manifold / hypoelliptic / Carnot** — `Manifold2D`,
+//!   `HypoellipticChernoffHeisenberg/Kolmogorov/Engel`, `ComplexTripleJumpV8`,
+//!   `PointEval`.
+//! - **Graph** — `Graph`, `GraphPath`, `Laplacian`, `GraphHeat`, `GraphHeat4th`,
+//!   `GraphHeat6`, `MagnusGraphHeat`, `MagnusGraphHeat6`, `VarCoefGraphHeat`,
+//!   `VarCoefMagnusGraph`, `GraphTraj`, `StrangGraph`, `QuantumGraph`,
+//!   `QuantumGraphHeat`, `GraphKrylov`, `GraphAdjoint`,
+//!   `GraphAdjointPresampled`.
+//! - **Sparse operators and semilinear problems** — `SymmetricOperator`,
+//!   `MassKOperator`, `GeneralOperator`, `Etdrk4`, plus the functions
+//!   `phi_action`, `phi_action_batched`, `mass_lumped_evolve`,
+//!   `assemble_conservative_csr_1d`.
+//! - **S³ carriers** (ADR-0171) — `TtState`, `TtEvolver`, `TtCoupledEvolver`,
+//!   `VarCoefTtEvolver`, `MeasureState`, `GridlessEvolver`.
+//! - **Adjoint / sensitivities / adaptive** — `Adjoint`, `AdjointFokkerPlanckV8`,
+//!   `AdaptivePI`, `ReverseHeat1D`, `EvolverHeat1DGreeksV3`,
+//!   `EvolverHeat1DUnitV3`, `GrowthV3`, and the gradient functions
+//!   `edge_weight_grad`, `edge_weight_grad_batched`, `graph_expmv_frechet`,
+//!   `symmetric_op_expmv_frechet`, `shift1d_coeff_grad`.
+//! - `SemiflowError`, `version()`, `heisenberg_heat_kernel()`,
+//!   `sample_gridfn2d()`.
 //!
 //! ## Error model
 //!
-//! All fallible operations raise `SemiflowError`.  The `.kind` attribute is a
-//! string matching the `SemiflowStatus` C-ABI names from `semiflow-ffi`:
-//! `"GridMismatch"`, `"NanInf"`, `"OutOfDomain"`, `"BoundaryFailure"`,
-//! `"CflViolated"`, `"ConvergenceFailed"`, `"Unsupported"`, `"Panic"`.
+//! All fallible operations raise `SemiflowError`. The message starts with the
+//! error kind in brackets — one of the `SemiflowStatus` C-ABI names from
+//! `semiflow-ffi`: `GridMismatch`, `NanInf`, `OutOfDomain`, `BoundaryFailure`,
+//! `CflViolated`, `ConvergenceFailed`, `Unsupported`, `Panic`.
 //!
 //! ```python
 //! from semiflow import Heat1D, SemiflowError
 //! try:
 //!     state.evolve(-1.0)
 //! except SemiflowError as e:
-//!     if e.kind == "OutOfDomain":
+//!     if str(e).startswith("[OutOfDomain]"):
 //!         ...
 //! ```
 //!
 //! ## GIL policy
 //!
-//! `Heat1D.evolve` releases the GIL during the inner pure-Rust compute loop
-//! (ADR-0031); the three-phase design is documented in `state.rs`.
+//! `Heat1D.evolve` (and most other `evolve` calls) release the GIL during the
+//! inner pure-Rust compute loop (ADR-0031); the three-phase design is
+//! documented in `state_1d.rs`.
 //!
 //! ## Safety note
 //!
 //! `#![allow(unsafe_code)]` is required: the `#[pymodule]` proc-macro
 //! expands `unsafe` blocks inside this file (`PyO3` initialisation code).
-//!
-//! ## Scope (v0.9.0-beta binding-parity wave)
-//!
-//! Broad parity with `semiflow` across the following families:
-//!
-//! - **1D diffusion** — `Heat1D`, `Heat1D4th/6th`, `TruncatedExp/4th`,
-//!   `DriftReaction1D`, `Shift1D`, `Strang1D`.
-//! - **2D/3D Strang tensor product** — `Heat2D/3D`, `Heat2DVarA/3DVarA`.
-//! - **Non-separable / anisotropic** — `NonSeparable2D`, `NonSeparable2DAniso`,
-//!   `AnisotropicShiftND2/3`.
-//! - **High-dimensional sparse grid** — `SmolyakD6`.
-//! - **Boundary conditions** — `Killing1D`, `Reflected1D`, `Robin1D`,
-//!   `Resolvent1D`, `KilledDirichlet1D`, `ObstacleChernoff1D`.
-//! - **Schrödinger** — real and complex variants.
-//! - **Matrix diffusion** — `MatrixDiffusion1D`.
-//! - **Nonautonomous / resolvent** — `Howland1D`, `Subordinated1D`,
-//!   `ResolventJumpChernoff` (1D/2D/3D).
-//! - **Manifold** — `ManifoldChernoff` (Torus, Sphere2, Hyperbolic2).
-//! - **Hypoelliptic / sub-Riemannian** — Heisenberg, Kolmogorov, Engel.
-//! - **Graph** — `GraphHeat`, `GraphHeat4th`, `MagnusGraphHeat`,
-//!   `VarCoefGraphHeat`, `QuantumGraphHeat`, `StrangGraph`.
-//! - **S³ flagship carriers** (ADR-0171) — `TtEvolver`, `TtCoupledEvolver`,
-//!   `GridlessEvolver`.
-//! - **Adjoint / Greeks / adaptive** — `AdjointFokkerPlanck`,
-//!   `EvolverHeat1DGreeksV3`, `AdaptivePI`, `Adjoint1D`.
-//! - **Carnot / point evaluation** — `ComplexTripleJump`, `PointEval`.
-//!
-//! **PyO3-only deferrals:** `ObstacleND`, `ObstacleGamma`, `GraphTraj`,
-//! Laplacian introspection, and `GraphAdjoint` dense read-back are not yet
-//! exposed (closure / dense-matrix surfaces require additional ABI design).
 //!
 //! See ADR-0028 for the binding split rationale and ABI stability roadmap.
 

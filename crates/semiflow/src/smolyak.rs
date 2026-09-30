@@ -8,6 +8,13 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
+
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
@@ -377,7 +384,7 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
             let mut b_val = [F::zero(); D];
             (self.b_i)(&xk, &mut b_val);
             let c_val = (self.c)(&xk);
-            let exp_factor = (tau * c_val).exp();
+            let exp_factor = (tau * c_val).libm_exp();
             let l_k = &self.cholesky_cache[flat];
             let mut acc = F::zero();
             for qi in 0..n_q {

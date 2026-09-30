@@ -1009,6 +1009,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "semiflow-nostd-check"
+version = "0.13.1-beta"
+dependencies = [
+ "semiflow",
+]
+
+[[package]]
 name = "semiflow-py"
 version = "0.13.1-beta"
 dependencies = [

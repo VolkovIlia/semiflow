@@ -14,6 +14,13 @@
     clippy::cast_possible_truncation
 )]
 
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
+
 use crate::{error::SemiflowError, float::SemiflowFloat, matrix_pade::mat_exp_pade13};
 
 // ---------------------------------------------------------------------------
@@ -58,7 +65,7 @@ pub(super) fn mat_vec_mul<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M], v: 
 /// M=1: scalar exponential.
 fn matrix_exp_m1<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; M] {
     let mut out = [[F::zero(); M]; M];
-    out[0][0] = a[0][0].exp();
+    out[0][0] = a[0][0].libm_exp();
     out
 }
 
@@ -84,7 +91,7 @@ fn matrix_exp_m2<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; 
     if disc.abs() < F::epsilon() * F::from(1000.0).unwrap_or(F::one()) {
         // Repeated eigenvalue λ = tr/2: e^A = e^λ·(I + (A - λI)).
         let lam = half * tr;
-        let e_lam = lam.exp();
+        let e_lam = lam.libm_exp();
         out[0][0] = e_lam * (F::one() + a00 - lam);
         out[0][1] = e_lam * a01;
         out[1][0] = e_lam * a10;
@@ -95,8 +102,8 @@ fn matrix_exp_m2<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; 
         let sqrt_disc = disc.abs().sqrt();
         let lam1 = half * (tr + sqrt_disc);
         let lam2 = half * (tr - sqrt_disc);
-        let e1 = lam1.exp();
-        let e2 = lam2.exp();
+        let e1 = lam1.libm_exp();
+        let e2 = lam2.libm_exp();
         let diff = lam1 - lam2;
         let c1 = (e1 - e2) / diff;
         let c0 = (lam1 * e2 - lam2 * e1) / diff;
@@ -179,7 +186,7 @@ fn scale_and_shift<F: SemiflowFloat, const M: usize>(
         if nf <= 1.0 {
             0u32
         } else {
-            (nf.log2().ceil() as u32).min(30)
+            (nf.libm_log2().ceil() as u32).min(30)
         }
     };
     let scale = F::from(f64::from(1u32 << k)).unwrap_or(F::one());

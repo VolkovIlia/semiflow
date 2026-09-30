@@ -171,10 +171,10 @@ impl HypoellipticChernoff<f64, 5, 2> {
         let eps = 1e-6_f64;
         let expected = [0.0, 0.0, 1.0, 0.0, 0.0];
         for (&got, &exp) in bracket_12.iter().zip(expected.iter()) {
-            if (got - exp).abs() > eps {
+            if libm::fabs(got - exp) > eps {
                 return Err(SemiflowError::DomainViolation {
                     what: "Filiform5 step-4 check: [X₁,X₂] deviates from X₃ at origin",
-                    value: (got - exp).abs(),
+                    value: libm::fabs(got - exp),
                 });
             }
         }

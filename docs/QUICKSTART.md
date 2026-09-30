@@ -1,7 +1,8 @@
 # Quickstart — Solving the heat equation
 
-> Current release: **v0.9.0-beta** (first public beta). For a full type catalogue and feature flag reference see
-> [`crates/semiflow/README.md`](../crates/semiflow/README.md).
+> Install instructions, the current version, feature flags and the full type
+> catalogue live in the [project README](../README.md#install) — this page only
+> walks through code.
 
 We numerically integrate `∂_t u = (1/2)·∂_xx u` from `u_0(x) = exp(-x²)` to
 `t = 1`, and compare against the closed-form Gaussian heat kernel
@@ -12,11 +13,11 @@ At `t = 1` the oracle is `3^{-1/2} exp(-x²/3)`.
 ## Full example
 
 ```rust
-use semiflow_core::{Grid1D, GridFn1D, ShiftChernoff1D, ChernoffSemigroup};
+use semiflow::{ChernoffSemigroup, Grid1D, GridFn1D, ShiftChernoff1D};
 
 fn main() {
     // Uniform grid: [-10, 10] with N=1000 nodes.
-    // Defaults: BoundaryPolicy::Reflect, InterpKind::CubicHermite.
+    // Defaults: BoundaryPolicy::Reflect, InterpKind::SepticHermite.
     let grid = Grid1D::new(-10.0, 10.0, 1000)
         .expect("grid bounds and node count are valid");
 
@@ -51,7 +52,7 @@ fn main() {
         }
     }
     println!("max sup-norm error: {:.3e}", max_err);
-    // Output: max sup-norm error: 3.207e-4
+    // Output: max sup-norm error: 3.211e-4
 }
 ```
 
@@ -59,7 +60,8 @@ fn main() {
 
 1. `Grid1D::new(-10.0, 10.0, 1000)` creates a uniform grid with 1000 nodes and
    spacing `dx ≈ 0.02`. The default boundary policy is `Reflect`; the default
-   sub-grid interpolation is `CubicHermite` (Catmull-Rom).
+   sub-grid interpolation is `SepticHermite` (degree-7 Hermite). Change either
+   with `.with_boundary(…)` / `.with_interp(…)`.
 
 2. `ShiftChernoff1D` encodes formula (6) of Theorem 6 (Remizov 2025):
 
@@ -71,7 +73,7 @@ fn main() {
    ```
 
    For `a = 0.5`, `b = c = 0` the shift is `±√(2τ)` ≈ ±0.14 grid units at
-   `τ = 0.01` (n=100, t=1), well within the Catmull-Rom stencil's accuracy.
+   `τ = 0.01` (n=100, t=1), well within the interpolation stencil's accuracy.
 
 3. `ChernoffSemigroup::evolve(t, &f)` applies `S(t/n)` exactly `n` times,
    threading the state forward. The error bound from Theorem 6 (inequality 9)
@@ -90,12 +92,12 @@ for &n in &[25_usize, 50, 100, 200, 400, 1000] {
     println!("n={n:5}  err={err:.3e}");
 }
 // Expected (first-order O(1/n) convergence, slope ≈ −1.00):
-// n=   25  err=1.3e-3
-// n=   50  err=6.4e-4
-// n=  100  err=3.2e-4
-// n=  200  err=1.6e-4
-// n=  400  err=8.0e-5
-// n= 1000  err=3.1e-5
+// n=   25  err=1.289e-3
+// n=   50  err=6.429e-4
+// n=  100  err=3.211e-4
+// n=  200  err=1.604e-4
+// n=  400  err=8.020e-5
+// n= 1000  err=3.207e-5
 ```
 
 ## Non-trivial coefficients
@@ -104,8 +106,8 @@ Vary the coefficients to model `L = a(x)∂² + b(x)∂`:
 
 ```rust
 let sc = ShiftChernoff1D::new(
-    |x| 0.5 + 0.1 * x.tanh(),  // space-varying diffusion
-    |x| -0.2 * x,               // linear drift (Ornstein-Uhlenbeck-like)
+    |x: f64| 0.5 + 0.1 * x.tanh(),  // space-varying diffusion
+    |x| -0.2 * x,                   // linear drift (Ornstein-Uhlenbeck-like)
     |_| 0.0,
     0.0,
     grid,
@@ -122,33 +124,30 @@ at each grid node during `apply`; callers are responsible for ellipticity.
   full mathematical specification of formula (6) and the convergence bound.
 - See [crates/semiflow/tests/heat_kernel.rs](../crates/semiflow/tests/heat_kernel.rs)
   for the gate tests (G1 at n=100, G2 at n=1000) run in CI.
-- Read the API docs: `cargo doc --open -p semiflow`.
+- Read the API docs: [docs.rs/semiflow](https://docs.rs/semiflow), or locally
+  `cargo doc --open -p semiflow`.
 
 ---
 
-## v0.2.0 — order-2 with `StrangSplit`
+## Order 2 with `StrangSplit`
 
-The v0.1.0 example above uses `ShiftChernoff1D`, which has first-order global
-convergence (O(1/n) error). The v0.2.0 release ships `StrangSplit`, an
-operator-splitting composer that achieves **order-2** (O(1/n²) error) by
-symmetrizing a pure-diffusion step with an exact drift+reaction step.
-
-The v0.2.0 acceptance gates are tighter than v0.1.0: G1 `< 1e-4` at `n=100`
-(was 5e-4) and G2 `< 1e-6` at `n=1000` (was 5e-5). These are the original
-PRD targets, now achievable with Strang order-2.
+The example above uses `ShiftChernoff1D`, which has first-order global
+convergence (O(1/n) error). `StrangSplit` is an operator-splitting composer
+that achieves **order 2** (O(1/n²) error) by symmetrizing a pure-diffusion step
+with an exact drift+reaction step.
 
 ### Example — advection-diffusion `∂_t u = (1/2) ∂_xx u + (1/2) ∂_x u`
 
 ```rust
-use semiflow_core::{
-    Grid1D, GridFn1D, ChernoffSemigroup,
-    DiffusionChernoff, DriftReactionChernoff, StrangSplit,
+use semiflow::{
+    ChernoffSemigroup, DiffusionChernoff, DriftReactionChernoff, Grid1D, GridFn1D,
+    StrangSplit,
 };
 
 fn main() {
     // Uniform grid: [-10, 10] with N=100_000 nodes.
-    // The fine grid pushes the cubic Hermite spatial-discretization floor
-    // below the tighter v0.2.0 tolerance gates.
+    // The fine grid pushes the spatial-discretization floor below the
+    // order-2 temporal error.
     let grid = Grid1D::new(-10.0, 10.0, 100_000)
         .expect("grid bounds and node count are valid");
 
@@ -156,10 +155,8 @@ fn main() {
     let u0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
 
     // Diffusion operator A = (1/2) d^2/dx^2.
-    // v0.3.0 (ADR-0008 Amendment 1, ζ-A):
     //   DiffusionChernoff::new(a, a_prime, a_double_prime, a_norm_bound, grid)
-    // For constant `a`, pass `|_| 0.0_f64` for BOTH a_prime AND a_double_prime
-    // (a' ≡ a'' ≡ 0; bit-equal to v0.2.2 by sympy gate Z_const-a).
+    // For constant `a`, pass `|_| 0.0_f64` for BOTH a_prime AND a_double_prime.
     let diff = DiffusionChernoff::new(|_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5, grid);
 
     // Drift+reaction operator B = (1/2) d/dx + 0.
@@ -175,20 +172,20 @@ fn main() {
     let u_t = semigroup.evolve(1.0, &u0)
         .expect("evolve should not fail for valid inputs");
 
-    // Oracle: u(t,x) = (1+2*alpha*t)^{-1/2} * exp(-(x+beta*t)^2 / (1+2*alpha*t))
-    // with alpha=beta=0.5, t=1 => u(1,x) = (2)^{-1/2} * exp(-(x+0.5)^2 / 2).
-    let inv_sqrt2 = 2.0_f64.sqrt().recip();
+    // Oracle: u(t,x) = (1+4*alpha*t)^{-1/2} * exp(-(x+beta*t)^2 / (1+4*alpha*t))
+    // with alpha=beta=0.5, t=1 => u(1,x) = (3)^{-1/2} * exp(-(x+0.5)^2 / 3).
+    let inv_sqrt3 = 3.0_f64.sqrt().recip();
     let mut max_err: f64 = 0.0;
     for i in 0..u_t.values.len() {
         let x = grid.x_at(i);
-        let oracle = inv_sqrt2 * (-((x + 0.5) * (x + 0.5)) / 2.0).exp();
+        let oracle = inv_sqrt3 * (-((x + 0.5) * (x + 0.5)) / 3.0).exp();
         let err = (u_t.values[i] - oracle).abs();
         if err > max_err {
             max_err = err;
         }
     }
     println!("max sup-norm error: {:.3e}", max_err);
-    // Output: max sup-norm error: 2.676e-9   (G2 gate: < 1e-6)
+    // Output: max sup-norm error: 2.674e-9   (G2 gate: < 1e-6)
 }
 ```
 
@@ -196,15 +193,17 @@ fn main() {
 
 | n | sup-norm error | gate |
 |---|---------------|------|
-| 100 | ≈ 2.7e-7 | G1: < 1e-4 |
-| 1000 | ≈ 2.7e-9 | G2: < 1e-6 |
+| 100 | ≈ 2.687e-7 | G1: < 1e-4 |
+| 1000 | ≈ 2.674e-9 | G2: < 1e-6 |
 
-The empirical log-log slope over `n ∈ {32, 64, 128, 256, 512, 1024}` is
-`-2.004`, confirming order-2 convergence (G3-strang gate: slope ≤ -1.95).
+The same problem is the runnable example
+[`strang_advdiff_demo.rs`](../crates/semiflow/examples/strang_advdiff_demo.rs)
+(`cargo run --release -p semiflow --example strang_advdiff_demo`), which also
+prints the order-1 `ShiftChernoff1D` baseline for comparison.
 
 ---
 
-## 2D heat (v0.5.0)
+## 2D heat
 
 > See `crates/semiflow/examples/heat_2d_demo.rs` for the full demo
 > (run via `cargo run --release --example heat_2d_demo -p semiflow`).
@@ -217,14 +216,14 @@ and compare against the closed-form 2D Gaussian heat oracle
 At `t = 1` the oracle is `(1/3) exp(-(x²+y²)/3)`.
 
 ```rust
-use semiflow_core::{
+use semiflow::{
     ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, GridFn2D, Strang2D,
 };
 
 fn main() {
-    // Uniform 2D grid: [-10, 10]² with N=1000 nodes per axis (1M cells).
-    let gx = Grid1D::new(-10.0, 10.0, 1000).expect("grid x OK");
-    let gy = Grid1D::new(-10.0, 10.0, 1000).expect("grid y OK");
+    // Uniform 2D grid: [-10, 10]² with N=200 nodes per axis.
+    let gx = Grid1D::new(-10.0, 10.0, 200).expect("grid x OK");
+    let gy = Grid1D::new(-10.0, 10.0, 200).expect("grid y OK");
     let g  = Grid2D::new(gx, gy);  // infallible — Grid1D preconditions already validated
 
     // Initial condition: u_0(x, y) = exp(-(x² + y²)).
@@ -232,14 +231,14 @@ fn main() {
 
     // Per-axis diffusion: L_x = L_y = ½∂²_z.
     // DiffusionChernoff::new(a, a_prime, a_double_prime, a_norm_bound, grid)
-    // Constant a=0.5 ⇒ a'=a''=0 (ζ-A fast path, bit-equal to v0.2.2 by Z_const-a).
+    // Constant a=0.5 ⇒ a'=a''=0.
     let cx = DiffusionChernoff::new(|_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5, gx);
     let cy = DiffusionChernoff::new(|_| 0.5_f64, |_| 0.0_f64, |_| 0.0_f64, 0.5, gy);
 
     // Palindromic Strang2D: Sx(τ/2) ∘ Sy(τ) ∘ Sx(τ/2), global order 2.
     // Strang2D::new wraps each inner 1D function in an AxisLift automatically.
     let strang = Strang2D::new(cx, cy);
-    let semi = ChernoffSemigroup::new(strang, 1000).expect("n >= 1");
+    let semi = ChernoffSemigroup::new(strang, 100).expect("n >= 1");
     let u1 = semi.evolve(1.0, &u0).expect("evolve OK");
 
     // Compare to oracle: u(1,x,y) = (1/3) exp(-(x²+y²)/3).
@@ -256,7 +255,7 @@ fn main() {
         }
     }
     println!("max sup-norm error: {:.3e}", max_err);
-    // Smoke gate (n=50, N=1000): err < 5e-4
+    // Output: max sup-norm error: 7.743e-7   (G1-2D gate: < 5e-4)
 }
 ```
 
@@ -278,19 +277,19 @@ fn main() {
    independent 1D problem; for `Axis::Y` it sweeps each column (fixed i).
    Both re-use the same `DiffusionChernoff::apply` kernel.
 
-### Acceptance gates (v0.5.0)
+### Acceptance gates
 
-| Gate | n | N | sup-norm err | threshold |
-|------|---|---|-------------|-----------|
-| G1-2D | 100 | 200×200 | 3.687e-5 | < 5e-4 |
-| G2-2D (slow-tests) | 1000 | 500×500 | 1.666e-5 | < 5e-5 |
-| G3-2D slope (slow-tests) | 8…64 | 1000×1000 | −2.056 | ≤ −1.95 |
+| Gate | n | N | threshold |
+|------|---|---|-----------|
+| G1-2D | 100 | 200×200 | sup-norm err < 5e-4 |
+| G2-2D (slow-tests) | 1000 | 500×500 | sup-norm err < 5e-5 |
+| G3-2D slope (slow-tests) | 8…64 | 1000×1000 | log-log slope ≤ −1.95 |
 
 ### Next steps
 
 - See `contracts/semiflow-core.math.md` §10 for Theorem 7 and Lemma 10.2
   (the Y-independent reduction lemma that validates per-axis sweep).
-- See `contracts/semiflow-core.tensor.yaml` for the NORMATIVE schema
-  (schema_version 0.5.0) covering `Grid2D`, `GridFn2D`, `AxisLift`, `Strang2D`.
+- See `contracts/semiflow-core.tensor.yaml` for the normative schema
+  covering `Grid2D`, `GridFn2D`, `AxisLift`, `Strang2D`.
 - See `docs/adr/0012-tensor-product-2d.md` for architectural rationale.
-- Read the API docs: `cargo doc --open -p semiflow`.
+- Read the API docs: [docs.rs/semiflow](https://docs.rs/semiflow).

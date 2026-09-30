@@ -160,7 +160,7 @@ impl<F: SemiflowFloat, const D: usize> AnisotropicShiftAdaptiveQ<F, D> {
         let mut b_val = [F::zero(); D];
         (self.b_i)(xk, &mut b_val);
         let c_val = (self.c_fn)(xk);
-        let exp_factor = (tau * c_val).exp();
+        let exp_factor = (tau * c_val).libm_exp();
         #[allow(clippy::cast_possible_truncation)]
         let total_q = q.pow(D as u32);
         let mut acc = F::zero();

@@ -11,7 +11,16 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
+
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
+
+use crate::float::SemiflowFloat;
 
 // ─── Symmetric tridiagonal eigensolver (Golub-Welsch) ────────────────────────
 
@@ -222,5 +231,5 @@ pub(crate) fn ig_density_std(v: f64, kappa: f64) -> f64 {
     if exponent < -700.0 {
         return 0.0;
     }
-    (kappa / (2.0 * core::f64::consts::PI)).sqrt() * v.powf(-1.5) * libm::exp(exponent)
+    (kappa / (2.0 * core::f64::consts::PI)).sqrt() * v.libm_powf(-1.5) * libm::exp(exponent)
 }

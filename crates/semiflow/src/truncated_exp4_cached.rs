@@ -225,8 +225,9 @@ fn precompute_g4_grids_cached(
 
 /// Apply the G⁴ stencil once; reads coefficients from cache instead of closure.
 ///
-/// Dispatches to the 4-node SIMD path (Wave B3) for interior chunks when
-/// `feature = "simd"` is active and the arch supports AVX2/NEON.
+/// Dispatches to the 4-node lane path (Wave B3) for interior chunks in every
+/// build: AVX2/NEON intrinsics under `feature = "simd"`, a scalar mirror of the
+/// same arithmetic otherwise (ADR-0200).
 /// Boundary nodes (first/last 2) always use the scalar path (requires `sample()`
 /// for out-of-bounds extrapolation).
 fn apply_g4_stencil_cached(
@@ -239,19 +240,16 @@ fn apply_g4_stencil_cached(
     let dx_sq = dx * dx;
     let mut out = prev.zeroed_like();
 
-    #[cfg(feature = "simd")]
-    {
-        if !(cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get)) {
-            return apply_g4_stencil_cached_simd(mc, cache, prev, &mut out, n, dx, dx_sq);
-        }
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+        apply_g4_stencil_cached_scalar(mc, cache, prev, &mut out, n, dx, dx_sq)?;
+        return Ok(out);
     }
-
-    // Scalar path — also reached under FORCE_SCALAR in tests.
-    apply_g4_stencil_cached_scalar(mc, cache, prev, &mut out, n, dx, dx_sq)?;
-    Ok(out)
+    apply_g4_stencil_cached_simd(mc, cache, prev, &mut out, n, dx, dx_sq)
 }
 
 /// Scalar implementation of the G⁴ stencil (all nodes, no SIMD).
+#[allow(dead_code)] // used by the test force-scalar hook
 #[allow(clippy::too_many_arguments)]
 fn apply_g4_stencil_cached_scalar(
     mc: &TruncatedExp4thDiffusionChernoff<f64>,
@@ -274,7 +272,6 @@ fn apply_g4_stencil_cached_scalar(
 /// Boundary invariant: the first/last 2 nodes may require `prev.sample()` for
 /// out-of-bounds extrapolation — those are always processed by the scalar path.
 /// Interior nodes [2 .. n-2] are safe for the 5-point stencil without extrapolation.
-#[cfg(feature = "simd")]
 #[allow(clippy::too_many_arguments)]
 fn apply_g4_stencil_cached_simd(
     mc: &TruncatedExp4thDiffusionChernoff<f64>,
@@ -313,10 +310,10 @@ fn apply_g4_stencil_cached_simd(
     Ok(out.clone())
 }
 
-/// Dispatch 4-node SIMD kernel: selects AVX2, NEON, or scalar for other arches.
+/// Dispatch 4-node lane kernel: AVX2 or NEON under `feature = "simd"`, the
+/// scalar mirror of the same arithmetic otherwise.
 ///
 /// Interior invariant: `base >= 2` and `base + 5 <= n` — caller ensures this.
-#[cfg(feature = "simd")]
 #[allow(clippy::similar_names)]
 fn apply_g4_4nodes_simd(
     base: usize,
@@ -326,7 +323,7 @@ fn apply_g4_4nodes_simd(
     out: &mut GridFn1D<f64>,
 ) {
     // AVX2 path.
-    #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+    #[cfg(all(feature = "simd", target_arch = "x86_64", target_feature = "avx2"))]
     apply_g4_stencil_avx2_4nodes(
         base,
         &prev.values,
@@ -339,7 +336,7 @@ fn apply_g4_4nodes_simd(
     );
 
     // NEON path.
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(all(feature = "simd", target_arch = "aarch64", target_feature = "neon"))]
     apply_g4_stencil_neon_4nodes(
         base,
         &prev.values,
@@ -351,24 +348,31 @@ fn apply_g4_4nodes_simd(
         &mut out.values,
     );
 
-    // Scalar fallback for arches without AVX2/NEON (simd feature but no intrinsics).
-    #[cfg(not(any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "aarch64", target_feature = "neon")
+    // Scalar mirror for builds/arches without AVX2/NEON intrinsics.
+    #[cfg(not(all(
+        feature = "simd",
+        any(
+            all(target_arch = "x86_64", target_feature = "avx2"),
+            all(target_arch = "aarch64", target_feature = "neon")
+        )
     )))]
     apply_g4_4nodes_scalar_fallback(base, prev, cache, dx_sq_inv, out);
 }
 
-/// Pure-scalar 4-node G⁴ stencil — fallback when AVX2/NEON are not enabled.
+/// Pure-scalar 4-node G⁴ stencil — used when AVX2/NEON intrinsics are not compiled in.
+///
+/// Mirrors `avx2_g4_fluxes` / `neon_g4_lane_pair` operation for operation
+/// (`× 0.25`, `× (1/12)`, `× dx_sq_inv`, same addition order), so every build
+/// produces the same bits (ADR-0200).
 ///
 /// Interior invariant: `base >= 2` and `base + 5 <= n` — caller ensures this.
-#[cfg(all(
+#[cfg(not(all(
     feature = "simd",
-    not(any(
+    any(
         all(target_arch = "x86_64", target_feature = "avx2"),
         all(target_arch = "aarch64", target_feature = "neon")
-    ))
-))]
+    )
+)))]
 #[allow(clippy::similar_names)]
 fn apply_g4_4nodes_scalar_fallback(
     base: usize,
@@ -377,7 +381,7 @@ fn apply_g4_4nodes_scalar_fallback(
     dx_sq_inv: f64,
     out: &mut GridFn1D<f64>,
 ) {
-    let dx_sq = 1.0 / dx_sq_inv;
+    let one_over_12 = 1.0 / 12.0;
     for j in base..base + 4 {
         // Interior invariant guarantees prev[j-2..j+3] are all in-bounds.
         let rp2 = prev.values[j + 2];
@@ -389,11 +393,11 @@ fn apply_g4_4nodes_scalar_fallback(
         let ar1h = cache.ar1h[j];
         let al1h = cache.al1h[j];
         let al3h = cache.al3h[j];
-        let flux_right = 5.0 * ar1h * (rp1 - ctr) / 4.0;
-        let flux_right_far = -ar3h * (rp2 - rp1) / 12.0;
-        let flux_left = -5.0 * al1h * (ctr - lm1) / 4.0;
-        let flux_left_far = al3h * (lm1 - lm2) / 12.0;
-        out.values[j] = (flux_right_far + flux_right + flux_left + flux_left_far) / dx_sq;
+        let flux_right = ((5.0 * ar1h) * (rp1 - ctr)) * 0.25;
+        let flux_right_far = ((-ar3h) * (rp2 - rp1)) * one_over_12;
+        let flux_left = ((-5.0 * al1h) * (ctr - lm1)) * 0.25;
+        let flux_left_far = (al3h * (lm1 - lm2)) * one_over_12;
+        out.values[j] = (((flux_right_far + flux_right) + flux_left) + flux_left_far) * dx_sq_inv;
     }
 }
 

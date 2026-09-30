@@ -76,7 +76,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Hyperbolic2<F> {
         let two = F::one() + F::one();
         let hyp_norm_v = two * self.scale * norm_euc_v / (F::one() - x_sq);
         // At origin: w = tanh(‖v‖_hyp / 2) · v̂
-        let tanh_half = Float::tanh(hyp_norm_v / two);
+        let tanh_half = SemiflowFloat::libm_tanh(hyp_norm_v / two);
         let alpha_u = tanh_half * v[0] / norm_euc_v;
         let alpha_w = tanh_half * v[1] / norm_euc_v;
         // Translate back: Möbius_x(alpha)
@@ -137,7 +137,7 @@ impl<F: SemiflowFloat> BoundedGeometryManifold<F> for Hyperbolic2<F> {
         let two = F::one() + F::one();
         let x_sq = x[0] * x[0] + x[1] * x[1];
         let one_minus_r_sq = (F::one() - x_sq).max(F::epsilon());
-        Float::ln(two * self.scale) - Float::ln(one_minus_r_sq)
+        SemiflowFloat::libm_ln(two * self.scale) - SemiflowFloat::libm_ln(one_minus_r_sq)
     }
 }
 

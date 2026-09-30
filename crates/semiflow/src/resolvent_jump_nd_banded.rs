@@ -74,10 +74,10 @@ pub(super) fn banded_lu_solve(
     let mut b = rhs.to_vec();
     for k in 0..n {
         let pivot = a[k * width + bw];
-        if pivot.norm() < 1e-300 {
+        if crate::complex_libm::norm(pivot) < 1e-300 {
             return Err(SemiflowError::DomainViolation {
                 what: "banded_lu_solve: pivot near zero (λ on spectrum)",
-                value: pivot.norm(),
+                value: crate::complex_libm::norm(pivot),
             });
         }
         banded_lu_forward(&mut a, &mut b, bw, width, n, k, pivot);
@@ -109,7 +109,7 @@ fn banded_lu_forward(
         }
         let off = off_i as usize;
         let factor = a[row * width + off] * pivot_inv;
-        if factor.norm() < 1e-300 {
+        if crate::complex_libm::norm(factor) < 1e-300 {
             continue;
         }
         a[row * width + off] = Complex::new(0.0, 0.0);
@@ -147,10 +147,10 @@ pub(super) fn back_substitute_band(
             s -= get_band(a, bw, k, col) * x[col];
         }
         let diag = a[k * width + bw];
-        if diag.norm() < 1e-300 {
+        if crate::complex_libm::norm(diag) < 1e-300 {
             return Err(SemiflowError::DomainViolation {
                 what: "banded_lu_solve: back-sub diagonal near zero",
-                value: diag.norm(),
+                value: crate::complex_libm::norm(diag),
             });
         }
         x[k] = s / diag;

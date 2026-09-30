@@ -21,6 +21,11 @@ it is blocked by any of:
   * `#[ignore]` / `#[ignore = "..."]`.
 A blocked test is still covered if some workflow names its binary via `--test`.
 
+`--list-unnamed` prints, one `crate test_stem` per line, every test binary with
+a blocked test that no workflow names (minus `NEVER_RUN`). The nightly
+`catch-all-gated` job runs exactly that list, so a blocked test cannot end up
+running nowhere just because nobody added it to a workflow (issue #31).
+
 Stdlib only, on purpose: the repo caps dependencies and this must run in a bare
 CI step. The YAML reader below handles the flat `- name:/severity:/test_file:`
 shape of properties.yaml and nothing more.
@@ -55,7 +60,11 @@ def read_gates(path):
         for key in ("severity", "test_file"):
             m = re.match(rf"\s+{key}:\s*(.+)$", line)
             if m:
-                entry[key] = m.group(1).strip().strip("\"'")
+                val = m.group(1).strip()
+                if not val.startswith(("\"", "'")):
+                    # YAML trailing comment: `severity: RELEASE_BLOCKING  # note`
+                    val = re.sub(r"\s+#.*$", "", val)
+                entry[key] = val.strip("\"'")
     if entry.get("name"):
         out.append(entry)
     return out
@@ -198,8 +207,37 @@ def _verdict(rel, fn, names, cache):
     return "OK" if stem in names else "UNREACHED"
 
 
+#: Blocked binaries that must never run unattended, with the reason. Everything
+#: else `--list-unnamed` reports is run by the nightly `catch-all-gated` job.
+NEVER_RUN = {
+    ("semiflow-ffi", "ffi_edge_cases"):
+        "its only ignored test would OOM; kept as a documentation stub",
+    ("semiflow", "capture_trace_v1"):
+        "one-shot fixture capture; running it overwrites the golden fixture",
+}
+
+
+def list_unnamed(names):
+    """(crate, stem) of every test binary with a blocked test that no workflow
+    names — i.e. tests that would otherwise run nowhere (issue #31)."""
+    out = []
+    for path in sorted(glob.glob("crates/*/tests/*.rs")):
+        file_slow, fns = scan_tests(path)
+        if not fns or not (file_slow or any(fns.values())):
+            continue
+        crate = path.split("/")[1]
+        stem = os.path.splitext(os.path.basename(path))[0]
+        if stem not in names and (crate, stem) not in NEVER_RUN:
+            out.append((crate, stem))
+    return out
+
+
 def main():
     os.chdir(ROOT)
+    if sys.argv[1:] == ["--list-unnamed"]:
+        for crate, stem in list_unnamed(named_binaries()):
+            print(crate, stem)
+        return 0
     bad = unreached(read_gates(CONTRACT), named_binaries())
     if not bad:
         print("check-gate-coverage: PASS — every RELEASE_BLOCKING gate is "

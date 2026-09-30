@@ -287,8 +287,9 @@ impl fmt::Display for SemiflowError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SemiflowError {}
+// `core::error::Error` (Rust 1.81) is `std::error::Error`: `?` into
+// `Box<dyn Error>` works in every build, `std` or not (ADR-0201).
+impl core::error::Error for SemiflowError {}
 
 #[cfg(test)]
 #[allow(unused_imports)]

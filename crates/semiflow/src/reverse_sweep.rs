@@ -18,7 +18,14 @@
 //!       K>1: matrix-explicit F^⊤ via unit-vector probing (§51.10 ADR-0177 Amdt 1).
 //!            F is time-homogeneous; F^⊤ is built ONCE per `backward_sweep` call.
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
+
+// `f64` has inherent math methods only when `std` is linked; otherwise they come
+// from `num_traits::Float` (libm). Test builds link `std` even without the
+// feature (harness, dev-dependencies), hence the `allow`.
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use num_traits::Float;
 
 use crate::{
     diffusion::DiffusionChernoff,

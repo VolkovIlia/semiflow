@@ -48,7 +48,7 @@ pub(crate) fn cplx_diffuse_x1(
         g.axes[3].n,
         g.axes[4].n,
     ];
-    let sqrt2s = (sigma + sigma).sqrt();
+    let sqrt2s = crate::complex_libm::sqrt(sigma + sigma);
     let pi_inv_sqrt = 1.0 / libm::sqrt(core::f64::consts::PI);
     for i4 in 0..n4 {
         for i3 in 0..n3 {
@@ -65,7 +65,7 @@ pub(crate) fn cplx_diffuse_x1(
                             let f1 = src.values[g.flat_idx(&[k1, i1, i2, i3, i4])];
                             let fv = f0 * (1.0 - alpha) + f1 * alpha;
                             // First-order imaginary correction.
-                            let dx = (g.axes[0].x_at(k1) - g.axes[0].x_at(k0)).abs().max(1e-30);
+                            let dx = libm::fabs(g.axes[0].x_at(k1) - g.axes[0].x_at(k0)).max(1e-30);
                             let f_prime = (f1 - f0) / dx;
                             let fv_cplx = fv - Complex::new(0.0, disp.im) * f_prime;
                             val += fv_cplx * wi;
@@ -104,7 +104,7 @@ pub(crate) fn cplx_diffuse_x2(
         g.axes[3].n,
         g.axes[4].n,
     ];
-    let sqrt2s = (sigma + sigma).sqrt();
+    let sqrt2s = crate::complex_libm::sqrt(sigma + sigma);
     let pi_inv_sqrt = 1.0 / libm::sqrt(core::f64::consts::PI);
     for i4 in 0..n4 {
         for i3 in 0..n3 {
@@ -178,14 +178,14 @@ pub(crate) fn apply_im_correction(
     x5_src: f64,
     g: &GridND<f64, 5>,
 ) -> Complex<f64> {
-    if s_im.abs() < 1e-30 {
+    if libm::fabs(s_im) < 1e-30 {
         return fv;
     }
-    let eps2 = (g.axes[1].x_at(1) - g.axes[1].x_at(0)).abs().max(1e-30);
+    let eps2 = libm::fabs(g.axes[1].x_at(1) - g.axes[1].x_at(0)).max(1e-30);
     let f_plus = sample_5d_cplx(src, x1f, x2_src + eps2, x3_src, x4_src, x5_src);
     let f_minus = sample_5d_cplx(src, x1f, x2_src - eps2, x3_src, x4_src, x5_src);
     let df_dx2 = (f_plus - f_minus) * (0.5 / eps2);
-    let eps3 = (g.axes[2].x_at(1) - g.axes[2].x_at(0)).abs().max(1e-30);
+    let eps3 = libm::fabs(g.axes[2].x_at(1) - g.axes[2].x_at(0)).max(1e-30);
     let f3p = sample_5d_cplx(src, x1f, x2_src, x3_src + eps3, x4_src, x5_src);
     let f3m = sample_5d_cplx(src, x1f, x2_src, x3_src - eps3, x4_src, x5_src);
     let df_dx3 = (f3p - f3m) * (0.5 / eps3);

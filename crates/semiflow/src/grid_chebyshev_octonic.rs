@@ -35,7 +35,6 @@
 use num_traits::float::FloatCore;
 
 use crate::grid::{bc_value, BoundaryPolicy, Grid1D};
-#[cfg(feature = "simd")]
 use crate::simd::{F64x4, SimdF64x4};
 
 // ---------------------------------------------------------------------------
@@ -150,9 +149,8 @@ fn h_b4(s: f64) -> f64 {
 /// Uses 10-point central {±1,±2,±3,±4,±5}: `Σ wⱼ·f[j] / (2520·dx)`.
 /// Weights: (−2, 25, −150, 600, −2100, 2100, −600, 150, −25, 2) / 2520.
 /// Leading error: O(dx¹⁰) on `f'`, preserving O(dx¹⁰) interpolant floor.
-// used under #[cfg(not(feature = "simd"))] and test force-scalar path
 #[allow(clippy::similar_names)]
-#[allow(dead_code)]
+#[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
 fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
     let fm5 = bc_value(bnd, values, n, idx - 5, dx);
@@ -179,7 +177,6 @@ fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Block A: (−2, 25, −150, 600, −2100, 0) × (fm5, fm4, fm3, fm2, fm1, 0)
 /// Block B: (2100, −600, 150, −25, 2, 0) × (fp1, fp2, fp3, fp4, fp5, 0)
 /// Uses 4+4 split since F64x4 holds 4 lanes; rem 1 added as scalar.
-#[cfg(feature = "simd")]
 #[allow(clippy::similar_names)]
 #[inline]
 fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
@@ -213,15 +210,11 @@ fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64,
 #[allow(clippy::similar_names)]
 #[inline]
 fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    #[cfg(feature = "simd")]
-    {
-        if cfg!(test) && crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-            return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
-        }
-        fd_scaled_prime_simd(values, bnd, n, idx, dx)
+    #[cfg(test)]
+    if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
+        return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
     }
-    #[cfg(not(feature = "simd"))]
-    fd_scaled_prime_scalar(values, bnd, n, idx, dx)
+    fd_scaled_prime_simd(values, bnd, n, idx, dx)
 }
 
 /// Scaled second derivative `dx² * f''` at grid index `idx`.
@@ -368,6 +361,8 @@ pub(crate) fn sample_octonic_1d(values: &[f64], grid: &Grid1D, x: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
+
     use super::*;
 
     fn make_grid_and_values(n: usize, f: impl Fn(f64) -> f64) -> (Grid1D, Vec<f64>) {
