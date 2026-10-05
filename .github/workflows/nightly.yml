@@ -23,7 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # Moved out of flagship-gates.yml: at the normative `N_AXIS = 6` this one
       # test costs ~4.9 h, most of a 6 h runner budget. The gate itself is
       # unchanged and still RELEASE_BLOCKING — it just cannot share a job with
@@ -41,7 +48,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # One gate per job, deliberately. Both Smolyak gates exceeded a 40 min cap
       # on a 12-core host — the first measurement either has ever had, since
       # neither ran in any workflow before 2026-08-18. A hosted runner is ~6x
@@ -80,7 +94,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # Split from D=5 for the reason given there: each is multi-hour on a
       # hosted runner and the pair would not fit in one 6 h job.
       - name: Run G_SMOLYAK_D6
@@ -104,7 +125,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # Third gate found to be hours-long by the 2026-08-18 sweep, and like the
       # two above it had never executed in any workflow, so its cost had never
       # been measured. It exceeded a 40 min cap on a 12-core host.
@@ -132,7 +160,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # Issue #31. `check_gate_coverage.py` guards RELEASE_BLOCKING gates only;
       # a NORMATIVE / ADVISORY / unlabelled test behind `slow-tests` or
       # `#[ignore]` could still run in no workflow at all. This job runs every

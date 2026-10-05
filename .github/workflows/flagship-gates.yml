@@ -99,7 +99,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rust-src
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Run flagship slope gates
         # test-flagship wraps: RUSTFLAGS="-C target-cpu=native"
         #   cargo test --workspace --features parallel,simd,slow-tests --release
@@ -123,7 +130,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # D=5 is NOT here — it runs in nightly.yml. `K^D` sampling (ADR-0191)
       # makes it a ~4.9 h single test at the normative `N_AXIS = 6`, which is
       # most of a 6 h runner budget for one gate. D=2..4 together run in ~20 min.
@@ -148,7 +162,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Run ζ truthful-order and correction-slope gates
         # These tests carry #[ignore] so -- --ignored is required in addition to
         # --features slow-tests (which may be needed for type-level compilation).
@@ -172,7 +193,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Run G17 (MagnusGraph 6th-order) and G18 (Schrödinger slope)
         run: |
           RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
@@ -188,7 +216,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Run Hörmander (Engel, Heisenberg, Kolmogorov) and quantum-graph gates
         run: |
           RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
@@ -206,7 +241,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Run Robin boundary, subordinated, and resolvent slope gates
         run: |
           RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
@@ -267,7 +309,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_ASND_MOMENT (#17 regression oracle), G_CONS_* ×5 (#26 degenerate
       # faces), G_SHIFT1D_COEFF_FD (#25 coefficient VJP), G_PENCIL_ORDER2
       # (#21 transverse-varying pencils), G_FROZEN_COEFF_* ×2.
@@ -290,7 +339,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_DENSE + G_SYMOP_ENTRY_FRECHET, G_MASSK_*,
       # G_PHI_AUG_DENSE, G_ETDRK4_ORDER, G_ETD_ADJOINT_FD, G_MATRIX_2D/3D,
       # G_MATRIX_PADE_M5, G_CPLX_MATRIX, and G_MATRIX (m1..m4 slope ladder,
@@ -337,7 +393,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_KAHLER_CURV, G_CARNOT_CPLX3, G26 (sphere), G23 + G_KILLING_ORDER2,
       # G27 (reflected half-line), G25 (Howland lift), G_HARD_WALL_ORDER2,
       # G_QSCHROD, G_SCHROD_B.
@@ -365,7 +428,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_RESOLVENT_JUMP_{,,2D_,3D_}ORDER, G_RES_RES, G_CPLX_RES,
       # G_PATH_EPS_FLOOR, G_PATH_EPS_CHEB_FLOOR, G_POINTEVAL, G_AS_K,
       # G_AS_ZETA2_DDIM.
@@ -402,7 +472,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_WENTZELL_{STABLE,ORDER}, G_TPS_* ×4 (multilayer stack),
       # G_DUAL_AD_GRADIENT, G_DUAL_ZERO_ALLOC, G_ADJOINT_FP_ORDER +
       # G_ADJOINT_FP_TIGHTNESS_VAGUE, G_DR_ZETA4_TRUTHFUL_ORDER.
@@ -427,7 +504,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_OBSTACLE_{GAMMA,SLOPE_2D,SLOPE_AMERICAN,SLOPE_SMOOTH},
       # STRANG2D_PARALLEL_BIT_EQUAL, CHERNOFF1D_PARALLEL_BIT_EQUAL.
       #
@@ -456,7 +540,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # G_BINDING_{ADJOINT_FP,CARNOT_CPLX3,RESOLVENT_JUMP,RESOLVENT_JUMP_ND,
       # SMOLYAK}_PARITY.
       #
@@ -487,7 +578,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       # Split from its four siblings after measuring it: 637 s on a 12-core
       # host against their 13-15 s. Same cause as G_SMOLYAK_D5/D6 — ADR-0191's
       # `K^D` tensor stencil — reaching a binding-parity test this time.
@@ -519,7 +617,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
+      - name: CPU fingerprint (cache key)
+        id: cpu
+        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: cpu-${{ steps.cpu.outputs.fp }}
       - name: Build release binary (required by latency-gate bench invocation)
         run: cargo build --release -p semiflow
         env:
