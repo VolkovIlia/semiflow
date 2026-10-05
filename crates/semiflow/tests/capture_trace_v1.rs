@@ -169,7 +169,7 @@ fn capture_and_write_fixtures() {
     std::fs::write(path, &json).expect("write fixture");
     println!("Wrote fixture to {path}");
 
-    assert!(!taus1.is_empty(), "heat_smooth: no accepted steps");
-    assert!(!taus2.is_empty(), "heat_strict: no accepted steps");
-    assert!(!taus3.is_empty(), "stiff_heat: no accepted steps");
+    assert_ne!(taus1, [] as [f64; 0], "heat_smooth: no accepted steps");
+    assert_ne!(taus2, [] as [f64; 0], "heat_strict: no accepted steps");
+    assert_ne!(taus3, [] as [f64; 0], "stiff_heat: no accepted steps");
 }

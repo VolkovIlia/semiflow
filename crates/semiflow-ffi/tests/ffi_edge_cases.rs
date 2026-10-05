@@ -387,7 +387,7 @@ fn test_status_str_all_variants() {
 fn test_version_parses_as_semver() {
     let ptr = smf_version();
     let s = unsafe { CStr::from_ptr(ptr) }.to_str().unwrap();
-    assert!(!s.is_empty(), "version must not be empty");
+    assert_ne!(s, "", "version must not be empty");
 
     // Strip optional pre-release suffix (everything after the first `-`).
     let core = s.split('-').next().unwrap_or(s);

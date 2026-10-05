@@ -43,7 +43,7 @@ fn inverse_gaussian_laplace_exponent_known_values() {
 fn stable_quadrature_node_count_and_weight_sum() {
     let sub = StableSubordinator::new(0.5_f64).unwrap();
     let (nodes, weights) = sub.quadrature(1.0_f64, 8);
-    assert!(!nodes.is_empty());
+    assert_ne!(nodes, [] as [f64; 0]);
     assert_eq!(nodes.len(), weights.len());
     let w_sum: f64 = weights.iter().sum();
     assert!((w_sum - 1.0_f64).abs() < 1e-10, "Σw={w_sum}");
@@ -65,7 +65,7 @@ fn gamma_quadrature_node_count_and_positivity() {
 fn ig_quadrature_node_count_positive() {
     let sub = InverseGaussianSubordinator::new(1.0_f64).unwrap();
     let (nodes, weights) = sub.quadrature(1.0_f64, 8);
-    assert!(!nodes.is_empty());
+    assert_ne!(nodes, [] as [f64; 0]);
     assert!(nodes.iter().all(|&s| s > 0.0_f64));
     let w_sum: f64 = weights.iter().sum();
     assert!((w_sum - 1.0_f64).abs() < 1e-6, "IG Σw={w_sum}");

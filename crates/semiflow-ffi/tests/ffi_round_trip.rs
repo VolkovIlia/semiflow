@@ -269,7 +269,7 @@ fn test_status_str_ok() {
 fn test_version_not_empty() {
     let ptr = smf_version();
     let s = unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap();
-    assert!(!s.is_empty(), "version string is empty");
+    assert_ne!(s, "", "version string is empty");
     // Accept any semver X.Y.Z (not pinned to 0.x.y since crate is now >=1.0).
     assert!(
         s.chars().next().is_some_and(|c| c.is_ascii_digit()),

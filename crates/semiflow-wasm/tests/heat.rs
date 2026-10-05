@@ -105,7 +105,7 @@ fn len_matches_n() {
 #[wasm_bindgen_test]
 fn version_is_semver() {
     let v = version();
-    assert!(!v.is_empty(), "version string is empty");
+    assert_ne!(v, "", "version string is empty");
     let core = v.split(['-', '+']).next().unwrap_or(&v);
     let parts: Vec<&str> = core.split('.').collect();
     assert_eq!(parts.len(), 3, "unexpected version core format: {v}");
