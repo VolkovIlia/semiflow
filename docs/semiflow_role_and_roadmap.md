@@ -1,6 +1,6 @@
 # SemiFlow: Backend Role and Roadmap Narrative
 
-> Covers 0.13.1-beta. Install commands, feature flags and the full engine
+> Covers 0.14.0-beta. Install commands, feature flags and the full engine
 > catalogue are in the [project README](../README.md).
 
 ## The "BLAS/cuDNN for Semigroups" Positioning
@@ -35,7 +35,7 @@ What the analogy captures is:
    `Etdrk4` step → gradient via `GeneratorSensitivity`) from verified pieces rather
    than writing bespoke numerical code per use case.
 
-## What Is Covered (as of 0.13.1-beta)
+## What Is Covered (as of 0.14.0-beta)
 
 ### Linear evolution: `∂ₜu = Lu`
 
@@ -93,7 +93,7 @@ For semilinear `Etdrk4`, `NonlinearityDiff` delivers the adjoint through one ste
 
 ## Honest Scope and Limits
 
-The following are explicit non-goals or deferred items as of 0.13.1-beta:
+The following are explicit non-goals or deferred items as of 0.14.0-beta:
 
 - **Non-symmetric / directed graphs:** Arnoldi required (stores full Hessenberg);
   deferred. Symmetric `L` only for Krylov/Chebyshev paths.

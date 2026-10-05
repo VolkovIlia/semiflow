@@ -262,7 +262,7 @@ pub use tt_wasm::{TtEvolver, TtState};
 pub use v3::{EvolverHeat1DUnitV3, GrowthV3};
 pub use wentzell_wasm::{GammaFamily, WentzellV8};
 
-/// Return the `semiflow-wasm` crate version string (e.g. `"0.13.1-beta"`).
+/// Return the `semiflow-wasm` crate version string (e.g. `"0.14.0-beta"`).
 ///
 /// Matches the Cargo package version baked in at compile time.
 #[must_use]

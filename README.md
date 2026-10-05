@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
-> **Status: beta (0.13.1-beta).** The API is stabilising toward 1.0; minor
+> **Status: beta (0.14.0-beta).** The API is stabilising toward 1.0; minor
 > versions may still make breaking changes. Bug reports and feedback are welcome.
 
 **SemiFlow solves evolution equations `∂ₜu = Lu` (heat, diffusion,
@@ -48,7 +48,7 @@ not allocate.
 
 ```toml
 [dependencies]
-semiflow = "0.13.1-beta"
+semiflow = "0.14.0-beta"
 ```
 
 MSRV: **Rust 1.81**. The default build is `#![no_std]` + `alloc` with
@@ -86,7 +86,7 @@ the runnable [examples](crates/semiflow/examples/README.md)
 
 ```toml
 [dependencies]
-semiflow = "0.13.1-beta"   # no_std + alloc, SIMD kernels
+semiflow = "0.14.0-beta"   # no_std + alloc, SIMD kernels
 ```
 
 The crate is `#![no_std]` by default and needs only `alloc`; the `std`
@@ -373,7 +373,7 @@ If you use SemiFlow in academic work, cite both the software and the theorem.
   author  = {Volkov, Ilia},
   title   = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year    = {2026},
-  version = {0.13.1-beta},
+  version = {0.14.0-beta},
   doi     = {10.5281/zenodo.20837851},
   url     = {https://doi.org/10.5281/zenodo.20837851}
 }

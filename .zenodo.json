@@ -37,5 +37,5 @@
   ],
   "access_right": "open",
   "notes": "Dual-licensed under MIT OR Apache-2.0 (SPDX), at the user's option. Zenodo's license field holds a single identifier, so it records MIT; the Apache-2.0 option applies equally (see LICENSE-MIT and LICENSE-APACHE in the repository).",
-  "version": "0.13.1-beta"
+  "version": "0.14.0-beta"
 }

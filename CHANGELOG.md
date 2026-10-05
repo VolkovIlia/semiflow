@@ -6,10 +6,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0-beta] — 2026-10-05
+
 CI, documentation and contract hygiene, plus three library changes: the
 `no_std` build fix (#40), one math backend for every build so `std` and
 `no_std` results are bit-identical, and `no_std` as the default build (see
-Changed). No ABI change, and no gate threshold or tolerance changes.
+Changed). No ABI change. The `G_SMOLYAK_D5` gate's slope band and measurement
+method were corrected, and the advisory zeta8 Chebyshev gate's reference
+sampler was realigned (see Fixed); no other gate threshold or tolerance moved.
 
 ### Changed
 
@@ -63,6 +67,10 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
 
 ### Fixed
 
+- **flagship-gates CI: rust-cache is keyed by runner CPU model.** `target-cpu=native`
+  test binaries are no longer restored onto a CPU lacking their instructions
+  (SIGILL in the scheduled RELEASE_BLOCKING runs 2026-10-03..05).
+
 - **`no_std` is now verified by execution, not just type-checked.** The
   previous state:
   - `cargo test --no-default-features` did not compile.
@@ -115,10 +123,11 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
   `vec!`, `Vec` or `to_owned` without importing them from `alloc`. The
   `std`-only methods now resolve through `num_traits::Float` (libm) only when
   `std` is off, so `std` builds keep calling exactly the same functions.
-  `rem_euclid` became a local helper with the same arithmetic. At the 1.78 MSRV,
-  `f64::abs` is not in `core`, so those calls use `libm::fabs`, which is exact.
-  A new `ci.yml` job, `no-std`, checks the build on the host, on
-  `thumbv7em-none-eabihf`, and at 1.78. Until now no job compiled it, because
+  `rem_euclid` became a local helper with the same arithmetic. At the then-current
+  MSRV of 1.78, `f64::abs` is not in `core`, so those calls use `libm::fabs`,
+  which is exact. A new `ci.yml` job, `no-std`, checks the build on the host, on
+  `thumbv7em-none-eabihf`, and at the MSRV (1.78 when added; 1.81 since the
+  Changed entry above). Until now no job compiled it, because
   the default `simd` feature always turns on `std`.
 
 - **`G4_NS2D_aniso` and `G5_3D` are now `RELEASE_BLOCKING` in the contract
@@ -195,12 +204,14 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
   it exceeded a 40-minute cap on a 12-core host without finishing.
   `g_smolyak_d6.rs` budgets "≤ 2 min wall-clock"; it hit the same 40-minute cap.
 
-  Neither gate changed and neither is failing — the *estimates* went stale.
-  ADR-0191 replaced multilinear N-D sampling with the `K^D` tensor stencil, so
-  a `D = 5` sample reads 1024 nodes where it used to read 32. ADR-0191 measured
-  that 32× on the `D = 5` Smolyak smoke tests (70 s → 198 s, which is why those
-  were re-sized) and recorded the slope gate as "untouched", meaning not
-  re-sized — its runtime was never measured, because it ran nowhere.
+  The `G_SMOLYAK_D6` gate is unchanged. `G_SMOLYAK_D5` was, in this release,
+  rewritten (see the next entry) — its slope band and measurement method both
+  changed, so "the estimates went stale" applies to its cost, not to its
+  contents. ADR-0191 replaced multilinear N-D sampling with the `K^D` tensor
+  stencil, so a `D = 5` sample reads 1024 nodes where it used to read 32.
+  ADR-0191 measured that 32× on the `D = 5` Smolyak smoke tests (70 s → 198 s,
+  which is why those were re-sized) and recorded the slope gate as "untouched",
+  meaning not re-sized — its runtime was never measured, because it ran nowhere.
 
   The completed sweep found a third of the same kind: `strang_nonseparable_slope`
   (`G3_NS2D`, `G3_NS2D_var`) also exceeded the 40-minute cap. No estimate was
@@ -218,6 +229,38 @@ Changed). No ABI change, and no gate threshold or tolerance changes.
   misdescribe the budget. They are deliberately not on the tag lane: a hosted
   runner is ~6× slower than the measurement host. The stale budget claims in both
   file headers are corrected in place rather than deleted.
+
+- **`G_SMOLYAK_D5` measured the wrong convergence regime (#38).** The gate
+  demanded a first-order slope (`≤ −0.95`; the contract still said `≤ −1.95`),
+  but this variable-coefficient tanh-coupled datum runs on the `2√τ`
+  anisotropic-shift family, which is globally order ½ (ADR-0191 Amendment 3);
+  Smolyak changes only the quadrature backend. Hosted-runner output measured a
+  successive-difference slope ≈ −0.477. The test (`tests/g_smolyak_d5.rs`) now
+  gates the OLS slope of `log‖u_n − u_2n‖∞` against `log n` over
+  n ∈ {32, 64, 128} — pairwise refinement deltas, with no `n_ref = 512`
+  reference run, whose floor contaminated the old estimate — and asserts the
+  two-sided band `−0.75 ≤ slope ≤ −0.42`, the same band as the dense
+  anisotropic D = 5 gate. The upper bound fails loudly if the kernel ever gains
+  an order. The node-count (`< 3125`) and `F(0) = I` sub-checks are unchanged.
+  `contracts/semiflow-core.properties.yaml` and ADR-0123 now state the same
+  band; `SmolyakGridND::order() = 1` is documented as a nominal
+  constructor-level value, not a promise that every variable-`A` gate slopes at
+  −1; the Smolyak jobs in `nightly.yml` use `target-cpu=native` only on
+  self-hosted runners.
+
+- **Hosted-runner portability in `flagship-gates.yml`.** The "operator and
+  matrix-exponential gates" job exported `RUSTFLAGS="-C target-cpu=native"`
+  unconditionally, which can produce binaries a GitHub-hosted runner's CPU
+  cannot execute. It now applies native tuning only on self-hosted runners and
+  uses portable target-cpu defaults on hosted ones. A clippy-driven cleanup in
+  `matrix_pade_tests_mod.rs` (`a[0].fill(..)`) rode along; no behaviour change.
+
+- **zeta8 Chebyshev advisory gate compared mismatched samplers (#37).**
+  `g_zeta8_var_a_slope_cheb` (`tests/zeta8_correction_slope.rs`) probed a
+  Chebyshev-sampled ζ⁸ kernel against a K5 reference built without Chebyshev
+  sampling, so the advisory slope near its 0.1 gate drifted with the runner.
+  The K5 reference oracle now uses `with_chebyshev_sampling()` too. The gate
+  stays advisory and its threshold is unchanged.
 
 - **`clippy` had never type-checked the `slow-tests` files either.** `ci.yml`
   now runs `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
