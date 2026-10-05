@@ -10326,3 +10326,278 @@ implementation_notes:
     pattern: B
     introduced_in: heat2dvara-operator-resolution
     authority: ADR-0191
+
+# ---------------------------------------------------------------------------
+# ADR-0202 — SPD resolvent / steady solve, operator composition, φ-combination
+# (math §62 = contracts/semiflow-core.math-spd-resolvent.md; every §62.x below cites that file). TDD: every test below is written FIRST and must fail (compile
+# error or assertion) before the implementation lands. pass_status is PENDING
+# until the engineer records the measured values.
+# ---------------------------------------------------------------------------
+
+  - name: G_SPDR_TRIDIAG_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_TRIDIAG_DENSE (RELEASE_BLOCKING, ADR-0202 D1, §62.2.a): the symmetric
+      tridiagonal LDLᵀ path of SpdResolvent solves (λM + A)x = b exactly up to
+      backward-stable rounding. Operator: assemble_conservative_csr_1d on n=12 with
+      a variable conductivity k(x)=1+x² (harmonic faces), then with_diagonal(c) with
+      c ≥ 0. Cases: (λ=0, c>0 everywhere), (λ=0.5, c=0, mass=None),
+      (λ=1e3, c>0, mass=[½,1,…,1,½]). Reference: dense Gaussian elimination with
+      partial pivoting written in the test (f64, n=12). κ(S) ≤ 1e4 in every case,
+      so 1e-12 relative leaves ≥ 10× margin over c·n·u·κ. Also asserts
+      method() == Tridiagonal under SpdSolver::Auto, and that a second solve_into
+      with a different b reuses the factor (two right-hand sides, both pass).
+    gate: "‖x − x_ref‖∞/‖x_ref‖∞ <= 1e-12 AND ‖b − Sx‖₂/‖b‖₂ <= 1e-14, all 3 cases"
+    test_file: "tests/g_spdr_tridiag_dense.rs::g_spdr_tridiag_dense"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_PCG_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_PCG_DENSE (RELEASE_BLOCKING, ADR-0202 D1, §62.2.b): PCG with IC(0) and
+      with Jacobi on a non-tridiagonal SPD operator. assemble_conservative_csr_nd
+      (D=2, 4×3 grid, variable k per axis) + with_diagonal(c), λ ∈ {0 (c>0), 1}.
+      Reference: dense LU in the test. tol = 1e-12 relative residual ⇒ relative
+      error ≤ κ·1e-12; κ ≤ 50 here, so 1e-10 is safe. Asserts method() is
+      PcgIc0 for Precond::Ic0 (an M-matrix, so no fallback is allowed), PcgJacobi
+      for Precond::Jacobi, and PcgIc0 under Auto (non-tridiagonal dispatch).
+      IC(0) iteration count ≤ Jacobi iteration count (structural sanity, not a
+      threshold on speed).
+    gate: "rel_err <= 1e-10 for both preconditioners and both λ; method() as specified; iters_ic0 <= iters_jacobi"
+    test_file: "tests/g_spdr_pcg_dense.rs::g_spdr_pcg_dense"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_STEADY_MMS
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202) — engineer records slope and err(513); the band is NORMATIVE, err(513) bound may be tightened (never loosened) by ADR amendment"
+    rationale: |
+      G_SPDR_STEADY_MMS (RELEASE_BLOCKING, ADR-0202, §62.3): the steady solve means
+      what users think it means. Manufactured solution u(x) = 2 + cos(πx) on [0,1]
+      (u'(0)=u'(1)=0, homogeneous Neumann), k(x) = 1 + x², c(x) = 1 + x,
+      s = −(k u')' + c u in closed form. FV system with half-cell lumped mass
+      m=[½,1,…,1,½]: (A + diag(c⊙m)) u = m⊙s, A = assemble_conservative_csr_1d
+      (Neumann carrier), solved by SpdResolvent with λ=0. Max-norm error vs u(xᵢ)
+      over n ∈ {65,129,257,513}. Expected order 2. The band [−2.2, −1.8] follows
+      the §41/ADR-0110 pre-asymptotic band convention. A sympy oracle script
+      `.dev-docs/verification/scripts/verify_spdr_mms.py` derives s(x) and the
+      expected leading error constant (constitution principle 1).
+    gate: "OLS slope of log(err) vs log(dx) in [−2.2, −1.8] AND err(n=513) <= 1e-5"
+    test_file: "tests/g_spdr_steady_mms.rs::g_spdr_steady_mms"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_PHI1_LIMIT
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_PHI1_LIMIT (RELEASE_BLOCKING, ADR-0202, §62.1.c): cross-path identity
+      between the new rational path and the existing polynomial φ path. n=12,
+      A + diag(c), c>0 uniform ⇒ λ_min(M⁻¹A) known exactly (constant mode, with
+      mass m uniform). τ = 40/λ_min ⇒ e^{−40} ≈ 4e-18 truncation. Compares
+      SpdResolvent(λ=0).solve(s) with τ·phi_action(CsrGenerator(mass), 1, τ, M⁻¹s).
+    gate: "relative sup difference <= 1e-10"
+    test_file: "tests/g_spdr_phi1_limit.rs::g_spdr_phi1_limit"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_IMPLICIT_CROSS
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_IMPLICIT_CROSS (RELEASE_BLOCKING, ADR-0202, §62.1.a): (I + ΔtA)⁻¹v =
+      λ(λI + A)⁻¹v with λ = 1/Δt. The new resolvent (tridiagonal LDLᵀ, and a forced
+      Pcg{Jacobi} variant) must agree with the existing ADR-0190 path
+      KrylovPath::ImplicitEuler{n_steps:1, cg_max_iter:None} (tol 1e-13) on the n=12
+      operator of G_SPDR_TRIDIAG_DENSE with c=0, Δt ∈ {1e-3, 1, 1e3}. Also guards
+      that the ImplicitEuler numerics are untouched: the existing G_SYMOP_IMPLICIT_*
+      gates must stay green without threshold change.
+    gate: "relative sup difference <= 1e-10, all Δt, both resolvent methods"
+    test_file: "tests/g_spdr_implicit_cross.rs::g_spdr_implicit_cross"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_REJECT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_REJECT (RELEASE_BLOCKING TEETH gate, ADR-0202 D1, §62.1 singular case):
+      errors are values with the right variant, never a garbage solution.
+      (1) pure-Neumann A (row sums 0), λ=0, Auto → DomainViolation (a-priori check);
+      (2) the same A with one interior c=0 but forced through the pivot test by a
+          rank-deficient construction (two decoupled blocks, one without reaction),
+          Tridiagonal → DomainViolation from the pivot certificate;
+      (3) λ = −1, λ = NaN → DomainViolation; (4) mass length n−1, mass with 0,
+          mass with NaN → DomainViolation; (5) tol ∈ {0, 1, NaN} → DomainViolation;
+      (6) SpdSolver::Tridiagonal on the 2-D operator → Unsupported;
+      (7) Pcg{max_iter: Some(1)} on a system needing more → ConvergenceFailed with
+          max_iter == 1; (8) b of wrong length / NaN → DomainViolation;
+      (9) with_diagonal with c<0 or wrong length → DomainViolation;
+      (10) phi_combination with 0 or 5 vectors, wrong length, τ<0 → DomainViolation.
+      Python mirror: tests/test_spd_resolvent.py::test_reject_kinds checks
+      SemiflowError.kind for (1),(3),(6),(7).
+    gate: "every case returns the exact variant listed; no panic"
+    test_file: "tests/g_spdr_reject.rs::g_spdr_reject"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SPDR_LINEAR_COST
+    type: PERFORMANCE
+    severity: ADVISORY
+    blocks_release: false
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SPDR_LINEAR_COST (ADVISORY, ADR-0202, §62.2.a): the tridiagonal path is O(n)
+      per solve (the case-study regression was O(n³)). Median of 7 solve_into wall
+      times at n = 2^16 and n = 2^20 (factor built outside the timer). Expected
+      ratio 16. Wall-time gates are noisy, so this is ADVISORY (G_GENOP_COST_LINEAR
+      precedent). O(n) is guaranteed structurally by G_SPDR_TRIDIAG_DENSE's
+      method() == Tridiagonal assertion plus the §62.2.a algorithm.
+    gate: "t(2^20)/t(2^16) <= 32"
+    test_file: "tests/g_spdr_linear_cost.rs::g_spdr_linear_cost"
+    feature_gate: "slow-tests"
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_SYMOP_COMPOSE_EXACT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_SYMOP_COMPOSE_EXACT (RELEASE_BLOCKING, ADR-0202 D2, §62.3): with_diagonal(c)
+      equals the dense A + diag(c) entrywise, bitwise. This covers an operator whose
+      CSR has rows WITHOUT a stored diagonal (hand-built CSR, n=6), where the
+      inserted entries must keep columns sorted and from_csr validation must
+      pass. csr() round trip: from_csr(n, csr()...) yields identical
+      row_ptr/col_idx/vals arrays and identical lambda_max_bound bits. Python
+      mirror: to_csr() dtypes int64/int32/float64 and scipy.sparse.csr_matrix
+      equality.
+    gate: "bitwise equality of all arrays and of lambda_max_bound"
+    test_file: "tests/g_symop_compose_exact.rs::g_symop_compose_exact"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_PHI_COST_V_INVARIANT
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202) — MUST FAIL on the pre-ADR code (cost grows with ‖v‖)"
+    rationale: |
+      G_PHI_COST_V_INVARIANT (RELEASE_BLOCKING, ADR-0202 D4, §62.4): φ cost does not
+      depend on the input vector. (1) A counting GeneratorAction wrapper (test-local,
+      counts apply_generator calls) shows phi_action(k=1), phi_action_batched(p=3)
+      and phi_combination perform the SAME number of matvecs for ‖v‖∞ ∈ {1e-6, 1,
+      1e6}, and that the number equals s·m from phi_cost_probe(norm_bound, τ)
+      (times p+1 for batched). (2) Bitwise homogeneity: phi_action(2^40·v) ==
+      2^40·phi_action(v) for k=0..=3 and phi_combination([w0, 2^40 w1, 2^40 w2])
+      top block == phi_combination with [w0, w1, w2] scaled consistently
+      (w0 is not in the matrix, so it is excluded from the scaling claim).
+      Operator: the §58 6-node tridiag(1,−2,1) via NegLaplacianGenerator. The
+      pre-ADR code fails sub-check (1) (cost ∝ ‖v‖∞, measured 20 ms vs 0.02 ms
+      at N=161, τ=1e-6).
+    gate: "matvec counts equal across scales; bitwise homogeneity holds"
+    test_file: "tests/g_phi_cost_v_invariant.rs::g_phi_cost_v_invariant"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_PHI_COMBINATION_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_PHI_COMBINATION_DENSE (RELEASE_BLOCKING, ADR-0202 D3, §62.4.a): one-sweep
+      combination equals Σ τ^k φ_k(τG) w_k. Oracle: the eigen-exact DST-I reference
+      of G_PHI_AUG_DENSE (6-node tridiag(1,−2,1), τ = 0.5) with four random-but-
+      seeded w_k (p = 3), plus p ∈ {0,1,2}. Second check against the sum of
+      separate phi_action calls (≤ 1e-13). G_PHI_AUG_DENSE itself must pass with
+      UNCHANGED thresholds after the η-scaling change.
+    gate: "sup error vs eigen oracle <= 1e-12 (relative to max_k ‖τ^k w_k‖∞); vs separate calls <= 1e-13"
+    test_file: "tests/g_phi_combination_dense.rs::g_phi_combination_dense"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_PHI_MASS_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_PHI_MASS_DENSE (RELEASE_BLOCKING, ADR-0202 D3, §62.3): φ-functions with a
+      diagonal mass. n=10 conservative operator + reaction, mass with ratio 50
+      (contrast). (1) CsrGenerator::from_symmetric(op, Some(m)) φ_k, k=0..=3, vs
+      dense mat_exp_pade13 of the (n+3)-augmented matrix of −M⁻¹A (≤ 1e-12).
+      (2) vs the §55.3 congruence route: M^{-½}·phi_action(lumped_congruence(m),
+      k, τ, M^{½}v) (≤ 1e-13). (3) CsrGenerator::from_symmetric(op, None) is
+      bitwise identical to NegLaplacianGenerator for phi_action and
+      phi_action_batched. (4) apply_generator_transpose == dense (−M⁻¹A)ᵀ·v (≤ 1e-15
+      relative).
+    gate: "(1) <= 1e-12, (2) <= 1e-13, (3) bitwise, (4) <= 1e-15"
+    test_file: "tests/g_phi_mass_dense.rs::g_phi_mass_dense"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_PHI_GENERAL_DENSE
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_PHI_GENERAL_DENSE (RELEASE_BLOCKING, ADR-0202 D3, closes MODEL gap G9):
+      φ-functions on the non-symmetric GeneralOperator via
+      CsrGenerator::from_general. Operator: the G_GENOP_DENSE upwinded drifted
+      Fokker–Planck CSR (n=12), with and without mass. Reference: Padé-13 of the
+      dense augmented matrix. Tolerance 1e-10 mirrors G_GENOP_DENSE (non-normal
+      operator). Transpose sub-check: apply_generator_transpose vs dense
+      transpose ≤ 1e-14.
+    gate: "φ_k (k=0..=3) and phi_combination rel err <= 1e-10; transpose <= 1e-14"
+    test_file: "tests/g_phi_general_dense.rs::g_phi_general_dense"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202
+
+  - name: G_ETD_AFFINE_EXACT
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (ADR-0202)"
+    rationale: |
+      G_ETD_AFFINE_EXACT (RELEASE_BLOCKING, ADR-0202, §62.5, closes MODEL gap G1):
+      (1) affine evolution M u' = −A u + s: phi_combination(h, [u0, M⁻¹s]) vs
+      u* + e^{hG}(u0 − u*) with u* from SpdResolvent(λ=0) and e^{hG} from dense
+      Padé-13 (n=10, h ∈ {1e-3, 1, 1e2}; the last is deep in the stiff regime,
+      h·λ_max ≈ 1e4). (2) The documented ETDRK4 recipe (four phi_combination calls,
+      §62.5) on Allen–Cahn (the G_ETDRK4_ORDER setup) agrees with the shipped
+      Rust Etdrk4 driver after 4 steps. The tolerance is looser because the two
+      evaluate the φ-weights by different summation paths.
+    gate: "(1) relative sup err <= 1e-12; (2) relative sup diff <= 1e-11"
+    test_file: "tests/g_etd_affine_exact.rs::g_etd_affine_exact"
+    feature_gate: none
+    introduced_in: adr-0202-spd-resolvent
+    authority: ADR-0202

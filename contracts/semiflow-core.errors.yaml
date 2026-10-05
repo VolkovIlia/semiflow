@@ -481,3 +481,19 @@ emission_table:
     emits: [DomainViolation, OutOfMagnusRadius]   # v2.1C (ADR-0051): OutOfMagnusRadius when rho_bar_max * tau >= π/2 (50% safety margin); DomainViolation if tau < 0 or non-finite, or if src signal has wrong node count. The convergence-radius check fires BEFORE any scratch allocation (errors-as-values).
   - method: "MagnusGraphHeatChernoff::apply_into_at"
     emits: [DomainViolation, OutOfMagnusRadius]   # Same as apply_into; additionally DomainViolation if t_start is non-finite.
+
+  # ADR-0202 (math §62 → contracts/semiflow-core.math-spd-resolvent.md) — SPD resolvent / steady solve, composition, φ-combination.
+  # NO new variants. ConvergenceFailed gains its first public-API emitter
+  # (SpdResolvent PCG path); its rustdoc "never returned" note must be updated.
+  - method: "SpdResolvent::new (and SymmetricOperator::resolvent)"
+    emits: [DomainViolation, Unsupported]   # DomainViolation: λ<0 or non-finite; mass length != n, mass <= 0 or non-finite; tol not in (0,1); λ=0 with all row sums of A equal to 0 (pure-Neumann null space, a-priori); tridiagonal LDLᵀ pivot d_i <= n·ε·max|δ_j| (not positive definite, §62.2.a certificate). Unsupported: SpdSolver::Tridiagonal forced on a non-tridiagonal pattern. IC(0) breakdown is NOT an error: fallback to Jacobi, visible in method() (§59.2 rule).
+  - method: "SpdResolvent::solve_into"
+    emits: [DomainViolation, ConvergenceFailed]   # DomainViolation: b or x length != n, non-finite b. ConvergenceFailed { last_residual, max_iter }: PCG only, cap reached (default 2n+16). The direct path never returns ConvergenceFailed.
+  - method: "SymmetricOperator::with_diagonal"
+    emits: [DomainViolation]   # c.len() != n; any c_i < 0 or non-finite.
+  - method: "CsrGenerator::from_symmetric / CsrGenerator::from_general"
+    emits: [DomainViolation]   # mass length != n; mass <= 0 or non-finite.
+  - method: "phi_combination"
+    emits: [DomainViolation]   # w empty or w.len() > PHI_MAX+1 (4); any w_k length != n or non-finite entry; out length != n; τ < 0 or non-finite.
+  - method: "phi_action / phi_action_batched (ADR-0202 amendment)"
+    emits: [DomainViolation]   # UNCHANGED error surface; only the (s,m) selection changed (§62.4).
