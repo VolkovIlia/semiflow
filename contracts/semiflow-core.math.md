@@ -13842,3 +13842,11 @@ singular `A`, so the guarantee is the shift's, not `A`'s).
   §57.4 (tridiagonal-only CN — the boundary this section extends), §45
   (`mat_exp_pade13` dense oracle), §54 (the explicit action, left untouched).
 - ADR-0190 (contract authority), ADR-0186 (§55), ADR-0188 (§57), ADR-0185 (§54).
+
+---
+
+## §62 — SPD resolvent / steady solve, operator composition, and the φ-combination (moved)
+
+> NORMATIVE body (§62.1 …, ADR-0202) moved verbatim to
+> [`contracts/semiflow-core.math-spd-resolvent.md`](semiflow-core.math-spd-resolvent.md)
+> for file-size reasons; numbering is unchanged and every "§62.x" citation resolves there.

@@ -239,7 +239,7 @@ Errors are thrown as JS `Error` objects with a `.kind` string:
 | Language | Package | Notes |
 |----------|---------|-------|
 | Rust | [`semiflow`](https://crates.io/crates/semiflow) ([docs.rs](https://docs.rs/semiflow)) | The full engine catalogue; `no_std + alloc` |
-| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 85 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `shift1d_coeff_grad()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
+| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 86 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
 | JavaScript / WASM | [`@semiflow/wasm`](https://www.npmjs.com/package/@semiflow/wasm) | Lite build on npm; the heavy-grid engines need a `--features full` build; see the [npm page](https://www.npmjs.com/package/@semiflow/wasm) |
 | C / C++ | `semiflow-ffi` | `extern "C"` ABI with `catch_unwind` on every entry point; header `semiflow.h` |
 

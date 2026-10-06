@@ -12,6 +12,26 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## ADR-0202 — SPD resolvent / steady solve, operator composition, φ-combination — PLANNED (math §62, `contracts/semiflow-core.math-spd-resolvent.md`)
+
+Triggered by an applied case study (steady 1-D heat with sink and source was O(N³)
+via the `τφ₁` limit: 187 s vs 1.1 s for scipy at N=641; `phi_action` cost grew
+with `‖v‖`). Every item is general-purpose:
+
+- `SpdResolvent` (`SymmetricOperator::resolvent`): `(λM + A)⁻¹b`, `λ ≥ 0`. Exact
+  O(N) tridiagonal LDLᵀ, PCG with IC(0) or Jacobi otherwise. Factor once, solve many.
+- `SymmetricOperator::with_diagonal` (reaction/sink/Robin rows) and `csr()`;
+  Python `to_csr`, `with_diagonal`, `lumped_congruence`.
+- `phi_combination` (one sweep for `Σ τ^k φ_k w_k`: affine evolve, ETD/ETDRK4
+  stages without callbacks); `CsrGenerator` (diagonal mass; non-symmetric
+  `GeneralOperator`); η-scaling makes φ cost independent of `‖v‖`.
+- Python only. FFI/WASM deferred (ADR-0186/0195 asymmetry).
+
+Gates: `G_SPDR_*`, `G_SYMOP_COMPOSE_EXACT`, `G_PHI_COST_V_INVARIANT`,
+`G_PHI_COMBINATION_DENSE`, `G_PHI_MASS_DENSE`, `G_PHI_GENERAL_DENSE`,
+`G_ETD_AFFINE_EXACT`. Deferred: a rational (contour) φ-action, multigrid, and a
+sparse direct Cholesky.
+
 ## Gate-coverage campaign — DONE (CI only, no ADR: no math or contract change)
 
 An audit of `properties.yaml` against the workflow files on 2026-08-18 found
@@ -2141,7 +2161,11 @@ Items carried forward from v2.2 MAY lists:
 - AMR / FFT-spectral exponential — out of scope per ADR-0012 (separate library)
 - GPU acceleration — different design space; no current plan
 - Stochastic PDEs — different mathematical framework
-- Fully-implicit schemes — Chernoff approach is explicit by design
+- Fully-implicit *time-stepping* schemes (BDF, implicit Runge–Kutta, Newton–Krylov
+  on nonlinear systems) — Chernoff evolution is explicit by design. NOT excluded
+  (ADR-0202): the linear resolvent `(λM + A)⁻¹` of a dissipative generator
+  (Hille–Yosida; already shipped as §22, §47, §59). A steady solve is `R(0)`, not
+  a time-stepping scheme.
 - MCP introspection server — withdrawn per ADR-0027 (no runtime to introspect;
   rustdoc + cargo cover what MCP would have provided).
 

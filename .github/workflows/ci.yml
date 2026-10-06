@@ -381,7 +381,7 @@ jobs:
           # through that dir's recorded python3 symlink (see xtask create_venv).
           rm -rf target/py-fast-venv
           python -m venv target/py-fast-venv
-          target/py-fast-venv/bin/pip install maturin numpy pytest
+          target/py-fast-venv/bin/pip install maturin numpy pytest scipy
       - name: Build and install extension module (maturin develop)
         run: |
           VIRTUAL_ENV=$PWD/target/py-fast-venv \

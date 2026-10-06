@@ -105,6 +105,11 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
         self.norm_inf
     }
 
+    /// Borrowed CSR view `(row_ptr, col_idx, vals)` (crate-internal: row-wise bounds).
+    pub(crate) fn csr_parts(&self) -> (&[usize], &[u32], &[F]) {
+        (&self.row_ptr, &self.col_idx, &self.vals)
+    }
+
     /// `dst ← A · src`.
     pub fn apply_into_slice(&self, src: &[F], dst: &mut [F]) {
         csr_matvec(&self.row_ptr, &self.col_idx, &self.vals, src, dst);

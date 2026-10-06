@@ -28,3 +28,11 @@ def test_error_has_kind_attribute() -> None:
         assert str(err).startswith(f"[{err.kind}]")
     else:
         raise AssertionError("expected SemiflowError")
+
+
+def test_adr_0202_names_are_public() -> None:
+    """ADR-0202: SpdResolvent + phi_combination are re-exported and listed in __all__."""
+    for name in ("SpdResolvent", "phi_combination"):
+        assert hasattr(semiflow, name), name
+        assert name in semiflow.__all__, name
+        assert hasattr(native, name), name

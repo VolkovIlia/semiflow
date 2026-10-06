@@ -14,6 +14,8 @@
 // Binding layer: allows for PyO3/wasm-bindgen wrapper patterns.
 #![allow(clippy::needless_pass_by_value)]
 
+use std::sync::Arc;
+
 use numpy::{PyArray2, PyReadonlyArray2, ToPyArray};
 use pyo3::prelude::*;
 use semiflow::general_operator::GeneralOperator;
@@ -42,7 +44,7 @@ use crate::{
 ///   assembly holds only if the caller's ``A`` has exactly zero column sums.
 #[pyclass(name = "GeneralOperator")]
 pub struct PyGeneralOperator {
-    inner: GeneralOperator<f64>,
+    pub(crate) inner: Arc<GeneralOperator<f64>>,
 }
 
 #[pymethods]
@@ -60,7 +62,9 @@ impl PyGeneralOperator {
         catch_panic_py!({
             let inner = GeneralOperator::<f64>::from_csr(n, &indptr, &indices, &data)
                 .map_err(|e| from_core(&e))?;
-            Ok(Self { inner })
+            Ok(Self {
+                inner: Arc::new(inner),
+            })
         })
     }
 

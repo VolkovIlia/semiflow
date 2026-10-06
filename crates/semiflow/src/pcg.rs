@@ -9,6 +9,10 @@
 //! [`implicit_euler_action`] builds the preconditioner ONCE per `(Â, Δt)` and loops
 //! `n_steps` PCG solves to compute `(I + Δt·Â)^{-n_steps} · w0` (backward-Euler, §59.1).
 //!
+//! The same CG loop also serves the SPD resolvent `(λ·diag(m) + A) x = b`
+//! (ADR-0202, §62.2.b) through the second [`Shift`] variant; the `ImplicitEuler`
+//! variant keeps its original expressions, so its numerics are bit-identical.
+//!
 //! **SPD guarantee (§59.3):** `σ(I + Δt·Â) ⊂ [1, 1+Δt·λ_max] ⊂ (0,∞)` for every
 //! `Δt > 0`, even when `Â` is singular — CG cannot break down.
 
@@ -41,11 +45,21 @@ pub(crate) trait Preconditioner<F: SemiflowFloat> {
 ///
 /// Built by N unit-vector matvecs; total cost = O(nnz).  For a tridiagonal
 /// N=400 operator that is ~1200 multiply-adds — negligible versus `n_steps` solves.
+#[derive(Clone)]
 pub(crate) struct Jacobi<F> {
     inv_diag: Vec<F>,
 }
 
 impl<F: SemiflowFloat> Jacobi<F> {
+    /// `P = diag(S)` from an explicit positive diagonal (SPD resolvent, §62.2.b).
+    ///
+    /// The caller guarantees `diag[i] > 0` (checked in `SpdResolvent::new`).
+    pub(crate) fn from_diag(diag: &[F]) -> Self {
+        Self {
+            inv_diag: diag.iter().map(|&d| F::one() / d).collect(),
+        }
+    }
+
     /// Probe each standard basis vector to read diagonal entries of `Â`.
     ///
     /// `inv_diag[i] = 1 / (1 + Δt · Â[i,i])`.  If a pivot is non-positive
@@ -94,26 +108,50 @@ fn vec_dot<F: SemiflowFloat>(a: &[F], b: &[F]) -> F {
         .fold(F::zero(), |s, (&ai, &bi)| s + ai * bi)
 }
 
-/// `r ← b − (x + dt · A·x)` = `b − S·x`, using `sp` as temporary for `A·x`.
-fn compute_residual<F: SemiflowFloat>(
-    op: &dyn SymmetricLinearOp<F>,
-    dt: F,
-    b: &[F],
-    x: &[F],
-    sp: &mut [F],
-    r: &mut [F],
-) {
-    op.apply_into_slice(x, sp); // sp = A·x
-    for i in 0..x.len() {
-        r[i] = b[i] - x[i] - dt * sp[i]; // r = b - S·x
-    }
+/// Which shifted SPD matrix `S` the CG loop solves with.
+///
+/// - `Euler { dt }`: `S = I + dt·A` (ADR-0190 backward Euler). Its expressions are
+///   unchanged since §59, so `ImplicitEuler` stays bit-identical.
+/// - `Mass { lambda, mass }`: `S = λ·diag(m) + A` (ADR-0202 resolvent, §62.2.b).
+///   Not rewritten as `λ = 1/dt`: that would change the rounding of the Euler path.
+pub(crate) enum Shift<'a, F> {
+    Euler { dt: F },
+    Mass { lambda: F, mass: &'a [F] },
 }
 
-/// `sp ← p + dt · A·p` = `S·p` (one matvec).
-fn shifted_matvec<F: SemiflowFloat>(op: &dyn SymmetricLinearOp<F>, dt: F, p: &[F], sp: &mut [F]) {
-    op.apply_into_slice(p, sp); // sp = A·p
-    for i in 0..p.len() {
-        sp[i] = p[i] + dt * sp[i]; // sp = S·p
+impl<F: SemiflowFloat> Shift<'_, F> {
+    /// `r ← b − S·x`, using `sp` as temporary for `A·x`.
+    fn residual(&self, op: &dyn SymmetricLinearOp<F>, b: &[F], x: &[F], sp: &mut [F], r: &mut [F]) {
+        op.apply_into_slice(x, sp); // sp = A·x
+        match self {
+            Shift::Euler { dt } => {
+                for i in 0..x.len() {
+                    r[i] = b[i] - x[i] - *dt * sp[i]; // r = b - S·x
+                }
+            }
+            Shift::Mass { lambda, mass } => {
+                for i in 0..x.len() {
+                    r[i] = b[i] - (*lambda * mass[i] * x[i] + sp[i]);
+                }
+            }
+        }
+    }
+
+    /// `sp ← S·p` (one matvec).
+    fn matvec(&self, op: &dyn SymmetricLinearOp<F>, p: &[F], sp: &mut [F]) {
+        op.apply_into_slice(p, sp); // sp = A·p
+        match self {
+            Shift::Euler { dt } => {
+                for i in 0..p.len() {
+                    sp[i] = p[i] + *dt * sp[i]; // sp = S·p
+                }
+            }
+            Shift::Mass { lambda, mass } => {
+                for i in 0..p.len() {
+                    sp[i] = *lambda * mass[i] * p[i] + sp[i];
+                }
+            }
+        }
     }
 }
 
@@ -133,18 +171,18 @@ fn rhs_norm_sq_or_zero_out<F: SemiflowFloat>(b: &[F], x: &mut [F]) -> Option<F> 
 
 // ── PCG solver ────────────────────────────────────────────────────────────────
 
-/// Solve `(I + dt·op) x = b` by preconditioned CG (§59.4).
+/// Solve `S x = b` (`S` given by `shift`) by preconditioned CG (§59.4, §62.2.b).
 ///
 /// `x` on entry: warm start (caller sets `x ← b`).
 /// `x` on exit: solution or last iterate on failure.
 ///
 /// Returns `Ok(iters)` on convergence; `Err(ConvergenceFailed)` otherwise.
 /// Borrows four scratch vectors and releases them before returning — no allocation.
-// 8 args by necessity — op/dt/b/x/precond/tol/max_iter/scratch: no grouping possible.
+// 8 args by necessity — op/shift/b/x/precond/tol/max_iter/scratch: no grouping possible.
 #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
 pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
-    dt: F,
+    shift: &Shift<'_, F>,
     b: &[F],
     x: &mut [F],
     precond: &dyn Preconditioner<F>,
@@ -161,7 +199,7 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     let mut z = scratch.take_vec(n);
     let mut p = scratch.take_vec(n);
     let mut sp = scratch.take_vec(n);
-    compute_residual(op, dt, b, x, &mut sp, &mut r);
+    shift.residual(op, b, x, &mut sp, &mut r);
     // ── Pre-loop convergence guard (§59.6) ────────────────────────────────────
     // If ‖r‖² ≤ tol already, warm start x already solves S·x = b (e.g. null-space
     // input on Neumann: Â·c·1 = 0 ⇒ S·c·1 = c·1 ⇒ r = 0).  Return Ok(0) immediately;
@@ -180,7 +218,7 @@ pub(crate) fn pcg_shifted<F: SemiflowFloat>(
     p.copy_from_slice(&z);
     let rz = vec_dot(&r, &z);
     let result = cg_loop(
-        op, dt, x, tol_abs_sq, max_iter, precond, &mut r, &mut z, &mut p, &mut sp, rz,
+        op, shift, x, tol_abs_sq, max_iter, precond, &mut r, &mut z, &mut p, &mut sp, rz,
     );
     scratch.return_vec(r);
     scratch.return_vec(z);
@@ -205,7 +243,7 @@ fn cg_update_x_r<F: SemiflowFloat>(x: &mut [F], r: &mut [F], p: &[F], sp: &[F], 
 #[allow(clippy::too_many_arguments)]
 fn cg_loop<F: SemiflowFloat>(
     op: &dyn SymmetricLinearOp<F>,
-    dt: F,
+    shift: &Shift<'_, F>,
     x: &mut [F],
     tol_abs_sq: F,
     max_iter: usize,
@@ -219,7 +257,7 @@ fn cg_loop<F: SemiflowFloat>(
     let tiny = F::from(1e-300_f64).unwrap();
     let mut last_r_sq = F::from(f64::INFINITY).unwrap_or(F::zero());
     for iter in 0..max_iter {
-        shifted_matvec(op, dt, p, sp); // sp = S·p
+        shift.matvec(op, p, sp); // sp = S·p
         let psp = vec_dot(p, sp);
         if psp <= F::zero() {
             // p≈0 on SPD system ⇒ check convergence
@@ -349,7 +387,8 @@ fn run_substeps<F: SemiflowFloat>(
         // x and u are independent scratch Vecs (separate pool allocations) — no aliasing.
         let mut x = scratch.take_vec(n);
         x.copy_from_slice(&u); // warm start x₀ = b = u_k
-        pcg_shifted(op, dt, &u, &mut x, precond, tol_cg, max_iter, scratch)?;
+        let shift = Shift::Euler { dt };
+        pcg_shifted(op, &shift, &u, &mut x, precond, tol_cg, max_iter, scratch)?;
         core::mem::swap(&mut u, &mut x); // u = solution; x = old u (returned to pool)
         scratch.return_vec(x);
     }
