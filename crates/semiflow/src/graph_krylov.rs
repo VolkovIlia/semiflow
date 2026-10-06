@@ -148,6 +148,39 @@ impl<F: SemiflowFloat> GraphKrylovChernoff<F> {
         }
     }
 
+    /// Cached Gershgorin bound `ρ̄ ≥ λ_max(L_G)` the polynomial paths are scaled with.
+    ///
+    /// Input of `graph_expmv_frechet_plan` and of the mesh of §63.3 (ADR-0203).
+    #[must_use]
+    pub fn lambda_max_bound(&self) -> F {
+        self.lambda_max
+    }
+
+    /// Propagator tolerance `tol` (also the decay-skip threshold of §63.5.b).
+    #[must_use]
+    pub fn tol(&self) -> F {
+        self.tol
+    }
+
+    /// Algorithm variant this solver runs.
+    #[must_use]
+    pub fn path(&self) -> KrylovPath {
+        self.path
+    }
+
+    /// `out ← e^{−τL}·v` on plain slices (no `GraphSignal`, no allocation of domain objects).
+    ///
+    /// Same polynomial/Krylov selection as `apply_into`; used by the §63.5 sweep.
+    pub(crate) fn expmv_slice(
+        &self,
+        tau: F,
+        v: &[F],
+        out: &mut [F],
+        scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        graph_expmv_krylov(&*self.laplacian, tau, v, out, self.path, self.tol, scratch)
+    }
+
     /// Number of nodes in the underlying graph.  Used by A2 (`graph_expmv_frechet`).
     #[must_use]
     pub fn n_nodes(&self) -> usize {

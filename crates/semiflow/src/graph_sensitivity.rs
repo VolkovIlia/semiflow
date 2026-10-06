@@ -51,6 +51,82 @@ pub trait GeneratorSensitivity<F: SemiflowFloat> {
         v: &[F],
         out: &mut [F],
     ) -> Result<(), SemiflowError>;
+
+    /// `grad[k] += w · ⟨a, (∂A/∂θ_k) b⟩` for EVERY parameter `k` (ADR-0203, §63.6).
+    ///
+    /// This is the contraction of one Duhamel node of
+    /// [`graph_expmv_frechet`](crate::graph_expmv_frechet): `a`, `b` are the two
+    /// propagated vectors, `w` the quadrature weight on the `σ`-scale (the
+    /// weights of a call sum to `t`; do NOT multiply by `t` again). Contract:
+    /// `a.len() == b.len()`, `grad.len() == n_params()`; no allocation per
+    /// parameter (borrow work vectors from `scratch`).
+    ///
+    /// The provided default loops [`Self::apply_param_deriv`] and costs
+    /// `O(n · n_params)` per call: correct for any implementor, slow for many
+    /// parameters. The in-tree sensitivities override it with `O(nnz)` forms.
+    ///
+    /// # Errors
+    ///
+    /// `DomainViolation` on a length mismatch or an invalid parameter.
+    #[allow(clippy::too_many_arguments)] // §63.8 contract: self + t, w, a, b, grad, scratch
+    fn accumulate_bilinear(
+        &self,
+        t: F,
+        w: F,
+        a: &[F],
+        b: &[F],
+        grad: &mut [F],
+        scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        check_bilinear_args(a.len(), b.len(), grad.len(), self.n_params())?;
+        let mut tmp = scratch.take_vec(b.len());
+        let status = bilinear_by_loop(self, (t, w), (a, b), grad, &mut tmp);
+        scratch.return_vec(tmp);
+        status
+    }
+}
+
+/// Default contraction: one `apply_param_deriv` + dot product per parameter.
+fn bilinear_by_loop<F: SemiflowFloat, S: GeneratorSensitivity<F> + ?Sized>(
+    sens: &S,
+    (t, w): (F, F),
+    (a, b): (&[F], &[F]),
+    grad: &mut [F],
+    tmp: &mut [F],
+) -> Result<(), SemiflowError> {
+    for (k, gk) in grad.iter_mut().enumerate() {
+        sens.apply_param_deriv(k, t, b, tmp)?;
+        let dot = a
+            .iter()
+            .zip(tmp.iter())
+            .fold(F::zero(), |acc, (&x, &y)| acc + x * y);
+        *gk += w * dot;
+    }
+    Ok(())
+}
+
+/// Shared argument check of the `accumulate_bilinear` family (§63.8 contract).
+pub(crate) fn check_bilinear_args(
+    a_len: usize,
+    b_len: usize,
+    grad_len: usize,
+    n_params: usize,
+) -> Result<(), SemiflowError> {
+    if a_len != b_len {
+        return Err(SemiflowError::DomainViolation {
+            what: "accumulate_bilinear: a.len() != b.len()",
+            #[allow(clippy::cast_precision_loss)]
+            value: b_len as f64,
+        });
+    }
+    if grad_len != n_params {
+        return Err(SemiflowError::DomainViolation {
+            what: "accumulate_bilinear: grad.len() != n_params()",
+            #[allow(clippy::cast_precision_loss)]
+            value: grad_len as f64,
+        });
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +356,31 @@ impl<F: SemiflowFloat> GeneratorSensitivity<F> for EdgeWeightSensitivity {
         }
         Ok(())
     }
+
+    /// `O(n_params)` contraction (§63.6.b): `grad[k] −= w·(a_i − a_j)(b_i − b_j)`.
+    fn accumulate_bilinear(
+        &self,
+        _t: F,
+        w: F,
+        a: &[F],
+        b: &[F],
+        grad: &mut [F],
+        _scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        check_bilinear_args(a.len(), b.len(), grad.len(), self.params.len())?;
+        let n = a.len();
+        for (gk, &(i, j)) in grad.iter_mut().zip(&self.params) {
+            if i >= n || j >= n || i == j {
+                return Err(SemiflowError::DomainViolation {
+                    what: "EdgeWeightSensitivity: invalid edge (index out of range or i == j)",
+                    #[allow(clippy::cast_precision_loss)]
+                    value: i.max(j) as f64,
+                });
+            }
+            *gk -= w * (a[i] - a[j]) * (b[i] - b[j]);
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +444,48 @@ impl<F: SemiflowFloat> GeneratorSensitivity<F> for NodeTimescaleSensitivity<F> {
         for x in out.iter_mut() {
             *x = -*x;
         }
+        Ok(())
+    }
+
+    /// Two `SpMV`s per call (§63.6.b): with `p = L(D b)`, `s = L(D a)`,
+    /// `grad[k] −= w·½a_k^{-1/2}·(a_k p_k + b_k s_k)`, using `(E_k L D)ᵀ = D L E_k`.
+    fn accumulate_bilinear(
+        &self,
+        _t: F,
+        w: F,
+        a: &[F],
+        b: &[F],
+        grad: &mut [F],
+        scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        check_bilinear_args(a.len(), b.len(), grad.len(), self.sqrt_a.len())?;
+        let n = a.len();
+        if n != self.sqrt_a.len() {
+            return Err(SemiflowError::DomainViolation {
+                what: "NodeTimescaleSensitivity::accumulate_bilinear: a.len() != n_nodes",
+                #[allow(clippy::cast_precision_loss)]
+                value: n as f64,
+            });
+        }
+        let mut da = scratch.take_vec(n);
+        let mut db = scratch.take_vec(n);
+        let mut lda = scratch.take_vec(n);
+        let mut ldb = scratch.take_vec(n);
+        for i in 0..n {
+            da[i] = self.sqrt_a[i] * a[i];
+            db[i] = self.sqrt_a[i] * b[i];
+        }
+        self.bare_lap.apply_into_slice(&db, &mut ldb);
+        self.bare_lap.apply_into_slice(&da, &mut lda);
+        let half = from_f64::<F>(0.5);
+        for node in 0..n {
+            let pre = half / self.sqrt_a[node];
+            grad[node] -= w * pre * (a[node] * ldb[node] + b[node] * lda[node]);
+        }
+        scratch.return_vec(ldb);
+        scratch.return_vec(lda);
+        scratch.return_vec(db);
+        scratch.return_vec(da);
         Ok(())
     }
 }

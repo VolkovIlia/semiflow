@@ -18,6 +18,7 @@ static EXPECTED: &[(&str, u64)] = &[
     ("expmv_div_form", 0x869f_d2e1_999b_9b85),
     ("graph_krylov_chebyshev", 0x29d5_3d4a_fadf_cbe5),
     ("symop_implicit_euler_pcg", 0x4819_db47_e626_d11b),
+    ("graph_frechet_large_t", 0x2f31_5b1c_9b43_770b),
     ("subordinated_gamma", 0x2dd5_2304_f635_4d71),
     ("gridless_moments", 0x5b45_603f_9e4b_42bc),
     ("smolyak_heat_d2", 0x94d0_efd5_d729_e3cb),

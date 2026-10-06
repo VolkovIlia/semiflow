@@ -5,7 +5,12 @@
 
 use alloc::vec::Vec;
 
-use crate::{error::SemiflowError, float::SemiflowFloat, graph_sensitivity::GeneratorSensitivity};
+use crate::{
+    error::SemiflowError,
+    float::SemiflowFloat,
+    graph_sensitivity::{check_bilinear_args, GeneratorSensitivity},
+    scratch::ScratchPool,
+};
 
 /// Parameter list for single-entry symmetric-stencil sensitivity (§55.5).
 ///
@@ -58,6 +63,36 @@ impl<F: SemiflowFloat> GeneratorSensitivity<F> for EntrySensitivity {
         } else {
             out[i] = -v[j]; // off-diagonal: ∂A/∂L_{ij} = −(e_i eⱼᵀ + e_j eᵢᵀ)
             out[j] = -v[i];
+        }
+        Ok(())
+    }
+
+    /// `O(n_params)` contraction (§63.6.b): off-diagonal
+    /// `grad[k] −= w·(a_i b_j + a_j b_i)`, diagonal `grad[k] −= w·a_i b_i`.
+    fn accumulate_bilinear(
+        &self,
+        _t: F,
+        w: F,
+        a: &[F],
+        b: &[F],
+        grad: &mut [F],
+        _scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        check_bilinear_args(a.len(), b.len(), grad.len(), self.entries.len())?;
+        let n = a.len();
+        for (gk, &(i, j)) in grad.iter_mut().zip(&self.entries) {
+            if i >= n || j >= n {
+                return Err(SemiflowError::DomainViolation {
+                    what: "EntrySensitivity::accumulate_bilinear: index out of range",
+                    #[allow(clippy::cast_precision_loss)]
+                    value: i.max(j) as f64,
+                });
+            }
+            *gk -= if i == j {
+                w * a[i] * b[i]
+            } else {
+                w * (a[i] * b[j] + a[j] * b[i])
+            };
         }
         Ok(())
     }

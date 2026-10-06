@@ -273,7 +273,7 @@ diagonal class.
 |------|-------------|
 | `SchrödingerChernoffComplex` / `SchrodingerChernoff` | Schrödinger equation on a native complex (or real-pair) carrier |
 | `GraphHeatChernoff` | Heat semigroup of a graph Laplacian |
-| `GraphKrylovChernoff`, `graph_expmv_frechet` | Depth-independent `e^{−tL}·v` (Chebyshev / Lanczos) and its edge-weight Fréchet gradient |
+| `GraphKrylovChernoff`, `graph_expmv_frechet` | Depth-independent `e^{−tL}·v` (Chebyshev / Lanczos) and its all-parameter Fréchet gradient (graded-mesh Duhamel quadrature: quadrature error independent of `λ_max·t`; f64 conditioning floor ≈ (r+n)·u·ρ̄t; `ImplicitEuler` path keeps its O(Δt) bias) |
 | `QuantumGraphHeatChernoff` / `QuantumSchrödingerChernoff` | Metric graphs with Kirchhoff vertex conditions |
 
 ### Conservative, stiff and semilinear problems

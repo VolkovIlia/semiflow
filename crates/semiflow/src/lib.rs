@@ -68,6 +68,9 @@ pub mod graph_adjoint_presampled;
 pub mod graph_batched;
 mod graph_batched_tests;
 pub mod graph_frechet;
+pub(crate) mod graph_frechet_mesh;
+#[cfg(test)]
+mod graph_frechet_tests;
 pub mod graph_heat;
 pub mod graph_heat4;
 pub mod graph_heat6;
@@ -275,6 +278,7 @@ pub use crate::{
         fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
     },
     graph_frechet::graph_expmv_frechet,
+    graph_frechet_mesh::{graph_expmv_frechet_plan, FrechetPlan},
     graph_heat::GraphHeatChernoff,
     graph_heat4::GraphHeat4thChernoff,
     graph_heat6::GraphHeat6thChernoff,

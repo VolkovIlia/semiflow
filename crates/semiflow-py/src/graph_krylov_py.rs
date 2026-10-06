@@ -118,9 +118,10 @@ impl GraphKrylov {
 
 /// VJP gradient `∂J/∂w` via the Fréchet–Duhamel integral (A2, §54.5, ADR-0185).
 ///
-/// Computes `∂J/∂w_k = t ∫₀¹ ⟨e^{−(1−s)tL}dj_c, (∂A/∂w_k) e^{−stL}u0_c⟩ ds`
-/// summed over channels using 8-point Gauss-Legendre quadrature.  Exact for all
-/// graph topologies including non-commuting edge directions.
+/// Computes `∂J/∂w_k = ∫₀ᵗ ⟨e^{−(t−σ)L}dj_c, (∂A/∂w_k) e^{−σL}u0_c⟩ dσ`
+/// summed over channels on a two-sided graded Gauss-Legendre mesh (math §63,
+/// ADR-0203), quadrature error independent of `λ_max·t`.  Exact for all graph topologies
+/// including non-commuting edge directions.
 ///
 /// Parameters
 /// ----------

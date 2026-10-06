@@ -45,6 +45,21 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
   committed digests that the `std-ref`, AVX2, NEON and QEMU jobs must reproduce.
   `tests/spdr_binding_parity.rs` pins the FNV digest the Python test checks
   bit-for-bit.
+- `GeneratorSensitivity::accumulate_bilinear` (provided method; default = the
+  old per-parameter loop, so external implementors keep working) with `O(nnz)`
+  overrides for `EdgeWeightSensitivity`, `EntrySensitivity` and
+  `NodeTimescaleSensitivity`.
+- `graph_expmv_frechet_plan` / `FrechetPlan`: pure predictor of node count,
+  chain length, maximum degree and SpMV bound of one Fréchet channel (the
+  accuracy gates derive their thresholds from it).
+- `GraphKrylovChernoff::{lambda_max_bound, tol, path}` accessors.
+- Python: `tol` keyword (default `1e-12`) on `symmetric_op_expmv_frechet`.
+- Gates `G_FRECHET_QUAD_CONSTANT`, `G_FRECHET_LARGE_T_ORACLE`,
+  `G_FRECHET_BILINEAR_ONE_PASS`, `G_FRECHET_LARGE_T_NOSTD_DIGEST` (new
+  `graph_frechet_large_t` scenario in `semiflow-nostd-check`),
+  `G_PY_FRECHET_LARGE_T`, `G_FRECHET_SWEEP_EXACT_PROP` (in-crate: the library sweep
+  driven by exact eigen propagators, `ρ̄t`-floor-free bound) (RELEASE_BLOCKING) and `G_FRECHET_COST_LOG_NODES`
+  (ADVISORY); evidence kit `scripts/frechet_large_t_kit.py`.
 
 ### Changed
 
@@ -67,6 +82,31 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
 - `G_SPDR_STEADY_MMS` threshold re-derived a priori (`C* = 3.506917`, ADR-0202
   Amendment 1); PCG result semantics and the near-singular band documented
   (Amendment 2).
+- **Graph / symmetric-operator Fréchet gradient: quadrature error independent of
+  `λ_max·t` (ADR-0203, math §63).** `graph_expmv_frechet` (and through it
+  `symmetric_op_expmv_frechet`, `EdgeWeightSensitivity`, `EntrySensitivity`,
+  `NodeTimescaleSensitivity`, Python `graph_expmv_frechet` and
+  `symmetric_op_expmv_frechet`) integrated the Duhamel integral with ONE 8-point
+  Gauss-Legendre panel on `[0, t]`. The integrand has boundary layers of width
+  `1/λ_max` at both ends, so the relative error was `1e-10` at `λ_max·t = 10`,
+  `7e-4` at 53 and `O(1e-2)` beyond ~100 (measured; the propagators were exact).
+  The integral is now evaluated on a two-sided graded Gauss-Legendre mesh
+  (`t/2` split, ratio 3/2, nodes carried as distances; `16·(K+1)` nodes,
+  `K = ⌈log_{1.5}(ρ̄t/4)⌉`), with quadrature error `≤ 1.1e-14` of the
+  absolute magnitude for EVERY `λ_max·t` (a-priori bound, §63.4) and memory
+  `≤ 15·N` independent of `λ_max·t`. The f64 conditioning floor
+  `≈ (r+n)·u·ρ̄t` of any method that applies `L` in floating point remains
+  (about `3e-9` relative at `λ_max·t = 1e6`), and the `ImplicitEuler` path keeps
+  its `O(Δt)` bias. The result changes numerically (more accurate), not
+  bit-identically; `graph_expmv_frechet`'s signature is unchanged and
+  `G_GRAPH_FRECHET_FD`, `G_SYMOP_ENTRY_FRECHET` and `T_ADJOINT_STATE_SENSITIVITY`
+  keep their thresholds. Cost: `2 + 32(K+1)` propagator calls per channel (was
+  16) and `SpMV`s `≤ B(ρ̄t) = m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))`, which tends to
+  `6×` one action as `ρ̄t → ∞` (measured `5.4–25×` one action for
+  `ρ̄t = 1e6…1e3`; the old rule was `≈ 8×`). Operators must be PSD (§63.1.d;
+  `SymmetricOperator::from_csr` does not check it).
+- The all-parameter contraction is `O(nnz)` per node (it was `O(n·n_params)`):
+  an all-edges gradient now costs the same propagator actions as a single edge.
 
 ## [0.14.0-beta] — 2026-10-05
 

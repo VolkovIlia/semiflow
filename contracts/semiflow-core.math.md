@@ -12895,6 +12895,11 @@ z≈6400) and lies outside the depth-flat scope.
 
 ### §54.5 — Augmented Fréchet gradient (NORMATIVE, A2)
 
+> **ADR-0203 note.** The shipped A2 evaluates the Duhamel form of this gradient by
+> quadrature, not by the augmented block action below. The quadrature rule is
+> NORMATIVE in §63 (`contracts/semiflow-core.math-frechet-large-t.md`); the
+> one-panel 8-node rule it replaces is accurate only for `λ_max·t ≲ 3`.
+
 For a scalar `J(u)`, `u = e^{−tL(w)} v`, the gradient w.r.t. the edge-weight
 vector `w` is assembled from the Fréchet derivative of the matrix exponential.
 With the augmented `2N×2N` block-upper-triangular operator (Al-Mohy–Higham 2009)
@@ -13850,3 +13855,13 @@ singular `A`, so the guarantee is the shift's, not `A`'s).
 > NORMATIVE body (§62.1 …, ADR-0202) moved verbatim to
 > [`contracts/semiflow-core.math-spd-resolvent.md`](semiflow-core.math-spd-resolvent.md)
 > for file-size reasons; numbering is unchanged and every "§62.x" citation resolves there.
+
+---
+
+## §63 — Two-sided graded Duhamel quadrature for the Fréchet gradient at large `λ_max·t` (moved)
+
+NORMATIVE text lives in `contracts/semiflow-core.math-frechet-large-t.md` (ADR-0203),
+split out for the 1024 KB git-guard (precedent §62). It replaces the one-panel
+8-point Gauss–Legendre rule of `graph_expmv_frechet` (§54.5 / §55.5), whose error
+grows like `(λ_max t)^{17}` (§63.2), by a geometric two-sided mesh with an a-priori
+bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).

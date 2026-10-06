@@ -46,6 +46,34 @@ mod tests {
         }
     }
 
+    /// `accumulate_bilinear` validates `a.len() == b.len() == n_nodes` (ADR-0203).
+    #[test]
+    fn node_timescale_bilinear_rejects_length_mismatch() {
+        let g = Arc::new(Graph::<f64>::path(3));
+        let bare_lap = Laplacian::assemble_combinatorial(&g);
+        let sens = NodeTimescaleSensitivity {
+            sqrt_a: vec![1.0_f64; 3],
+            bare_lap,
+        };
+        let mut scratch = ScratchPool::new();
+        let mut grad = vec![0.0_f64; 3];
+        let ok = [1.0_f64, 2.0, 3.0];
+        let short = [1.0_f64, 2.0];
+        assert!(sens
+            .accumulate_bilinear(0.1, 1.0, &ok, &ok, &mut grad, &mut scratch)
+            .is_ok());
+        assert!(sens
+            .accumulate_bilinear(0.1, 1.0, &short, &short, &mut grad, &mut scratch)
+            .is_err());
+        assert!(sens
+            .accumulate_bilinear(0.1, 1.0, &ok, &short, &mut grad, &mut scratch)
+            .is_err());
+        let mut bad_grad = vec![0.0_f64; 2];
+        assert!(sens
+            .accumulate_bilinear(0.1, 1.0, &ok, &ok, &mut bad_grad, &mut scratch)
+            .is_err());
+    }
+
     #[test]
     fn adjoint_grad_finite() {
         use crate::magnus_graph::{LaplacianAtTime, MagnusGraphHeatChernoff};

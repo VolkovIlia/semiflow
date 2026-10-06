@@ -3,11 +3,12 @@
 use alloc::{sync::Arc, vec::Vec};
 
 use semiflow::{
-    dense_csr_expmv_ref, dense_graph_expmv_ref, graph_expmv_krylov, ChernoffFunction, Graph,
-    GraphKrylovChernoff, GraphSignal, KrylovPath, Laplacian, ScratchPool, SymmetricOperator,
+    dense_csr_expmv_ref, dense_graph_expmv_ref, graph_expmv_frechet, graph_expmv_frechet_plan,
+    graph_expmv_krylov, ChernoffFunction, EdgeWeightSensitivity, Graph, GraphKrylovChernoff,
+    GraphSignal, KrylovPath, Laplacian, ScratchPool, SymmetricOperator,
 };
 
-use crate::{check, digest_of, m, sup_diff, ScenarioResult};
+use crate::{check, digest_of, m, sup_diff, Failure, ScenarioResult};
 
 /// `GraphKrylovChernoff` (Chebyshev path) vs `dense_graph_expmv_ref`.
 ///
@@ -82,4 +83,88 @@ pub(crate) fn implicit_euler_pcg() -> ScenarioResult {
         &mut ScratchPool::new(),
     )?;
     check(sup_diff(&approx, &exact), 1e-6, digest_of(&approx))
+}
+
+/// Number of nodes of the stiff path of [`frechet_large_t`].
+const FRECHET_N: usize = 10;
+
+/// Alternating conductances `{1e3, 1, 1e3, ...}` of the `n - 1` path edges.
+fn stiff_path_weights() -> Vec<f64> {
+    (0..FRECHET_N - 1)
+        .map(|k| if k % 2 == 0 { 1.0e3 } else { 1.0 })
+        .collect()
+}
+
+/// Path graph on `FRECHET_N` nodes with edge `k` = `(k, k + 1)` of weight `weights[k]`.
+fn stiff_path(weights: &[f64]) -> Result<Graph<f64>, semiflow::SemiflowError> {
+    let edges = (0_u32..).zip(weights).map(|(k, &w)| (k, k + 1, w));
+    Graph::<f64>::from_edges(FRECHET_N, edges)
+}
+
+/// `J(w) = <dj, e^{-t L(w)} u0>` with the dense Padé reference.
+fn frechet_j(
+    weights: &[f64],
+    t: f64,
+    u0: &[f64],
+    dj: &[f64],
+) -> Result<f64, semiflow::SemiflowError> {
+    let g = stiff_path(weights)?;
+    let lap = Laplacian::assemble_combinatorial(&g);
+    let mut out = alloc::vec![0.0; FRECHET_N];
+    dense_graph_expmv_ref(&lap, t, u0, &mut out)?;
+    Ok(out.iter().zip(dj).map(|(a, b)| a * b).sum())
+}
+
+/// Fréchet gradient at `ρ̄t ≈ 2e3` (math §63, ADR-0203) vs a central difference.
+///
+/// `G_FRECHET_LARGE_T_NOSTD_DIGEST`: path(10), alternating weights `{1e3, 1}`,
+/// `t = 1`, Chebyshev `tol = 1e-12`, `EdgeWeightSensitivity` on all 9 edges, one
+/// channel. The graded mesh has `K ≥ 10` panels per half and no decay skip (the
+/// zero mode of the combinatorial Laplacian keeps the far vector alive). The
+/// directional derivative along `δw = (1, 2, …, 9)` is compared with
+/// `[J(w + εδw) − J(w − εδw)] / 2ε`, `ε = 1e-5` (`dense_graph_expmv_ref`);
+/// gate `|error| ≤ 1e-6`. The digest covers the 9 gradient entries, so the mesh
+/// (no transcendental calls) and the sweep must be bit-identical in every build.
+pub(crate) fn frechet_large_t() -> ScenarioResult {
+    let t = 1.0;
+    let weights = stiff_path_weights();
+    let g = stiff_path(&weights)?;
+    let lap = Arc::new(Laplacian::assemble_combinatorial(&g));
+    let gk = GraphKrylovChernoff::new(Arc::clone(&lap), KrylovPath::Chebyshev, 1e-12)?;
+    let u0: Vec<f64> = (0_u32..10)
+        .map(|i| m::sin(0.7 * f64::from(i) + 0.3))
+        .collect();
+    let dj: Vec<f64> = (0_u32..10).map(|i| m::cos(0.4 * f64::from(i))).collect();
+    let sens = EdgeWeightSensitivity {
+        params: (0..FRECHET_N - 1).map(|k| (k, k + 1)).collect(),
+        n_nodes: FRECHET_N,
+    };
+    // The point of the scenario: a deep graded mesh (K >= 10), not one panel.
+    let plan = graph_expmv_frechet_plan(gk.lambda_max_bound(), t, gk.tol(), &gk.path());
+    if plan.panels_per_half < 11 {
+        return Err(Failure::Invariant("mesh has fewer than 11 panels per half"));
+    }
+    let mut grad = alloc::vec![0.0; FRECHET_N - 1];
+    graph_expmv_frechet(
+        &gk,
+        &u0,
+        &dj,
+        1,
+        t,
+        &sens,
+        &mut grad,
+        &mut ScratchPool::new(),
+    )?;
+    let dir: Vec<f64> = (1_u32..10).map(f64::from).collect();
+    let shifted = |sign: f64| -> Vec<f64> {
+        weights
+            .iter()
+            .zip(&dir)
+            .map(|(w, d)| w + sign * 1e-5 * d)
+            .collect()
+    };
+    let fd =
+        (frechet_j(&shifted(1.0), t, &u0, &dj)? - frechet_j(&shifted(-1.0), t, &u0, &dj)?) / 2e-5;
+    let analytic: f64 = grad.iter().zip(&dir).map(|(g, d)| g * d).sum();
+    check(m::abs(analytic - fd), 1e-6, digest_of(&grad))
 }

@@ -69,6 +69,11 @@ fn symop_implicit_euler_pcg() {
 }
 
 #[test]
+fn graph_frechet_large_t() {
+    run("graph_frechet_large_t");
+}
+
+#[test]
 fn subordinated_gamma() {
     run("subordinated_gamma");
 }
