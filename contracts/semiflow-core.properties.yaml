@@ -10326,3 +10326,162 @@ implementation_notes:
     pattern: B
     introduced_in: heat2dvara-operator-resolution
     authority: ADR-0191
+
+  # ── ADR-0203 gates (§63, contracts/semiflow-core.math-frechet-large-t.md) ─────
+  # Fréchet gradient at large λ_max·t. Thresholds are a-priori (§63.4, §63.7);
+  # none is fitted to a measurement. Unchanged by ADR-0203 and still
+  # RELEASE_BLOCKING with their thresholds: G_GRAPH_FRECHET_FD (≤ 1e-7),
+  # tests/graph_frechet_fd.rs::g_graph_frechet_fd_triangle (≤ 1e-7),
+  # G_SYMOP_ENTRY_FRECHET (≤ 1e-7 per entry), T_ADJOINT_STATE_SENSITIVITY.
+
+  - name: G_FRECHET_QUAD_CONSTANT
+    type: NUMERICAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (probe sup = 4.9e-16 ≤ 1.1e-14)"
+    rationale: |
+      G_FRECHET_QUAD_CONSTANT (RELEASE_BLOCKING, ADR-0203 §63.3–§63.4): the
+      two-sided geometric mesh (q = 3/2, δ = 2, GL8 per panel, nodes carried as
+      distances) integrates the single exponentials e^{-|μ|σ} and
+      e^{-|μ|(t-σ)} on [0, t] for |μ|t in logspace(-3, 8, 600) and
+      ρ̄ ∈ {|μ|, 2|μ|} with relative error ≤ ε_Q against the closed form
+      -expm1(-|μ|t)/|μ|. ε_Q = 1.1e-14 is Proposition 63.4 (GL remainder
+      C_8 = 1.697e-23, geometric panel sum 3.95e8, factor 1/(1-e^{-1})).
+      Pure quadrature: no operator, no propagator. Also asserts the node count
+      16(K+1) equals graph_expmv_frechet_plan(...).n_nodes on the same grid, and
+      that the mesh is built without ln (K from the multiply loop).
+      The pre-ADR-0203 one-panel rule must FAIL the same bound at |μ|t = 10
+      (red-first discrimination of the gate itself).
+    gate: "max rel_err <= 1.1e-14 over the grid; legacy one-panel rule rel_err > 1.1e-14 at |μ|t = 10"
+    test_file: "src/graph_frechet_mesh.rs::tests::g_frechet_quad_constant"
+    feature_gate: none
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_FRECHET_LARGE_T_ORACLE
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (numpy probe of the design: ≤ 1.4e-14·G_k at every point)"
+    rationale: |
+      G_FRECHET_LARGE_T_ORACLE (RELEASE_BLOCKING, ADR-0203 §63.7): graph_expmv_frechet
+      vs a Daleckii–Krein eigen oracle (cyclic Jacobi, §63.1.b cancellation-free
+      divided difference) at λ_max·t ∈ {1, 10, 1e2, 1e4, 1e6}, λ_max the oracle's
+      largest eigenvalue, t = (λ_max t)/λ_max. Two n = 12 fixtures:
+        (F1) uniform random graph (weights U[0.2, 2], ≈35% density + path);
+        (F2) stiff contrast: two 6-node rings with fast weights W·U[0.5,1.5],
+             one bridge of weight 1, a Robin leak 0.3 on node 0 (SPD), W chosen so
+             λ_max/λ_min ∈ [5e5, 2e6] (asserted), i.e. slow modes have
+             λ_min·t = O(1) at the λ_max·t = 1e6 point.
+      Sensitivities: EdgeWeightSensitivity (all edges) on F1 and F2 via
+      GraphKrylovChernoff (Chebyshev, tol = 1e-14); EntrySensitivity on F2 via
+      SymmetricOperator (all off-diagonal pairs + two diagonal entries).
+      Bound per parameter k:
+        |g_k - g_k^ref| ≤ τ_k = (ε_Q + 2n²u)·G_k + η·N_k,
+        η = 2·N_chain·(tol + (r+3)·m_max²·u) + tol + (r+n)·u·ρ̄t,
+      with G_k, N_k from §63.1.c, u = 2^-53, r = max row nnz, and N_chain, m_max
+      taken from graph_expmv_frechet_plan (not measured). Non-vacuity, per point:
+      (a) at least one k with |g_k^ref| ≥ 1e3·τ_k (informative parameter);
+      (b) at every λ_max·t ≥ 10 the legacy one-panel GL8 rule, evaluated with the
+          oracle's exact propagators inside the test, violates the propagator-free
+          part τ_k^Q = (ε_Q + 2n²u)·G_k + (r+n)·u·ρ̄t·N_k for at least one k (the
+          gate rejects the defect it is written for; exact propagators carry no
+          tol / Chebyshev-rounding term, so η's other parts do not apply to it).
+    gate: "|g_k - g_k^ref| <= τ_k (§63.7.a) for all k, fixtures, sensitivities and λ_max·t points; non-vacuity (a), (b)"
+    test_file: "tests/g_frechet_large_t_oracle.rs::g_frechet_large_t_oracle"
+    feature_gate: "slow-tests"
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_FRECHET_BILINEAR_ONE_PASS
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING"
+    rationale: |
+      G_FRECHET_BILINEAR_ONE_PASS (RELEASE_BLOCKING, ADR-0203 §63.6): the
+      all-parameters contraction is one O(nnz) pass per node. A test-local
+      counting wrapper around EdgeWeightSensitivity, EntrySensitivity and
+      NodeTimescaleSensitivity forwards accumulate_bilinear to the inner
+      override and counts calls. Asserts: accumulate_bilinear is called exactly
+      plan.n_nodes · n_cols times (n_cols = 3); apply_param_deriv is called
+      0 times. A second wrapper that does NOT override accumulate_bilinear
+      (trait default) gives the gradient of the old contraction; the two agree
+      to |Δg_k| ≤ 8·u·N_k (reordering of at most 4 products per node, weights
+      summing to t, |a_i| ≤ ‖dj‖₂, |b_i| ≤ ‖u0‖₂ by contraction).
+    gate: "calls(accumulate_bilinear) == n_nodes·n_cols; calls(apply_param_deriv) == 0; |g_override - g_default| <= 8·u·N_k"
+    test_file: "tests/g_frechet_bilinear_one_pass.rs::g_frechet_bilinear_one_pass"
+    feature_gate: none
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_FRECHET_LARGE_T_NOSTD_DIGEST
+    type: BIT_IDENTITY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (digest recorded from the host no_std run, ADR-0200 procedure)"
+    rationale: |
+      G_FRECHET_LARGE_T_NOSTD_DIGEST (RELEASE_BLOCKING, ADR-0203 + ADR-0200): new
+      semiflow-nostd-check scenario `graph_frechet_large_t`: path(10) with
+      alternating edge weights {1e3, 1}, ρ̄t ≈ 2e3 (K ≥ 10 panels per half, decay
+      skip not triggered), EdgeWeightSensitivity on all 9 edges, one channel,
+      Chebyshev tol 1e-12. Sanity check: directional derivative vs central FD of
+      J computed with dense_graph_expmv_ref, ε = 1e-5, error ≤ 1e-6 (FD truncation
+      ε²·|J'''| plus u·|J|/ε, both ≪ 1e-6 on this fixture). The FNV-1a digest of
+      the gradient bits is committed in expected.rs and must reproduce in every
+      configuration of the ADR-0200 matrix (std-ref, AVX2, NEON, Cortex-M).
+      Holds by construction only if the mesh avoids transcendental calls (§63.3).
+    gate: "digest == committed value in all configurations; FD sanity <= 1e-6"
+    test_file: "crates/semiflow-nostd-check/src/graph.rs::frechet_large_t"
+    feature_gate: none
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_PY_FRECHET_LARGE_T
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PENDING (current binding on the kit fixture: 1.2e-2·G_k at 1e3, 1.6e-5·G_k at 1e6 — must fail first)"
+    rationale: |
+      G_PY_FRECHET_LARGE_T (RELEASE_BLOCKING, ADR-0203 §63.7): the user-facing path
+      of the finding. semiflow.symmetric_op_expmv_frechet on fixture F2 of
+      G_FRECHET_LARGE_T_ORACLE (built in numpy, same seed), all off-diagonal
+      pairs + diagonal entries, λ_max·t ∈ {1, 10, 1e2, 1e4, 1e6}, default
+      tol = 1e-12. Oracle: numpy.linalg.eigh + §63.1.b. Bound: τ_k of §63.7.a with
+      tol = 1e-12 and N_chain, m_max from semiflow.graph_expmv_frechet_plan (or
+      the documented closed form if the predictor is not bound). Oracle
+      self-check: scipy.linalg.expm_frechet agrees with the eigen oracle to
+      1e-12·G_k for λ_max·t ≤ 1e2 (measured ≤ 2e-15·G_k). Non-vacuity as in
+      G_FRECHET_LARGE_T_ORACLE (a).
+    gate: "|g_k - g_k^ref| <= τ_k for all k and points; expm_frechet vs eigh <= 1e-12·G_k for λ_max·t <= 1e2"
+    test_file: "crates/semiflow-py/tests/test_frechet_large_t.py::test_frechet_large_t_vs_eigh"
+    feature_gate: none
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_FRECHET_COST_LOG_NODES
+    type: STRUCTURAL_PERFORMANCE
+    severity: ADVISORY
+    blocks_release: false
+    pass_status: "PENDING"
+    rationale: |
+      G_FRECHET_COST_LOG_NODES (ADVISORY, ADR-0203 §63.6): (i) plan.n_nodes equals
+      16·(K+1), K = ⌈log_{1.5}(ρ̄t/4)⌉₊, at ρ̄t ∈ {1, 10, 1e2, 1e4, 1e6}
+      (= {16, 64, 144, 336, 512}) and n_nodes(1e6)/n_nodes(1e2) ≤ 4;
+      (ii) plan.spmv_upper ≤ 6·graph_expmv_matvec_count-derived C(t) for
+      ρ̄t ≥ 1e3 (§63.6.a gives ≈ 5·C(t)); (iii) wall time of the all-edges
+      gradient (|E| ≈ 6000) vs a single-edge gradient on an N = 2000 random
+      graph at ρ̄t = 1e3: ratio ≤ 2 (the n_params-independence claim). Timing
+      parts are advisory because CI hosts are noisy; (i) is exact arithmetic and
+      may be promoted.
+    gate: "n_nodes formula exact; n_nodes ratio <= 4; spmv_upper <= 6·C(t); wall-time ratio <= 2"
+    test_file: "tests/g_frechet_cost_log_nodes.rs::g_frechet_cost_log_nodes"
+    feature_gate: "slow-tests"
+    pattern: B
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
