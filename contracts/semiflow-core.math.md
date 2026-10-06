@@ -13850,6 +13850,14 @@ singular `A`, so the guarantee is the shift's, not `A`'s).
 
 ---
 
+## §62 — SPD resolvent / steady solve, operator composition, and the φ-combination (moved)
+
+> NORMATIVE body (§62.1 …, ADR-0202) moved verbatim to
+> [`contracts/semiflow-core.math-spd-resolvent.md`](semiflow-core.math-spd-resolvent.md)
+> for file-size reasons; numbering is unchanged and every "§62.x" citation resolves there.
+
+---
+
 ## §63 — Two-sided graded Duhamel quadrature for the Fréchet gradient at large `λ_max·t` (moved)
 
 NORMATIVE text lives in `contracts/semiflow-core.math-frechet-large-t.md` (ADR-0203),

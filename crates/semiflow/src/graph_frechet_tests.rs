@@ -304,7 +304,12 @@ fn sweep_gate_rejects_nan() {
     assert!(violates(1.0, f64::NAN));
     assert!(nan_max(0.5, f64::NAN).is_nan());
     let (fx, t) = fixtures_at(10.0).pop().expect("F3 fixture");
-    assert!(run_point(&fx, t, 10.0).fails.is_empty());
+    let fails = run_point(&fx, t, 10.0).fails;
+    assert_eq!(
+        fails,
+        Vec::<String>::new(),
+        "F3 at lt=10 must pass the sweep gate"
+    );
 }
 
 // ---------------------------------------------------------------------------

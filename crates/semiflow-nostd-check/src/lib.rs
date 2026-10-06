@@ -38,6 +38,7 @@ mod expected;
 mod graph;
 mod heat;
 mod particles;
+mod resolvent;
 mod spectral;
 
 /// Result of a scenario that met its tolerance.
@@ -195,6 +196,18 @@ static SCENARIOS: &[Scenario] = &[
     Scenario {
         name: "octonic_heat",
         run: heat::octonic_heat,
+    },
+    Scenario {
+        name: "spdr_tridiag",
+        run: resolvent::spdr_tridiag,
+    },
+    Scenario {
+        name: "spdr_pcg_ic0",
+        run: resolvent::spdr_pcg_ic0,
+    },
+    Scenario {
+        name: "phi_combination",
+        run: resolvent::phi_combination_p3,
     },
 ];
 

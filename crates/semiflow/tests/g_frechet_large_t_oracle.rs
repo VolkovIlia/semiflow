@@ -358,7 +358,7 @@ fn nan_is_a_violation() {
     let mut grad = grad_of(&case, t);
     let legacy = legacy_gl8(&case.eig, &case.d, &case.v, t, &case.stencils);
     let (_, clean) = score(&case, (&bound, 1.0), &grad, &refs, &legacy);
-    assert!(clean.is_empty(), "clean gradient must pass: {clean:?}");
+    assert_eq!(clean, Vec::<String>::new(), "clean gradient must pass");
     grad[3] = f64::NAN;
     let (row, fails) = score(&case, (&bound, 1.0), &grad, &refs, &legacy);
     assert_eq!(fails.len(), 1, "NaN gradient entry must be reported");

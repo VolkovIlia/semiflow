@@ -28,6 +28,9 @@ static EXPECTED: &[(&str, u64)] = &[
     ("diffusion6_catmull_f32", 0x6180_7208_60df_84af),
     ("cubic_hermite_heat", 0xc0ea_9dbe_d6e1_71cb),
     ("octonic_heat", 0x399e_f380_eb86_fb81),
+    ("spdr_tridiag", 0xa216_35ae_041b_f865),
+    ("spdr_pcg_ic0", 0x6f8f_19a8_3b27_ccaa),
+    ("phi_combination", 0xb4f0_594e_c035_7da5),
 ];
 
 /// Committed digest for `name`, if any.

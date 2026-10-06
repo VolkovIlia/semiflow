@@ -11,6 +11,7 @@ use crate::{
     graph::{Laplacian, LaplacianKind},
     graph_krylov::{GraphKrylovChernoff, KrylovPath, MAX_DENSE_N},
     matrix_pade::mat_exp_pade13,
+    spd_resolvent::{SpdResolvent, SpdSolver},
 };
 
 // ── SymmetricLinearOp ─────────────────────────────────────────────────────────
@@ -96,6 +97,69 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
         self.inner.spectral_radius_bound()
     }
 
+    /// Borrowed CSR view `(row_ptr, col_idx, vals)`; zero copies.
+    ///
+    /// Round trip: `from_csr(n, csr().0, csr().1, csr().2, 0)` reproduces identical arrays.
+    #[must_use]
+    pub fn csr(&self) -> (&[usize], &[u32], &[F]) {
+        (
+            self.inner.row_ptr(),
+            self.inner.col_idx(),
+            self.inner.vals(),
+        )
+    }
+
+    /// `A + diag(c)` (ADR-0202 D2, §62.3). Inserts structurally missing diagonal
+    /// entries; columns stay sorted.
+    ///
+    /// # Errors
+    ///
+    /// [`SemiflowError::DomainViolation`] if `c.len() != n`, any `cᵢ < 0` / non-finite, or an
+    /// assembled entry overflows to `±∞`.
+    pub fn with_diagonal(&self, c: &[F]) -> Result<Self, SemiflowError> {
+        let n = self.n();
+        if c.len() != n {
+            #[allow(clippy::cast_precision_loss)]
+            return Err(SemiflowError::DomainViolation {
+                what: "with_diagonal: c.len() != n",
+                value: c.len() as f64,
+            });
+        }
+        if let Some(&bad) = c.iter().find(|&&v| !v.is_finite() || v < F::zero()) {
+            return Err(SemiflowError::DomainViolation {
+                what: "with_diagonal: c entries must be finite and >= 0",
+                value: bad.to_f64().unwrap_or(f64::NAN),
+            });
+        }
+        let (rp, ci, va) = self.csr();
+        let (nrp, nci, nva) = add_diagonal(n, rp, ci, va, c);
+        if let Some(&bad) = nva.iter().find(|v| !v.is_finite()) {
+            return Err(SemiflowError::DomainViolation {
+                what: "with_diagonal: A + diag(c) overflows (non-finite assembled entry)",
+                value: bad.to_f64().unwrap_or(f64::NAN),
+            });
+        }
+        let inner = Laplacian::from_csr_parts(n, nrp, nci, nva, LaplacianKind::GeneralSymmetric)?;
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
+    }
+
+    /// Factor-once / solve-many resolvent `(λ·diag(mass) + A)⁻¹` (ADR-0202 D1, §62).
+    ///
+    /// # Errors
+    ///
+    /// See [`SpdResolvent::new`].
+    pub fn resolvent(
+        &self,
+        lambda: F,
+        mass: Option<&[F]>,
+        solver: SpdSolver,
+        tol: F,
+    ) -> Result<SpdResolvent<F>, SemiflowError> {
+        SpdResolvent::new(self, lambda, mass, solver, tol)
+    }
+
     /// Build a [`GraphKrylovChernoff`] solver backed by this operator's CSR matrix.
     ///
     /// # Errors
@@ -167,6 +231,44 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for SymmetricOperator<F> {
     fn apply_into_slice(&self, src: &[F], dst: &mut [F]) {
         Laplacian::apply_into_slice(&self.inner, src, dst);
     }
+}
+
+/// CSR of `A + diag(c)`: copies each row, adding `c[i]` at (or inserting it as) `(i, i)`.
+fn add_diagonal<F: SemiflowFloat>(
+    n: usize,
+    rp: &[usize],
+    ci: &[u32],
+    va: &[F],
+    c: &[F],
+) -> (Vec<usize>, Vec<u32>, Vec<F>) {
+    let mut nrp = Vec::with_capacity(n + 1);
+    let mut nci = Vec::with_capacity(ci.len() + n);
+    let mut nva = Vec::with_capacity(ci.len() + n);
+    nrp.push(0_usize);
+    for i in 0..n {
+        #[allow(clippy::cast_possible_truncation)]
+        let diag_col = i as u32;
+        let mut placed = false;
+        for k in rp[i]..rp[i + 1] {
+            if !placed && ci[k] >= diag_col {
+                placed = true;
+                nci.push(diag_col);
+                if ci[k] == diag_col {
+                    nva.push(va[k] + c[i]);
+                    continue;
+                }
+                nva.push(c[i]);
+            }
+            nci.push(ci[k]);
+            nva.push(va[k]);
+        }
+        if !placed {
+            nci.push(diag_col);
+            nva.push(c[i]);
+        }
+        nrp.push(nci.len());
+    }
+    (nrp, nci, nva)
 }
 
 // ── Validation helpers ─────────────────────────────────────────────────────────

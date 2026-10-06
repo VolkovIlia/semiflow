@@ -6,8 +6,82 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
+φ-combination that closes the affine and ETD gaps. All additive except one
+behaviour change in `phi_action` (see Changed). No ABI change; FFI and WASM are
+unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
+
+### Added
+
+- **`SpdResolvent` (Rust, Python).** `SymmetricOperator::resolvent(λ, mass,
+  solver, tol)` factors `λ·M + A` once for repeated solves, `λ ≥ 0`, `M =
+  diag(mass) > 0`. `λ = 0` is the steady state. A tridiagonal operator uses an
+  exact `O(n)` LDLᵀ with a positive-pivot certificate; everything else uses PCG
+  with IC(0) (reported fallback to Jacobi). `SolveReport` carries the iteration
+  count and the true relative residual. Singular (`λ = 0` with a constant null
+  vector), `n = 0`, overflow and stagnating systems return errors, not `Ok`. PCG
+  has no multigrid: cost is `O(√κ·nnz)` per solve.
+- **Operator composition.** `SymmetricOperator::with_diagonal(c)` (`A + diag(c)`,
+  `c ≥ 0`, inserts missing diagonal entries), `csr()` / `to_csr()` (round-trips
+  with `from_csr`), and Python `lumped_congruence`.
+- **`phi_combination`** computes `Σₖ τᵏ φₖ(τG) wₖ` (`p ≤ 3`) in one augmented sweep
+  (Al-Mohy–Higham 2011, Thm 2.1). With the §62.5 recipes it gives exact affine
+  evolution `M u' = −A u + s`, ETD-RK2 and ETDRK4 with the nonlinearity evaluated
+  by the caller. Python: `semiflow.phi_combination(op, tau, w, mass=None)`.
+- **`CsrGenerator`** gives φ-functions a diagonal mass (`G = −M⁻¹A`) and makes them
+  work on `GeneralOperator`. Python `phi_action` and `phi_action_batched` take
+  `mass=` and accept a `GeneralOperator`; `mass=None` is bit-identical to the old
+  path.
+- **Python surface** `SpdResolvent` (`solve`, `solve_batched`, `solve_info`,
+  `method`, `n`) and `SymmetricOperator.{resolvent, with_diagonal, to_csr,
+  lumped_congruence}`; the GIL is released during solves (ADR-0031). `.pyi` stubs
+  and README updated.
+- **Gates.** `G_SPDR_TRIDIAG_DENSE`, `G_SPDR_PCG_DENSE`, `G_SPDR_STEADY_MMS`,
+  `G_SPDR_PHI1_LIMIT`, `G_SPDR_IMPLICIT_CROSS`, `G_SPDR_REJECT`,
+  `G_SYMOP_COMPOSE_EXACT`, `G_PHI_COST_V_INVARIANT`, `G_PHI_COMBINATION_DENSE`,
+  `G_PHI_MASS_DENSE`, `G_PHI_GENERAL_DENSE`, `G_ETD_AFFINE_EXACT` (all
+  RELEASE_BLOCKING); `G_SPDR_LINEAR_COST` is advisory. `semiflow-nostd-check`
+  gains the scenarios `spdr_tridiag`, `spdr_pcg_ic0` and `phi_combination`, with
+  committed digests that the `std-ref`, AVX2, NEON and QEMU jobs must reproduce.
+  `tests/spdr_binding_parity.rs` pins the FNV digest the Python test checks
+  bit-for-bit.
+- `GeneratorSensitivity::accumulate_bilinear` (provided method; default = the
+  old per-parameter loop, so external implementors keep working) with `O(nnz)`
+  overrides for `EdgeWeightSensitivity`, `EntrySensitivity` and
+  `NodeTimescaleSensitivity`.
+- `graph_expmv_frechet_plan` / `FrechetPlan`: pure predictor of node count,
+  chain length, maximum degree and SpMV bound of one Fréchet channel (the
+  accuracy gates derive their thresholds from it).
+- `GraphKrylovChernoff::{lambda_max_bound, tol, path}` accessors.
+- Python: `tol` keyword (default `1e-12`) on `symmetric_op_expmv_frechet`.
+- Gates `G_FRECHET_QUAD_CONSTANT`, `G_FRECHET_LARGE_T_ORACLE`,
+  `G_FRECHET_BILINEAR_ONE_PASS`, `G_FRECHET_LARGE_T_NOSTD_DIGEST` (new
+  `graph_frechet_large_t` scenario in `semiflow-nostd-check`),
+  `G_PY_FRECHET_LARGE_T`, `G_FRECHET_SWEEP_EXACT_PROP` (in-crate: the library sweep
+  driven by exact eigen propagators, `ρ̄t`-floor-free bound) (RELEASE_BLOCKING) and `G_FRECHET_COST_LOG_NODES`
+  (ADVISORY); evidence kit `scripts/frechet_large_t_kit.py`.
+
+### Changed
+
+- **`phi_action` / `phi_action_batched` cost no longer depends on `‖v‖`.** The
+  Taylor truncation `(s, m)` was chosen from `τ‖G‖ + ‖v‖∞ + 1`, so the substep
+  count grew with the magnitude of the input (16.9M matvecs at `‖v‖ = 1e6`, 90
+  after the fix). The input is now scaled by a power of two, so `(s, m)` depends
+  only on `τ‖G‖` and the result is bitwise homogeneous in `v`. **Behaviour
+  change at the truncation level:** results can move by at most the truncation
+  tolerance. At unit norm they are unchanged (the ETDRK4 and adjoint gates are
+  bit-identical). §62.4 is amended to the implemented scaling.
+- `SemiflowError::ConvergenceFailed` is now returned in production (PCG iteration
+  cap and gross-residual guard); its rustdoc no longer says it is reserved.
+
 ### Fixed
 
+- The IC(0) preconditioner that §59.2 declared normative but `pcg.rs` never
+  shipped is now implemented (zero fill-in, Jacobi fallback reported by
+  `SpdResolvent::method()`). `ImplicitEuler` is untouched and bit-identical.
+- `G_SPDR_STEADY_MMS` threshold re-derived a priori (`C* = 3.506917`, ADR-0202
+  Amendment 1); PCG result semantics and the near-singular band documented
+  (Amendment 2).
 - **Graph / symmetric-operator Fréchet gradient: quadrature error independent of
   `λ_max·t` (ADR-0203, math §63).** `graph_expmv_frechet` (and through it
   `symmetric_op_expmv_frechet`, `EdgeWeightSensitivity`, `EntrySensitivity`,
@@ -33,24 +107,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `SymmetricOperator::from_csr` does not check it).
 - The all-parameter contraction is `O(nnz)` per node (it was `O(n·n_params)`):
   an all-edges gradient now costs the same propagator actions as a single edge.
-
-### Added
-
-- `GeneratorSensitivity::accumulate_bilinear` (provided method; default = the
-  old per-parameter loop, so external implementors keep working) with `O(nnz)`
-  overrides for `EdgeWeightSensitivity`, `EntrySensitivity` and
-  `NodeTimescaleSensitivity`.
-- `graph_expmv_frechet_plan` / `FrechetPlan`: pure predictor of node count,
-  chain length, maximum degree and SpMV bound of one Fréchet channel (the
-  accuracy gates derive their thresholds from it).
-- `GraphKrylovChernoff::{lambda_max_bound, tol, path}` accessors.
-- Python: `tol` keyword (default `1e-12`) on `symmetric_op_expmv_frechet`.
-- Gates `G_FRECHET_QUAD_CONSTANT`, `G_FRECHET_LARGE_T_ORACLE`,
-  `G_FRECHET_BILINEAR_ONE_PASS`, `G_FRECHET_LARGE_T_NOSTD_DIGEST` (new
-  `graph_frechet_large_t` scenario in `semiflow-nostd-check`),
-  `G_PY_FRECHET_LARGE_T`, `G_FRECHET_SWEEP_EXACT_PROP` (in-crate: the library sweep
-  driven by exact eigen propagators, `ρ̄t`-floor-free bound) (RELEASE_BLOCKING) and `G_FRECHET_COST_LOG_NODES`
-  (ADVISORY); evidence kit `scripts/frechet_large_t_kit.py`.
 
 ## [0.14.0-beta] — 2026-10-05
 

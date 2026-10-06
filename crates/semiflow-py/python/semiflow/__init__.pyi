@@ -6438,6 +6438,45 @@ class SymmetricOperator:
         """
         ...
 
+    def with_diagonal(self, c: NDArray[np.float64]) -> "SymmetricOperator":
+        """``A + diag(c)`` (ADR-0202). ``c >= 0``, shape ``(n,)``.
+
+        Inserts structurally missing diagonal entries; column indices stay sorted.
+        Raises ``SemiflowError``: ``kind="OutOfDomain"`` for ``c_i < 0``, ``"NanInf"``
+        for a non-finite entry, ``"GridMismatch"`` for a wrong length.
+        """
+        ...
+
+    def to_csr(
+        self,
+    ) -> tuple[NDArray[np.int64], NDArray[np.int32], NDArray[np.float64]]:
+        """CSR arrays ``(indptr, indices, data)``; ``from_csr`` reproduces them."""
+        ...
+
+    def lumped_congruence(self, masses: NDArray[np.float64]) -> "SymmetricOperator":
+        """``M^{-1/2} A M^{-1/2}`` for ``M = diag(masses)`` (§55.3)."""
+        ...
+
+    def resolvent(
+        self,
+        lam: float = 0.0,
+        mass: NDArray[np.float64] | None = None,
+        solver: str = "auto",
+        precond: str = "ic0",
+        tol: float = 1e-12,
+        max_iter: int | None = None,
+    ) -> "SpdResolvent":
+        """Factor ``(lam*M + A)`` once for repeated solves (ADR-0202, §62).
+
+        ``lam >= 0``; ``lam = 0`` needs ``A`` positive definite. ``mass`` is the
+        diagonal of ``M > 0`` (default identity). ``solver`` is ``"auto"``,
+        ``"tridiagonal"`` or ``"pcg"``; ``precond`` is ``"ic0"`` or ``"jacobi"``
+        (PCG path only); ``tol`` is the PCG relative-residual target in ``(0, 1)``;
+        ``max_iter=None`` means ``2n + 16``. An unknown ``solver`` / ``precond`` string
+        raises ``SemiflowError(kind="OutOfDomain")``.
+        """
+        ...
+
     def n(self) -> int:
         """Operator dimension."""
         ...
@@ -6588,14 +6627,17 @@ def mass_lumped_evolve(
 # ---------------------------------------------------------------------------
 
 def phi_action(
-    op: SymmetricOperator,
+    op: SymmetricOperator | GeneralOperator,
     k: int,
     tau: float,
     v: NDArray[np.float64],
+    mass: NDArray[np.float64] | None = None,
 ) -> NDArray[np.float64]:
-    """Compute ``φ_k(−τA) v`` via augmented-matrix construction (§58.2, ADR-0189).
+    """Compute ``φ_k(τG) v`` with ``G = −M⁻¹A`` via the augmented matrix (§58.2, §62.3).
 
-    ``k = 0`` gives the matrix exponential ``e^{−τA} v``.
+    ``k = 0`` gives ``e^{−τ M⁻¹A} v``. ``op`` may be a :class:`SymmetricOperator` or a
+    (non-symmetric) :class:`GeneralOperator`; ``mass`` is the diagonal of ``M > 0``
+    (default identity). The cost does not depend on ``‖v‖`` (§62.4).
 
     Returns ndarray of shape ``(n,)``.
     """
@@ -6603,16 +6645,70 @@ def phi_action(
 
 
 def phi_action_batched(
-    op: SymmetricOperator,
+    op: SymmetricOperator | GeneralOperator,
     p: int,
     tau: float,
     v: NDArray[np.float64],
+    mass: NDArray[np.float64] | None = None,
 ) -> NDArray[np.float64]:
-    """Compute all ``φ_0, …, φ_p`` actions in one shot (§58.2).
+    """Compute all ``φ_0, …, φ_p`` actions in one shot (§58.2, §62.3).
 
     Returns ndarray of shape ``(p+1, n)``.
     """
     ...
+
+
+def phi_combination(
+    op: SymmetricOperator | GeneralOperator,
+    tau: float,
+    w: NDArray[np.float64],
+    mass: NDArray[np.float64] | None = None,
+) -> NDArray[np.float64]:
+    """``Σ_{k=0}^{p} τ^k φ_k(τG) w_k`` in one augmented sweep (ADR-0202, §62.4).
+
+    ``G = −M⁻¹A``; ``w`` has shape ``(p+1, n)`` with ``p <= 3``. With the recipes of
+    §62.5 this is exact affine evolution ``M u' = −A u + s`` (``w = [u₀, M⁻¹s]``),
+    ETD-RK2 and ETDRK4; the caller evaluates the nonlinearity (no callbacks).
+
+    Returns ndarray of shape ``(n,)``.
+    """
+    ...
+
+
+@final
+class SpdResolvent:
+    """Factor-once / solve-many resolvent ``x = (λM + A)⁻¹ b`` of an SPD operator (§62).
+
+    Build with :meth:`SymmetricOperator.resolvent`. Tridiagonal operators use an
+    exact ``O(n)`` LDLᵀ; others use PCG with IC(0) (or Jacobi).
+    """
+
+    @property
+    def method(self) -> str:
+        """``"tridiagonal"``, ``"pcg-ic0"`` or ``"pcg-jacobi"``."""
+        ...
+
+    @property
+    def n(self) -> int:
+        """Operator dimension."""
+        ...
+
+    def solve(self, b: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Solve ``(λM + A) x = b``; ``b`` and result have shape ``(n,)``."""
+        ...
+
+    def solve_batched(self, b: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Solve for ``nc`` right-hand sides; ``b`` and result have shape ``(n, nc)``."""
+        ...
+
+    def solve_info(
+        self, b: NDArray[np.float64]
+    ) -> tuple[NDArray[np.float64], int, float]:
+        """``(x, iterations, rel_residual)``; ``iterations`` is 0 on the direct path.
+
+        ``rel_residual`` is the true ``‖b − (λM+A)x‖₂/‖b‖₂``.
+        """
+        ...
 
 
 @final

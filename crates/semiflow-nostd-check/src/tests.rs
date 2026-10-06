@@ -119,6 +119,21 @@ fn octonic_heat() {
 }
 
 #[test]
+fn spdr_tridiag() {
+    run("spdr_tridiag");
+}
+
+#[test]
+fn spdr_pcg_ic0() {
+    run("spdr_pcg_ic0");
+}
+
+#[test]
+fn phi_combination() {
+    run("phi_combination");
+}
+
+#[test]
 fn run_all_passes_and_names_are_unique() {
     let mut seen = std::vec::Vec::new();
     let summary = run_all(|s, r| {

@@ -137,6 +137,7 @@ mod shift1d_py;
 mod shift1d_schedule_py;
 mod shift1d_vjp_py;
 mod smolyak_py;
+mod spd_resolvent_py;
 mod state;
 mod state_1d_chunked;
 mod structured;
@@ -256,6 +257,8 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     mass_op_py::register(py, m)?;
     phi_etdrk4_py::register(py, m)?;
     symmetric_op_py::register(py, m)?;
+    // ADR-0202: SPD resolvent / steady solve
+    spd_resolvent_py::register(py, m)?;
     // Issue #24: non-symmetric CSR operator action
     general_op_py::register(py, m)?;
     // Issue #25: coefficient-field gradients
