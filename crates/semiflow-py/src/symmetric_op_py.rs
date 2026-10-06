@@ -162,7 +162,9 @@ impl PySymmetricOperator {
 /// Entry-sensitivity VJP ``∂J/∂A_{ij}`` via Fréchet–Duhamel (§55.5, ADR-0186).
 ///
 /// Uses ``EntrySensitivity`` stencil within the ``graph_expmv_frechet``
-/// Gauss-Legendre 8-point quadrature.
+/// Duhamel quadrature: two-sided graded Gauss-Legendre mesh (math §63, ADR-0203),
+/// quadrature error independent of ``λ_max·t`` (the earlier single 8-point panel
+/// lost all digits beyond ``λ_max·t ≈ 30``).
 ///
 /// Parameters
 /// ----------
@@ -176,10 +178,13 @@ impl PySymmetricOperator {
 ///     Evolution time ``t > 0``.
 /// entries : list[tuple[int, int]]
 ///     ``(i, j)`` pairs with ``i ≤ j`` (one parameter per pair).
+/// tol : float, optional
+///     Chebyshev propagator tolerance, finite and ``> 0`` (default ``1e-12``);
+///     also the decay-skip threshold of §63.5.b.
 ///
 /// Returns ndarray[float64] of length ``len(entries)``.
 #[pyfunction]
-#[pyo3(name = "symmetric_op_expmv_frechet", signature = (op, u0, dj, *, t, entries))]
+#[pyo3(name = "symmetric_op_expmv_frechet", signature = (op, u0, dj, *, t, entries, tol = 1e-12))]
 pub fn symmetric_op_expmv_frechet_py<'py>(
     py: Python<'py>,
     op: &PySymmetricOperator,
@@ -187,11 +192,11 @@ pub fn symmetric_op_expmv_frechet_py<'py>(
     dj: PyReadonlyArray2<'py, f64>,
     t: f64,
     entries: Vec<(usize, usize)>,
+    tol: f64,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     catch_panic_py!({
-        if !t.is_finite() || t <= 0.0 {
-            return Err(new_pyerr("OutOfDomain", "t must be finite and positive"));
-        }
+        require_finite_positive("t", t)?;
+        require_finite_positive("tol", tol)?;
         let n = op.op.n();
         let [rows, n_cols] = validate_batched_shape(u0.shape(), n)?;
         let [r2, c2] = validate_batched_shape(dj.shape(), n)?;
@@ -204,7 +209,7 @@ pub fn symmetric_op_expmv_frechet_py<'py>(
         let dj_cn = gather_nc_to_cn(&dj.as_array(), rows, n_cols);
         let op_c = Arc::clone(&op.op);
         let result: Result<Vec<f64>, semiflow::SemiflowError> = py.detach(move || {
-            let gk = op_c.krylov(KrylovPath::Chebyshev, 1e-12)?;
+            let gk = op_c.krylov(KrylovPath::Chebyshev, tol)?;
             let sens = EntrySensitivity {
                 entries,
                 n_nodes: n,
@@ -231,6 +236,18 @@ pub fn symmetric_op_expmv_frechet_py<'py>(
 // ---------------------------------------------------------------------------
 // Helpers (private)
 // ---------------------------------------------------------------------------
+
+/// `OutOfDomain` unless `x` is finite and strictly positive.
+fn require_finite_positive(name: &str, x: f64) -> PyResult<()> {
+    if x.is_finite() && x > 0.0 {
+        Ok(())
+    } else {
+        Err(new_pyerr(
+            "OutOfDomain",
+            &format!("{name} must be finite and positive"),
+        ))
+    }
+}
 
 pub(crate) fn csr_row_ptr(arr: &PyReadonlyArray1<'_, i64>) -> PyResult<Vec<usize>> {
     let sl = arr

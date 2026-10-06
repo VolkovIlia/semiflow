@@ -347,7 +347,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
-      # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_DENSE + G_SYMOP_ENTRY_FRECHET, G_MASSK_*,
+      # G_GRAPH_EXPMV_*, G_GRAPH_FRECHET_FD, G_SYMOP_DENSE + G_SYMOP_ENTRY_FRECHET,
+      # G_FRECHET_LARGE_T_ORACLE + G_FRECHET_COST_LOG_NODES (ADR-0203), G_MASSK_*,
       # G_PHI_AUG_DENSE, G_ETDRK4_ORDER, G_ETD_ADJOINT_FD, G_MATRIX_2D/3D,
       # G_MATRIX_PADE_M5, G_CPLX_MATRIX, and G_MATRIX (m1..m4 slope ladder,
       # which properties.yaml records via the brace shorthand
@@ -368,6 +369,8 @@ jobs:
             --test graph_expmv_dense \
             --test graph_expmv_depth_flat \
             --test graph_frechet_fd \
+            --test g_frechet_large_t_oracle \
+            --test g_frechet_cost_log_nodes \
             --test sym_op_dense \
             --test sym_op_entry_frechet \
             --test massk_lumped \

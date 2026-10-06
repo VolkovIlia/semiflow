@@ -123,3 +123,104 @@ max error over parameters relative to `G_k`:
 
 The eigen oracle agrees with `scipy.linalg.expm_frechet` to `≤ 2e−15·G_k` for
 `λ_max t ≤ 1e2`.
+
+## Amendment 1 — gate decisions after implementation (2026-10-06)
+
+Gate-Change-Approved-By: ai-solutions-architect
+
+1. **Cost model corrected (`G_FRECHET_COST_LOG_NODES` (ii), ADVISORY).** The
+   "≈ 5·C(t)" estimate assumed every call costs SpMVs in proportion to its time
+   step. Below `Z_SAFE` a call costs its degree `m(z) ~ √z`, and the near-vector
+   sum missed the clipped last panel (`≤ 4H` per half, not `3H`). Derived
+   replacement (§63.6.c): `spmv_upper ≤ m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))`, which is
+   about `6·C(t)` asymptotically. That gives `B/C = 180 / 33 / 9.3 / 6.4` at
+   `ρ̄t = 1e3…1e6`; measured `25.1 / 9.8 / 5.6 / 5.4`. Part (ii) now asserts the
+   bound at all four points instead of a constant 6 from `1e3`. I did not restrict
+   the claim to `ρ̄t ≥ 1e5`: the bound holds everywhere, and at small `ρ̄t` it is
+   loose, not wrong.
+2. **Non-vacuity is per carrier, not pooled (`G_FRECHET_LARGE_T_ORACLE`,
+   `G_PY_FRECHET_LARGE_T`).** In the implementation, the 68 F2 entry parameters
+   certified every point. Meanwhile no edge parameter was informative from
+   `λt = 1e2` (F1) or at `1e6` (F2), so the edge path was untested exactly where
+   the SOFC application needs it. This is expected for connected graphs with
+   generic signals: edge gradients decay like `e^{−λ₂t}`. New fixture **F3**:
+   four 3-node clusters with stiff internal weights `W`, three unit-scale bridges,
+   and deterministic weights and signals (spec in properties.yaml). `W` is solved
+   per point so that `λ₂·t = 1` whenever `λ_max t ≥ 47.5`, i.e. slow inter-cluster
+   modes are resolved while intra-cluster modes are `λ_max t`-stiff. That is the
+   thermal-network regime. The oracle probe gives the 2nd-largest bridge
+   `|g|/N_k ≥ 2e−3` at every point, against `1e3·η ≈ 1e−4`. The carriers are
+   F3-edge (≥ 2 of 3 bridges informative per point) and F2-entry (≥ 1 per point).
+   The Python gate adds the F3 bridge entry pairs. F1-edge and F2-edge remain
+   accuracy-only. The thresholds `τ_k` and `τ_k^Q` are unchanged.
+
+## Amendment 2 — sharp algorithmic gate and the PSD precondition (2026-10-06)
+
+Gate-Change-Approved-By: ai-solutions-architect
+
+1. **New RELEASE_BLOCKING gate `G_FRECHET_SWEEP_EXACT_PROP` (§63.7.b).** Review
+   showed that the end-to-end bound τ_k barely discriminates at `λ_max t = 1e6`.
+   The measured error is about `2.9e−7·τ_k`, and the legacy rule exceeds τ_k by
+   only about 4×. The cause is the `(r+n)·u·ρ̄t·N_k` floor. That floor is genuine
+   for any method that applies `L` in floating point (SpMV cancellation on slow
+   vectors), so I keep it in the end-to-end gate and do not tighten it there.
+   Rejected alternatives:
+   - A tighter spectral estimate than Gershgorin gains at most 2×.
+   - A `G_k`-relative bound on informative parameters has no a-priori constant:
+     propagator errors are vector-norm errors and can project onto any `M_k`.
+   - Testing τ^Q against a test-side replica checks the test, not the library.
+
+   Adopted: make the library's own sweep generic over a crate-private propagator
+   and drive it, in an in-crate test, with exact-eigenvalue propagators that share
+   the oracle's Jacobi decomposition. The eigensolver's backward error then
+   cancels, and the bound becomes
+   `τ_k^E = (ε_Q + 2n²u)·G_k + (2(1+8(K+1))·κ_E + n_nodes + 4)·u·N_k`,
+   with `κ_E = 2n^{3/2} + n + 2`. At `ρ̄t = 1e6` this is about `5.6e−12·N_k`:
+   about 600× tighter than the floor term alone, and independent of `ρ̄t` apart
+   from `log(ρ̄t)`. It catches mesh, weight, step-length, role-swap and skip
+   regressions. The production path must stay bit-identical after the refactor.
+   No existing threshold changes.
+2. **PSD precondition documented (§63.1.d).** `SymmetricOperator::from_csr` checks
+   symmetry and `diag ≥ 0`, not positive semidefiniteness. The Chebyshev mapping,
+   the decay skip and Proposition 63.4 all assume `σ(L) ⊂ [0, ρ̄]`; for indefinite
+   input the results are unspecified and no error is raised. Weak diagonal
+   dominance is a sufficient `O(nnz)` check, and conductance networks with
+   non-negative leaks satisfy it. Turning it into a runtime check is a follow-up
+   API decision outside this ADR.
+
+## Amendment 3 — the decay skip gets a real test (2026-10-06)
+
+Gate-Change-Approved-By: ai-solutions-architect
+
+Amendment 2 claimed that `G_FRECHET_SWEEP_EXACT_PROP` covers the decay skip through
+a second run with `ε_skip = 1e−14`. That claim was false. Propagator call counts
+were identical with the skip on and off at every point. On the Laplacian fixtures
+the zero mode keeps the far vector alive, and F2 has `λ_min·t ≲ 2`. SOFC networks
+leak to ambient, so the skip will fire in production; it needs a test that
+discriminates.
+
+- **Why a uniform leak cannot test it (§63.7.c).** With `L + cI`, every Duhamel
+  term carries the same factor `e^{−ct}`. The skip fires only when the whole
+  gradient is already below `ε_skip·N_k`, so the dropped-part bound covers it,
+  but no broken skip can be detected that way. Discrimination needs non-uniform
+  decay between the two sources.
+- **Fixture S1.** F3 with `dj` projected onto the fast intra-cluster eigenspace;
+  `u0` keeps its slow content. The left half's far vector then decays and the
+  skip fires there. The right half carries the whole gradient, so a wrongly fired
+  skip loses `|g_k|`. A-priori onset: `λ_f(t − δ/ρ̄) ≥ ln(2/ε_skip)`, which with
+  `ε_skip = 1e−12` holds at `λ_max t ∈ {1e2, 1e4, 1e6}`.
+- **Bound.** The skip fires at most once per half (§63.5 returns on the first
+  success), so the dropped part is at most `(ε_skip + L_E κ_E u)·N_k/2` per half.
+  The assertion is `|g_k − g_k^ref| ≤ τ_k^E + ε_skip·N_k`; no new constant.
+- **Non-vacuity, two ways.**
+  - Call counts: strictly fewer calls with the skip on at the three onset points.
+  - Two negative tests must violate the bound at every `λ_max t ≥ 10`: a skip
+    that always fires, and an unscaled-norm skip on signals scaled by `1e−16`.
+- **Probe (numpy replica of the sweep).** Correct skip: err/bound `≤ 6.6e−4`.
+  Calls `322/178`, `674/354`, `1058/546` at `1e2/1e4/1e6`. Negative tests:
+  `3.1e3` to `2.9e9` × the bound.
+- The §63.7.b wording is corrected; part A of the gate now runs with the skip off
+  only.
+- Informational: the end-to-end legacy margin on F3-edge at `λ_max t = 1e6` is
+  only 1.026 against `τ^Q`. The sharp check at that point is part A of
+  `G_FRECHET_SWEEP_EXACT_PROP` (legacy err/`τ^E` = 4.1e2).

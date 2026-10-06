@@ -157,6 +157,10 @@ static SCENARIOS: &[Scenario] = &[
         run: graph::implicit_euler_pcg,
     },
     Scenario {
+        name: "graph_frechet_large_t",
+        run: graph::frechet_large_t,
+    },
+    Scenario {
         name: "subordinated_gamma",
         run: particles::subordinated_gamma,
     },

@@ -50,6 +50,20 @@ N_k := t · ‖M_k‖₂ · ‖d‖₂ · ‖v‖₂.                           
 `‖M_k‖₂ = 2` for an edge weight (`(e_i−e_j)(e_i−e_j)ᵀ`), `1` for a symmetric entry
 pair (`e_ie_jᵀ + e_je_iᵀ`) and for a diagonal entry (`e_ie_iᵀ`).
 
+**§63.1.d Precondition: `L` is PSD (NORMATIVE, Amendment 2).** The Chebyshev
+mapping (§54.3, `B = (2/ρ̄)L − I` on `[0, ρ̄]`), the contraction bound
+`‖e^{−τL}x‖ ≤ ‖x‖` behind the decay skip (§63.5.b), and Proposition 63.4 all
+assume `σ(L) ⊂ [0, ρ̄]`. `Laplacian` satisfies this by construction.
+`SymmetricOperator::from_csr` checks symmetry, finiteness and `diag ≥ 0` but does
+**not** check positive semidefiniteness: a symmetric matrix with non-negative
+diagonal and large off-diagonal entries can be indefinite. For such input the
+results of `graph_expmv`, `graph_expmv_frechet` and `symmetric_op_expmv_frechet` are
+unspecified and no error is raised. Sufficient, `O(nnz)`-checkable condition: weak
+diagonal dominance `L_ii ≥ Σ_{j≠i} |L_ij|` for every row (Gershgorin), which every
+conductance network with non-negative leaks satisfies. Callers with other operators
+must establish PSD themselves. (Adding a diagonal-dominance check, or an `Unsupported`
+error for operators that fail it, is a follow-up API decision, not part of ADR-0203.)
+
 ### §63.2 — Root cause of the pre-ADR-0203 error (NORMATIVE diagnosis)
 
 The pre-ADR-0203 rule was ONE 8-point Gauss–Legendre panel on `σ ∈ [0, t]`. Each
@@ -176,11 +190,26 @@ near vectors: 2 · Σ_{k=0..K} C(d_k)        (first node direct, then 7 steps)
 contractions: n_nodes = 16(K+1) calls of accumulate_bilinear.                  [§63.6.a]
 ```
 
-For the Chebyshev path with `ρ̄t ≫ 2·Z_SAFE` (substepped, `C(τ) ≈ c·ρ̄τ`), the
-geometric sum gives `Σ_k C(d_k) ≤ q/(q−1)·C(H) = 3·C(H)`, so the total is
-`≈ 5·C(t)` SpMVs, against `≈ 8·C(t)` for the old 16-action rule (which was also
-wrong). For `ρ̄t ≲ 10` the per-call minimum degree dominates and the new rule costs
-`~2×` the old one in calls (`n_nodes = 16` or `32` instead of 8 GL nodes × 2).
+**§63.6.c Bound (Amendment 1, replaces the "≈ 5·C(t)" estimate).** Propagated
+time per channel: far chains `2·(H + H) = 2t`; near vectors, per half,
+`Σ_{k=0..K} d_k ≤ d_K + d_{K−1}·q/(q−1) ≤ 4H` (the last panel is clipped, so
+`d_{K−1}` can be close to `H`), i.e. `≤ 4t` for both halves. Total `≤ 6t`, so
+`Σ z_i ≤ 3·ρ̄t` over all calls (`z = ρ̄τ/2`). On the Chebyshev path a call costs
+`C(τ) = ⌈z/Z_SAFE⌉·m(z_sub)` with `z_sub ≤ Z_SAFE` and `m(·)` nondecreasing
+(`e^{−z}I_k(z)` increases in `z`), hence `C(τ) ≤ (z/Z_SAFE + 1)·m_Z`,
+`m_Z := chebyshev_degree(Z_SAFE, tol)`. Summing over `N_calls = 2 + 32(K+1)` calls:
+
+```text
+spmv_upper ≤ B(ρ̄t) := m_Z · ( 3·ρ̄t / Z_SAFE + 2 + 32·(K+1) ).                 [§63.6.c]
+```
+
+Relative to one forward action `C(t) ≈ (ρ̄t/(2Z_SAFE))·m_Z` this is
+`6 + (2 + 32(K+1))·2Z_SAFE/ρ̄t`: the asymptote is 6 (not 5), and the per-call
+term dominates until `ρ̄t ≈ 1e5`. `B/C(t) = 179.9 / 33.0 / 9.3 / 6.4` at
+`ρ̄t = 1e3 / 1e4 / 1e5 / 1e6` (`tol = 1e−12`, `m_Z = 101`); the implementation
+measures `25.1 / 9.8 / 5.6 / 5.4` (bound loose at small `ρ̄t` because short calls
+cost `m(z) ≪ m_Z`). The old 16-action rule cost `≈ 8·C(t)` and was wrong.
+For `ρ̄t ≲ 10` the new rule makes 34 calls instead of 16.
 The node count is `O(log(ρ̄t))`: `ρ̄t ∈ {1, 10, 1e2, 1e4, 1e6} → K ∈ {0, 3, 8, 20, 31}`,
 `n_nodes ∈ {16, 64, 144, 336, 512}`.
 
@@ -237,6 +266,91 @@ Terms, each derived, none fitted:
 `N_chain`, `m_max` and `n_nodes` are returned by the pure predictor
 `graph_expmv_frechet_plan` (§63.8); the gate does not measure them.
 
+**§63.7.b Sharp algorithmic check with exact propagators (NORMATIVE, Amendment 2).**
+Term 5 of §63.7.a, the inherent `(r+n)·u·ρ̄t` floor, dominates `τ_k` at large
+`ρ̄t`. Combined with `N_k ≫ G_k` for most parameters, this lets the end-to-end
+bound accept algorithmic regressions (mesh, weights, sweep step lengths, role
+swap, skip) of several orders of magnitude at `λ_max t = 1e6`. The floor is genuine
+for any method that applies `L` in floating point (the SpMV `(Lx)_i = L_ii x_i − Σ…`
+cancels on slow vectors with error `u·L_ii`), so it cannot be removed from the
+end-to-end gate. It can be removed from a second check that runs the library's own
+sweep with propagators that apply exact eigenvalues.
+
+Let the sweep of §63.5 be generic over a crate-private propagator
+`x ↦ P(τ)x`. Production uses `GraphKrylovChernoff`. The check uses
+`P_E(τ)x = Ṽ(e^{−τλ̃} ⊙ (Ṽᵀx))`, where `(λ̃, Ṽ)` comes from the same Jacobi
+decomposition as the oracle. Oracle and propagator then describe the same matrix
+`Ṽ diag(λ̃) Ṽᵀ`, so the eigensolver's backward error cancels: there is no `ρ̄t`
+term. Per call, `‖P_E(τ)x − Ṽ e^{−τΛ̃} Ṽᵀ x‖₂ ≤ κ_E·u·‖x‖₂` with
+`κ_E = 2n^{3/2} + n + 2`. The terms are: two dense products, each `≤ γ_n‖|Ṽ|‖₂ ≤ n·√n·u`;
+loss of orthogonality of `Ṽ`, `≤ n·u`; and `exp` of an argument carried with relative
+error `u`, `≤ (1 + max_z z e^{−z})u ≤ 2u`. Chains restart at every panel (near) or
+run once (far), so the longest chain has `L_E = 1 + 8(K+1)` calls. Contraction
+rounding is at most `(n_nodes + 4)·u` relative to `Σ w·|bilinear| ≤ N_k`. Hence
+
+```text
+|g_k^{sweep,P_E} − g_k^ref| ≤ τ_k^E := (ε_Q + 2n²u)·G_k
+                                     + ( 2·L_E·κ_E + n_nodes + 4 )·u·N_k,
+evaluated with the decay skip OFF (predicate never fires).                         [§63.7.b]
+```
+
+At `n = 12` (`κ_E = 97.1`), `ρ̄t = 1e6` (`K = 31`): `(2·257·97.1 + 516)·u ≈ 5.6e−12`. This is
+independent of `ρ̄t` up to `log(ρ̄t)`, and about 600× tighter than the floor term
+`(r+n)·u·ρ̄t ≈ 3.5e−9` alone. The gate requires the legacy one-panel rule, driven by the
+same `P_E`, to violate `τ_k^E` at every `λ_max t ≥ 10` on every carrier. Under
+§63.7.a the legacy rule exceeds the full `τ_k` at `1e6` by only about 4× (reviewer
+measurement), so this second check is what catches mesh, weight, step-length and
+role-swap regressions that §63.7.a cannot see. It does not test the Chebyshev
+propagator; §63.7.a and the existing `G_GRAPH_EXPMV_*` gates do.
+
+*Correction (Amendment 3).* Amendment 2 also claimed this check covers the decay
+skip, via a second run with `ε_skip = tol`. That claim was false. On F1 and F3
+(Laplacians) the zero mode keeps `‖far‖` above any `ε_skip`, and on F2
+`λ_min·t ≲ 2`. Propagator call counts were identical with the skip on and off at
+every point, so the skip path never ran. §63.7.c replaces it.
+
+**§63.7.c Decay-skip check (NORMATIVE, Amendment 3).**
+
+*Dropped part.* §63.5 tests the skip once per panel and returns on the first
+success, so it fires at most once per half and per channel. At the firing check,
+the computed far vector satisfies `‖far‖ ≤ ε_skip‖far_src‖`. With propagator
+error, the true far vector satisfies `‖far‖ ≤ (ε_skip + L_E κ_E u)‖far_src‖`.
+Norms do not increase along the chain (`L` PSD), every near vector satisfies
+`‖near‖ ≤ ‖near_src‖`, and the dropped weights sum to at most `H`. So the dropped
+part of `g_k` is at most `(ε_skip + L_E κ_E u)·N_k/2` per half. The same bound
+holds for an implementation that keeps sweeping and only skips contractions,
+because the dropped weight still totals `≤ H`. Over both halves:
+
+```text
+|g_k^{sweep,P_E,skip} − g_k^ref| ≤ τ_k^E + ε_skip·N_k                            [§63.7.c]
+```
+
+(`L_E κ_E u·N_k` is already inside `τ_k^E`.) No new constant is needed when the
+skip fires: by construction it can fire only once per half. `N_k` is summed over
+channels when `n_cols > 1`.
+
+*Why a uniform leak cannot test it.* For `L' = L + cI`, `e^{−τL'} = e^{−cτ}e^{−τL}`.
+The Duhamel integrand then carries the constant factor
+`e^{−c(t−σ)}·e^{−cσ} = e^{−ct}`, so `g' = e^{−ct}g`. The skip fires only when
+`e^{−ct} ≲ ε_skip`, and then the whole gradient is already `≲ ε_skip·N_k`.
+Accuracy under a uniform leak (the SOFC ambient leak) is covered by the bound,
+but no fixture of that kind can discriminate a broken skip. A discriminating
+fixture needs the decay to be non-uniform between the two sources.
+
+*Onset.* Let `dj` lie in the span of eigenvectors with `λ ≥ λ_f`, with residual
+slow content `ρ_res·‖dj‖` (projection rounding, `ρ_res ≤ 2n^{3/2}u`). On the left
+half the far vector is `a = e^{−DL}dj` at distance `D ∈ [H, t − r_min]`, so
+`‖a‖ ≤ (e^{−λ_f D} + ρ_res)‖dj‖`. Consequences:
+- The skip is guaranteed to fire by the last check of the left half if
+  `λ_f·(t − δ/ρ̄) ≥ ln(2/ε_skip)` and `ρ_res ≤ ε_skip/2`.
+- It fires at the first check if `λ_f·t/2 ≥ ln(2/ε_skip)`.
+- On the right half, the far vector `b = e^{−DL}u0` keeps its slow content, so the
+  right half does not skip.
+
+The right half carries the whole gradient (the boundary layer at `σ → t`), so a
+skip that wrongly fires there loses `|g_k|`. That is the discrimination.
+
+
 ### §63.8 — Public surface (NORMATIVE)
 
 ```text
@@ -262,11 +376,12 @@ the backward-Euler propagator to `O(Δt)`. Documented, not gated.
 | Gate | Definition | Threshold | Oracle |
 |------|-----------|-----------|--------|
 | `G_FRECHET_QUAD_CONSTANT` | §63.3 rule on `e^{−|μ|σ}`, `e^{−|μ|(t−σ)}`, `|μ|t ∈ logspace(−3, 8, 600)`, `ρ̄ ∈ {|μ|, 2|μ|}` | rel-err `≤ ε_Q = 1.1e−14` | closed form `−expm1(−|μ|t)/|μ|` |
-| `G_FRECHET_LARGE_T_ORACLE` | `graph_expmv_frechet` (Edge, Entry incl. diagonal) on two `n=12` fixtures, `λ_max t ∈ {1, 10, 1e2, 1e4, 1e6}` | `|g_k − g_k^ref| ≤ τ_k` (§63.7.a) for every `k`; legacy-rule replica (exact propagators) must VIOLATE `τ_k^Q = (ε_Q+2n²u)·G_k + (r+n)·u·ρ̄t·N_k` for some `k` at every `λ_max t ≥ 10`; `≥ 1` informative `k` per point | Jacobi eigen + §63.1.b; scipy-free |
+| `G_FRECHET_LARGE_T_ORACLE` | `graph_expmv_frechet` (Edge, Entry incl. diagonal) on three `n=12` fixtures (F3 clustered edge carrier, Amendment 1), `λ_max t ∈ {1, 10, 1e2, 1e4, 1e6}` | `|g_k − g_k^ref| ≤ τ_k` (§63.7.a) for every `k`; legacy-rule replica (exact propagators) must VIOLATE `τ_k^Q = (ε_Q+2n²u)·G_k + (r+n)·u·ρ̄t·N_k` for some `k` at every `λ_max t ≥ 10`, per carrier; informative `k` per point PER CARRIER (F3-edge ≥ 2/3 bridges, F2-entry ≥ 1), never pooled | Jacobi eigen + §63.1.b; scipy-free |
 | `G_FRECHET_BILINEAR_ONE_PASS` | counting wrapper: `accumulate_bilinear` called exactly `n_nodes·n_cols` times, `apply_param_deriv` zero times for overriding impls; override vs default path | `|Δg_k| ≤ 8u·N_k` | default trait path |
 | `G_FRECHET_LARGE_T_NOSTD_DIGEST` | new `semiflow-nostd-check` scenario `graph_frechet_large_t` | digest identical in every configuration; FD sanity `≤ 1e−6` | committed digest (ADR-0200) |
-| `G_PY_FRECHET_LARGE_T` | `symmetric_op_expmv_frechet` on the stiff fixture, same `λ_max t` grid, `tol=1e−12` | `τ_k` of §63.7.a; scipy `expm_frechet` agrees with the eigen oracle to `1e−12·G_k` for `λ_max t ≤ 1e2` | numpy `eigh` + §63.1.b |
-| `G_FRECHET_COST_LOG_NODES` (ADVISORY) | `n_nodes(ρ̄t)` formula; `n_nodes(1e6)/n_nodes(1e2) ≤ 4`; all-edges vs one-edge wall time on `N=2000` | ratio `≤ 2` | instrumentation |
+| `G_PY_FRECHET_LARGE_T` | `symmetric_op_expmv_frechet` on F2 and F3 (bridge pairs ≥ 2/3 informative), same `λ_max t` grid, `tol=1e−12` | `τ_k` of §63.7.a; scipy `expm_frechet` agrees with the eigen oracle to `1e−12·G_k` for `λ_max t ≤ 1e2` | numpy `eigh` + §63.1.b |
+| `G_FRECHET_SWEEP_EXACT_PROP` (Amendments 2, 3) | library sweep (crate-private, generic over propagator and skip predicate) driven by the exact-eigenvalue propagator `P_E`; part A: F1/F2/F3 × `λ_max t` grid, skip off; part B: skip fixture S1 (F3 with `dj` projected onto the fast eigenspace), `ε_skip = 1e−12` | A: `≤ τ_k^E` (§63.7.b), legacy rule violates `τ_k^E` at every `λ_max t ≥ 10` per carrier; B: `≤ τ_k^E + ε_skip N_k` (§63.7.c), fewer calls with skip on at `λ_max t ≥ 1e2`, broken skips (always-fire; absolute norm on signals ×1e−16) violate it | same Jacobi decomposition as `P_E` |
+| `G_FRECHET_COST_LOG_NODES` (ADVISORY) | `n_nodes(ρ̄t)` formula; `n_nodes(1e6)/n_nodes(1e2) ≤ 4`; `spmv_upper ≤ B(ρ̄t)` (§63.6.c); all-edges vs one-edge wall time on `N=2000` | ratio `≤ 2` | instrumentation |
 
 Unchanged and still RELEASE_BLOCKING: `G_GRAPH_FRECHET_FD` (`≤ 1e−7`),
 `tests/graph_frechet_fd.rs::g_graph_frechet_fd_triangle` (`≤ 1e−7`),

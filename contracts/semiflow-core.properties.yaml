@@ -10338,7 +10338,7 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (probe sup = 4.9e-16 ≤ 1.1e-14)"
+    pass_status: "PASS (2026-10-06: sup rel-err = 7.67e-16 ≤ 1.1e-14 over |μ|t∈logspace(-3,8,600), ρ̄∈{|μ|,2|μ|}; legacy one-panel rule 1.61e-8 at |μ|t=10; plan n_nodes = {16,64,144,336,512})"
     rationale: |
       G_FRECHET_QUAD_CONSTANT (RELEASE_BLOCKING, ADR-0203 §63.3–§63.4): the
       two-sided geometric mesh (q = 3/2, δ = 2, GL8 per panel, nodes carried as
@@ -10363,7 +10363,16 @@ implementation_notes:
     type: GRADIENT_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (numpy probe of the design: ≤ 1.4e-14·G_k at every point)"
+    pass_status: "PASS (2026-10-06, Amendment 1 re-run): max |g−g_ref|/τ_k per λ_max·t = 1,10,1e2,1e4,1e6: 1.5e-3 / 9.1e-5 / 1.3e-5 / 8.6e-6 / 3.6e-6 over F1-edge, F2-edge, F2-entry (68), F3-edge (15; W = 1, 1, 3.601, 428.1, 4.288e4). Per-carrier non-vacuity: F3-edge 3/3 bridges informative at every point (needs ≥ 2); F2-entry 68/68 informative; legacy GL8 (exact propagators) violates τ^Q per carrier at every λt ≥ 10 (F3-edge 14/15/15/1 params at 10/1e2/1e4/1e6, F2-entry 67/68/68/67); legacy err/τ (full τ) F3-edge 0.73 / 1.8e4 / 67 / 0.035, F2-entry 6.7 / 1.2e6 / 1.4e4 / 2.8 (informational). F1-edge informative = 0 from λt=1e2 and F2-edge = 0 at 1e6 (accuracy-only, decay reported). Max rel error vs G_k over informative k: 5.4e-11 (F3 at 1e6), 1.2e-11 (F2-entry at 1e6). Pre-fix kernel failed 226 violations (F1/F2), max err/τ = 1.2e6. Informational (Amendment 3): F3-edge legacy err/τ^Q margin at λt=1e6 is only 1.026 (one parameter). This end-to-end check barely discriminates there; the sharp discrimination at large λt is G_FRECHET_SWEEP_EXACT_PROP (legacy err/τ^E = 4.1e2 on F3-edge at 1e6)"
+    gate_change: |
+      ADR-0203 Amendment 1 (2026-10-06). The engineer's aggregation of
+      non-vacuity across the whole gate (any fixture, any sensitivity) is
+      REJECTED: it let the 68 F2 entry parameters certify points where no edge
+      parameter was informative, so EdgeWeightSensitivity was effectively unchecked
+      at λ_max·t ≥ 1e2. Edge gradients at large λ_max·t are the SOFC use case.
+      Added fixture F3 and per-carrier non-vacuity (below). Thresholds τ_k and
+      τ_k^Q unchanged.
+      Gate-Change-Approved-By: ai-solutions-architect
     rationale: |
       G_FRECHET_LARGE_T_ORACLE (RELEASE_BLOCKING, ADR-0203 §63.7): graph_expmv_frechet
       vs a Daleckii–Krein eigen oracle (cyclic Jacobi, §63.1.b cancellation-free
@@ -10374,23 +10383,149 @@ implementation_notes:
              one bridge of weight 1, a Robin leak 0.3 on node 0 (SPD), W chosen so
              λ_max/λ_min ∈ [5e5, 2e6] (asserted), i.e. slow modes have
              λ_min·t = O(1) at the λ_max·t = 1e6 point.
-      Sensitivities: EdgeWeightSensitivity (all edges) on F1 and F2 via
+        (F3, Amendment 1) clustered network, the edge carrier: n = 12, four
+             3-node triangle clusters {a,b,d} = {3c, 3c+1, 3c+2}, c = 0..3, edges
+             (a,b),(b,d),(a,d) indexed e = 0,1,2 with weight W·(0.5 + ((7·(3c+e))
+             mod 11)/10); three bridges (3c+2, 3c+3), c = 0..2, weights
+             {0.6, 1.0, 1.4} (deterministic, no RNG, identical in Rust and Python);
+             pure combinatorial Laplacian (Graph + Laplacian route). W is chosen PER
+             POINT: let R1 = λ_max/λ_2 at W = 1 (= 47.5); if target ≥ R1, W ≥ 1
+             solves λ_max/λ_2 = target (bisection on log W, |ratio/target − 1|
+             ≤ 1e-3, asserted) and t = 1/λ_2; else W = 1 and t = target/λ_max.
+             So λ_2·t = 1 at λ_max·t ∈ {1e2, 1e4, 1e6}: the window resolves the
+             slow inter-cluster modes while the intra-cluster modes are
+             λ_max·t-stiff — the SOFC regime. Signals concentrate on slow modes:
+             with cluster(i) = ⌊i/3⌋: u0_i = cluster(i) − 1.5 + 0.1·sin(1.7i + 0.3),
+             dj_i = (−1)^{cluster(i)} + 0.1·cos(2.3i). EdgeWeightSensitivity on all
+             15 edges, Chebyshev tol = 1e-14. Probe (oracle only, 2026-10-06):
+             W = {1, 1, 3.60, 428, 4.29e4}; |g_k|/N_k on the three bridges =
+             {0.058, 0.046, 0.045} at 1, {0.012, 7e-4, 2.0e-3} at 1e2,
+             {0.016, 9e-4, 2.7e-3} at 1e4 and 1e6; intra edges ≤ 1.2e-8 at ≥ 1e4.
+      Sensitivities: EdgeWeightSensitivity (all edges) on F1, F2 and F3 via
       GraphKrylovChernoff (Chebyshev, tol = 1e-14); EntrySensitivity on F2 via
       SymmetricOperator (all off-diagonal pairs + two diagonal entries).
       Bound per parameter k:
         |g_k - g_k^ref| ≤ τ_k = (ε_Q + 2n²u)·G_k + η·N_k,
         η = 2·N_chain·(tol + (r+3)·m_max²·u) + tol + (r+n)·u·ρ̄t,
       with G_k, N_k from §63.1.c, u = 2^-53, r = max row nnz, and N_chain, m_max
-      taken from graph_expmv_frechet_plan (not measured). Non-vacuity, per point:
-      (a) at least one k with |g_k^ref| ≥ 1e3·τ_k (informative parameter);
-      (b) at every λ_max·t ≥ 10 the legacy one-panel GL8 rule, evaluated with the
+      taken from graph_expmv_frechet_plan (not measured). The accuracy bound
+      applies to every k of every (fixture, sensitivity) pair. Non-vacuity is
+      evaluated PER CARRIER and per point (Amendment 1), never pooled:
+      carriers are F3-edge and F2-entry. F1-edge and F2-edge are accuracy-only:
+      on a connected graph with generic signals every edge gradient decays like
+      e^{−λ_2 t} once λ_2·t ≫ 1, so their vacuity at large λ_max·t is expected and
+      is reported, not asserted.
+      (a) F3-edge: at least 2 of the 3 bridges have |g_k^ref| ≥ 1e3·τ_k at every
+          point; F2-entry: at least one k with |g_k^ref| ≥ 1e3·τ_k at every point
+          (2nd-largest bridge |g|/N_k ≥ 2.0e-3 at every point vs 1e3·η ≈ 1e-4 at
+          1e6 with tol = 1e-14: margin ≈ 20×);
+      (b) for EACH carrier, at every λ_max·t ≥ 10 the legacy one-panel GL8 rule, evaluated with the
           oracle's exact propagators inside the test, violates the propagator-free
           part τ_k^Q = (ε_Q + 2n²u)·G_k + (r+n)·u·ρ̄t·N_k for at least one k (the
           gate rejects the defect it is written for; exact propagators carry no
           tol / Chebyshev-rounding term, so η's other parts do not apply to it).
-    gate: "|g_k - g_k^ref| <= τ_k (§63.7.a) for all k, fixtures, sensitivities and λ_max·t points; non-vacuity (a), (b)"
+    gate: "|g_k - g_k^ref| <= τ_k (§63.7.a) for all k, fixtures (F1, F2, F3), sensitivities and λ_max·t points; non-vacuity (a), (b) per carrier (F3-edge, F2-entry), not pooled"
     test_file: "tests/g_frechet_large_t_oracle.rs::g_frechet_large_t_oracle"
     feature_gate: "slow-tests"
+    pattern: A
+    introduced_in: frechet-large-lambda-t
+    authority: ADR-0203
+
+  - name: G_FRECHET_SWEEP_EXACT_PROP
+    type: GRADIENT_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (2026-10-06, Amendment 3). Part A (skip off): max |g−g_ref|/τ_k^E per λ_max·t = 1,10,1e2,1e4,1e6: 1.4e-2 / 6.7e-3 / 2.5e-3 / 7.7e-4 / 1.9e-5 (F2-entry max; F3-edge 2.3e-3 / 4.3e-4 / 5.3e-4 / 3.4e-4 / 1.4e-4); legacy rule driven by P_E violates τ_k^E on every carrier at every λt ≥ 10 (legacy err/τ^E F3-edge 19.5 / 2.8e6 / 6.4e4 / 4.1e2, F2-entry 159 / 1.6e8 / 1.3e7 / 2.9e4); bridges 3/3 and F2-entry 68/68 informative. Part B (S1, ε_skip = 1e-12; the earlier ε_skip=1e-14 run was vacuous and is removed): B1 max err/(τ_k^E + ε_skip·N_k) = 5.5e-4 / 1.9e-4 / 6.2e-5 / 5.5e-7 / 4.3e-8 (also ≤ 5.2e-4 / 1.9e-4 / 6.2e-5 / 5.4e-7 / 2.2e-8 with signals ×1e-16); B2 propagator calls OFF/ON = 34/34, 130/130, 322/178, 674/354, 1058/546 (strictly fewer at the three onset points λt = 1e2, 1e4, 1e6; equal and bit-identical gradients elsewhere); onset premise residual ‖(I−Π_f)dj‖/‖dj‖ ≤ 8.3e-16 ≤ ε_skip/2; λ_f·t = 0.16 / 1.6 / 46.6 / 4.7e3 / 4.7e5; B3 always-fire N1 err/bound = 5.5e-4 (λt=1, one panel per half, nothing to drop) / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3; B4 unscaled-norm N2 on signals ×1e-16: 5.2e-4 / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3 (violated for every λt ≥ 10). Calls and N1/N2 ratios equal the architect's numpy probe; the correct-skip ratios differ from the probe (6.6e-4 / 2.1e-4 / 5.2e-5 / 1.5e-7 / 1.8e-7) by rounding noise of the eigendecomposition only, all ≪ 1. Production graph_expmv_frechet bit-identical after both refactors: FNV-1a 0x6d87193c3a066bb0 (F3, W=3.6013, t=6.8096, Edge+Entry); nostd digest 0x2f315b1c9b43770b unchanged"
+    gate_change: |
+      ADR-0203 Amendment 2 (2026-10-06): new secondary gate. Reviewer finding:
+      at λ_max·t = 1e6 the end-to-end bound τ_k (§63.7.a) is dominated by the
+      genuine (r+n)·u·ρ̄t·N_k floor; measured error ≈ 2.9e-7·τ_k, and the legacy
+      rule exceeds τ_k by only ≈ 4×, so sweep regressions of ~1e5 would pass.
+      This gate removes the floor by driving the library's OWN sweep with
+      exact-eigenvalue propagators. No existing threshold changes.
+      Gate-Change-Approved-By: ai-solutions-architect
+      ADR-0203 Amendment 3 (2026-10-06): the "ε_skip = tol" run of Amendment 2
+      was vacuous (reviewer: identical propagator call counts with skip on/off
+      at every fixture and point; F1/F3 zero mode, F2 λ_min·t ≲ 2). The skip run
+      is replaced by part B (skip fixture S1, call-count non-vacuity, accuracy
+      bound τ_k^E + ε_skip·N_k derived in §63.7.c, two negative tests). Part A
+      is unchanged except that it runs with the skip OFF only.
+      Gate-Change-Approved-By: ai-solutions-architect
+    rationale: |
+      G_FRECHET_SWEEP_EXACT_PROP (RELEASE_BLOCKING, ADR-0203 Amendment 2, §63.7.b).
+      Structure (src change, engineer): the §63.5 half-sweep in graph_frechet.rs
+      becomes generic over a crate-private trait, e.g.
+        pub(crate) trait FrechetPropagator<F> {
+            fn propagate(&self, tau: F, src: &[F], dst: &mut [F],
+                         scratch: &mut ScratchPool<F>) -> Result<(), SemiflowError>;
+        }
+      plus an explicit ε_skip argument. The production impl wraps
+      GraphKrylovChernoff::apply_into and passes ε_skip = gk.tol(). The public
+      graph_expmv_frechet signature and its results are unchanged (bit-identical
+      to the pre-refactor implementation: assert in the same test on one fixture).
+      Test (in-crate, src/graph_frechet_tests.rs, cfg(test), because the trait is
+      pub(crate)): impl P_E(τ)x = Ṽ (exp(−τλ̃) ⊙ (Ṽᵀ x)) with (λ̃, Ṽ) from the
+      SAME cyclic-Jacobi decomposition the oracle uses (copy the helper from
+      tests/frechet_oracle_common or move it to a cfg(test) crate module).
+      Fixtures F1, F2, F3 (Amendment 1 definitions), λ_max·t ∈ {1, 10, 1e2, 1e4, 1e6},
+      EdgeWeightSensitivity on all edges (F1, F2, F3) and EntrySensitivity on F2
+      (68 params); one channel; ρ̄ = the fixture's Gershgorin bound (as production).
+      Part A runs with the skip predicate OFF (never fires).
+      Bound for every k:
+        |g_k − g_k^ref| ≤ τ_k^E = (ε_Q + 2n²u)·G_k
+                                 + (2·L_E·κ_E + n_nodes + 4)·u·N_k,
+        κ_E = 2n^{3/2} + n + 2 (= 97.1 at n = 12), L_E = 1 + 8(K+1),
+        n_nodes, K from graph_expmv_frechet_plan, ε_Q = 1.1e-14, u = 2^-53.
+      τ_k^E ≈ 5.6e-12·N_k at ρ̄t = 1e6, independent of ρ̄t up to log(ρ̄t): no
+      ρ̄t floor because P_E and the oracle share (λ̃, Ṽ) (derivation §63.7.b).
+      Non-vacuity, per carrier (F3-edge, F2-entry) and per point: (a) as in
+      G_FRECHET_LARGE_T_ORACLE; (b) the legacy one-panel GL8 rule driven by the
+      same P_E violates τ_k^E for at least one k at every λ_max·t ≥ 10.
+      Report max |g_k − g_k^ref|/τ_k^E per point in pass_status.
+      PART B — decay skip (Amendment 3, §63.7.c). The sweep's skip test becomes a
+      crate-private predicate argument (e.g. generic `S: Fn(far_norm: F,
+      far_src_norm: F) -> bool`, evaluated after each panel exactly as §63.5,
+      returning from the half on true). Production passes
+      |f, s| f <= gk.tol() * s. Production stays bit-identical (re-check the
+      Amendment 2 FNV digest).
+      Fixture S1 (deterministic): F3 with its per-point W and t (Amendment 1),
+      u0 as F3, and dj = Π_f(raw), where raw_i = (−1)^i + 0.1·cos(2.3i) and Π_f is
+      the orthogonal projector Ṽ_f Ṽ_fᵀ onto the eigenvectors of P_E's
+      decomposition with λ̃ ≥ √(λ̃_2·λ̃_max) (fast intra-cluster modes).
+      EdgeWeightSensitivity on all 15 edges, one channel, ε_skip = 1e-12,
+      λ_max·t ∈ {1, 10, 1e2, 1e4, 1e6}. λ_f·t (λ_f = smallest projected
+      eigenvalue) = 0.16, 1.6, 46.6, 4.7e3, 4.7e5.
+      Assertions per point:
+      (B1) accuracy, skip ON: |g_k − g_k^ref| ≤ τ_k^E + ε_skip·N_k for every k
+           (§63.7.c: the skip fires at most once per half, and the dropped part is
+           ≤ (ε_skip + L_E κ_E u)·N_k/2 per half; no new constant);
+      (B2) call-count non-vacuity: count propagator calls with skip OFF and ON.
+           At every point with λ_f·(t − δ/ρ̄) ≥ ln(2/ε_skip) = 28.3 (the
+           a-priori onset of §63.7.c, i.e. λ_max·t ∈ {1e2, 1e4, 1e6}), require
+           calls_ON < calls_OFF. At the other points, require calls_ON ≤ calls_OFF,
+           and if they are equal, bit-identical gradients. Also assert the
+           projection residual ‖(I − Π_f)dj‖/‖dj‖ ≤ ε_skip/2 (onset premise);
+      (B3) negative test N1 ("always fires": predicate |_, _| true). At every
+           λ_max·t ≥ 10, B1 must be VIOLATED for at least one k (it drops the
+           inner panels of the right half, which carry the boundary-layer
+           gradient);
+      (B4) negative test N2 ("unscaled norm": predicate |f, _| f <= ε_skip) on
+           S1 with u0 and dj both multiplied by 1e-16 (B1 bound and oracle scaled
+           consistently). At every λ_max·t ≥ 10, B1 must be VIOLATED for at least
+           one k. With unit-scale signals N2 is indistinguishable from the correct
+           rule, which is why the scaled run is required.
+      Probe (numpy replica of the same sweep, 2026-10-06), max err/bound per
+      λ_max·t = 1/10/1e2/1e4/1e6: correct 6.6e-4 / 2.1e-4 / 5.2e-5 / 1.5e-7 /
+      1.8e-7; calls OFF/ON 34/34, 130/130, 322/178, 674/354, 1058/546;
+      N1 6.6e-4 (λt=1: one panel per half, nothing to drop) / 2.9e9 / 6.8e7 /
+      4.5e5 / 3.1e3; N2 (×1e-16) 6.6e-4 / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3.
+      A uniform diagonal leak (L + cI, the SOFC ambient leak) makes the skip
+      fire, but g scales as e^{−ct}, so it fires only when |g| ≲ ε_skip·N_k
+      already. It is covered by B1's bound but cannot discriminate (§63.7.c), so
+      S1 uses non-uniform decay between the two sources instead.
+    gate: "A: |g_k - g_k^ref| <= τ_k^E (§63.7.b), skip off, all k, F1/F2/F3, all points; production bit-identical; non-vacuity (a), (b) per carrier. B (S1, ε_skip = 1e-12): B1 |g_k - g_k^ref| <= τ_k^E + ε_skip·N_k; B2 calls_ON < calls_OFF at λ_max·t ∈ {1e2,1e4,1e6}; B3, B4 negative tests violate B1 at every λ_max·t >= 10"
+    test_file: "src/graph_frechet_tests.rs::g_frechet_sweep_exact_prop"
+    feature_gate: none
     pattern: A
     introduced_in: frechet-large-lambda-t
     authority: ADR-0203
@@ -10399,7 +10534,7 @@ implementation_notes:
     type: STRUCTURAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING"
+    pass_status: "PASS (2026-10-06: accumulate_bilinear calls = n_nodes·n_cols = 96, apply_param_deriv calls = 0 for Edge/Entry/NodeTimescale; max |g_override − g_default|/(u·N_k) = 0.005 / 0.000 / 0.014 ≤ 8)"
     rationale: |
       G_FRECHET_BILINEAR_ONE_PASS (RELEASE_BLOCKING, ADR-0203 §63.6): the
       all-parameters contraction is one O(nnz) pass per node. A test-local
@@ -10422,7 +10557,7 @@ implementation_notes:
     type: BIT_IDENTITY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (digest recorded from the host no_std run, ADR-0200 procedure)"
+    pass_status: "PASS (2026-10-06: scenario graph_frechet_large_t, digest 0x2f315b1c9b43770b identical in no_std, std-ref and AVX2 (x86-64-v3) host runs, FD sanity err 4.56e-8 ≤ 1e-6, 17 panels per half; aarch64 NEON and Cortex-M QEMU configurations pending CI)"
     rationale: |
       G_FRECHET_LARGE_T_NOSTD_DIGEST (RELEASE_BLOCKING, ADR-0203 + ADR-0200): new
       semiflow-nostd-check scenario `graph_frechet_large_t`: path(10) with
@@ -10445,7 +10580,7 @@ implementation_notes:
     type: GRADIENT_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (current binding on the kit fixture: 1.2e-2·G_k at 1e3, 1.6e-5·G_k at 1e6 — must fail first)"
+    pass_status: "PASS (2026-10-06, Amendment 1 re-run, fresh wheel): max |g−g_ref|/τ_k per λ_max·t = 1,10,1e2,1e4,1e6: F2-entry 1.7e-3 / 1.0e-3 / 1.8e-4 / 8.4e-5 / 5.8e-5 (68 informative at every point); F3-bridge carrier (15 entry pairs, W = 1, 1, 3.601, 428.1, 4.288e4): 2.0e-3 / 9.2e-4 / 1.5e-4 / 3.9e-5 / 3.7e-3, 3/3 bridge pairs informative at every point (needs ≥ 2). Old binding failed first: F2 141 violations (max err/τ 4.2e5), F3-bridge 29 violations (max err/τ 3.3e4). scipy expm_frechet vs eigh oracle ≤ 1e-12·G_k for λt ≤ 1e2. Full suite -m not slow: 879 passed, 1 skipped"
     rationale: |
       G_PY_FRECHET_LARGE_T (RELEASE_BLOCKING, ADR-0203 §63.7): the user-facing path
       of the finding. semiflow.symmetric_op_expmv_frechet on fixture F2 of
@@ -10456,8 +10591,20 @@ implementation_notes:
       the documented closed form if the predictor is not bound). Oracle
       self-check: scipy.linalg.expm_frechet agrees with the eigen oracle to
       1e-12·G_k for λ_max·t ≤ 1e2 (measured ≤ 2e-15·G_k). Non-vacuity as in
-      G_FRECHET_LARGE_T_ORACLE (a).
-    gate: "|g_k - g_k^ref| <= τ_k for all k and points; expm_frechet vs eigh <= 1e-12·G_k for λ_max·t <= 1e2"
+      G_FRECHET_LARGE_T_ORACLE (a), per carrier.
+      Amendment 1: also run fixture F3 of G_FRECHET_LARGE_T_ORACLE (same
+      deterministic definition and per-point W) through symmetric_op_expmv_frechet
+      with the three bridge pairs (3c+2, 3c+3) as entries, plus all intra pairs.
+      Carrier F3-bridge: at least 2 of 3 bridge pairs informative
+      (|g_k^ref| ≥ 1e3·τ_k) at every point. Probe |g_k|/N_k (N_k with
+      ‖M_k‖₂ = 1) for the bridge pairs: {0.054, 0.046, 0.048} at 1,
+      {0.0002, 0.0020, 0.012} at 1e4 and 1e6; 1e3·η ≈ 1.2e-4 at 1e6 with
+      tol = 1e-12. This is the user-facing route of the SOFC edge-conductance
+      gradient (PREREG-B1A §9 F2: conductance gradient assembled from entries).
+    gate_change: |
+      ADR-0203 Amendment 1 (2026-10-06): F3 bridge-entry carrier added; τ_k unchanged.
+      Gate-Change-Approved-By: ai-solutions-architect
+    gate: "|g_k - g_k^ref| <= τ_k for all k, fixtures F2 and F3, and points; F3 ≥ 2/3 bridge pairs informative per point; expm_frechet vs eigh <= 1e-12·G_k for λ_max·t <= 1e2"
     test_file: "crates/semiflow-py/tests/test_frechet_large_t.py::test_frechet_large_t_vs_eigh"
     feature_gate: none
     pattern: A
@@ -10468,18 +10615,32 @@ implementation_notes:
     type: STRUCTURAL_PERFORMANCE
     severity: ADVISORY
     blocks_release: false
-    pass_status: "PENDING"
+    pass_status: "PASS (2026-10-06, Amendment 1): (i) n_nodes = {16,64,144,336,512} exact, ratio(1e6/1e2) = 3.56 ≤ 4; (ii) spmv_upper ≤ B(ρ̄t) asserted at ρ̄t = 1e3/1e4/1e5/1e6: spmv_upper = 6.996e3 / 2.48e4 / 1.407e5 / 1.356e6 vs B = 5.02e4 / 8.32e4 / 2.36e5 / 1.62e6; spmv_upper/C(t) = 25.1 / 9.8 / 5.6 / 5.4, B/C(t) = 179.9 / 33.0 / 9.3 / 6.4; (iii) all-edges/one-edge wall time = 1.00 ≤ 2 (N=2000, |E|=5994, ρ̄t=1e3)"
     rationale: |
       G_FRECHET_COST_LOG_NODES (ADVISORY, ADR-0203 §63.6): (i) plan.n_nodes equals
       16·(K+1), K = ⌈log_{1.5}(ρ̄t/4)⌉₊, at ρ̄t ∈ {1, 10, 1e2, 1e4, 1e6}
       (= {16, 64, 144, 336, 512}) and n_nodes(1e6)/n_nodes(1e2) ≤ 4;
-      (ii) plan.spmv_upper ≤ 6·graph_expmv_matvec_count-derived C(t) for
-      ρ̄t ≥ 1e3 (§63.6.a gives ≈ 5·C(t)); (iii) wall time of the all-edges
+      (ii) (Amendment 1, replaces "spmv_upper ≤ 6·C(t) for ρ̄t ≥ 1e3")
+      plan.spmv_upper ≤ B(ρ̄t) := m_Z·(3·ρ̄t/Z_SAFE + N_calls) at every
+      ρ̄t ∈ {1e3, 1e4, 1e5, 1e6}, with m_Z = chebyshev_degree(Z_SAFE, tol),
+      Z_SAFE = 200, N_calls = 2 + 32·(K+1) (§63.6.c). Reported, not asserted
+      as a bound: spmv_upper/C(t), which tends to ≤ 6 as ρ̄t → ∞ (B/C(t) =
+      179.9 / 33.0 / 9.3 / 6.4 at 1e3 / 1e4 / 1e5 / 1e6 for tol = 1e-12,
+      m_Z = 101). (iii) wall time of the all-edges
       gradient (|E| ≈ 6000) vs a single-edge gradient on an N = 2000 random
       graph at ρ̄t = 1e3: ratio ≤ 2 (the n_params-independence claim). Timing
       parts are advisory because CI hosts are noisy; (i) is exact arithmetic and
       may be promoted.
-    gate: "n_nodes formula exact; n_nodes ratio <= 4; spmv_upper <= 6·C(t); wall-time ratio <= 2"
+    gate_change: |
+      ADR-0203 Amendment 1 (2026-10-06): the "≈ 5·C(t)" of §63.6 assumed
+      C(τ) linear in τ for every call; below Z_SAFE a call costs its degree
+      m(z) ~ √z, not ∝ z, and the near-vector sum also missed the clipped last
+      panel (≤ 4H per half, not 3H). Claim corrected to the derived bound B(ρ̄t)
+      and the asymptote ≤ 6; measured 25.1 / 9.8 / 5.6 / 5.4 ≤ B/C. Not a fit:
+      B follows from C(τ) ≤ (z/Z_SAFE + 1)·m_Z (m nondecreasing in z, z_sub ≤
+      Z_SAFE) summed over the propagated time 6t (§63.6.c).
+      Gate-Change-Approved-By: ai-solutions-architect
+    gate: "n_nodes formula exact; n_nodes ratio <= 4; spmv_upper <= m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1)); wall-time ratio <= 2"
     test_file: "tests/g_frechet_cost_log_nodes.rs::g_frechet_cost_log_nodes"
     feature_gate: "slow-tests"
     pattern: B

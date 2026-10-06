@@ -6362,9 +6362,10 @@ def graph_expmv_frechet(
 ) -> NDArray[np.float64]:
     """VJP gradient ``∂J/∂w`` via the Fréchet–Duhamel integral (A2, §54.5, ADR-0185).
 
-    Computes ``∂J/∂w_k = t ∫₀¹ ⟨e^{−(1−s)tL}dj_c, (∂A/∂w_k) e^{−stL}u0_c⟩ ds``
-    summed over channels using 8-point Gauss-Legendre quadrature.  Exact for all
-    graph topologies including non-commuting edge directions.
+    Computes ``∂J/∂w_k = ∫₀ᵗ ⟨e^{−(t−σ)L}dj_c, (∂A/∂w_k) e^{−σL}u0_c⟩ dσ``
+    summed over channels on a two-sided graded Gauss-Legendre mesh (§63,
+    ADR-0203), quadrature error independent of ``λ_max·t``.  Exact for all graph topologies
+    including non-commuting edge directions.
 
     Parameters
     ----------
@@ -6453,10 +6454,21 @@ def symmetric_op_expmv_frechet(
     *,
     t: float,
     entries: list[tuple[int, int]],
+    tol: float = 1e-12,
 ) -> NDArray[np.float64]:
-    """Entry-sensitivity VJP ``∂J/∂A_{ij}`` via Fréchet–Duhamel (§55.5).
+    """Entry-sensitivity VJP ``∂J/∂A_{ij}`` via Fréchet–Duhamel (§55.5, §63).
+
+    The Duhamel integral is evaluated on a two-sided graded Gauss-Legendre mesh
+    (ADR-0203), quadrature error independent of ``λ_max·t``.  ``tol`` is the Chebyshev
+    propagator tolerance (finite, ``> 0``; also the decay-skip threshold).
 
     Returns ndarray of length ``len(entries)``.
+
+    Raises
+    ------
+    SemiflowError
+        kind='OutOfDomain' if ``t`` or ``tol`` is non-positive or non-finite,
+        or the shapes of ``u0``/``dj`` differ.
     """
     ...
 
