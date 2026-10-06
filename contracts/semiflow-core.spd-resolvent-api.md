@@ -55,7 +55,11 @@ pub enum ResolventMethod { Tridiagonal, PcgIc0, PcgJacobi }
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct SolveReport {
     pub iterations: usize,
-    /// ‖b − (λM+A)x‖₂ / ‖b‖₂ (0 when b = 0). Recomputed after the solve on both paths.
+    /// ‖b − (λM+A)x‖₂ / ‖b‖₂ (0 when b = 0). TRUE residual, recomputed after the solve
+    /// on both paths (on the prescaled system, §62.2.c, so the value does not depend
+    /// on ‖b‖). On the PCG path it may exceed `tol` near the ε·κ(S) attainable-accuracy
+    /// floor, which is not an error. It is never above max(1e3·tol, 1e-3) in an `Ok`
+    /// (§62.2.b gross-residual guard).
     pub rel_residual: f64,
 }
 
@@ -66,8 +70,10 @@ pub struct SpdResolvent<F: SemiflowFloat = f64> { /* private: op Arc, λ, mass, 
 
 impl<F: SemiflowFloat> SpdResolvent<F> {
     /// # Errors
-    /// `DomainViolation`: λ < 0 or non-finite; `mass.len() != n`; mass ≤ 0 or non-finite;
-    ///   `tol ∉ (0, 1)`; λ = 0 and every row sum of A is 0 (pure-Neumann null space);
+    /// `DomainViolation`: n = 0; λ < 0 or non-finite; `mass.len() != n`; mass ≤ 0 or
+    ///   non-finite; `tol ∉ (0, 1)`; λ = 0 and every row satisfies
+    ///   |Σⱼ aᵢⱼ| ≤ 8ε·Σⱼ|aᵢⱼ| ("numerically singular: all row sums <= 8*eps*row
+    ///   magnitude (constant vector in the null space)"; §62.1 (i));
     ///   tridiagonal LDLᵀ pivot ≤ n·ε·max|aᵢᵢ + λmᵢ| (not positive definite).
     /// `Unsupported { feature: "spd_resolvent: tridiagonal solver on non-tridiagonal operator" }`.
     pub fn new(
@@ -82,9 +88,22 @@ impl<F: SemiflowFloat> SpdResolvent<F> {
     pub fn method(&self) -> ResolventMethod;
 
     /// `x ← (λM+A)⁻¹ b`. `x` is overwritten; it is not used as a warm start.
+    /// `b` is prescaled by an exact power of two (‖b‖∞ ∈ [1,2)), so the result is
+    /// scale-equivariant bitwise (§62.2.c). On the PCG path `Ok` means the recursive
+    /// residual met `tol`; read `SolveReport::rel_residual` for the true one (§62.2.b).
     /// # Errors
     /// `DomainViolation` (`b.len()`/`x.len() != n`, non-finite `b`);
-    /// `ConvergenceFailed { last_residual, max_iter }` (PCG only).
+    /// `ConvergenceFailed { last_residual, max_iter }`, PCG only, when either
+    /// (a) the iteration cap is reached, or (b) the recomputed true residual is NaN
+    /// or > max(1e3·tol, 1e-3) (gross-residual guard: catches CG stagnation on a
+    /// singular system). For both triggers, `max_iter` is the configured cap (override
+    /// or 2n+16), not the iteration count. `last_residual` is the relative TRUE
+    /// residual ‖b−Sx‖₂/‖b‖₂ of the returned iterate (NaN if non-finite). The direct
+    /// path never returns it.
+    /// Near-singular band (§62.2.b): for κ(S) ≳ 1e12–1e13 (f64; ≳ 1e4 in f32), but
+    /// not caught by the null-space check, PCG may return ConvergenceFailed where
+    /// LDLᵀ returns Ok with a comparable residual. This is documented and accepted.
+    /// Use the direct path or regularise.
     pub fn solve_into(
         &self, b: &[F], x: &mut [F], scratch: &mut ScratchPool<F>,
     ) -> Result<SolveReport, SemiflowError>;
@@ -233,7 +252,8 @@ checked before `py.detach`. Add the type stubs to the package `.pyi`.
 | `CsrGenerator::from_symmetric` / `from_general` | `DomainViolation` |
 | `phi_combination` | `DomainViolation` |
 
-No new variants. `ConvergenceFailed` gets its first production emitter here.
+No new variants. `ConvergenceFailed` gets its first production emitter here, from
+two conditions: the cap, and the gross-residual guard of §62.2.b (Amendment 2).
 Its rustdoc line "Reserved for v0.3+ resolvent; never returned in v0.1.0" must be
 updated, because `pcg.rs` already returns it.
 

@@ -100,6 +100,7 @@ fn aug_matvec_inplace<F: SemiflowFloat, Op: GeneratorAction<F>>(
     // Per-column scalar cj = (coef_j·w_c[j])/(j·s), hoisted out of the i-loop.
     // coef carries η and w_c carries 1/η, so that pair is multiplied first
     // (exact power-of-two scalings keep φ(2^j v) = 2^j φ(v) bitwise).
+    debug_assert!(coupling.cols.len() <= MAX_COUPLING_COLS);
     let mut scalars = [F::zero(); MAX_COUPLING_COLS];
     for (j, scalar) in scalars.iter_mut().enumerate().take(coupling.cols.len()) {
         *scalar = coupling.coef[j] * w_c[j] * one_over_js;

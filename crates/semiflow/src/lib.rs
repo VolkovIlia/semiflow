@@ -143,10 +143,12 @@ pub(crate) mod parallel1d;
 #[doc(hidden)]
 pub mod parallel_pool;
 pub(crate) mod pcg;
+pub(crate) mod pcg_ic0;
 pub(crate) mod pencil;
 pub mod phi_action;
 pub(crate) mod phi_action_helpers;
 pub mod point_eval;
+pub(crate) mod pow2;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
 pub mod quantum_schrodinger;
@@ -178,6 +180,7 @@ pub mod shift_nd_zeta2;
 #[doc(hidden)]
 pub mod simd;
 pub mod smolyak;
+pub mod spd_resolvent;
 pub mod state;
 pub mod strang;
 pub mod strang2d;
@@ -352,6 +355,7 @@ pub use crate::{
     shift_nd_adaptive::AnisotropicShiftAdaptiveQ,
     shift_nd_zeta2::AnisotropicShiftZeta2ND,
     smolyak::SmolyakGridND,
+    spd_resolvent::{Precond, ResolventMethod, SolveReport, SpdResolvent, SpdSolver},
     state::{Discrete, HilbertState, State},
     strang::StrangSplit,
     strang2d::Strang2D,

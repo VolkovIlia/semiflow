@@ -177,3 +177,43 @@ kernels (§22, §47, §59). A steady solve is `R(0)`, not a time-stepping scheme
 - The 1×-BDF transient target may need case-study-side changes (adaptive Δt,
   linear coupling moved into the operator). The library supplies the means. It
   does not promise the number.
+
+## Amendment 1 — gate calibration (2026-10-06, Gate-Change-Approved-By: ai-solutions-architect)
+
+The `G_SPDR_*` thresholds were set before implementation. This amendment
+calibrates a constant that had never been measured. It does not weaken a
+measured gate. `G_SPDR_STEADY_MMS` had `err(513) ≤ 1e-5`, estimated from the
+interior truncation alone (C = 1.565). The half-cell boundary row has an O(h)
+truncation at x = 1, where `k'(1) ≠ 0`. That row adds an O(h²) Neumann flux
+defect `k w'(1) = −π²/2` to the global error. The a-priori error equation
+(`scripts/verify_spdr_mms.py`, Part 2) gives `C* = 3.506917`. The measurement is
+`3.50692`, and an independent Thomas oracle reproduces the Rust errors to 6 digits.
+The new gate is `err(513) ≤ 1.02·C*·h² = 1.365e-5`, plus a two-sided check
+`|C(n)/C* − 1| ≤ 2 %`. The `#[ignore]` is gone. Two deviations are approved:
+`G_SPDR_PCG_DENSE`/`G_SPDR_REJECT` use 4×4 because `GridND` needs n ≥ 4 per
+axis, and `G_SPDR_IMPLICIT_CROSS` raises the reference's CG cap (`Some(20n)`)
+with its threshold of 1e-10 kept. Derivations are in properties.yaml.
+
+## Amendment 2 — PCG result semantics (2026-10-06)
+
+On the PCG path, `Ok` means the recursive CG residual met `tol`. The true residual
+is recomputed on both paths and reported in `SolveReport`. Near the `ε·κ(S)`
+attainable-accuracy floor it may exceed `tol`, and that is not an error. The shared
+CG loop returns `Ok` when it stagnates, so stagnation could pass as success: on a
+singular `lumped_congruence` at `λ = 0`, `Pcg(IC0)` returned `Ok` with a residual of
+1.43. A gross-residual guard turns any true residual that is NaN or
+`> max(10³·tol, 10⁻³)` into `ConvergenceFailed`. That threshold is approved over
+two alternatives. `10·tol` falsely rejects legitimately converged solves at tight
+`tol`, where the floor is about `ε·κ`. A bound relative to an `ε·κ` estimate needs
+a κ estimator, which adds code for a detector that only has to separate an `O(1)`
+failure from a floor of at most `10⁻⁶`. That separation holds only for
+`κ(S) ≲ 10¹⁰`. In the band between the guard and the `8ε` null-space check
+(`κ ≈ 10¹³–10¹⁴` measured), PCG returns `ConvergenceFailed` while LDLᵀ returns
+`Ok` at a comparable residual. This is accepted and documented, not fixed: the
+only cheap κ-aware floor, `ε‖S‖‖x‖/‖b‖`, is inflated by null-mode growth during
+singular stagnation, which is the very case the guard exists to catch.
+`ConvergenceFailed` reports the configured cap and the relative true residual. `solve_into` prescales `b` by an exact
+power of two, which makes the solve bitwise scale-equivariant. The null-space
+rejection is now relative to rounding: every `|row sum| ≤ 8ε·Σ|aᵢⱼ|`. `n = 0` is
+rejected. The normative text is in §62.1 and §62.2.b/c of
+math-spd-resolvent.md, in spd-resolvent-api.md and in errors.yaml.

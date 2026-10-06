@@ -52,11 +52,14 @@ pub enum SemiflowError {
 
     /// Iterative solver did not converge within the iteration cap.
     ///
-    /// Reserved for v0.3+ resolvent; **never returned** in v0.1.0.
+    /// Returned by the PCG-based solvers (`ImplicitEuler` Krylov path and the
+    /// `SpdResolvent` PCG path) when the residual target is not met in the cap.
     ConvergenceFailed {
-        /// Final residual norm when the cap was hit.
+        /// Final residual when the solver gave up. `ImplicitEuler`: absolute recursive CG
+        /// residual norm. `SpdResolvent`: relative true residual `‖b − Sx‖₂/‖b‖₂`.
         last_residual: f64,
-        /// Iteration cap that was reached.
+        /// Configured iteration cap (not necessarily the iterations performed: the
+        /// `SpdResolvent` residual guard can fire before the cap).
         max_iter: usize,
     },
 

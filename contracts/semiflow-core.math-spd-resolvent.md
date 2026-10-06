@@ -47,10 +47,20 @@ used by §22 (`λ > 0`), §47 (contour nodes) and §59 (`λ = 1/Δt`). A steady 
 
 **Singular case.** `S` is singular iff `λ = 0` and `ker A ≠ {0}` (for example a pure
 Neumann Laplacian without reaction: `A·1 = 0`). Rejection is NORMATIVE:
-(i) a priori, `λ = 0` and `Σⱼ aᵢⱼ = 0` for every `i` ⇒ `DomainViolation`;
-(ii) on the tridiagonal path, the pivot certificate of §62.2.a. On the PCG path a
-singular-but-consistent `b` may converge (to some solution), and an inconsistent
-`b` ends in `ConvergenceFailed`. That is documented, not hidden.
+(i) a priori: if `λ = 0` and `|Σⱼ aᵢⱼ| ≤ 8ε·Σⱼ|aᵢⱼ|` for every `i` (row sums
+vanish to rounding, so the constant vector is in the null space), the result is
+`DomainViolation("numerically singular: all row sums <= 8*eps*row magnitude
+(constant vector in the null space)")`. The test is relative to each row's
+magnitude, so it does not depend on scale. (ADR-0202 Amendment 2: the old text
+asked for exact zero, which rounding in assembled carriers breaks.)
+(ii) on the tridiagonal path, the pivot certificate of §62.2.a.
+(iii) on the PCG path, the gross-residual guard of §62.2.b. A singular system that
+gets past (i) (for example `lumped_congruence` on a Neumann carrier at `λ = 0`)
+can make CG stagnate and stop with a small recursive residual. The guard catches
+the true residual (1.44 in that case) and returns `ConvergenceFailed`. A
+singular-but-consistent `b` may still converge, to some solution, with a true
+residual under the guard. That is documented, not hidden.
+`n = 0` is rejected by `new` with `DomainViolation`.
 
 ### §62.2 — Algorithms and dispatch (NORMATIVE)
 
@@ -84,11 +94,78 @@ holds for every FV/FD diffusion stencil with harmonic faces plus `λM + diag(c)`
 `c ≥ 0`. On a non-positive pivot, the §59.2 rule applies: fall back to Jacobi and
 report it in `method()`.
 
+*What `Ok` means on the PCG path (ADR-0202 Amendment 2, NORMATIVE).* The stopping
+test above uses the **recursive** CG residual. `Ok` therefore means that the
+recursive residual met `tol` within the cap. After every solve (both paths), the
+**true** residual `‖b − Sx‖₂/‖b‖₂` is recomputed and returned in
+`SolveReport::rel_residual`. On the PCG path that value can exceed `tol` by up to
+the attainable-accuracy floor: the recursive and true residuals drift apart by
+`O(k·ε·‖S‖‖x‖/‖b‖) ≤ O(k·ε·κ(S))` (Greenbaum 1997; Sleijpen–van der Vorst 1996).
+That is not an error. Callers who need a certified residual read the report.
+*Gross-residual guard.* On the PCG path, if the recomputed residual is NaN or
+`> max(10³·tol, 10⁻³)`, `solve_into` returns
+`ConvergenceFailed { last_residual, max_iter }` and sets no `Ok`. The shared CG
+loop also exits with `Ok` when it stagnates, and the guard is what turns that
+into an error value. The threshold separates two regimes:
+- A legitimately converged solve: `‖r_true‖/‖b‖ ≤ tol + c·ε·κ(S)`. In f64 that is
+  `≤ 10⁻⁶` for `κ(S) ≲ 10¹⁰`, more than the 2-D/3-D stencils this path serves.
+- A gross failure (stagnation on a singular or near-singular `S`): `O(1)`.
+For `κ(S) ≲ 10¹⁰` these regimes are at least 3 orders apart, and the threshold sits
+in the gap. The separation does NOT hold above that.
+
+*Near-singular band (ADR-0202 Amendment 2, NORMATIVE; measured by the reviewer).*
+Between the guard (`ε·κ ≈ 10⁻³`, i.e. `κ ≳ 10¹²–10¹³` in f64) and the null-space
+check of §62.1 (i), which fires only when the row sums vanish to `8ε`, there is a
+band of very ill-conditioned but formally nonsingular systems. A typical example is
+a Neumann carrier plus a tiny reaction `c`. In this band an at-floor PCG solve
+returns `ConvergenceFailed`, while LDLᵀ on the same system returns `Ok` with a
+comparable true residual. Measured with Neumann + `c`, `n = 200`, `λ = 0`,
+`tol = 10⁻¹⁰` and the same `b`:
+
+| `c` | Tridiagonal | PCG IC(0) | PCG Jacobi |
+|---|---|---|---|
+| `10⁻¹³` | `Ok`, 3.6e-4 | `Ok`, 4.8e-4 | `ConvergenceFailed`, 3.4e-3 |
+| `10⁻¹⁴` | `Ok`, 1.5e-3 | `ConvergenceFailed`, 2.7e-3 | `ConvergenceFailed`, 2.7e-2 |
+
+This divergence between paths is ACCEPTED and documented. The guard is not made
+κ-aware. The cheap κ-aware floor would be `ε·‖S‖·‖x‖/‖b‖` (Gershgorin `‖S‖`,
+computed `‖x‖`), but it defeats the guard exactly where the guard is needed. When
+CG stagnates on a singular `S`, `x` grows along the null mode, which inflates
+`‖x‖` and with it the floor. From the residual and `‖x‖` alone, a near-singular
+solve at its floor cannot be told apart from singular stagnation. Contract in the
+band: PCG never returns a garbage `Ok` (its residual is either `≤ 10⁻³` or an
+error). Users who need a solve there should use the direct path (1-D, `Auto`),
+or regularise (`c` large enough that `κ ≲ 10¹⁰`). In this band any solution has a
+forward error of `O(κ·residual) ≫ 1` anyway.
+
+*`ConvergenceFailed` fields (NORMATIVE, both triggers).* `max_iter` = the
+configured CG cap (the override, or the default `2n + 16`), not the number of
+iterations used. `last_residual` = the relative TRUE residual `‖b − Sx‖₂/‖b‖₂` of
+the returned iterate, on the prescaled system (§62.2.c). For the cap trigger it is
+recomputed at the cap. For the guard trigger it is the value that crossed the
+threshold. It is NaN if the iterate is non-finite.
+The term `10³·tol` keeps a deliberately loose `tol` (for example `10⁻⁴`) from
+being judged against a stricter floor than the caller asked for. The guard does
+not apply to the direct path, where the §62.2.a certificate and backward
+stability already bound the residual. Known edge: for `F = f32`
+(`ε ≈ 6·10⁻⁸`) and `κ(S) ≳ 10⁴`, the same band starts there: a converged solve may
+cross `10⁻³` and return `ConvergenceFailed`. That is honest: the backward error is
+then above 0.1 %.
+
 **§62.2.c — Determinism.** Both paths use only `+ − × ÷`, plus `sqrt` (IC(0)
 diagonal, the reported residual), routed through `SemiflowFloat` → `libm`
 (ADR-0200). Summation order is fixed: rows ascending, then CSR order within a row;
 no threads. Hence std and no_std results are bit-identical, which the nostd-check
 digests verify.
+*Right-hand-side prescaling (ADR-0202 Amendment 2).* On both paths `solve_into`
+multiplies `b` by an exact power of two `2^{−e}` with `‖2^{−e}b‖∞ ∈ [1, 2)`, solves
+and verifies the scaled system, then multiplies `x` by `2^{e}`. Multiplying by a
+power of two is exact, so this changes no rounding. It makes the iteration, the
+stopping test, the guard and the reported residual independent of `‖b‖`. For any
+integer `k` with no under- or overflow in `b` or `x`,
+`solve(2ᵏb) = 2ᵏ·solve(b)` bitwise, with an identical `SolveReport`. It also
+prevents overflow in `‖r‖²` for `‖b‖∞` far from 1 (tested from 1e-155 to 1e150).
+`b = 0` short-circuits to `x = 0`, `iterations = 0`, `rel_residual = 0`.
 
 ### §62.3 — Composition and generators (NORMATIVE)
 
@@ -187,10 +264,10 @@ error by that power of the Lipschitz ratio.
 | Gate | Claim | Threshold | Severity |
 |---|---|---|---|
 | `G_SPDR_TRIDIAG_DENSE` | LDLᵀ vs dense LU, λ ∈ {0 (c>0), 0.5, 1e3}, with/without mass, n=12 | rel ≤ 1e-12; residual ≤ 1e-14 | RELEASE_BLOCKING |
-| `G_SPDR_PCG_DENSE` | PCG IC(0) and Jacobi, 2-D 4×3 + reaction, λ ∈ {0, 1} | rel ≤ 1e-10 (tol 1e-12) | RELEASE_BLOCKING |
-| `G_SPDR_STEADY_MMS` | FV steady `−(ku')'+cu=s`, Neumann, manufactured | OLS slope ∈ [−2.2, −1.8] over n ∈ {65,129,257,513}; err(513) ≤ 1e-5 | RELEASE_BLOCKING |
+| `G_SPDR_PCG_DENSE` | PCG IC(0) and Jacobi, 2-D 4×4 + reaction, λ ∈ {0, 1} | rel ≤ 1e-10 (tol 1e-12) | RELEASE_BLOCKING |
+| `G_SPDR_STEADY_MMS` | FV steady `−(ku')'+cu=s`, Neumann, manufactured | OLS slope ∈ [−2.2, −1.8] over n ∈ {65,129,257,513}; \|err·(n−1)²/C* − 1\| ≤ 2 %, C* = 3.506917 a-priori (`scripts/verify_spdr_mms.py`); err(513) ≤ 1.365e-5 (ADR-0202 Amendment 1) | RELEASE_BLOCKING |
 | `G_SPDR_PHI1_LIMIT` | `R(0)s` vs `τφ₁(τG)M⁻¹s`, τ = 40/λ_min (§62.1.c) | rel ≤ 1e-10 | RELEASE_BLOCKING |
-| `G_SPDR_IMPLICIT_CROSS` | `λ(λI+A)⁻¹v` vs `KrylovPath::ImplicitEuler{1}` at Δt = 1/λ | rel ≤ 1e-10 | RELEASE_BLOCKING |
+| `G_SPDR_IMPLICIT_CROSS` | `λ(λI+A)⁻¹v` vs `KrylovPath::ImplicitEuler{1, cg_max_iter: Some(20n)}` at Δt = 1/λ | rel ≤ 1e-10 | RELEASE_BLOCKING |
 | `G_SPDR_REJECT` | singular / negative λ / bad mass / forced-tridiagonal misuse → typed errors | exact variant match | RELEASE_BLOCKING |
 | `G_SPDR_LINEAR_COST` | tridiagonal wall time `t(2²⁰)/t(2¹⁶)` | ≤ 32 | ADVISORY |
 | `G_SYMOP_COMPOSE_EXACT` | `with_diagonal` = dense `A + diag(c)` entrywise; `csr()`/`from_csr` round trip | bitwise | RELEASE_BLOCKING |
