@@ -84,7 +84,9 @@ pub fn matvec(a: &[f64], x: &[f64]) -> Vec<f64> {
         .collect()
 }
 
+/// `max_i |v_i|`; panics on non-finite entries (`f64::max` would swallow NaN).
 pub fn sup(v: &[f64]) -> f64 {
+    assert!(v.iter().all(|x| x.is_finite()), "sup: non-finite input");
     v.iter().fold(0.0_f64, |m, &x| m.max(x.abs()))
 }
 

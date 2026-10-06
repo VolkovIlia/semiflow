@@ -490,9 +490,9 @@ emission_table:
   - method: "SpdResolvent::solve_into"
     emits: [DomainViolation, ConvergenceFailed]   # DomainViolation: b or x length != n, non-finite b. ConvergenceFailed { last_residual, max_iter }: PCG only, (a) cap reached (default 2n+16), or (b) gross-residual guard: recomputed TRUE relative residual NaN or > max(1e3·tol, 1e-3) after the loop exits Ok (stagnation on a singular system) (ADR-0202 Amendment 2, §62.2.b). Fields for both triggers: max_iter = configured cap (override or 2n+16), last_residual = relative TRUE residual ‖b−Sx‖₂/‖b‖₂ of the returned iterate (NaN if non-finite). Near-singular band κ ≳ 1e12–1e13 (f64): PCG may return ConvergenceFailed where LDLᵀ returns Ok (documented, accepted). Ok on the PCG path = recursive residual met tol; the true residual is in SolveReport.rel_residual and may exceed tol near the ε·κ floor. The direct path never returns ConvergenceFailed.
   - method: "SymmetricOperator::with_diagonal"
-    emits: [DomainViolation]   # c.len() != n; any c_i < 0 or non-finite.
+    emits: [DomainViolation]   # c.len() != n; any c_i < 0 or non-finite; an assembled entry of A+diag(c) overflows (non-finite) (ADR-0202 Amendment 3).
   - method: "CsrGenerator::from_symmetric / CsrGenerator::from_general"
-    emits: [DomainViolation]   # mass length != n; mass <= 0 or non-finite.
+    emits: [DomainViolation]   # mass length != n; mass <= 0 or non-finite; with a mass, any quotient |a_ij|/m_i or the norm bound max_i Σ_j |a_ij|/m_i non-finite (both constructors; ADR-0202 Amendment 3). mass=None unchanged.
   - method: "phi_combination"
     emits: [DomainViolation]   # w empty or w.len() > PHI_MAX+1 (4); any w_k length != n or non-finite entry; out length != n; τ < 0 or non-finite; τ^k·‖w_k‖∞ overflow (non-finite η-scale sum).
   - method: "phi_action / phi_action_batched (ADR-0202 amendment)"

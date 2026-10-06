@@ -157,13 +157,18 @@ enum CsrBackend<F: SemiflowFloat> {
 
 /// `G = −M⁻¹A` over a CSR operator, `M = diag(mass)` (§62.3).
 ///
-/// `apply_generator(v) = −(A v) ⊘ m`; the exact transpose is `Gᵀ v = −Aᵀ(v ⊘ m)`.
-/// Norm bound: with `mass = None` the operator's own bound (bit-identical to
-/// [`NegLaplacianGenerator`] for a symmetric operator); otherwise the exact
-/// row-wise Gershgorin bound `maxᵢ Σⱼ|aᵢⱼ|/mᵢ ≥ ‖G‖_∞`.
+/// With `mass = None`, `apply_generator(v) = −A v` and the transpose uses the
+/// operator's own transpose (bit-identical to [`NegLaplacianGenerator`] for a
+/// symmetric operator; norm bound = the operator's own bound). With a mass the
+/// row-normalised entries `qᵢⱼ = aᵢⱼ/mᵢ` are formed once (so no intermediate
+/// `A·v` / `v ⊘ m` can overflow or underflow when `G` itself is representable):
+/// `G v = −Q v`, `Gᵀ v = −Qᵀ v` (scatter over the same pattern), and the norm bound
+/// is the exact row-wise Gershgorin bound `maxᵢ Σⱼ|qᵢⱼ| ≥ ‖G‖_∞`. Construction
+/// returns `DomainViolation` if any `qᵢⱼ` or the bound is not finite.
 pub struct CsrGenerator<F: SemiflowFloat = f64> {
     backend: CsrBackend<F>,
-    mass: Option<Vec<F>>,
+    /// Row-normalised values `aᵢⱼ/mᵢ` aligned with the backend's CSR pattern (mass path).
+    scaled: Option<Vec<F>>,
     norm: F,
 }
 
@@ -187,17 +192,31 @@ fn check_mass<F: SemiflowFloat>(n: usize, mass: &[F]) -> Result<(), SemiflowErro
     Ok(())
 }
 
-/// `maxᵢ Σⱼ |aᵢⱼ| / mᵢ` over CSR rows.
-fn row_gershgorin<F: SemiflowFloat>(row_ptr: &[usize], vals: &[F], mass: &[F]) -> F {
+/// Row-normalised values `aᵢⱼ/mᵢ` and `maxᵢ Σⱼ |aᵢⱼ/mᵢ|`; dividing before summing
+/// avoids spurious overflow. `DomainViolation` if any quotient or the bound is not finite.
+fn normalise_rows<F: SemiflowFloat>(
+    row_ptr: &[usize],
+    vals: &[F],
+    mass: &[F],
+) -> Result<(Vec<F>, F), SemiflowError> {
+    let mut scaled = Vec::with_capacity(vals.len());
     let mut best = F::zero();
     for (i, &m) in mass.iter().enumerate() {
         let mut sum = F::zero();
         for &v in &vals[row_ptr[i]..row_ptr[i + 1]] {
-            sum += v.abs();
+            let q = v / m;
+            sum += q.abs();
+            scaled.push(q);
         }
-        best = best.max(sum / m);
+        best = best.max(sum);
+        if !sum.is_finite() {
+            return Err(SemiflowError::DomainViolation {
+                what: "CsrGenerator: M^-1 A has a non-finite row bound (entry/mass overflow)",
+                value: sum.to_f64().unwrap_or(f64::NAN),
+            });
+        }
     }
-    best
+    Ok((scaled, best))
 }
 
 impl<F: SemiflowFloat> CsrGenerator<F> {
@@ -210,16 +229,17 @@ impl<F: SemiflowFloat> CsrGenerator<F> {
         mass: Option<&[F]>,
     ) -> Result<Self, SemiflowError> {
         let inner = Arc::clone(&op.inner);
-        let norm = match mass {
-            None => inner.spectral_radius_bound(),
+        let (scaled, norm) = match mass {
+            None => (None, inner.spectral_radius_bound()),
             Some(m) => {
                 check_mass(op.n(), m)?;
-                row_gershgorin(inner.row_ptr(), inner.vals(), m)
+                let (q, nb) = normalise_rows(inner.row_ptr(), inner.vals(), m)?;
+                (Some(q), nb)
             }
         };
         Ok(Self {
             backend: CsrBackend::Symmetric(inner),
-            mass: mass.map(<[F]>::to_vec),
+            scaled,
             norm,
         })
     }
@@ -232,17 +252,18 @@ impl<F: SemiflowFloat> CsrGenerator<F> {
         op: &GeneralOperator<F>,
         mass: Option<&[F]>,
     ) -> Result<Self, SemiflowError> {
-        let norm = match mass {
-            None => from_f64(op.norm_inf_bound()),
+        let (scaled, norm) = match mass {
+            None => (None, from_f64(op.norm_inf_bound())),
             Some(m) => {
                 check_mass(op.n(), m)?;
                 let (row_ptr, _, vals) = op.csr_parts();
-                row_gershgorin(row_ptr, vals, m)
+                let (q, nb) = normalise_rows(row_ptr, vals, m)?;
+                (Some(q), nb)
             }
         };
         Ok(Self {
             backend: CsrBackend::General(op.clone()),
-            mass: mass.map(<[F]>::to_vec),
+            scaled,
             norm,
         })
     }
@@ -252,6 +273,17 @@ impl<F: SemiflowFloat> CsrGenerator<F> {
         match &self.backend {
             CsrBackend::Symmetric(lap) => Laplacian::apply_into_slice(lap, src, dst),
             CsrBackend::General(op) => op.apply_into_slice(src, dst),
+        }
+    }
+
+    /// CSR pattern `(row_ptr, col_idx)` shared by `A` and the normalised values.
+    fn pattern(&self) -> (&[usize], &[u32]) {
+        match &self.backend {
+            CsrBackend::Symmetric(lap) => (lap.row_ptr(), lap.col_idx()),
+            CsrBackend::General(op) => {
+                let (rp, ci, _) = op.csr_parts();
+                (rp, ci)
+            }
         }
     }
 
@@ -273,18 +305,20 @@ impl<F: SemiflowFloat> GeneratorAction<F> for CsrGenerator<F> {
     }
 
     fn apply_generator(&self, src: &[F], dst: &mut [F]) {
-        self.apply_a(src, dst);
-        match &self.mass {
-            None => {
-                for d in dst.iter_mut() {
-                    *d = -*d;
-                }
+        let Some(q) = &self.scaled else {
+            self.apply_a(src, dst);
+            for d in dst.iter_mut() {
+                *d = -*d;
             }
-            Some(m) => {
-                for (d, &mi) in dst.iter_mut().zip(m) {
-                    *d = -*d / mi;
-                }
+            return;
+        };
+        let (rp, ci) = self.pattern();
+        for (i, d) in dst.iter_mut().enumerate().take(self.dim()) {
+            let mut acc = F::zero();
+            for k in rp[i]..rp[i + 1] {
+                acc += q[k] * src[ci[k] as usize];
             }
+            *d = -acc;
         }
     }
 
@@ -293,15 +327,19 @@ impl<F: SemiflowFloat> GeneratorAction<F> for CsrGenerator<F> {
     }
 
     fn apply_generator_transpose(&self, src: &[F], dst: &mut [F]) {
-        match &self.mass {
-            None => self.apply_a_transpose(src, dst),
-            Some(m) => {
-                let scaled: Vec<F> = src.iter().zip(m).map(|(&x, &mi)| x / mi).collect();
-                self.apply_a_transpose(&scaled, dst);
+        let Some(q) = &self.scaled else {
+            self.apply_a_transpose(src, dst);
+            for d in dst.iter_mut() {
+                *d = -*d;
             }
-        }
-        for d in dst.iter_mut() {
-            *d = -*d;
+            return;
+        };
+        let (rp, ci) = self.pattern();
+        dst[..self.dim()].fill(F::zero());
+        for (i, &si) in src.iter().enumerate().take(self.dim()) {
+            for k in rp[i]..rp[i + 1] {
+                dst[ci[k] as usize] -= q[k] * si;
+            }
         }
     }
 }

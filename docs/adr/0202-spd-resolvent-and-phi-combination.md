@@ -217,3 +217,15 @@ power of two, which makes the solve bitwise scale-equivariant. The null-space
 rejection is now relative to rounding: every `|row sum| ≤ 8ε·Σ|aᵢⱼ|`. `n = 0` is
 rejected. The normative text is in §62.1 and §62.2.b/c of
 math-spd-resolvent.md, in spd-resolvent-api.md and in errors.yaml.
+
+## Amendment 3 — PR #43 review fixes (2026-10-06)
+
+Contract changes after review:
+- `with_diagonal` returns `DomainViolation` when an assembled entry of `A + diag(c)` overflows.
+- With a mass, `CsrGenerator` stores the row-normalised `Q = M⁻¹A` once and applies `−Qv`.
+- Its norm bound `maxᵢ Σⱼ(|aᵢⱼ|/mᵢ)` is computed divide-then-sum, and a non-finite quotient or bound is a `DomainViolation`, in both constructors. `mass = None` is unchanged.
+- In the `solve_into` power-of-two prescale, an exponent whose factor is not representable is clamped toward 0 until both factors are finite and nonzero, replacing the `(1,1)` fallback. A subnormal RHS is now solved correctly.
+- In Python, `resolvent(solver="auto")` tries the tridiagonal path and on `Unsupported` rebuilds as `Pcg{precond, max_iter}`, so those keywords are honoured. The core `SpdSolver::Auto` is unchanged.
+- The test-side gate helpers (`sup`, `sup_diff`, `rel_sup_err`) reject non-finite input, so a NaN can no longer pass a `≤` threshold vacuously.
+
+No gate threshold changes.

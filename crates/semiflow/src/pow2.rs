@@ -14,8 +14,8 @@ fn pow2_f64(k: i32) -> f64 {
 /// Scaling by a power of two is exact in IEEE arithmetic except that entries more than
 /// 1022 binades below the maximum land in the subnormal range and lose bits. The solve
 /// and the residual then run on an O(1) right-hand side and cannot underflow or
-/// overflow in the squared norms. Falls back to `(1, 1)` if the factors are not
-/// representable in `F`.
+/// overflow in the squared norms. If the exact factors are not representable in `F`
+/// (subnormal `b`), the exponent is clamped to the largest representable one.
 pub(crate) fn pow2_scale<F: SemiflowFloat>(rhs: &[F]) -> Option<(F, F)> {
     let bmax = rhs.iter().fold(F::zero(), |m, &v| m.max(v.abs()));
     if bmax == F::zero() {
@@ -28,12 +28,25 @@ pub(crate) fn pow2_scale<F: SemiflowFloat>(rhs: &[F]) -> Option<(F, F)> {
         shift += 54;
     }
     let exp = i32::try_from((mag.to_bits() >> 52) & 0x7ff).unwrap_or(1023) - 1023 - shift;
-    match (F::from(pow2_f64(-exp)), F::from(pow2_f64(exp))) {
-        (Some(down), Some(up))
-            if down.is_finite() && up.is_finite() && down != F::zero() && up != F::zero() =>
-        {
-            Some((down, up))
+    // Largest |e| ≤ |exp| for which both factors are finite and nonzero in `F`. A
+    // subnormal `b` (exp ≈ −1030 in f64) cannot use 2^1030; 2^1023 still lifts it to O(1)
+    // enough that its squared norm cannot underflow.
+    let mut e = exp;
+    loop {
+        if let Some(pair) = factors::<F>(e) {
+            return Some(pair);
         }
-        _ => Some((F::one(), F::one())),
+        if e == 0 {
+            return Some((F::one(), F::one()));
+        }
+        e -= e.signum();
     }
+}
+
+/// `(2^{-e}, 2^{e})` if both are finite and nonzero in `F`.
+fn factors<F: SemiflowFloat>(e: i32) -> Option<(F, F)> {
+    let down = F::from(pow2_f64(-e))?;
+    let up = F::from(pow2_f64(e))?;
+    (down.is_finite() && up.is_finite() && down != F::zero() && up != F::zero())
+        .then_some((down, up))
 }

@@ -291,6 +291,26 @@ def test_pcg_iteration_cap_is_convergence_failed() -> None:
     assert _kind(res.solve, _rhs(100)) == "ConvergenceFailed"
 
 
+def test_auto_forwards_precond_and_max_iter_to_pcg() -> None:
+    """solver="auto" on a non-tridiagonal operator must honour precond / max_iter."""
+    op = _grid_op(10).with_diagonal(np.full(100, 0.01))
+    jac = op.resolvent(lam=0.0, solver="auto", precond="jacobi", tol=1e-12)
+    assert jac.method == "pcg-jacobi"
+    capped = op.resolvent(lam=0.0, solver="auto", precond="jacobi", max_iter=1)
+    assert _kind(capped.solve, _rhs(100)) == "ConvergenceFailed"
+    default = op.resolvent(lam=0.0, solver="auto")
+    assert default.method == "pcg-ic0"
+
+
+def test_auto_tridiagonal_unchanged_by_pcg_options() -> None:
+    """Tridiagonal operators keep the direct path; PCG options are ignored."""
+    op = _op_1d(30)
+    r = op.resolvent(lam=0.0, solver="auto", precond="jacobi", max_iter=1)
+    assert r.method == "tridiagonal"
+    b = _rhs(30)
+    np.testing.assert_array_equal(r.solve(b), op.resolvent(lam=0.0).solve(b))
+
+
 # ---------------------------------------------------------------------------
 # GIL release (ADR-0031)
 # ---------------------------------------------------------------------------

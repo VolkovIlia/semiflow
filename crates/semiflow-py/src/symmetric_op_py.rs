@@ -259,7 +259,7 @@ impl PySymmetricOperator {
         max_iter: Option<usize>,
     ) -> PyResult<PySpdResolvent> {
         catch_panic_py!({
-            let kind = parse_solver(solver, precond, max_iter)?;
+            let plan = parse_solver(solver, precond, max_iter)?;
             let mass_vec = mass.map(|m| contiguous_vec(&m, "mass")).transpose()?;
             if let Some(m) = &mass_vec {
                 if m.len() != self.op.n() {
@@ -269,7 +269,7 @@ impl PySymmetricOperator {
                     ));
                 }
             }
-            build_resolvent(py, &self.op, lam, mass_vec, kind, tol)
+            build_resolvent(py, &self.op, lam, mass_vec, plan, tol)
         })
     }
 

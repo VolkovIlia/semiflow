@@ -65,6 +65,10 @@ fn max_err(n: usize) -> f64 {
     let r = op.resolvent(0.0, None, SpdSolver::Auto, 1e-12).unwrap();
     let mut u = vec![0.0; n];
     r.solve_into(&rhs, &mut u, &mut ScratchPool::new()).unwrap();
+    assert!(
+        u.iter().all(|v| v.is_finite()),
+        "max_err: non-finite solution (f64::max would swallow NaN)"
+    );
     xs.iter()
         .zip(&u)
         .map(|(&x, ui)| (ui - (2.0 + (PI * x).cos())).abs())

@@ -148,6 +148,10 @@ fn check_near_clamp() {
     let (mut a, mut b) = (vec![0.0; N], vec![0.0; N]);
     phi_action(&gen, 2, TAU, &v, &mut a, &mut scratch).unwrap();
     phi_action(&gen, 2, TAU, &scaled(&v, huge), &mut b, &mut scratch).unwrap();
+    assert!(
+        a.iter().all(|x| x.is_finite()),
+        "clamp case: non-finite unscaled output (f64::max would swallow NaN)"
+    );
     let err = a
         .iter()
         .zip(&b)

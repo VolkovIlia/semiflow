@@ -143,7 +143,8 @@ fixed (row-sequential, no threads), which makes std and no_std results bit-ident
 ```rust
 impl<F: SemiflowFloat> SymmetricOperator<F> {
     /// A + diag(c). Inserts structurally missing diagonal entries; columns stay sorted.
-    /// # Errors  `DomainViolation`: c.len() != n, any cᵢ < 0 or non-finite.
+    /// # Errors  `DomainViolation`: c.len() != n, any cᵢ < 0 or non-finite, or an
+    ///   assembled entry A+diag(c) overflows (non-finite).
     pub fn with_diagonal(&self, c: &[F]) -> Result<Self, SemiflowError>;
 
     /// Borrowed CSR view (row_ptr, col_idx, vals). Round-trip:
@@ -161,7 +162,9 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
 pub struct CsrGenerator<F: SemiflowFloat = f64> { /* Arc CSR (+ transpose for general), inv_mass */ }
 
 impl<F: SemiflowFloat> CsrGenerator<F> {
-    /// # Errors `DomainViolation`: mass length/positivity/finiteness.
+    /// # Errors `DomainViolation`: mass length/positivity/finiteness; with a mass, any
+    ///   quotient |aᵢⱼ|/mᵢ or the norm bound maxᵢ Σⱼ |aᵢⱼ|/mᵢ is non-finite (both
+    ///   constructors).
     pub fn from_symmetric(op: &SymmetricOperator<F>, mass: Option<&[F]>) -> Result<Self, SemiflowError>;
     pub fn from_general(op: &GeneralOperator<F>, mass: Option<&[F]>) -> Result<Self, SemiflowError>;
 }
@@ -172,8 +175,9 @@ impl<F: SemiflowFloat> GeneratorAction<F> for CsrGenerator<F> { /* dim, apply_ge
 `NegLaplacianGenerator` is unchanged. For `mass = None` on a symmetric operator,
 `CsrGenerator` uses `norm_bound = op.lambda_max_bound()` and the same CSR matvec,
 so its results are **bit-identical** to `NegLaplacianGenerator` (checked in
-`G_PHI_MASS_DENSE`). With `mass = Some(m)` it uses the row-wise bound
-`maxᵢ Σⱼ|aᵢⱼ|/mᵢ`. For `from_general`, `mass = None` uses
+`G_PHI_MASS_DENSE`). With `mass = Some(m)` it stores the row-normalised
+`Q = M⁻¹A` once (each entry `aᵢⱼ/mᵢ`), applies `G v = −Q v`, and uses the row-wise bound
+`maxᵢ Σⱼ(|aᵢⱼ|/mᵢ)` (divide-then-sum; non-finite → `DomainViolation`). For `from_general`, `mass = None` uses
 `op.norm_inf_bound()`.
 
 ### 1.5 `phi_action.rs` (AMEND) + `phi_combination` (NEW; split into `phi_combination.rs` if > 500 LoC)
@@ -235,8 +239,12 @@ Y   = semiflow.phi_action_batched(op, p, tau, v, mass=None)  # idem
 
 String arguments are validated against fixed menus. An unknown value raises
 `SemiflowError(kind="OutOfDomain")`. `solver ∈ {"auto","tridiagonal","pcg"}`,
-`precond ∈ {"ic0","jacobi"}` (`precond` is ignored unless `solver="pcg"`, or
-`"auto"` dispatches to PCG). Inputs must be contiguous float64, and lengths are
+`precond ∈ {"ic0","jacobi"}`. Under `solver="auto"` the binding first tries the
+core `Tridiagonal` path. If the core returns `Unsupported` (the pattern is not
+tridiagonal), it rebuilds with `Pcg{precond, max_iter}`, so `precond` and
+`max_iter` are honoured under `"auto"` too. They are ignored only when the
+tridiagonal path is taken. The core `SpdSolver::Auto` is unchanged
+(ADR-0202 Amendment 3). Inputs must be contiguous float64, and lengths are
 checked before `py.detach`. Add the type stubs to the package `.pyi`.
 
 **FFI / WASM**: DEFERRED (ADR-0202 D5; ADR-0186/0195 asymmetry: neither binding has

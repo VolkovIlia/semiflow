@@ -34,12 +34,24 @@ use crate::{
     panic::catch_panic_py,
 };
 
+/// Parsed solver menu: the core solver to try, plus the PCG configuration to use when
+/// `"auto"` meets a non-tridiagonal operator.
+///
+/// The core `SpdSolver::Auto` carries no PCG options, so `"auto"` is realised as
+/// "try `Tridiagonal`; on `Unsupported` (the core's own structural test) rebuild with
+/// `Pcg { precond, max_iter }`". The core stays the only judge of tridiagonality.
+#[derive(Copy, Clone)]
+pub(crate) struct SolverPlan {
+    primary: SpdSolver,
+    fallback: Option<SpdSolver>,
+}
+
 /// Solver-menu entry point (`solver`, `precond`, `max_iter`) shared by `resolvent`.
 pub(crate) fn parse_solver(
     solver: &str,
     precond: &str,
     max_iter: Option<usize>,
-) -> PyResult<SpdSolver> {
+) -> PyResult<SolverPlan> {
     let precond = match precond {
         "ic0" => Precond::Ic0,
         "jacobi" => Precond::Jacobi,
@@ -51,9 +63,18 @@ pub(crate) fn parse_solver(
         }
     };
     match solver {
-        "auto" => Ok(SpdSolver::Auto),
-        "tridiagonal" => Ok(SpdSolver::Tridiagonal),
-        "pcg" => Ok(SpdSolver::Pcg { precond, max_iter }),
+        "auto" => Ok(SolverPlan {
+            primary: SpdSolver::Tridiagonal,
+            fallback: Some(SpdSolver::Pcg { precond, max_iter }),
+        }),
+        "tridiagonal" => Ok(SolverPlan {
+            primary: SpdSolver::Tridiagonal,
+            fallback: None,
+        }),
+        "pcg" => Ok(SolverPlan {
+            primary: SpdSolver::Pcg { precond, max_iter },
+            fallback: None,
+        }),
         other => Err(new_pyerr(
             "OutOfDomain",
             &format!("solver must be 'auto', 'tridiagonal' or 'pcg', got '{other}'"),
@@ -77,12 +98,19 @@ pub(crate) fn build_resolvent(
     op: &Arc<SymmetricOperator<f64>>,
     lam: f64,
     mass: Option<Vec<f64>>,
-    solver: SpdSolver,
+    plan: SolverPlan,
     tol: f64,
 ) -> PyResult<PySpdResolvent> {
     let op_c = Arc::clone(op);
-    let built: Result<SpdResolvent<f64>, CoreError> =
-        py.detach(move || SpdResolvent::new(&op_c, lam, mass.as_deref(), solver, tol));
+    let built: Result<SpdResolvent<f64>, CoreError> = py.detach(move || {
+        let first = SpdResolvent::new(&op_c, lam, mass.as_deref(), plan.primary, tol);
+        match (first, plan.fallback) {
+            (Err(CoreError::Unsupported { .. }), Some(fb)) => {
+                SpdResolvent::new(&op_c, lam, mass.as_deref(), fb, tol)
+            }
+            (other, _) => other,
+        }
+    });
     let inner = built.map_err(|e| from_core(&e))?;
     Ok(PySpdResolvent {
         inner: Arc::new(inner),

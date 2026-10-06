@@ -165,6 +165,11 @@ stopping test, the guard and the reported residual independent of `‖b‖`. For
 integer `k` with no under- or overflow in `b` or `x`,
 `solve(2ᵏb) = 2ᵏ·solve(b)` bitwise, with an identical `SolveReport`. It also
 prevents overflow in `‖r‖²` for `‖b‖∞` far from 1 (tested from 1e-155 to 1e150).
+*Unrepresentable factors (Amendment 3).* If `2^{−e}` or `2^{e}` is not a finite,
+nonzero `F` (for example a subnormal RHS, where `2^{−e}` overflows), the exponent
+`e` is clamped toward 0 until both factors are finite and nonzero. The scaled
+`‖b‖∞` may then lie outside `[1, 2)`, but the scaling is still an exact power of
+two. There is no `(1, 1)` fallback, and a subnormal RHS is solved correctly.
 `b = 0` short-circuits to `x = 0`, `iterations = 0`, `rel_residual = 0`.
 
 ### §62.3 — Composition and generators (NORMATIVE)
@@ -176,10 +181,13 @@ prevents overflow in `‖r‖²` for `‖b‖∞` far from 1 (tested from 1e-155
   `−∂ₓ(k∂ₓu) + c u` pointwise. With half-cell FV mass `m = [½,1,…,1,½]` (units of
   `dx`), the conservative FV system is `(A + diag(c⊙m))u = m⊙s`. That is the form
   used by `G_SPDR_STEADY_MMS`.
-- `CsrGenerator`: `G = −M⁻¹A`, with `apply_generator(v) = −(A v)⊘m` and an exact
-  transpose `Gᵀv = −Aᵀ(v⊘m)`. Norm bound: `mass = None` reuses the operator's own
-  bound (bit-identity with `NegLaplacianGenerator`, §55). Otherwise the row-wise
-  Gershgorin bound `maxᵢ Σⱼ|aᵢⱼ|/mᵢ ≥ ‖G‖_∞`. It is the same φ-function of the
+- `CsrGenerator`: `G = −M⁻¹A`. With a mass, the row-normalised `Q = M⁻¹A`
+  (entries `aᵢⱼ/mᵢ`) is stored once, `apply_generator(v) = −Q v`, and the transpose
+  is exact, `Gᵀ = −Qᵀ`. Norm bound: `mass = None` reuses the operator's own bound
+  (bit-identity with `NegLaplacianGenerator`, §55; this path is unchanged).
+  Otherwise the row-wise Gershgorin bound `maxᵢ Σⱼ(|aᵢⱼ|/mᵢ) ≥ ‖G‖_∞`, computed
+  divide-then-sum. If any quotient or the bound is non-finite, the result is
+  `DomainViolation` (ADR-0202 Amendment 3). It is the same φ-function of the
   same generator as the §55.3 congruence route
   (`φ(τG) = M^{−½}φ(−τÂ)M^{½}`, `Â = M^{−½}AM^{−½}`) and needs no square roots.
 

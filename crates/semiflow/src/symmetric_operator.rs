@@ -114,7 +114,8 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
     ///
     /// # Errors
     ///
-    /// [`SemiflowError::DomainViolation`] if `c.len() != n` or any `cᵢ < 0` / non-finite.
+    /// [`SemiflowError::DomainViolation`] if `c.len() != n`, any `cᵢ < 0` / non-finite, or an
+    /// assembled entry overflows to `±∞`.
     pub fn with_diagonal(&self, c: &[F]) -> Result<Self, SemiflowError> {
         let n = self.n();
         if c.len() != n {
@@ -132,6 +133,12 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
         }
         let (rp, ci, va) = self.csr();
         let (nrp, nci, nva) = add_diagonal(n, rp, ci, va, c);
+        if let Some(&bad) = nva.iter().find(|v| !v.is_finite()) {
+            return Err(SemiflowError::DomainViolation {
+                what: "with_diagonal: A + diag(c) overflows (non-finite assembled entry)",
+                value: bad.to_f64().unwrap_or(f64::NAN),
+            });
+        }
         let inner = Laplacian::from_csr_parts(n, nrp, nci, nva, LaplacianKind::GeneralSymmetric)?;
         Ok(Self {
             inner: Arc::new(inner),

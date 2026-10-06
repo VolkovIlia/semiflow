@@ -108,7 +108,14 @@ pub fn lcg_vec(seed: u64, n: usize) -> Vec<f64> {
 }
 
 /// `max_i |a_i − b_i|`.
+///
+/// Panics on any non-finite input: `f64::max` ignores NaN, so an all-NaN result
+/// would otherwise read as an exact match.
 pub fn sup_diff(a: &[f64], b: &[f64]) -> f64 {
+    assert!(
+        a.iter().chain(b).all(|v| v.is_finite()),
+        "sup_diff: non-finite input"
+    );
     a.iter()
         .zip(b)
         .map(|(x, y)| (x - y).abs())
@@ -116,7 +123,10 @@ pub fn sup_diff(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// `max_i |a_i|`.
+///
+/// Panics on any non-finite entry (see [`sup_diff`]).
 pub fn sup(a: &[f64]) -> f64 {
+    assert!(a.iter().all(|v| v.is_finite()), "sup: non-finite input");
     a.iter().map(|x| x.abs()).fold(0.0_f64, f64::max)
 }
 
