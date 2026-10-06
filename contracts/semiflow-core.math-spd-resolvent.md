@@ -108,23 +108,49 @@ digests verify.
 
 ### §62.4 — φ-combination and the v-independent cost (NORMATIVE; amends §58.2)
 
-**Theorem (Al-Mohy & Higham 2011, SIAM J. Sci. Comput. 33:488, Thm 2.1).** Let
-`W = [w_p, …, w_1] ∈ ℝ^{n×p}` and `J = [[0, I_{p−1}],[0, 0]] ∈ ℝ^{p×p}`. With
+**Theorem (Al-Mohy & Higham 2011, SIAM J. Sci. Comput. 33:488, Thm 2.1; stated
+in the implemented, τ-absorbed form).** Let `p ≥ 1`, let `J ∈ ℝ^{p×p}` be the
+unit super-diagonal nilpotent (`(Jc)_i = c_{i+1}` for `i < p−1`, `(Jc)_{p−1} = 0`;
+`‖J‖_∞ = 1`, **not** scaled by `τ`), and let `W_τ ∈ ℝ^{n×p}` have column
+`j = 0, …, p−1` equal to `τ^{p−j}·w_{p−j}` (so `W_τ = [τ^p w_p, …, τ w_1]`). With
 
 ```text
-B̃ = [[G, W],[0, J]],   [I_n 0]·exp(τB̃)·[w₀; e_p]  =  Σ_{k=0}^{p} τ^k φ_k(τG) w_k .     [§62.4.a]
+B̃ = [[τG, W_τ],[0, J]],   [I_n 0]·exp(B̃)·[w₀; e_p]  =  Σ_{k=0}^{p} τ^k φ_k(τG) w_k ,     [§62.4.a]
 ```
 
+where `e_p` is the last unit vector of `ℝ^p` (augmented slot `n+p−1`). *Proof.*
+`c(t) = e^{tJ}e_p` has entry `j` equal to `t^{k−1}/(k−1)!` with `k = p−j`, so the
+top block solves `u' = τG u + Σ_{k≥1} τ^k w_k t^{k−1}/(k−1)!`, `u(0) = w₀`, and
+`u(1) = e^{τG}w₀ + Σ_k τ^k ∫₀¹ e^{(1−t)τG} t^{k−1}/(k−1)! dt · w_k`, which is the
+right-hand side by the integral definition of `φ_k`. ∎ Note `τ` sits inside the
+`G`-block and the coupling weights, never on `J`; the exponent is `exp(B̃)`, not
+`exp(τB̃)`.
+
 **η-scaling (the cost fix).** For any `η > 0`, `D = diag(I_n, η⁻¹I_p)` gives
-`D B̃ D⁻¹ = [[G, ηW],[0, J]]` and `D[w₀; e_p] = [w₀; e_p/η]`, so the top block is
-unchanged. NORMATIVE choice:
-`η = 2^{−e}` with `e = ⌈log₂ max_{k≥1} ‖w_k‖_∞⌉`, `e` clamped to `[−1000, 1000]`,
-`η = 1` if every `w_k` (`k ≥ 1`) is zero. Then `‖ηW‖_∞ ≤ 1`, so
-`‖τ B̃_η‖_∞ ≤ τ‖G‖_∞ + 2`. `(s, m)` is selected from `PHI_NORM_TIGHTEN·(τ‖G‖ + 2)`
-(§58.2 constant kept). `w₀` never enters the matrix. `phi_action(k)` and
-`phi_action_batched` are the special cases `W = [v, 0, …]` with their existing
-initial vectors, and they get the same η treatment. **Consequences:**
-(i) cost `(s, m) = phi_cost_probe(‖G‖, τ)` is independent of all input vectors;
+`D B̃ D⁻¹ = B̃_η := [[τG, ηW_τ],[0, J]]` and `D[w₀; e_p] = [w₀; e_p/η]`, so the
+top block is unchanged; the initial vector carries `1/η` in slot `n+p−1`.
+NORMATIVE choice (code: `weighted_columns`, `eta_scaling`):
+
+```text
+M = Σ_{k=1}^{p} τ^k ‖w_k‖_∞     (τ-WEIGHTED, SUMMED over columns; zero columns skipped)
+η = 2^{−e},  e = ⌈log₂ M⌉ clamped to [−1000, 1000];   η = 1 if M = 0 or M non-finite.
+```
+
+`M` non-finite (`τ^k‖w_k‖_∞` overflow) is a typed `DomainViolation`, not a
+fallback. **Norm bound.** Row `i < n` of `ηW_τ` has absolute sum
+`η Σ_k τ^k |w_{k,i}| ≤ η M ≤ 1` (since `2^e ≥ M`), so `‖ηW_τ‖_∞ ≤ 1` and
+`‖B̃_η‖_∞ ≤ ‖τG‖_∞ + ‖ηW_τ‖_∞ + ‖J‖_∞ ≤ τ‖G‖_∞ + 2` for any number `q ≤ p` of
+non-zero columns and every `τ ≥ 0`. (An unweighted `max_k ‖w_k‖_∞` would leave `‖ηW_τ‖_∞` up to
+`Σ_k τ^k`, i.e. unbounded for `τ > 1` and above 1 for `q ≥ 2` non-zero columns.)
+The bound needs `2^e ≥ M`, i.e. `M ≤ 2^{1000}`; above the clamp, and in a float
+type where `2^{±e}` is not finite (`η = 1` fallback), the bound — and hence (i)
+below — is not guaranteed (accuracy is unaffected, only cost). `(s, m)` is selected
+from `PHI_NORM_TIGHTEN·(τ‖G‖ + 2)` (§58.2 constant kept). `w₀` never enters the
+matrix. `phi_action(k)` and `phi_action_batched` are the special case
+`p = PHI_MAX`, one non-zero column `W = [v, 0, 0]` (weight 1, no `τ^k`), η from
+`M = ‖v‖_∞`, initial vector `e_k/η` in slot `n+k−1` (`k ≥ 1`) or `[v; 0]` (`k = 0`);
+the top block is then `φ_k(τG)v`. **Consequences:** (i) cost
+`(s, m) = phi_cost_probe(‖G‖, τ)` is independent of all input vectors;
 (ii) powers of two are exact, so `φ(2^j v) = 2^j φ(v)` **bit for bit** within the
 clamp range. That is gate `G_PHI_COST_V_INVARIANT`. The pre-ADR-0202 bound
 `τ‖A‖ + ‖v‖_∞ + 1` made the substep count grow linearly in `‖v‖_∞`: measured
@@ -170,8 +196,8 @@ error by that power of the Lipschitz ratio.
 | `G_SYMOP_COMPOSE_EXACT` | `with_diagonal` = dense `A + diag(c)` entrywise; `csr()`/`from_csr` round trip | bitwise | RELEASE_BLOCKING |
 | `G_PHI_COST_V_INVARIANT` | `(s,m)` independent of `‖v‖`; `φ(2⁴⁰v) = 2⁴⁰φ(v)` | bitwise | RELEASE_BLOCKING |
 | `G_PHI_COMBINATION_DENSE` | §62.4.a vs DST-eigen oracle (the §58 6-node one) and vs separate calls | ≤ 1e-12 / ≤ 1e-13 | RELEASE_BLOCKING |
-| `G_PHI_MASS_DENSE` | mass φ vs Padé-13 dense augmented ref; vs §55.3 congruence; `mass=None` ≡ `NegLaplacianGenerator` | ≤ 1e-12 / ≤ 1e-13 / bitwise | RELEASE_BLOCKING |
-| `G_PHI_GENERAL_DENSE` | φ_k on upwind drift–diffusion `GeneralOperator` vs dense ref; transpose vs dense | ≤ 1e-10 / ≤ 1e-14 | RELEASE_BLOCKING |
+| `G_PHI_MASS_DENSE` | mass φ vs test-local dense Taylor scaling-and-squaring ref (`tests/phi_dense`); vs §55.3 congruence; `mass=None` ≡ `NegLaplacianGenerator` | ≤ 1e-12 / ≤ 1e-13 / bitwise | RELEASE_BLOCKING |
+| `G_PHI_GENERAL_DENSE` | φ_k on upwind drift–diffusion `GeneralOperator` vs test-local dense Taylor ref; transpose vs dense | ≤ 1e-10 / ≤ 1e-14 | RELEASE_BLOCKING |
 | `G_ETD_AFFINE_EXACT` | `C(h,[u₀,M⁻¹s])` vs `u* + e^{hG}(u₀−u*)`; ETDRK4 recipe vs `Etdrk4` driver | ≤ 1e-12 / ≤ 1e-11 | RELEASE_BLOCKING |
 
 Plus the ADR-0200 CI digests: new nostd-check scenarios `spdr_tridiag`, `spdr_pcg_ic0`

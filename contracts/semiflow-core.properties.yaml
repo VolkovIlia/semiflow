@@ -9890,7 +9890,7 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "UPDATED (PHI_NORM_TIGHTEN=2.0 fix: select_s_m now picks Taylor-18 instead of Taylor-13; expected action_err ~2e-15 << 1e-12; pade_err ≤ 1e-12 unchanged)"
+    pass_status: "PASS (re-run after ADR-0202 η-scaling, thresholds unchanged): action_err ≤ 5.6e-16 (k=0..3; thr 1e-12), pade_err ≤ 5.6e-16, batched vs single sup_diff 0 (thr 1e-14)"
     rationale: |
       G_PHI_AUG_DENSE (RELEASE_BLOCKING, ADR-0189 §B): verifies phi_action
       (augmented Horner, Al-Mohy-Higham Alg. 3.2) against an EIGEN-EXACT reference
@@ -9922,7 +9922,7 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (slope=4.0778, e1=9.765e-10, e2=5.783e-11)"
+    pass_status: "PASS (slope=4.0778, e1=9.765e-10, e2=5.783e-11; re-run after ADR-0202 η-scaling, identical to pre-change values, thresholds unchanged)"
     rationale: |
       G_ETDRK4_ORDER (RELEASE_BLOCKING, ADR-0189 §C): ETDRK4 achieves order 4 on
       Allen-Cahn 1D with periodic BC (N=8, eps=0.01, T=0.2).  Self-convergence with
@@ -9940,7 +9940,7 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (rel_err_jvp=8.503e-9, rel_err_adj=2.689e-16)"
+    pass_status: "PASS (rel_err_jvp=8.503e-9, rel_err_adj=2.689e-16; re-run after ADR-0202 η-scaling, identical to pre-change values, thresholds unchanged)"
     rationale: |
       G_ETD_ADJOINT_FD (RELEASE_BLOCKING, ADR-0189 §D4): AllenCahn NonlinearityDiff
       correctness on n=16 with smooth test vectors.  Two sub-checks: (1) jvp vs central
@@ -10504,7 +10504,7 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (ADR-0202) — MUST FAIL on the pre-ADR code (cost grows with ‖v‖)"
+    pass_status: "PASS (ADR-0202 Wave 1) — matvec counts equal across ‖v‖∞ ∈ {1e-6, 1, 1e6} and equal s·m of phi_cost_probe (×4 batched); bitwise 2^40 homogeneity holds for phi_action k=0..3 and phi_combination (w0=0, and with w0 scaled too); 1e300-scale and f32 smoke cases pass. RED on pre-ADR code: counts [60, 90, 16949220] at ‖v‖ = 1e-6/1/1e6 (n=6, τ=0.5); N=161, τ=1e-6 phi_action(k=1): 15.19 ms at scale 1e3 vs 0.037 ms at 1e-3 before; 0.13 ms vs 0.09 ms after"
     rationale: |
       G_PHI_COST_V_INVARIANT (RELEASE_BLOCKING, ADR-0202 D4, §62.4): φ cost does not
       depend on the input vector. (1) A counting GeneratorAction wrapper (test-local,
@@ -10515,7 +10515,8 @@ implementation_notes:
       2^40·phi_action(v) for k=0..=3 and phi_combination([w0, 2^40 w1, 2^40 w2])
       top block == phi_combination with [w0, w1, w2] scaled consistently
       (w0 is not in the matrix, so it is excluded from the scaling claim).
-      Operator: the §58 6-node tridiag(1,−2,1) via NegLaplacianGenerator. The
+      Operator: the §58 6-node tridiag(1,−2,1) as a test-local CountingGen
+      (GeneratorAction impl, norm_bound = 4, counts apply_generator). The
       pre-ADR code fails sub-check (1) (cost ∝ ‖v‖∞, measured 20 ms vs 0.02 ms
       at N=161, τ=1e-6).
     gate: "matvec counts equal across scales; bitwise homogeneity holds"
@@ -10528,13 +10529,16 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (ADR-0202)"
+    pass_status: "PASS (ADR-0202 Wave 1) — sup err vs eigen oracle ≤ 4.6e-16 (p=0..3; threshold 1e-12), vs separate phi_action calls ≤ 3.4e-16 (threshold 1e-13); G_PHI_AUG_DENSE re-run with unchanged thresholds: action_err 5.6e-16 max (k=0..3), batched==single 0"
     rationale: |
       G_PHI_COMBINATION_DENSE (RELEASE_BLOCKING, ADR-0202 D3, §62.4.a): one-sweep
-      combination equals Σ τ^k φ_k(τG) w_k. Oracle: the eigen-exact DST-I reference
-      of G_PHI_AUG_DENSE (6-node tridiag(1,−2,1), τ = 0.5) with four random-but-
-      seeded w_k (p = 3), plus p ∈ {0,1,2}. Second check against the sum of
-      separate phi_action calls (≤ 1e-13). G_PHI_AUG_DENSE itself must pass with
+      combination equals Σ τ^k φ_k(τG) w_k. Primary oracle: the eigen-exact DST-I
+      reference of G_PHI_AUG_DENSE (6-node tridiag(1,−2,1) as a test-local
+      TriDiagGen, τ = 0.5; tests/phi_dense/mod.rs::eigen_exact_phi_k) with four
+      random-but-seeded w_k (p = 3), plus p ∈ {0,1,2}. Cross-check against the
+      sum of separate phi_action calls (≤ 1e-13). Error measure (both checks):
+      sup-norm error divided by max_k τ^k‖w_k‖∞; a non-vacuity floor
+      ‖out‖∞ > 0.01 is asserted. G_PHI_AUG_DENSE itself must pass with
       UNCHANGED thresholds after the η-scaling change.
     gate: "sup error vs eigen oracle <= 1e-12 (relative to max_k ‖τ^k w_k‖∞); vs separate calls <= 1e-13"
     test_file: "tests/g_phi_combination_dense.rs::g_phi_combination_dense"
@@ -10546,17 +10550,22 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (ADR-0202)"
+    pass_status: "PASS (ADR-0202 Wave 1) — (1) vs dense augmented exp ≤ 4.4e-16 (thr 1e-12); (2) vs §55.3 congruence ≤ 2.2e-16 (thr 1e-13); (3) mass=None bitwise identical to NegLaplacianGenerator (phi_action k=0..3, phi_action_batched, norm_bound); (4) transpose ≤ 2.2e-17 rel (thr 1e-15)"
     rationale: |
       G_PHI_MASS_DENSE (RELEASE_BLOCKING, ADR-0202 D3, §62.3): φ-functions with a
       diagonal mass. n=10 conservative operator + reaction, mass with ratio 50
       (contrast). (1) CsrGenerator::from_symmetric(op, Some(m)) φ_k, k=0..=3, vs
-      dense mat_exp_pade13 of the (n+3)-augmented matrix of −M⁻¹A (≤ 1e-12).
-      (2) vs the §55.3 congruence route: M^{-½}·phi_action(lumped_congruence(m),
-      k, τ, M^{½}v) (≤ 1e-13). (3) CsrGenerator::from_symmetric(op, None) is
-      bitwise identical to NegLaplacianGenerator for phi_action and
-      phi_action_batched. (4) apply_generator_transpose == dense (−M⁻¹A)ᵀ·v (≤ 1e-15
-      relative).
+      the test-local dense Taylor scaling-and-squaring oracle
+      (tests/phi_dense/mod.rs::dense_expm: scale to ‖·‖∞ ≤ 0.5, 26-term Taylor,
+      square back; independent of the library's φ code) applied to the
+      (n+3)-augmented matrix of G = −M⁻¹A (≤ 1e-12). (2) vs the §55.3 congruence
+      route: M^{-½}·phi_action(lumped_congruence(m), k, τ, M^{½}v) (≤ 1e-13).
+      (3) CsrGenerator::from_symmetric(op, None) is bitwise identical to
+      NegLaplacianGenerator for phi_action and phi_action_batched (and
+      norm_bound). (4) apply_generator_transpose == dense (−M⁻¹A)ᵀ·v (≤ 1e-15).
+      Error measure: (1) and (2) are sup-norm errors divided by
+      max(1, ‖ref‖∞) (absolute below unit scale, relative above); (4) is
+      sup-norm error divided by ‖ref‖∞ (plain relative).
     gate: "(1) <= 1e-12, (2) <= 1e-13, (3) bitwise, (4) <= 1e-15"
     test_file: "tests/g_phi_mass_dense.rs::g_phi_mass_dense"
     feature_gate: none
@@ -10567,16 +10576,22 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (ADR-0202)"
+    pass_status: "PASS (ADR-0202 Wave 1) — drifted Fokker–Planck n=12, no-mass and mass: phi_k (k=0..3) ≤ 1.8e-15, phi_combination ≤ 1.9e-15 (thr 1e-10); transpose ≤ 6.7e-17 (thr 1e-14); operator non-symmetry asserted"
     rationale: |
       G_PHI_GENERAL_DENSE (RELEASE_BLOCKING, ADR-0202 D3, closes MODEL gap G9):
       φ-functions on the non-symmetric GeneralOperator via
       CsrGenerator::from_general. Operator: the G_GENOP_DENSE upwinded drifted
-      Fokker–Planck CSR (n=12), with and without mass. Reference: Padé-13 of the
-      dense augmented matrix. Tolerance 1e-10 mirrors G_GENOP_DENSE (non-normal
-      operator). Transpose sub-check: apply_generator_transpose vs dense
-      transpose ≤ 1e-14.
-    gate: "φ_k (k=0..=3) and phi_combination rel err <= 1e-10; transpose <= 1e-14"
+      Fokker–Planck CSR (n=12), with and without mass. Reference: the
+      test-local dense Taylor scaling-and-squaring oracle
+      (tests/phi_dense/mod.rs::dense_expm: scale to ‖·‖∞ ≤ 0.5, 26-term Taylor,
+      square back; independent of the library's φ code),
+      applied to the dense augmented matrix (φ_k and the phi_combination
+      augmented form of §62.4.a). Tolerance 1e-10 mirrors G_GENOP_DENSE
+      (non-normal operator). Transpose sub-check: apply_generator_transpose vs
+      dense transpose ≤ 1e-14. Error measure: φ_k and phi_combination use the
+      sup-norm error divided by max(1, ‖ref‖∞) (not a pure relative error);
+      the transpose uses sup-norm error divided by ‖ref‖∞.
+    gate: "φ_k (k=0..=3) and phi_combination sup err / max(1, ‖ref‖∞) <= 1e-10; transpose sup err / ‖ref‖∞ <= 1e-14"
     test_file: "tests/g_phi_general_dense.rs::g_phi_general_dense"
     feature_gate: none
     introduced_in: adr-0202-spd-resolvent

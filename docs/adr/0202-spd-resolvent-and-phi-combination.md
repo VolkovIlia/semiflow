@@ -69,8 +69,11 @@ specific to that study; it only exposed three universal defects.
   structure.
 - **C2 (φ cost).** `v` must sit inside the augmented matrix (one sweep for all φ_k),
   and `v` must not affect that matrix's norm. *Resolution by parameter*: scale the
-  coupling column by `η = 2^{−⌈log₂‖v‖⌉}` and the companion block by `1/η`. Powers
-  of two are exact in IEEE arithmetic, so `φ(2^j v) = 2^j φ(v)` bit for bit.
+  coupling block by `η = 2^{−⌈log₂ M⌉}`, `M = Σ_k τ^k‖w_k‖_∞` (τ-weighted, summed
+  over columns; `M = ‖v‖_∞` for `phi_action`), and the companion slot of the
+  initial vector by `1/η`, so `‖ηW_τ‖_∞ ≤ 1` for every `τ` and column count
+  (§62.4). Powers of two are exact in IEEE arithmetic, so `φ(2^j v) = 2^j φ(v)`
+  bit for bit.
 - **C3 (transient).** The coupling term must stay explicit (it is problem-specific
   and nonlinear, and Python cannot call back per step: ADR-0189 D3). It must also
   be implicit (it cancels the linear part). *Resolution in structure*: split it into
@@ -123,7 +126,10 @@ in the operator (C3).
 
 **D4 — φ cost fix (§58.2 amended).** `phi_action`, `phi_action_batched` and
 `phi_combination` select `(s, m)` from `τ‖G‖ + 2` (`PHI_NORM_TIGHTEN` kept) with
-the power-of-two scaling `η` applied to the coupling block. New probe
+the power-of-two scaling `η` applied to the coupling block. The augmented matrix
+is `B̃_η = [[τG, ηW_τ],[0, J]]` (column `j` of `W_τ` is `τ^{p−j}w_{p−j}`, `J`
+unscaled) and `η` comes from the τ-weighted column sum, which is what makes
+`‖B̃_η‖_∞ ≤ τ‖G‖ + 2` hold (§62.4). New probe
 `phi_cost_probe(norm_g, τ) -> (s, m)`. Existing gate thresholds (`G_PHI_AUG_DENSE`,
 `G_ETDRK4_ORDER`, `G_ETD_ADJOINT_FD`) are unchanged and must stay green. Values change only through the
 `(s, m)` choice, at the truncation-error level (≤ 1e-14 on the existing oracles).

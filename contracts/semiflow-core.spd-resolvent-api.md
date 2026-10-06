@@ -162,8 +162,10 @@ so its results are **bit-identical** to `NegLaplacianGenerator` (checked in
 ```rust
 /// out ← Σ_{k=0}^{p} τ^k φ_k(τG) w_k,  p = w.len() − 1 ≤ PHI_MAX (= 3)   (§62.4)
 /// One augmented Horner sweep (Al-Mohy–Higham 2011 Thm 2.1, η-scaled).
+/// Augmented matrix B̃_η = [[τG, ηW_τ],[0, J]], column j of W_τ = τ^{p−j}·w_{p−j},
+/// J unscaled; η = 2^{−⌈log₂ Σ_k τ^k‖w_k‖∞⌉} (§62.4), initial slot n+p−1 = 1/η.
 /// # Errors `DomainViolation`: w empty or w.len() > PHI_MAX+1; any w_k.len() != n
-///   or non-finite entry; τ < 0 or non-finite; out.len() != n.
+///   or non-finite entry; τ < 0 or non-finite; out.len() != n; τ^k‖w_k‖∞ overflow.
 pub fn phi_combination<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op, tau: F, w: &[&[F]], out: &mut [F], scratch: &mut ScratchPool<F>,
 ) -> Result<(), SemiflowError>;

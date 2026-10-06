@@ -266,7 +266,7 @@ pub use crate::{
     etdrk4::Etdrk4,
     expmv::DiffusionExpmvChernoff,
     float::SemiflowFloat,
-    generator_action::{DivFormGenerator, GeneratorAction, NegLaplacianGenerator},
+    generator_action::{CsrGenerator, DivFormGenerator, GeneratorAction, NegLaplacianGenerator},
     graph::{Graph, Laplacian, LaplacianKind},
     graph_adjoint_presampled::{
         fill_abscissa_times, PreSampledLaplacianSeq, PreSampledMagnusAdj, PreSampledVarCoefAdj,
@@ -324,7 +324,9 @@ pub use crate::{
     nonseparable_mixed::NonSeparableMixedChernoff,
     obstacle::{ClosureObstacle, ConstantObstacle, Obstacle, ObstacleChernoff},
     obstacle_nd::ObstacleChernoffND,
-    phi_action::{dense_phi_aug_ref, phi_action, phi_action_batched, PHI_MAX},
+    phi_action::{
+        dense_phi_aug_ref, phi_action, phi_action_batched, phi_combination, phi_cost_probe, PHI_MAX,
+    },
     point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
