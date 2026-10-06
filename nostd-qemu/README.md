@@ -16,7 +16,9 @@ and octonic Hermite sampling, 9-point FD stencils in `f64` and `f32`, the
 cached G⁴ stencil), Chebyshev boundary folding, Schrödinger norm
 conservation, `expmv`, graph Krylov/Chebyshev and implicit-Euler PCG against
 dense Padé, the Gamma-subordinated semigroup, gridless particle moments,
-Smolyak quadrature, and reverse-mode AD with `√n` checkpoints. Each scenario
+Smolyak quadrature, reverse-mode AD with `√n` checkpoints, the SPD
+resolvent (tridiagonal LDLᵀ and PCG with IC(0), ADR-0202) against manufactured
+solutions, and `phi_combination` against the DST-I eigen-exact oracle. Each scenario
 also hashes its output bits and must reproduce the digest committed in
 `crates/semiflow-nostd-check/src/expected.rs`. The same scenarios run on the
 host with `cargo test -p semiflow-nostd-check --release`.
@@ -50,12 +52,13 @@ layout is in `memory.x`: 4 MiB of code at `0x0000_0000` and 4 MiB of RAM at
 
 Each line of output reports the measured error, its tolerance, the output
 digest, the scenario's peak heap use, the heap still allocated afterwards
-(`leaked`, which should be 0) and the elapsed host time:
+(`leaked`, which should be 0) and the elapsed host time (the numbers below are illustrative; the heap peak and timings
+change with the scenario set and the host):
 
 ```text
 PASS heat_shift1d err=3.2113543939227274e-4 tol=5e-4 digest=0xac0e1482a362f4fe heap_peak=4824 leaked=0 time=1.41s
 ...
-summary: 19 passed, 0 failed; heap peak 525552 of 1048576 bytes; 20.65s
+summary: 22 passed, 0 failed; heap peak 525552 of 1048576 bytes; 20.65s
 ALL PASS
 ```
 

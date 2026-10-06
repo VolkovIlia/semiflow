@@ -227,7 +227,7 @@ R.method   # "tridiagonal" | "pcg-ic0" | "pcg-jacobi"
 R.n
 
 # --- φ-functions (op: SymmetricOperator | GeneralOperator) ---
-y   = semiflow.phi_combination(op, tau, W, mass=None)  # W: (p+1, n), rows w_0..w_p, p <= 3
+y   = semiflow.phi_combination(op, tau, w, mass=None)  # w: (p+1, n), rows w_0..w_p, p <= 3
                                                        # y = Σ τ^k φ_k(−τ M⁻¹A) w_k
 y1  = semiflow.phi_action(op, k, tau, v, mass=None)          # mass kwarg + GeneralOperator: NEW
 Y   = semiflow.phi_action_batched(op, p, tau, v, mass=None)  # idem

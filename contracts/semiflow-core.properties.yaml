@@ -10655,16 +10655,24 @@ implementation_notes:
     type: NUMERICAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PENDING (ADR-0202)"
+    pass_status: "PASS (ADR-0202 Wave 3) — (1) affine rel sup err 4.9e-16 (h=1e-3), 3.9e-15 (h=1), 1.9e-14 (h=1e2) (thr 1e-12); (2) ETDRK4 recipe vs shipped Etdrk4 after 4 steps rel sup diff 3.1e-16 (thr 1e-11)"
     rationale: |
       G_ETD_AFFINE_EXACT (RELEASE_BLOCKING, ADR-0202, §62.5, closes MODEL gap G1):
-      (1) affine evolution M u' = −A u + s: phi_combination(h, [u0, M⁻¹s]) vs
-      u* + e^{hG}(u0 − u*) with u* from SpdResolvent(λ=0) and e^{hG} from dense
-      Padé-13 (n=10, h ∈ {1e-3, 1, 1e2}; the last is deep in the stiff regime,
-      h·λ_max ≈ 1e4). (2) The documented ETDRK4 recipe (four phi_combination calls,
-      §62.5) on Allen–Cahn (the G_ETDRK4_ORDER setup) agrees with the shipped
-      Rust Etdrk4 driver after 4 steps. The tolerance is looser because the two
-      evaluate the φ-weights by different summation paths.
+      (1) affine evolution M u' = −A u + s on n=10 (op_1d with with_diagonal(c),
+      c = 0.5 + 0.25·i, half-cell mass): phi_combination(h, [u0, M⁻¹s]) vs the
+      oracle u* + e^{hG}(u0 − u*), G = −M⁻¹A dense. u* comes from SpdResolvent(λ=0).
+      e^{hG} comes from the test-local dense exponential tests/phi_dense::dense_expm:
+      scale to ‖·‖∞ ≤ 0.5, 26-term Taylor, square back. That is the same oracle as
+      the other φ gates (G_PHI_MASS_DENSE, G_PHI_GENERAL_DENSE). h ∈ {1e-3, 1, 1e2};
+      spec(G) ⊂ [−559, −1.75], so h = 1e2 gives h·|λ|_max ≈ 5.6e4, deep in the stiff
+      regime. Error measure: relative sup error sup|got − want| / sup|want|.
+      (2) The documented ETDRK4 recipe (four phi_combination calls, §62.5) on
+      Allen–Cahn (the G_ETDRK4_ORDER setup, h = 0.05) agrees with the shipped Rust
+      Etdrk4 driver after 4 steps. The measure is the relative sup difference against
+      the driver state, which must have sup > 0.1 (non-trivial). The tolerance is
+      looser because the two evaluate the φ-weights by different summation paths.
+      (Text aligned with the test 2026-10-06: the earlier "dense Padé-13" wording
+      was wrong. No threshold change.)
     gate: "(1) relative sup err <= 1e-12; (2) relative sup diff <= 1e-11"
     test_file: "tests/g_etd_affine_exact.rs::g_etd_affine_exact"
     feature_gate: none

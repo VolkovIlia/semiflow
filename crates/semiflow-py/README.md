@@ -505,9 +505,10 @@ Python boundary.
 
 | Class | Constructor | Key methods | Notes |
 |-------|-------------|-------------|-------|
-| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55) |
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
 | `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
 | `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, n_steps) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv`. Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects. Cost is `Θ(t‖A‖_∞)` matvecs — linear in the horizon, NOT depth-flat like Lanczos (§57, ADR-0195) |
+| `SpdResolvent` | built by `SymmetricOperator.resolvent(...)` | `.solve(b) -> NDArray`, `.solve_batched(B) -> NDArray`, `.solve_info(b) -> (x, iterations, rel_residual)`, `.method`, `.n` | Factor-once / solve-many `x = (λM + A)⁻¹ b` of an SPD operator, `λ ≥ 0`, `M = diag(mass) > 0`. Tridiagonal: exact `O(n)` LDLᵀ; otherwise PCG with IC(0) or Jacobi. The GIL is released during the solve. PCG is `O(√κ·nnz)` per solve; no multigrid (§62, ADR-0202) |
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
 | `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
@@ -547,7 +548,7 @@ assert np.max(np.abs(u - v0.mean())) < 1e-6
 
 ### Free functions
 
-`version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `shift1d_coeff_grad()` — see `__init__.pyi` for their signatures.
+`version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()` — see `__init__.pyi` for their signatures.
 
 ---
 
@@ -581,7 +582,7 @@ to `extraPaths` so local development also resolves the stubs correctly
 | Language | Package | Notes |
 |----------|---------|-------|
 | Rust | [`semiflow`](https://crates.io/crates/semiflow) ([docs.rs](https://docs.rs/semiflow)) | The full engine catalogue; `no_std + alloc` |
-| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 85 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `shift1d_coeff_grad()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
+| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 86 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
 | JavaScript / WASM | [`@semiflow/wasm`](https://www.npmjs.com/package/@semiflow/wasm) | Lite build on npm; the heavy-grid engines need a `--features full` build; see the [npm page](https://www.npmjs.com/package/@semiflow/wasm) |
 | C / C++ | `semiflow-ffi` | `extern "C"` ABI with `catch_unwind` on every entry point; header `semiflow.h` |
 

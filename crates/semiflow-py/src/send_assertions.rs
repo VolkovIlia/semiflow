@@ -316,4 +316,11 @@ mod tests {
     assert_impl_all!(Grid2D<f64>: Send, Sync);
     assert_impl_all!(AdaptivePI<DiffusionChernoff<f64>>: Send, Sync);
     assert_impl_all!(AdaptivePI<DriftReactionChernoff<f64>>: Send, Sync);
+
+    // ADR-0202: `SpdResolvent<f64>` (Arc CSR + Vec factors) and `CsrGenerator<f64>`
+    // (Arc CSR) cross `py.detach` in `spd_resolvent_py.rs` / `phi_etdrk4_py.rs`.
+    assert_impl_all!(semiflow::SpdResolvent<f64>: Send, Sync);
+    assert_impl_all!(semiflow::CsrGenerator<f64>: Send, Sync);
+    assert_impl_all!(semiflow::SymmetricOperator<f64>: Send, Sync);
+    assert_impl_all!(semiflow::general_operator::GeneralOperator<f64>: Send, Sync);
 }

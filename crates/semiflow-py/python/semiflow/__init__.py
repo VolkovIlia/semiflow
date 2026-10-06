@@ -128,6 +128,9 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     phi_action,
     phi_action_batched,
     Etdrk4,
+    # ADR-0202 — SPD resolvent / steady solve + φ-combination
+    SpdResolvent,
+    phi_combination,
     # reverse-mode AD (ADR-0156) — registered natively but was never re-exported
     ReverseHeat1D,
 )
@@ -258,5 +261,8 @@ __all__ = [
     "phi_action",
     "phi_action_batched",
     "Etdrk4",
+    # ADR-0202
+    "SpdResolvent",
+    "phi_combination",
     "ReverseHeat1D",
 ]
