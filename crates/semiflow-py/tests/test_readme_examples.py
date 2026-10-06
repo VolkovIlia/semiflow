@@ -43,4 +43,4 @@ def test_readme_has_examples() -> None:
 
 @pytest.mark.parametrize("source", BLOCKS, ids=[f"example-{i}" for i in range(len(BLOCKS))])
 def test_readme_example_runs(source: str) -> None:
-    exec(compile(source, str(README), "exec"), {"__name__": "__readme__"})  # noqa: S102
+    exec(compile(source, str(README), "exec"), {"__name__": "__readme__"})  # noqa: S102  # nosec B102 - executes trusted README examples as tests
