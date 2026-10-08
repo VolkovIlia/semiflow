@@ -488,7 +488,16 @@ jobs:
       # G_ADJOINT_FP_TIGHTNESS_VAGUE, G_DR_ZETA4_TRUTHFUL_ORDER.
       - name: Run Wentzell, multilayer and AD gates
         run: |
-          RUSTFLAGS="-C target-cpu=native" cargo test --workspace \
+          # Keep native tuning only on explicit self-hosted runs.
+          # Hosted runners must use portable defaults to avoid ISA mismatches.
+          if [ "${RUNNER_ENVIRONMENT:-github-hosted}" = "self-hosted" ]; then
+            export RUSTFLAGS="-C target-cpu=native"
+            echo "Using self-hosted native tuning: ${RUSTFLAGS}"
+          else
+            unset RUSTFLAGS
+            echo "Using portable target-cpu defaults on ${RUNNER_ENVIRONMENT:-unknown}"
+          fi
+          cargo test --workspace \
             --features parallel,simd,slow-tests --release \
             --test g_wentzell_stable \
             --test g_wentzell_order \
