@@ -105,7 +105,11 @@ pub(crate) fn half_of<F: SemiflowFloat>(t: F) -> F {
 /// (`graph_expmv_matvec_count`), so it equals what the sweep does (the decay
 /// skip of §63.5.b can only shorten it). Used by the accuracy gates to derive
 /// the error bound `τ_k` of §63.7.a without measuring anything.
+///
+/// `#[non_exhaustive]`: a predictor report gains fields as the bound evolves
+/// (ADR-0205 added `chain_weight`); read it, do not construct it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FrechetPlan {
     /// Panels per half, `K + 1`.
     pub panels_per_half: u32,

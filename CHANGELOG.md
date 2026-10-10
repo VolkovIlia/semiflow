@@ -45,7 +45,18 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   any NumPy-vectorised callable `f(t, x, u)` called once per RK stage (not per
   node); `evolve(t, n_steps, richardson=L)`, `values()` `(K, *grid)`, `time`,
   `species`; GIL released; callback exceptions propagate unchanged.
-  `semiflow.richardson_weights`. Stubs and README updated.
+  `semiflow.richardson_weights`; `Heat1D.evolve(..., richardson=L)`. Stubs and
+  README updated.
+
+#### Changed (behaviour)
+
+- Chebyshev, Lanczos and general Taylor actions (and everything built on them:
+  `GraphKrylovChernoff`, Fréchet gradients, `CsrExpmvChernoff`, ETDRK4) return
+  different bits — within their tolerance, and more accurately — see ADR-0205.
+- `KrylovPath::Lanczos { m_max }` with an `m_max` that cannot reach `tol` at
+  any substep count (`m_max = 1`) returns `DomainViolation` instead of an
+  under-resolved result.
+- `FrechetPlan` (unreleased) gains `chain_weight` and is `#[non_exhaustive]`.
 
 #### Fixed
 
