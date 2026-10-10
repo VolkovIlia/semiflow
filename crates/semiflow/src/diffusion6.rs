@@ -336,13 +336,17 @@ impl ChernoffFunction<f64> for Diffusion6thChernoff<f64> {
         tau: f64,
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
+        scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
-        crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-            apply_at_node_f64(self, tau, src, i)
+        // ADR-0204: one ghost/derivative table and one ζ⁶ step per step.
+        let step = Zeta6Step::new(self, tau);
+        crate::sample_table::with_prepared(&src.values, src.grid, scratch, |f| {
+            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
+                apply_at_node_f64(self, tau, f, i, step)
+            })
         })
     }
 }
@@ -387,7 +391,7 @@ impl ChernoffFunction<f32> for Diffusion6thChernoff<f32> {
 
 #[path = "diffusion6_helpers.rs"]
 mod helpers_f64;
-use helpers_f64::{apply_at_node_f64, validate_tau_f64};
+use helpers_f64::{apply_at_node_f64, validate_tau_f64, Zeta6Step};
 
 #[path = "diffusion6_generic.rs"]
 mod helpers_generic;

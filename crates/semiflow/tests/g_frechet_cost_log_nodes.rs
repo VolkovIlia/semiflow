@@ -2,8 +2,9 @@
 //! grows like `log(ρ̄t)` and the all-edges gradient costs the same actions as a
 //! single edge.
 //!
-//! Parts (i) (node counts) and (ii) (`spmv_upper ≤ B(ρ̄t)` of §63.6.c, Amendment 1)
-//! are exact plan arithmetic and are asserted; part (iii) (wall-time ratio) is
+//! Parts (i) (node counts) and (ii) (`spmv_upper ≤ B(ρ̄t)` of §63.6.c, Amendment 4,
+//! never looser than the Amendment-1 bound) are exact plan arithmetic and are
+//! asserted; part (iii) (wall-time ratio) is
 //! printed with `eprintln!` because CI hosts are noisy.
 
 #![allow(
@@ -47,32 +48,44 @@ fn part_i_node_counts() {
     assert!(hi <= 4 * lo, "n_nodes(1e6)/n_nodes(1e2) = {hi}/{lo} > 4");
 }
 
-/// `B(ρ̄t) = m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))` of §63.6.c (Amendment 1).
-fn spmv_bound(rho_t: f64, panels: u32, m_z: u32) -> f64 {
-    const Z_SAFE: f64 = 200.0;
-    f64::from(m_z) * (3.0 * rho_t / Z_SAFE + 2.0 + 32.0 * f64::from(panels))
+/// `B(ρ̄t) = √(6L·N·ρ̄t) + N·2L/3` of §63.6.c (Amendment 4), `N = 2 + 32(K+1)`
+/// calls, `L = ln(8/tol)`: each call costs `m(z) ≤ 2L/3 + √(2Lz)` (Bennett tail of
+/// the Skellam law, gate `G_CHEB_SQRT_COST`) and `Σ√zᵢ ≤ √(N·Σzᵢ)`, `Σzᵢ ≤ 3ρ̄t`.
+fn spmv_bound(rho_t: f64, panels: u32, tol: f64) -> f64 {
+    let ln8 = (8.0 / tol).ln();
+    let calls = 2.0 + 32.0 * f64::from(panels);
+    (6.0 * ln8 * calls * rho_t).sqrt() + calls * 2.0 * ln8 / 3.0
+}
+
+/// Amendment-1 bound with `Z_SAFE = 200`, `m_Z = 101` (the substep kernel).
+fn legacy_spmv_bound(rho_t: f64, panels: u32) -> f64 {
+    101.0 * (3.0 * rho_t / 200.0 + 2.0 + 32.0 * f64::from(panels))
 }
 
 fn part_ii_spmv_bound() {
     let path = KrylovPath::Chebyshev;
-    // m_Z = chebyshev_degree(Z_SAFE, tol): an action with z = ρ̄τ/2 = 200 is one substep.
-    let (s_z, m_z) = graph_expmv_matvec_count(1.0, 400.0_f64, 1e-12, &path);
-    assert_eq!(s_z, 1, "z = Z_SAFE must be a single substep");
+    let tol = 1e-12;
     for rho_t in [1e3, 1e4, 1e5, 1e6] {
-        let plan = graph_expmv_frechet_plan(rho_t, 1.0_f64, 1e-12, &path);
-        let (s, m) = graph_expmv_matvec_count(rho_t, 1.0_f64, 1e-12, &path);
+        let plan = graph_expmv_frechet_plan(rho_t, 1.0_f64, tol, &path);
+        let (s, m) = graph_expmv_matvec_count(rho_t, 1.0_f64, tol, &path);
         let c_t = (u64::from(s) * u64::from(m)) as f64;
-        let bound = spmv_bound(rho_t, plan.panels_per_half, m_z);
+        let bound = spmv_bound(rho_t, plan.panels_per_half, tol);
+        let legacy = legacy_spmv_bound(rho_t, plan.panels_per_half);
         let upper = plan.spmv_upper as f64;
         eprintln!(
             "ADVISORY (ii) rho_t={rho_t:e} spmv_upper={upper:e} B={bound:e} \
-             spmv_upper/C(t)={:.2} B/C(t)={:.2}",
+             spmv_upper/C(t)={:.2} B/C(t)={:.2} B/B_legacy={:.3}",
             upper / c_t,
-            bound / c_t
+            bound / c_t,
+            bound / legacy
         );
         assert!(
             upper <= bound,
             "spmv_upper {upper:e} > B {bound:e} at rho_t = {rho_t:e}"
+        );
+        assert!(
+            bound <= legacy,
+            "re-derived B {bound:e} looser than Amendment-1 B {legacy:e}"
         );
     }
 }

@@ -12852,17 +12852,19 @@ fixed-seed power iteration to relative tolerance `1e-3`; over-estimation only
 raises `m` slightly, never breaks correctness — same conservative-bound rationale
 as §45 / ADR-0121).
 
-**Stiff-regime substep scaling (NORMATIVE, Issue #11).** When `z = τ·λ_max/2` exceeds
-`Z_SAFE = 200`, the coefficient `c_k = e^{-z}·I_k(z)` would overflow/underflow in
-f64 arithmetic (`e^{-z} → 0`, `I_k(z) → ∞`, product `0·∞ = NaN`).  The
-implementation avoids NaN by splitting: choose `s = ⌈z / 200⌉` substeps and apply
-the expansion with step `τ_sub = τ/s` so every substep's `z_sub = τ_sub·λ_max/2 ≤ 200`.
-The semigroup property `e^{-τA} = (e^{-(τ/s)A})^s` is EXACT; the s-fold composition
-introduces no approximation error beyond the per-substep Chebyshev truncation.
-For `z ≤ 200` (all normalised graphs, most practical cases), `s = 1` and this path is
-identical to the single-step Chebyshev above.  The implementation additionally asserts
-(fail-loud) that the output of every substep is finite; a non-finite result returns
-`SemiflowError::DomainViolation` rather than silently propagating NaN.
+**Stiff regime: one expansion (NORMATIVE, ADR-0205; supersedes the Issue #11
+substep rule).** The coefficients are computed as the exponentially scaled values
+`c_k = e^{−z}I_k(z) ∈ [0, 1]` (power series for `z ≤ 1`, Miller's backward
+recurrence normalised by `c₀ + 2Σ_{k≥1}c_k = 1` for `z > 1`), which never
+overflow, so ONE expansion serves every `z` up to the degree cap `2²⁰`
+(`z ≈ 1.5·10¹⁰`); beyond it `z` is split into equal substeps with `tol/s` each.
+The degree is the smallest `m ≥ 3` with `2Σ_{k>m}c_k ≤ tol/4`; by Bennett's
+inequality for the Skellam law (`§63.6.d`)
+`m ≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1`, `L = ln(8/tol)`, so the cost is `Θ(√(z·ln(1/tol)))`
+for every `z` (gates `G_CHEB_SQRT_COST`, `G_CHEB_STIFF_ORACLE`). The former rule
+(`s = ⌈z/200⌉` substeps of degree ≈ 101, each with the full `tol`) cost `∝ z` and
+lost accuracy linearly in `s`. Every output is still checked finite
+(`DomainViolation` otherwise), and a non-finite `λ_max` bound is rejected (issue #44).
 
 `graph_expmv` exposes Chebyshev as the DEFAULT (lowest memory) and Lanczos as the
 adaptive path when the spectral bound is loose or a strict per-call tolerance is
@@ -12879,19 +12881,14 @@ versus the per-step baseline `N_mv^{step} = Θ(n_steps)` which grows linearly wi
 the requested depth resolution. This is the formal content of gate
 `G_GRAPH_EXPMV_DEPTH_FLAT` (§54.5).
 
-**Scope qualification for the Chebyshev path (Issue #11, NORMATIVE).**  The
-depth-flat property above holds for the Chebyshev path (§54.3) only when
-`z = t·λ_max/2 ≤ Z_SAFE = 200` for all queried depths, i.e. for **normalised
-graphs** (`λ_max ≲ 2`) where `z_max ≤ t_max ≈ 64` at the maximum gate depth.
-In that regime the stiff-regime substep count `s = ⌈z / Z_SAFE⌉ = 1` throughout
-and the `Θ(√(tλ_max))` cost formula is unchanged.
-
-For **stiff operators** (large `λ_max`), the Chebyshev substep count grows as
-`s ≈ t·λ_max / (2·Z_SAFE)` and the total SpMV count becomes
-`N_mv = s · m ≈ (t·λ_max / 400) · √(z_sub)·polylog(1/ε)` — linear in `t·λ_max`,
-matching the Lanczos depth-linear regime.  Gate `G_CONS_SYMOP` (§54.x, Issue #11)
-tests the Chebyshev path on the conservative k=[1,100,1] operator (λ_max≈25600,
-z≈6400) and lies outside the depth-flat scope.
+**Chebyshev path (ADR-0205, supersedes the Issue #11 scope qualification).** With
+one expansion per action (§54.3) the Chebyshev SpMV count is
+`N_mv = m(tλ_max/2) = Θ(√(tλ_max·ln(1/ε)))` for EVERY `λ_max`, normalised or stiff:
+the depth-flat property holds on the whole range. The Lanczos path takes its
+substeps from the Hochbruck–Lubich bound and the Saad/Chebyshev-interpolation
+bound `4xᵐ/m!` (`x = λ_max h/4`) instead of the Taylor radii `θ_m`; at fixed
+`m_max` its count stays linear in `tλ_max` (restarted Krylov), with a constant
+`≈ 5·ln(10s/ε)/(4 m_max)` instead of `1/θ_{m}` (gate `G_LANCZOS_HL_COST`).
 
 ### §54.5 — Augmented Fréchet gradient (NORMATIVE, A2)
 
@@ -13491,7 +13488,7 @@ Crank–Nicolson reference — **no new sympy**.
 | `G_TPS_MASS_WEIGHT` | `mass_lumped_evolve(A,μ)` vs `expm(−τM⁻¹A)v`, `N≤12`, μ-contrast `≥2` | `sup_error ≤ 1e-10` | dense `mat_exp_pade13` (§45) |
 | `G_TPS_UNITMASS_FAILS` (TEETH) | #11 unit-mass on the same stack MISSES the CN reference | T_Al rel-err `≥ 0.5` (FAILURE) | §57.7 CN reference |
 | `G_TPS_STACK_ACCEPTANCE` | LI-900/SIP/RTV/Al-2024 (k-contrast `≥100`), 2500 s, T_Al(t)+T_bondline(t) | rel-err `≤ 2e-2` at `t∈{500,1500,2500}s` | test-local dense CN |
-| `G_TPS_STIFF_STEPCOUNT` (TEETH) | explicit-CFL count `X=⌈τλ_max⌉` vs stable matvec count `Y` | `X/Y ≥ 100` AND `Y ≤ 2√(τλ_max)` | §54.5 matvec counter |
+| `G_TPS_STIFF_STEPCOUNT` (TEETH) | explicit-CFL count `X=⌈τλ_max⌉` vs stable TOTAL matvec count `Y = s·m` | `X/Y ≥ 300` AND `Y ≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1` (ADR-0205; was `X/Y ≥ 100`, `Y ≤ 2√(τλ_max)` on the per-substep degree) | §54.5 matvec counter |
 
 ### §57.8 — References
 

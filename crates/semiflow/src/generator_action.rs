@@ -11,16 +11,15 @@
 
 extern crate alloc;
 
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
     diffusion4::Diffusion4thChernoff,
-    diffusion4_zeta4::apply_div_form,
+    diffusion4_zeta4::DivFormFaces,
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     general_operator::GeneralOperator,
     graph::Laplacian,
-    grid_fn::GridFn1D,
     symmetric_operator::{SymmetricLinearOp, SymmetricOperator},
 };
 
@@ -56,40 +55,39 @@ pub trait GeneratorAction<F: SemiflowFloat>: Send + Sync {
 ///
 /// Wraps [`Diffusion4thChernoff<f64>`]; forwards `apply_generator` to
 /// `apply_div_form`.  Conservative norm bound: `4·a_norm_bound / dx²`.
+///
+/// The face coefficients `a(xᵢ ± dx/2)` are evaluated once at construction
+/// (ADR-0205); every application is allocation-free and bit-identical to
+/// `apply_div_form`.
 pub struct DivFormGenerator {
-    inner: Diffusion4thChernoff<f64>,
+    faces: DivFormFaces,
     norm_est: f64,
 }
 
 impl DivFormGenerator {
     /// Build from a div-form kernel.  Consumes the kernel (cheap Copy inside).
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)] // public signature kept; faces are read once
     pub fn new(inner: Diffusion4thChernoff<f64>) -> Self {
         let dx = inner.grid.dx();
         let norm_est = 4.0 * inner.a_norm_bound / (dx * dx);
-        Self { inner, norm_est }
+        let faces = DivFormFaces::new(&inner, inner.grid.n);
+        Self { faces, norm_est }
     }
 }
 
 impl GeneratorAction<f64> for DivFormGenerator {
     fn dim(&self) -> usize {
-        self.inner.grid.n
+        self.faces.n()
     }
 
     fn apply_generator(&self, src: &[f64], dst: &mut [f64]) {
-        let n = self.inner.grid.n;
-        // Wrap src as a temporary GridFn1D (one allocation, O(n) copy).
-        let src_gfn = GridFn1D {
-            grid: self.inner.grid,
-            values: src[..n].to_vec(),
-        };
-        let mut dst_gfn = GridFn1D {
-            grid: self.inner.grid,
-            values: vec![0.0_f64; n],
-        };
-        apply_div_form(&self.inner, &src_gfn, &mut dst_gfn)
-            .expect("DivFormGenerator: apply_div_form");
-        dst[..n].copy_from_slice(&dst_gfn.values);
+        let n = self.faces.n();
+        assert!(
+            n >= 3,
+            "DivFormGenerator: apply_div_form: divergence-form stencil requires >= 3 grid points"
+        );
+        self.faces.apply(&src[..n], &mut dst[..n]);
     }
 
     fn norm_bound(&self) -> f64 {
@@ -219,18 +217,32 @@ fn normalise_rows<F: SemiflowFloat>(
     Ok((scaled, best))
 }
 
+/// Defense in depth for the `mass = None` path (issue #44): the operator constructors
+/// already reject a non-finite bound, but the bound selects the Taylor `(s, m)`, so it is
+/// re-checked where it is consumed.
+fn finite_bound<F: SemiflowFloat>(bound: F) -> Result<F, SemiflowError> {
+    if bound.is_finite() {
+        Ok(bound)
+    } else {
+        Err(SemiflowError::DomainViolation {
+            what: "CsrGenerator: operator norm bound is non-finite",
+            value: bound.to_f64().unwrap_or(f64::NAN),
+        })
+    }
+}
+
 impl<F: SemiflowFloat> CsrGenerator<F> {
     /// Generator of a symmetric operator, `G = −M⁻¹A` (`mass = None` → `M = I`).
     ///
     /// # Errors
-    /// `DomainViolation`: mass length / positivity / finiteness.
+    /// `DomainViolation`: mass length / positivity / finiteness, or a non-finite norm bound.
     pub fn from_symmetric(
         op: &SymmetricOperator<F>,
         mass: Option<&[F]>,
     ) -> Result<Self, SemiflowError> {
         let inner = Arc::clone(&op.inner);
         let (scaled, norm) = match mass {
-            None => (None, inner.spectral_radius_bound()),
+            None => (None, finite_bound(inner.spectral_radius_bound())?),
             Some(m) => {
                 check_mass(op.n(), m)?;
                 let (q, nb) = normalise_rows(inner.row_ptr(), inner.vals(), m)?;
@@ -247,13 +259,13 @@ impl<F: SemiflowFloat> CsrGenerator<F> {
     /// Generator of a general (non-symmetric) operator, `G = −M⁻¹A`.
     ///
     /// # Errors
-    /// `DomainViolation`: mass length / positivity / finiteness.
+    /// `DomainViolation`: mass length / positivity / finiteness, or a non-finite norm bound.
     pub fn from_general(
         op: &GeneralOperator<F>,
         mass: Option<&[F]>,
     ) -> Result<Self, SemiflowError> {
         let (scaled, norm) = match mass {
-            None => (None, from_f64(op.norm_inf_bound())),
+            None => (None, finite_bound(from_f64(op.norm_inf_bound()))?),
             Some(m) => {
                 check_mass(op.n(), m)?;
                 let (row_ptr, _, vals) = op.csr_parts();

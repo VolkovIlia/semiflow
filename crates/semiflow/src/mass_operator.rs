@@ -126,19 +126,24 @@ pub struct MassKOperator<F: SemiflowFloat> {
 impl<F: SemiflowFloat> MassKOperator<F> {
     /// Build from stiffness operator `k` and Cholesky factor `r` of mass matrix M.
     ///
-    /// Estimates `λ_max(Â) ≤ λ_max(K) / λ_min(M)` via 5-step inverse power.
+    /// The spectral bound is RIGOROUS: `λ_max(Â) ≤ ρ̄(K) · ‖R⁻¹‖₁ · ‖R⁻¹‖_∞`, with
+    /// `‖R⁻¹‖₂² ≤ ‖R⁻¹‖₁‖R⁻¹‖_∞` and both norms bounded through the comparison matrix
+    /// of `R` in `O(n²)` (see [`inverse_norm_bounds`]). The Chebyshev path requires a
+    /// true upper bound: the previous 5-step inverse-power estimate of `λ_min(M)`
+    /// started from the constant vector — an eigenvector of the consistent P1 mass
+    /// matrix with its LARGEST eigenvalue — so it under-estimated `λ_max(Â)` by up to
+    /// 3× and the Chebyshev series diverged (relative error `1.7e11` at `n = 12`).
     ///
-    /// # Panics
-    ///
-    /// Panics if `F::from` cannot represent basic constants (only exotic `F` can trigger).
+    /// A bound that overflows is stored as `∞`; [`graph_expmv_krylov`] then returns
+    /// `DomainViolation` instead of a silently wrong schedule (issue #44).
     #[must_use]
     pub fn new(k: SymmetricOperator<F>, r: TriangularFactor<F>) -> Self {
-        let lambda_min_m = estimate_lambda_min_m(&r);
-        let lambda_max_bound = if lambda_min_m > F::zero() {
-            k.lambda_max_bound() / lambda_min_m
-        } else {
-            k.lambda_max_bound() * F::from(1e6_f64).unwrap()
-        };
+        let (inv_r_1, inv_r_inf) = inverse_norm_bounds(&r);
+        #[allow(clippy::cast_precision_loss)]
+        // n is a matrix dimension; only scales a safety factor
+        let rounding =
+            F::one() + F::epsilon() * F::from(4.0 * (r.n() as f64 + 2.0)).unwrap_or(F::one());
+        let lambda_max_bound = k.lambda_max_bound() * inv_r_1 * inv_r_inf * rounding;
         Self {
             k,
             r,
@@ -189,42 +194,34 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for MassKOperator<F> {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-/// Estimate `λ_min(M)` via 5-step inverse power on `M = Rᵀ R`.
+/// Rigorous upper bounds `(‖R⁻¹‖₁, ‖R⁻¹‖_∞)` for the upper-triangular factor `R`.
 ///
-/// Returns `1 / ‖x_5‖` where `x_k = M⁻¹ x_{k-1} / ‖…‖` (Rayleigh quotient after convergence).
-fn estimate_lambda_min_m<F: SemiflowFloat>(r: &TriangularFactor<F>) -> F {
+/// With the comparison matrix `C(R)` (`|rᵢᵢ|` on the diagonal, `−|rᵢⱼ|` off it),
+/// `|R⁻¹| ≤ C(R)⁻¹` entrywise and `C(R)⁻¹ ≥ 0` (Higham, *Accuracy and Stability*,
+/// §8.3), so `‖R⁻¹‖_∞ ≤ ‖C(R)⁻¹ e‖_∞` and `‖R⁻¹‖₁ ≤ ‖C(R)⁻ᵀ e‖_∞` for the all-ones
+/// `e`. Both are one triangular solve with non-negative data: `O(n²)`, no
+/// cancellation. Exact for bidiagonal `R` with positive entries (P1 mass in 1D).
+#[allow(clippy::many_single_char_names)] // r, n, a, x, y, s: triangular-solve notation
+fn inverse_norm_bounds<F: SemiflowFloat>(r: &TriangularFactor<F>) -> (F, F) {
     let n = r.n();
-    #[allow(clippy::cast_precision_loss)] // n ≤ MAX_DENSE_N = 12 — no precision loss
-    let inv_sqrt_n = F::one() / F::from(n as f64).unwrap_or(F::one()).sqrt();
-    let mut y: Vec<F> = vec![inv_sqrt_n; n];
-    let mut tmp = vec![F::zero(); n];
+    let a = |i: usize, j: usize| r.r[i * n + j].abs();
+    // ‖C⁻¹ e‖_∞: back substitution  x_i = (1 + Σ_{j>i} |r_ij| x_j) / |r_ii|.
     let mut x = vec![F::zero(); n];
-    for _ in 0..5 {
-        r.solve_rt(&y, &mut tmp); // tmp = R⁻ᵀ y
-        r.solve_r(&tmp, &mut x); // x   = R⁻¹(R⁻ᵀ y) = M⁻¹ y
-        let norm = x
-            .iter()
-            .map(|&v| v * v)
-            .fold(F::zero(), |a, b| a + b)
-            .sqrt();
-        if norm < F::from(1e-300_f64).unwrap() {
-            break;
-        }
-        let inv_norm = F::one() / norm;
-        for i in 0..n {
-            y[i] = x[i] * inv_norm;
-        }
+    let mut inf_norm = F::zero();
+    for i in (0..n).rev() {
+        let s = ((i + 1)..n).fold(F::one(), |acc, j| acc + a(i, j) * x[j]);
+        x[i] = s / a(i, i);
+        inf_norm = inf_norm.max(x[i]);
     }
-    // ‖x_5‖ ≈ 1/λ_min(M)  → return λ_min(M) ≈ 1/‖x_5‖
-    let norm = x
-        .iter()
-        .map(|&v| v * v)
-        .fold(F::zero(), |a, b| a + b)
-        .sqrt();
-    if norm < F::from(1e-300_f64).unwrap() {
-        return F::from(1e-10_f64).unwrap();
+    // ‖C⁻ᵀ e‖_∞: forward substitution  y_j = (1 + Σ_{i<j} |r_ij| y_i) / |r_jj|.
+    let mut y = vec![F::zero(); n];
+    let mut one_norm = F::zero();
+    for j in 0..n {
+        let s = (0..j).fold(F::one(), |acc, i| acc + a(i, j) * y[i]);
+        y[j] = s / a(j, j);
+        one_norm = one_norm.max(y[j]);
     }
-    F::one() / norm
+    (one_norm, inf_norm)
 }
 
 // ── Lumped-mass fast path ─────────────────────────────────────────────────────

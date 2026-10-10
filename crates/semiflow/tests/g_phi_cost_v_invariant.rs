@@ -152,15 +152,16 @@ fn check_near_clamp() {
         a.iter().all(|x| x.is_finite()),
         "clamp case: non-finite unscaled output (f64::max would swallow NaN)"
     );
+    assert!(
+        b.iter().all(|x| x.is_finite()),
+        "clamp case: non-finite scaled output (f64::max would swallow NaN)"
+    );
     let err = a
         .iter()
         .zip(&b)
         .map(|(x, y)| (x * huge - y).abs() / y.abs().max(1e-300))
         .fold(0.0_f64, f64::max);
-    assert!(
-        b.iter().all(|x| x.is_finite()) && err < 1e-12,
-        "clamp case err={err:e}"
-    );
+    assert!(err < 1e-12, "clamp case err={err:e}");
 }
 
 /// `tridiag(1,−2,1)` in `f32`.

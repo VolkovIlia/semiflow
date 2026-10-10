@@ -194,21 +194,31 @@ contractions: n_nodes = 16(K+1) calls of accumulate_bilinear.                  [
 time per channel: far chains `2·(H + H) = 2t`; near vectors, per half,
 `Σ_{k=0..K} d_k ≤ d_K + d_{K−1}·q/(q−1) ≤ 4H` (the last panel is clipped, so
 `d_{K−1}` can be close to `H`), i.e. `≤ 4t` for both halves. Total `≤ 6t`, so
-`Σ z_i ≤ 3·ρ̄t` over all calls (`z = ρ̄τ/2`). On the Chebyshev path a call costs
-`C(τ) = ⌈z/Z_SAFE⌉·m(z_sub)` with `z_sub ≤ Z_SAFE` and `m(·)` nondecreasing
-(`e^{−z}I_k(z)` increases in `z`), hence `C(τ) ≤ (z/Z_SAFE + 1)·m_Z`,
-`m_Z := chebyshev_degree(Z_SAFE, tol)`. Summing over `N_calls = 2 + 32(K+1)` calls:
+`Σ z_i ≤ 3·ρ̄t` over all calls (`z = ρ̄τ/2`).
+
+*Amendment 4 (ADR-0205).* A Chebyshev call is ONE expansion of degree `m(z)`, the
+smallest `m` with `2Σ_{k>m} e^{−z}I_k(z) ≤ tol/4`. That tail is `P(|X| > m)` for
+the Skellam law `X = P₁ − P₂`, `P_{1,2} ~ Poisson(z/2)` (variance `z`, unit
+jumps), so Bennett's inequality gives
+`P(|X| ≥ x) ≤ 2·exp(−x²/(2(z + x/3)))` and, with `L = ln(8/tol)`,
 
 ```text
-spmv_upper ≤ B(ρ̄t) := m_Z · ( 3·ρ̄t / Z_SAFE + 2 + 32·(K+1) ).                 [§63.6.c]
+m(z) ≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1 ≤ 2L/3 + √(2Lz).                            [§63.6.d]
 ```
 
-Relative to one forward action `C(t) ≈ (ρ̄t/(2Z_SAFE))·m_Z` this is
-`6 + (2 + 32(K+1))·2Z_SAFE/ρ̄t`: the asymptote is 6 (not 5), and the per-call
-term dominates until `ρ̄t ≈ 1e5`. `B/C(t) = 179.9 / 33.0 / 9.3 / 6.4` at
-`ρ̄t = 1e3 / 1e4 / 1e5 / 1e6` (`tol = 1e−12`, `m_Z = 101`); the implementation
-measures `25.1 / 9.8 / 5.6 / 5.4` (bound loose at small `ρ̄t` because short calls
-cost `m(z) ≪ m_Z`). The old 16-action rule cost `≈ 8·C(t)` and was wrong.
+(gate `G_CHEB_SQRT_COST`; measured `m/bound ≤ 0.955` for `z ∈ [1e−3, 1e7]`,
+`tol ∈ [1e−14, 1e−6]`). Summing over the `N = 2 + 32(K+1)` calls with
+`Σ√zᵢ ≤ √(N·Σzᵢ)`:
+
+```text
+spmv_upper ≤ B(ρ̄t) := √(6L·N·ρ̄t) + N·2L/3.                                   [§63.6.c]
+```
+
+At `tol = 1e−12`: `B = 1.9e4 / 4.8e4 / 1.4e5 / 4.5e5` at
+`ρ̄t = 1e3 / 1e4 / 1e5 / 1e6`, against `5.0e4 / 8.3e4 / 2.4e5 / 1.6e6` for the
+Amendment-1 bound `m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))` of the substep kernel
+(`Z_SAFE = 200`, `m_Z = 101`), which the gate also asserts is never exceeded by
+the new `B`. The cost per channel grows like `√(ρ̄t·log ρ̄t)` rather than `ρ̄t`.
 For `ρ̄t ≲ 10` the new rule makes 34 calls instead of 16.
 The node count is `O(log(ρ̄t))`: `ρ̄t ∈ {1, 10, 1e2, 1e4, 1e6} → K ∈ {0, 3, 8, 20, 31}`,
 `n_nodes ∈ {16, 64, 144, 336, 512}`.
@@ -235,12 +245,14 @@ before this section (`O(n·|E|)` per node).
 
 Write `u = 2^{−53}`, `r` = max stored entries in a row of `L`, `n` = dimension,
 `tol` the propagator tolerance, `N_chain` the largest number of propagator
-*evaluations* (Chebyshev substeps, Lanczos outer steps) along any single chain of
-§63.5, `m_max` the largest polynomial degree among them. Then
+*evaluations* (Chebyshev expansions, Lanczos outer steps) along any single chain of
+§63.5, and `W` the largest rounding weight `Σ wᵢ` along any single chain, with
+`wᵢ = ⌈zᵢ/2⌉ + mᵢ` for a Chebyshev evaluation of `zᵢ = ρ̄τᵢ/2` and degree `mᵢ`,
+`wᵢ = mᵢ²` for a Lanczos outer step of dimension `mᵢ`. Then
 
 ```text
 |g_k − g_k^ref| ≤ τ_k := (ε_Q + 2n²u)·G_k + η·N_k,
-η = 2·N_chain·(tol + (r+3)·m_max²·u)  +  ε_skip  +  (r + n)·u·ρ̄t.          [§63.7.a]
+η = 2·(N_chain·tol + (r+3)·W·u)  +  ε_skip  +  (r + n)·u·ρ̄t.               [§63.7.a]
 ```
 
 Terms, each derived, none fitted:
@@ -250,11 +262,26 @@ Terms, each derived, none fitted:
    `chebyshev_degree`, §54.3), norms are non-increasing along a chain, and
    `|⟨δa, M b⟩| + |⟨a, M δb⟩| ≤ ‖M‖(‖δa‖‖b‖ + ‖a‖‖δb‖)` integrated over weights
    summing to `t`.
-3. `2·N_chain·(r+3)m_max²u·N_k`: forward rounding of an `m`-term Chebyshev three-term
-   recurrence with `‖B‖₂ ≤ 1` is `O(m²u)` per evaluation: a local error `e` injected
-   at step `j` propagates like a Chebyshev polynomial of degree `≤ m − j`, and
-   `max_{[−1,1]} |U_k| = k + 1` (Clenshaw 1955; Higham 2002 Ch. 3 for the
-   running-error framework), times the `r`-term SpMV inner products. Conservative.
+3. `2·(r+3)·W·u·N_k`: forward rounding of the Chebyshev three-term recurrence
+   with `‖B‖₂ ≤ 1`. A local error `eⱼ` (`‖eⱼ‖ ≤ (r+3)u‖v‖`, the `r`-term SpMV plus
+   the update) injected at step `j` reaches `t_k = T_k(B)v` through `U_{k−j}(B)`,
+   and `max_{[−1,1]} |U_i| = i + 1` (Clenshaw 1955; Higham 2002 Ch. 3), so
+   `‖δt_k‖ ≤ (r+3)u‖v‖·k(k+1)/2`. The series weights `t_k` by `2c_k`,
+   `c_k = e^{−z}I_k(z)`, hence the output error is at most
+   `(r+3)u‖v‖·Σ_{k≥1} c_k k(k+1) = (r+3)u‖v‖·(z/2 + Σ c_k k)`: `Σ_{k≥1} c_k k² = z/2`
+   is the variance identity of the Skellam distribution `p_k = e^{−z}I_{|k|}(z)`,
+   and `Σ c_k k ≤ √(z/2)·√(1/2) ≤ m` (Cauchy–Schwarz). The `+m` also covers the
+   coefficient and accumulation rounding (`O(m u)`). Lanczos keeps the `m²`
+   per outer step of the original analysis.
+
+   *Amendment 4 (ADR-0205).* The original term was `2·N_chain·(r+3)·m_max²·u`,
+   with `m_max ≤ 101` from substeps of `z ≤ 200`. One Chebyshev expansion of
+   degree `≈ √(2z ln(1/tol))` replaces those substeps; `m_max²` would then grow
+   like `z` per evaluation instead of per chain. `W` sums the actual weights
+   along the chain. The new `η` is below the old one at every point of the grid
+   (`r ∈ {3, 5, 12}`, `n = 12`, `tol = 1e−12`; ratio new/old at
+   `λ_max t = 1, 10, 1e2, 1e4, 1e6`: `0.92–0.97, 0.74–0.88, 0.30–0.52, 0.06–0.13,
+   0.04–0.06`), so the gate tightens.
 4. `ε_skip·N_k`: §63.5.b, both halves.
 5. `(r + n)·u·ρ̄t·N_k`: the *inherent* conditioning. Perturbing `L` by `ΔL` changes
    `g_k` by at most `t·‖ΔL‖₂·N_k` (Duhamel twice; `‖e^{−τL'} − e^{−τL}‖ ≤ τ‖ΔL‖`).
@@ -263,7 +290,7 @@ Terms, each derived, none fitted:
    that reads `L` can beat this term; it is why `λ_max·t = 1e6` cannot deliver
    `1e−15` relative accuracy for slow modes in any library.
 
-`N_chain`, `m_max` and `n_nodes` are returned by the pure predictor
+`N_chain`, `W` (`chain_weight`) and `n_nodes` are returned by the pure predictor
 `graph_expmv_frechet_plan` (§63.8); the gate does not measure them.
 
 **§63.7.b Sharp algorithmic check with exact propagators (NORMATIVE, Amendment 2).**
@@ -359,7 +386,7 @@ GeneratorSensitivity::accumulate_bilinear(&self, t, w, a, b, grad, scratch)
         -> Result<(), SemiflowError>                    NEW, provided default
 graph_expmv_frechet_plan(rho_bar, t, tol, &path) -> FrechetPlan              NEW, pure
 FrechetPlan { panels_per_half: u32, n_nodes: u32, propagator_calls: u32,
-              n_chain: u64, m_max: u32, spmv_upper: u64 }
+              n_chain: u64, m_max: u32, chain_weight: u64, spmv_upper: u64 }
 GraphKrylovChernoff::lambda_max_bound(&self) -> F,  ::tol(&self) -> F,
                      ::path(&self) -> KrylovPath                              NEW accessors
 Python: symmetric_op_expmv_frechet(..., tol: float = 1e-12)                   NEW kwarg

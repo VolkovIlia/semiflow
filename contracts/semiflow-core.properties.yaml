@@ -9680,7 +9680,7 @@ implementation_notes:
     type: BACKWARD_ERROR
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (sup_error=3.501e-10 ≤ 1e-8)"
+    pass_status: "PASS (sup_error=2.217e-13 ≤ 1e-11; was 3.501e-10 with the under-estimated λ_max)"
     rationale: |
       G_MASSK_CONSISTENT (RELEASE_BLOCKING, ADR-0186 §55.4): `MassKOperator::evolve`
       (Krylov on `Â = R^{−T}KR^{−1}`, dense Cholesky M=RᵀR) vs
@@ -9688,7 +9688,14 @@ implementation_notes:
       consistent-mass M (M[i,i]=2, M[i,i±1]=0.5). Off-diagonal mass entries
       create non-trivial congruence; sup_error 3.501e-10 confirms the Cholesky
       solve chain is correct and the result is not degenerate.
-    gate: "sup_error <= 1e-8"
+    gate_change: |
+      Tightened 1e-8 → 1e-11 (2026-10-10). The Chebyshev scaling bound of
+      MassKOperator became rigorous (ρ̄(K)·‖R⁻¹‖₁‖R⁻¹‖_∞ via the comparison
+      matrix, G_MASSK_RIGOROUS_BOUND); the 3.5e-10 previously measured was the
+      under-estimated λ_max of the 5-step inverse-power estimate. Measured
+      2.2e-13, margin 45×.
+      Gate-Change-Approved-By: Ilia Volkov (owner instruction: gates may be tightened)
+    gate: "sup_error <= 1e-11"
     test_file: "tests/massk_consistent.rs::g_massk_consistent"
     feature_gate: "slow-tests"
     introduced_in: issue-13-generic-symmetric-L
@@ -9870,21 +9877,25 @@ implementation_notes:
     type: STRUCTURAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (X/Y=28817.7 ≥ 100 AND Y=101 ≤ 2√X=3412.1)"
+    pass_status: "PASS (X/Y=329.7 ≥ 300 AND Y=8829 ≤ 9309; substep kernel: X/Y=3.96)"
     rationale: |
-      G_TPS_STIFF_STEPCOUNT (RELEASE_BLOCKING, ADR-0188 §57.3): TPS stack,
-      τ=2500 s, tol=1e-12. X=⌈τ·λ_max(Â)⌉ (stiffness measure), Y=m (Chebyshev
-      degree per substep from graph_expmv_matvec_count). Measured: λ_max(Â)=1.164e3,
-      X=2910586, Y=101, X/Y=28817.7, 2√X=3412.1. Gate: X/Y ≥ 100 (economy: one
-      Krylov substep handles ≥100 explicit time units) AND Y ≤ 2√X (degree bound
-      from Chebyshev polynomial approximation theory). Verifies that the Krylov expmv
-      automatically selects an efficient substep count without user tuning, even under
-      extreme stiffness (X/Y=28817 means one substep handles ~29k explicit steps).
-    gate: "X/Y >= 100 AND Y <= 2*sqrt(X)"
+      G_TPS_STIFF_STEPCOUNT (RELEASE_BLOCKING, ADR-0188 §57.3; redefined by
+      ADR-0205): TPS stack, τ=2500 s, tol=1e-12. X=⌈τ·λ_max(Â)⌉ (explicit-CFL
+      count), Y = s·m, the TOTAL mat-vec count of the stable path, as ADR-0188's
+      gate table defines it. The test used to read the per-substep degree m
+      only (Y=101 with s=7277 substeps, total 7.35e5): under the ADR's own
+      definition the substep kernel had X/Y = 3.96 and FAILED the economy
+      clause. The old degree clause Y ≤ 2√X is below what any polynomial of
+      degree Y can reach at tol=1e-12 (the minimax degree for e^{−x} on
+      [0, X] grows like √(X·ln(1/tol))); it was satisfiable only per substep
+      of z ≤ 200. Replaced by the derived bound of math §63.6.d. Economy clause
+      tightened 100 → 300 (deterministic count, measured 329.7).
+      Measured: λ_max(Â)=1.164e3, X=2910586, Y=8829 (one expansion), bound 9309.
+    gate: "X/Y >= 300 AND Y <= ⌈L/3 + √(L²/9 + 2zL)⌉ − 1 (z = τλ_max/2, L = ln(8/tol)); substep kernel X/Y < 100"
     test_file: "tests/multilayer_gates.rs::g_tps_stiff_stepcount"
     feature_gate: "slow-tests"
     introduced_in: issue-14-implicit-stiff-multilayer
-    authority: ADR-0188
+    authority: ADR-0205
 
   - name: G_PHI_AUG_DENSE
     type: NUMERICAL
@@ -10787,7 +10798,7 @@ implementation_notes:
     type: GRADIENT_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (2026-10-06, Amendment 3). Part A (skip off): max |g−g_ref|/τ_k^E per λ_max·t = 1,10,1e2,1e4,1e6: 1.4e-2 / 6.7e-3 / 2.5e-3 / 7.7e-4 / 1.9e-5 (F2-entry max; F3-edge 2.3e-3 / 4.3e-4 / 5.3e-4 / 3.4e-4 / 1.4e-4); legacy rule driven by P_E violates τ_k^E on every carrier at every λt ≥ 10 (legacy err/τ^E F3-edge 19.5 / 2.8e6 / 6.4e4 / 4.1e2, F2-entry 159 / 1.6e8 / 1.3e7 / 2.9e4); bridges 3/3 and F2-entry 68/68 informative. Part B (S1, ε_skip = 1e-12; the earlier ε_skip=1e-14 run was vacuous and is removed): B1 max err/(τ_k^E + ε_skip·N_k) = 5.5e-4 / 1.9e-4 / 6.2e-5 / 5.5e-7 / 4.3e-8 (also ≤ 5.2e-4 / 1.9e-4 / 6.2e-5 / 5.4e-7 / 2.2e-8 with signals ×1e-16); B2 propagator calls OFF/ON = 34/34, 130/130, 322/178, 674/354, 1058/546 (strictly fewer at the three onset points λt = 1e2, 1e4, 1e6; equal and bit-identical gradients elsewhere); onset premise residual ‖(I−Π_f)dj‖/‖dj‖ ≤ 8.3e-16 ≤ ε_skip/2; λ_f·t = 0.16 / 1.6 / 46.6 / 4.7e3 / 4.7e5; B3 always-fire N1 err/bound = 5.5e-4 (λt=1, one panel per half, nothing to drop) / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3; B4 unscaled-norm N2 on signals ×1e-16: 5.2e-4 / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3 (violated for every λt ≥ 10). Calls and N1/N2 ratios equal the architect's numpy probe; the correct-skip ratios differ from the probe (6.6e-4 / 2.1e-4 / 5.2e-5 / 1.5e-7 / 1.8e-7) by rounding noise of the eigendecomposition only, all ≪ 1. Production graph_expmv_frechet bit-identical after both refactors: FNV-1a 0x6d87193c3a066bb0 (F3, W=3.6013, t=6.8096, Edge+Entry); nostd digest 0x2f315b1c9b43770b unchanged"
+    pass_status: "PASS (2026-10-06, Amendment 3). Part A (skip off): max |g−g_ref|/τ_k^E per λ_max·t = 1,10,1e2,1e4,1e6: 1.4e-2 / 6.7e-3 / 2.5e-3 / 7.7e-4 / 1.9e-5 (F2-entry max; F3-edge 2.3e-3 / 4.3e-4 / 5.3e-4 / 3.4e-4 / 1.4e-4); legacy rule driven by P_E violates τ_k^E on every carrier at every λt ≥ 10 (legacy err/τ^E F3-edge 19.5 / 2.8e6 / 6.4e4 / 4.1e2, F2-entry 159 / 1.6e8 / 1.3e7 / 2.9e4); bridges 3/3 and F2-entry 68/68 informative. Part B (S1, ε_skip = 1e-12; the earlier ε_skip=1e-14 run was vacuous and is removed): B1 max err/(τ_k^E + ε_skip·N_k) = 5.5e-4 / 1.9e-4 / 6.2e-5 / 5.5e-7 / 4.3e-8 (also ≤ 5.2e-4 / 1.9e-4 / 6.2e-5 / 5.4e-7 / 2.2e-8 with signals ×1e-16); B2 propagator calls OFF/ON = 34/34, 130/130, 322/178, 674/354, 1058/546 (strictly fewer at the three onset points λt = 1e2, 1e4, 1e6; equal and bit-identical gradients elsewhere); onset premise residual ‖(I−Π_f)dj‖/‖dj‖ ≤ 8.3e-16 ≤ ε_skip/2; λ_f·t = 0.16 / 1.6 / 46.6 / 4.7e3 / 4.7e5; B3 always-fire N1 err/bound = 5.5e-4 (λt=1, one panel per half, nothing to drop) / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3; B4 unscaled-norm N2 on signals ×1e-16: 5.2e-4 / 2.9e9 / 6.8e7 / 4.5e5 / 3.1e3 (violated for every λt ≥ 10). Calls and N1/N2 ratios equal the architect's numpy probe; the correct-skip ratios differ from the probe (6.6e-4 / 2.1e-4 / 5.2e-5 / 1.5e-7 / 1.8e-7) by rounding noise of the eigendecomposition only, all ≪ 1. Production graph_expmv_frechet bit-identical after both refactors: FNV-1a 0x6d87193c3a066bb0 (F3, W=3.6013, t=6.8096, Edge+Entry); nostd digest 0x2f315b1c9b43770b unchanged. 2026-10-10: both re-recorded once for ADR-0205's single Chebyshev expansion (FNV-1a 0x46cec3022d2a7b91, nostd 0xe37f093cf01ed1c2)"
     gate_change: |
       ADR-0203 Amendment 2 (2026-10-06): new secondary gate. Reviewer finding:
       at λ_max·t = 1e6 the end-to-end bound τ_k (§63.7.a) is dominated by the
@@ -10909,7 +10920,7 @@ implementation_notes:
     type: BIT_IDENTITY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (2026-10-06: scenario graph_frechet_large_t, digest 0x2f315b1c9b43770b identical in no_std, std-ref and AVX2 (x86-64-v3) host runs, FD sanity err 4.56e-8 ≤ 1e-6, 17 panels per half; aarch64 NEON and Cortex-M QEMU configurations pending CI)"
+    pass_status: "PASS (2026-10-10, re-recorded once for ADR-0205's single Chebyshev expansion: digest 0xe37f093cf01ed1c2 identical in no_std, std-ref and AVX2 (x86-64-v3) host runs; previously 0x2f315b1c9b43770b; aarch64 NEON and Cortex-M QEMU configurations run in CI)"
     rationale: |
       G_FRECHET_LARGE_T_NOSTD_DIGEST (RELEASE_BLOCKING, ADR-0203 + ADR-0200): new
       semiflow-nostd-check scenario `graph_frechet_large_t`: path(10) with
@@ -10998,3 +11009,230 @@ implementation_notes:
     pattern: B
     introduced_in: frechet-large-lambda-t
     authority: ADR-0203
+
+  # ── Issue #44 and audit fixes (2026-10-10) ─────────────────────────────────
+
+  - name: G_NONFINITE_BOUND_REJECT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS — every consumer returns DomainViolation for an ∞ bound; constructors accept legal 1e308 operators"
+    rationale: |
+      Issue #44: finite entries can overflow an operator's norm bound (2×2
+      all-1e308: Gershgorin ρ̄ = ∞; ‖A‖_∞ = ∞). The operator is legal (with a
+      diagonal mass M⁻¹A has a finite norm, G_SPDR_OVERFLOW_ROBUST), so
+      construction succeeds; every consumer that derives a schedule from the
+      bound must reject it: CsrGenerator (mass = None), GraphKrylovChernoff::new,
+      graph_expmv_krylov (Chebyshev and Lanczos, also for an external
+      SymmetricLinearOp returning ∞), CsrExpmvChernoff (select_s_m), the φ
+      entry points (also τ < 0 / NaN / ∞). Before the fix select_s_m skipped
+      every θ row and silently returned one substep, NaN returned s = 0 (input
+      unchanged) and s saturated at u32::MAX above τ‖A‖ ≈ 1.5e10. Also: a
+      non-finite ENTRY is rejected (Laplacian::from_csr_parts, lumped_congruence
+      of a tiny mass, an overflowing weighted degree in Graph::from_edges), and
+      the public probes return (0, 0) instead of a bogus schedule.
+    gate: "every listed consumer returns DomainViolation; legal constructions succeed"
+    test_file: "tests/g_nonfinite_bound_reject.rs"
+    feature_gate: none
+    introduced_in: issue-44
+    authority: ADR-0205
+
+  - name: G_LANCZOS_M_MAX_CAP
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (m_max ∈ {2,4,8,18,30,64}, λτ ∈ [0.1, 1e4]: every schedulable point satisfies the bound; m_max = 2 is unschedulable above λτ ≈ 1 and errors)"
+    rationale: |
+      The Lanczos substep count must belong to the CAPPED Krylov dimension.
+      graph_krylov.rs capped m at m_max AFTER choosing (s, m) for the uncapped
+      degree, keeping the s of the larger degree: silently under-resolved.
+      ADR-0205 replaced the Taylor θ-table schedule by the Hochbruck–Lubich
+      bound and the Saad/Chebyshev-interpolation bound 4xᵐ/m! (x = λh/4); the
+      gate recomputes both independently (monotone in the step, Saad's lemma)
+      and requires the one-step bound ≤ tol/s for the returned (s, m ≤ m_max).
+      m_max = 1 cannot reach tol at λτ = 1e4: graph_expmv_krylov must error.
+    gate: "m <= m_max AND min(HL, 4xᵐ/m!)(m, λτ/(4s)) <= tol/s; m_max = 1 errors"
+    test_file: "tests/g_lanczos_hl_cost.rs::g_lanczos_m_max_cap"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_MATRIX_EXP_SMALL_M
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (all cases ≤ 1e-13 relative; before: rotation 5.0e-3, M=3 6.0e-4, M=4 9.3e-5, complex M=4 large-argument 1.9e-6)"
+    rationale: |
+      MatrixDiffusionChernoff with A = B = 0 evolves e^{tC}u₀ exactly, so the
+      per-point matrix exponential is checked against closed forms: 2×2
+      rotation (complex eigenvalues), 2×2 nearly repeated eigenvalues, M = 3, 4
+      orthogonal spectral forms, complex unitary 2×2 and complex M = 4 (also at
+      ‖τC/2‖ ≈ 3 in one step). Three defects were found: the M=2 closed form
+      took √|disc| for a NEGATIVE discriminant (cosh/sinh instead of cos/sin);
+      the M=3,4 Taylor helper summed Bᵈ/d instead of Bᵈ/d!; the complex M≤4
+      helper scaled by the largest entry, not the row sum (‖B‖ up to M at
+      degree 12). Now: stable closed form for M=2, Padé[13/13] for M≥3 and for
+      every complex M.
+    gate: "relative sup error <= 1e-13 at every grid point, every case"
+    test_file: "tests/g_matrix_exp_small_m.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_MASSK_RIGOROUS_BOUND
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (bound/λ_exact ∈ [1, 1.5]; Chebyshev error ≤ 1e-11·‖v‖∞; before: bound 1450 < λ_exact 1942 at n=12, relative error 1.7e11)"
+    rationale: |
+      MassKOperator::new estimated λ_max(M⁻¹K) as ρ̄(K)/λ̂_min(M) with a 5-step
+      inverse power from the constant vector — for P1 consistent mass that is
+      the eigenvector of M's LARGEST eigenvalue, so λ_min(M) was over-estimated
+      and the Chebyshev scaling bound UNDER-estimated λ_max; the series
+      diverged. Now a rigorous O(n²) bound ρ̄(K)·‖R⁻¹‖₁‖R⁻¹‖_∞ through the
+      comparison matrix of the Cholesky factor. Oracle: closed-form P1
+      generalized spectrum λ_k = (6/h²)(1−cos θ_k)/(2+cos θ_k) and the dense
+      Padé reference.
+    gate: "lambda_exact <= bound <= 1.5·lambda_exact; sup error <= 1e-11·‖v‖∞ (n ≤ 12)"
+    test_file: "tests/massk_consistent.rs::g_massk_rigorous_bound"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G16C_ADJOINT_VARIABLE_DRIFT
+    type: CONVERGENCE_ORDER
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (defect 2.7e-6 at τ=0.02, 3.8e-7 at τ=0.01, ratio 7.2; before: 1.27e-3)"
+    rationale: |
+      The L²-adjoint of B = b∂ₓ + c is −b∂ₓ + (c − b′). DriftReactionChernoff's
+      transpose kernel negated the drift only, exact for constant b (G16c′)
+      but with an O(τ·b′) dual-pairing defect otherwise. b′ is now the
+      sixth-order central difference of b (exactly 0 for constant b, so G16c′
+      is bit-identical). Gate: same identity and tolerances as G16c′ with
+      b(x) = 0.8 + 0.5 sin 2πx, c(x) = 0.3 cos 3x, and halving τ cuts the
+      defect by ≥ 4.
+    gate: "|⟨Su,g⟩ − ⟨u,S*g⟩|·dx < 8e-5 (τ=0.02), < 1e-5 (τ=0.01); ratio ≥ 4"
+    test_file: "tests/g16_dual_pairing.rs::g16c_second_adjoint_identity_variable_drift_f64"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_LANCZOS_HL_COST
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (cost/legacy ≤ 0.18 at λτ ≥ 10; err ≤ 3.1e-12·‖v‖∞ at tol 1e-10, ≤ 2.7e-13 at tol 1e-6)"
+    rationale: |
+      ADR-0205: Lanczos substeps came from the Taylor backward-error radii θ_m
+      (λh ≤ 1.09 at m = 18, ≈ 16.5·λτ mat-vecs) plus a dense Padé-13 per step.
+      The Hochbruck–Lubich schedule admits λh ≈ 7.4 at m = 18. Deterministic
+      counter: s·m ≤ ½·⌈λτ/θ₁₈⌉·18 for λτ ≥ 10 (m_max ∈ {18, 30}); accuracy on
+      the Neumann path Laplacian (n = 400) against its cosine eigenbasis at
+      λτ ∈ {1, 10, 1e2, 1e3}, tol ∈ {1e-10, 1e-12, 1e-6}.
+    gate: "2·s·m <= legacy for λτ >= 10 AND ‖err‖∞ <= (tol + 1e-11)·‖v‖∞"
+    test_file: "tests/g_lanczos_hl_cost.rs::g_lanczos_hl_cost"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_CHEB_SQRT_COST
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (s = 1 and m ≤ bound everywhere; max m/bound = 0.955; at z = 1e6 the substep kernel costs 69× more)"
+    rationale: |
+      ADR-0205: the Chebyshev kernel split every action into ⌈z/200⌉ substeps
+      of degree ≈ 101 (the Bessel power series overflows near z ≈ 700), cost
+      ∝ z. Now ONE expansion with exponentially scaled Bessel coefficients
+      (Miller recurrence). Its degree is bounded a priori by Bennett's
+      inequality for the Skellam law (math §63.6.d):
+      m(z) ≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1, L = ln(8/tol). Deterministic counter
+      graph_expmv_matvec_count over z ∈ [1e-3, 1e7] × tol ∈ {1e-6, 1e-10,
+      1e-12, 1e-14}.
+    gate: "s == 1 AND m <= ⌈L/3 + √(L²/9 + 2zL)⌉ − 1 (floor 3)"
+    test_file: "tests/g_cheb_sqrt_cost.rs::g_cheb_sqrt_cost"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_CHEB_STIFF_ORACLE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (max err/‖v‖∞ = 3.4e-12 at n = 4000, λt = 1e6; ≤ 3.1e-13 at λt = 1e8; before: 6.8e-6 at λt = 4e7, tol 1e-10)"
+    rationale: |
+      The substep kernel did not divide tol by the substep count, so its error
+      grew with λt. Oracle: the Neumann path Laplacian's closed-form cosine
+      eigenbasis (compensated sums), n = 400 at λ_max t ∈ {1e2, 1e4, 1e6, 1e8}
+      and n = 4000 at λ_max t ∈ {1e6, 1e8}, where the slow modes are alive
+      (non-mean part ≥ 1e3 × the allowance, asserted). The 1e-11 floor is
+      empirical (≈3× the worst measurement) and far below the derived
+      rounding bound (r+3)·u·(z/2 + m)·‖v‖₂ of math §63.7.a.
+    gate: "‖err‖∞ <= (tol + 1e-11)·‖v‖∞ at every point"
+    test_file: "tests/g_cheb_sqrt_cost.rs::g_cheb_stiff_oracle"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_ETDRK4_SWEEPS
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (calls == 3·C(h/2) + C(h) exactly; legacy/new = 2.25–2.6 at c ∈ {1, 10, 100, 1e4})"
+    rationale: |
+      ADR-0205: one ETDRK4 step made nine single-φ augmented sweeps (stage a:
+      φ₀, φ₁; b: φ₁; c: φ₀, φ₁; update: φ₀…φ₃). Every stage is one combination
+      Σ τᵏφₖ(τL)wₖ, evaluated by phi_combination in one sweep. A counting
+      generator (periodic Laplacian, N = 32) must see exactly 3·C(h/2) + C(h)
+      applications per step, C(τ) = s·m of phi_cost_probe; the legacy count
+      5·C(h/2) + 4·C(h) must be ≥ 2.2× larger. Accuracy: G_ETDRK4_ORDER and
+      G_ETD_AFFINE_EXACT unchanged.
+    gate: "calls == 3·C(h/2) + C(h) AND 10·legacy >= 22·calls"
+    test_file: "tests/g_etdrk4_sweeps.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_EXPMV_SHIFT_COST
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (drifted Fokker–Planck n=200: ‖A−μI‖∞/‖A‖∞ = 0.505, mat-vecs ×0.517; n=40 dense reference ≤ 1e-10 with the shift active)"
+    rationale: |
+      ADR-0205: CsrExpmvChernoff ran the Taylor kernel on ‖A‖∞. With the trace
+      shift μ = tr(A)/n (Al-Mohy & Higham 2011, §3.1), kept only when it lowers
+      the bound, it runs on A − μI and multiplies by e^{−τ_s μ} per substep;
+      the cost scales with ‖A − μI‖∞ — half of ‖A‖∞ on a diffusion stencil.
+      GeneralOperator::taylor_norm_bound exposes the bound the kernel uses.
+      With μ = 0 the arithmetic is exactly the unshifted kernel's.
+    gate: "taylor_norm_bound <= 0.55·norm_inf_bound AND cost ratio <= 0.6 (n=200); sup err <= 1e-10 vs dense (n=40, shift active)"
+    test_file: "tests/general_operator_gates.rs::g_expmv_shift_cost"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0205
+
+  - name: G_PLAN_BIT_EQUAL
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (> 100 000 probes per mode, 0 ULP)"
+    rationale: |
+      ADR-0204: the grid engines sample through a per-step ghost/derivative
+      table (PreparedGridFn) instead of rebuilding the FD derivative data per
+      sample (44 bc_value calls per septic sample) and the M+1 Chebyshev
+      virtual nodes per sample. The table holds exactly what the direct
+      sampler computes, from the same functions, combined in the same order.
+      Gate: for every interpolant (septic, octonic, cubic, linear, Chebyshev
+      with three OobPolicy) × every BoundaryPolicy × n ∈ {8, 37, 128}, at a
+      sweep reaching beyond the ghost margin (direct fallback), at every node
+      and every virtual node, the prepared sample equals Grid1D::interp to the
+      bit (or both return the same error); on the lane path and under the
+      force-scalar hook. The no_std digests of every covered grid engine are
+      unchanged (end-to-end witness).
+    gate: "prepared.sample(x).to_bits() == grid.interp(values, x).to_bits() for every probe"
+    test_file: "src/sample_table_tests.rs"
+    feature_gate: none
+    introduced_in: adr-0204-prepared-sampling
+    authority: ADR-0204
+

@@ -28,6 +28,38 @@ pub trait SymmetricLinearOp<F: SemiflowFloat>: Send + Sync {
 
     /// `dst ← A · src`.  Both slices must have length `self.n()`.
     fn apply_into_slice(&self, src: &[F], dst: &mut [F]);
+
+    /// `dst[i] ← A[i,i]` (`dst.len() == self.n()`).
+    ///
+    /// The default probes `A·eᵢ` for every `i` — `n` matvecs, `O(n·nnz)`. CSR-backed
+    /// operators override it with an `O(nnz)` read that returns the same values
+    /// bit for bit (the probe sums `a_ij·0` terms, which add nothing).
+    fn diagonal_into(&self, dst: &mut [F]) {
+        let n = self.n();
+        let mut unit = alloc::vec![F::zero(); n];
+        let mut col = alloc::vec![F::zero(); n];
+        for (i, d) in dst.iter_mut().enumerate().take(n) {
+            unit[i] = F::one();
+            self.apply_into_slice(&unit, &mut col);
+            *d = col[i];
+            unit[i] = F::zero();
+        }
+    }
+}
+
+/// `O(nnz)` diagonal of a CSR matrix: duplicate `(i, i)` entries are summed in
+/// storage order, exactly as the matvec would.
+fn csr_diagonal_into<F: SemiflowFloat>(lap: &Laplacian<F>, dst: &mut [F]) {
+    let (rp, ci, va) = (lap.row_ptr(), lap.col_idx(), lap.vals());
+    for (i, d) in dst.iter_mut().enumerate().take(lap.n_nodes()) {
+        let mut acc = F::zero();
+        for k in rp[i]..rp[i + 1] {
+            if ci[k] as usize == i {
+                acc += va[k];
+            }
+        }
+        *d = acc;
+    }
 }
 
 impl<F: SemiflowFloat> SymmetricLinearOp<F> for Laplacian<F> {
@@ -42,6 +74,10 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for Laplacian<F> {
     fn apply_into_slice(&self, src: &[F], dst: &mut [F]) {
         // Inherent `Laplacian::apply_into_slice` (same name — use UFCS to be unambiguous).
         Laplacian::apply_into_slice(self, src, dst);
+    }
+
+    fn diagonal_into(&self, dst: &mut [F]) {
+        csr_diagonal_into(self, dst);
     }
 }
 
@@ -178,11 +214,9 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
     ///
     /// # Errors
     ///
-    /// [`SemiflowError::DomainViolation`] if `masses.len() != n` or any mass is `≤ 0`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the derived CSR is structurally invalid (impossible: source was validated).
+    /// [`SemiflowError::DomainViolation`] if `masses.len() != n`, any mass is `≤ 0`
+    /// or non-finite, or a scaled entry `A[i,j]/√(mᵢmⱼ)` (or the Gershgorin bound of `Â`)
+    /// overflows to `±∞` (tiny masses can push finite entries out of range).
     pub fn lumped_congruence(&self, masses: &[F]) -> Result<Self, SemiflowError> {
         let n = self.inner.n_nodes();
         if masses.len() != n {
@@ -211,8 +245,13 @@ impl<F: SemiflowFloat> SymmetricOperator<F> {
                 nv.push(ov[k] / (sqrt_m[i] * sqrt_m[j]));
             }
         }
-        let inner = Laplacian::from_csr_parts(n, rp, ci, nv, LaplacianKind::GeneralSymmetric)
-            .expect("lumped_congruence: derived CSR is always valid (validated source)");
+        if let Some(&bad) = nv.iter().find(|v| !v.is_finite()) {
+            return Err(SemiflowError::DomainViolation {
+                what: "lumped_congruence: scaled entry A[i,j]/sqrt(m_i m_j) overflows",
+                value: bad.to_f64().unwrap_or(f64::NAN),
+            });
+        }
+        let inner = Laplacian::from_csr_parts(n, rp, ci, nv, LaplacianKind::GeneralSymmetric)?;
         Ok(Self {
             inner: Arc::new(inner),
         })
@@ -230,6 +269,10 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for SymmetricOperator<F> {
 
     fn apply_into_slice(&self, src: &[F], dst: &mut [F]) {
         Laplacian::apply_into_slice(&self.inner, src, dst);
+    }
+
+    fn diagonal_into(&self, dst: &mut [F]) {
+        csr_diagonal_into(&self.inner, dst);
     }
 }
 

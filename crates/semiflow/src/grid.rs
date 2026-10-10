@@ -346,14 +346,8 @@ impl Grid1D<f64> {
                     })
                 }
             }
-            InterpKind::ChebyshevSpectralWithBC { m, oob_policy } => {
-                // Build a grid with the effective BoundaryPolicy based on oob_policy.
-                let effective_grid = match oob_policy {
-                    OobPolicy::Inherit => *self,
-                    OobPolicy::ForceReflect => self.with_boundary(BoundaryPolicy::Reflect),
-                    OobPolicy::ForcePeriodic => self.with_boundary(BoundaryPolicy::Periodic),
-                    OobPolicy::ForceZero => self.with_boundary(BoundaryPolicy::ZeroExtend),
-                };
+            InterpKind::ChebyshevSpectralWithBC { m, .. } => {
+                let effective_grid = self.chebyshev_effective_grid();
                 crate::grid_chebyshev::sample_chebyshev_1d(values, &effective_grid, x, m)
             }
         }

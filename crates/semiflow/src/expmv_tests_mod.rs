@@ -33,7 +33,7 @@ fn constant_state(grid: Grid1D<f64>, val: f64) -> GridFn1D<f64> {
 #[test]
 fn tau_zero_is_identity() {
     let kernel = make_kernel(32);
-    let grid = kernel.grid;
+    let grid = kernel.inner.grid;
     let src = GridFn1D::from_fn(grid, f64::sin);
     let dst = kernel.apply_chernoff(0.0, &src).unwrap();
     for (s, d) in src.values.iter().zip(dst.values.iter()) {
@@ -50,7 +50,7 @@ fn tau_zero_is_identity() {
 fn mass_conserved_under_diffusion() {
     // Constant function → diffusion of a constant is a constant.
     let kernel = make_kernel(64);
-    let grid = kernel.grid;
+    let grid = kernel.inner.grid;
     let src = constant_state(grid, 1.0);
     let dst = kernel.apply_chernoff(0.1, &src).unwrap();
     let dx = grid.dx();
@@ -68,7 +68,7 @@ fn mass_conserved_under_diffusion() {
 #[test]
 fn output_shape_preserved() {
     let kernel = make_kernel(20);
-    let grid = kernel.grid;
+    let grid = kernel.inner.grid;
     let src = GridFn1D::from_fn(grid, |x| x * (1.0 - x));
     let dst = kernel.apply_chernoff(0.05, &src).unwrap();
     assert_eq!(dst.values.len(), src.values.len());
@@ -96,7 +96,7 @@ fn growth_is_contraction() {
 #[test]
 fn negative_tau_returns_err() {
     let kernel = make_kernel(16);
-    let grid = kernel.grid;
+    let grid = kernel.inner.grid;
     let src = constant_state(grid, 1.0);
     let mut dst = src.clone();
     let mut scratch = ScratchPool::new();
@@ -108,7 +108,7 @@ fn negative_tau_returns_err() {
 fn all_output_values_finite_after_step() {
     // Verify that the expmv kernel produces finite output for a smooth datum.
     let kernel = make_kernel(32);
-    let grid = kernel.grid;
+    let grid = kernel.inner.grid;
     let src = GridFn1D::from_fn(grid, |x| (core::f64::consts::PI * x).cos());
     let dst = kernel.apply_chernoff(0.05, &src).unwrap();
     assert_eq!(dst.values.len(), src.values.len());

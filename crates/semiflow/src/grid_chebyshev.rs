@@ -64,7 +64,7 @@
 use crate::{
     boundary::BoundaryPolicy,
     error::SemiflowError,
-    grid::Grid1D,
+    grid::{Grid1D, InterpKind, OobPolicy},
     grid_chebyshev_nodes::{chebyshev_nodes, chebyshev_weights, is_supported_m},
     grid_chebyshev_septic::sample_septic_1d as sample_virtual_node,
 };
@@ -183,7 +183,13 @@ fn linear_extrapolate_chebyshev(values: &[f64], grid: &Grid1D, x: f64, m: usize)
 /// Does not panic. Reflect and Periodic recurse once; after fold/wrap, the
 /// result is in-domain and the recursion terminates (the branch is only
 /// entered when `x` is strictly outside `[xmin, xmax]`).
-fn out_of_domain_sample(values: &[f64], grid: &Grid1D, x: f64, m: usize) -> f64 {
+fn out_of_domain_sample<B: Fn(f64) -> f64>(
+    values: &[f64],
+    grid: &Grid1D,
+    x: f64,
+    m: usize,
+    bary: &B,
+) -> f64 {
     match grid.boundary {
         BoundaryPolicy::Reflect | BoundaryPolicy::Robin { .. } => {
             // Mirror x into [xmin, xmax] with one fold; result is in-domain.
@@ -192,11 +198,11 @@ fn out_of_domain_sample(values: &[f64], grid: &Grid1D, x: f64, m: usize) -> f64 
                 reflected >= grid.xmin && reflected <= grid.xmax,
                 "reflect_into_domain produced out-of-domain result"
             );
-            sample_chebyshev_1d(values, grid, reflected, m).unwrap_or(0.0)
+            chebyshev_eval_with(values, grid, reflected, m, bary)
         }
         BoundaryPolicy::Periodic => {
             let wrapped = wrap_periodic(x, grid.xmin, grid.xmax);
-            sample_chebyshev_1d(values, grid, wrapped, m).unwrap_or(0.0)
+            chebyshev_eval_with(values, grid, wrapped, m, bary)
         }
         BoundaryPolicy::ZeroExtend => 0.0,
         BoundaryPolicy::LinearExtrapolate => linear_extrapolate_chebyshev(values, grid, x, m),
@@ -209,9 +215,43 @@ fn out_of_domain_sample(values: &[f64], grid: &Grid1D, x: f64, m: usize) -> f64 
         // Odd-image: reflect into domain, negate. Mirrors Reflect path with sign flip.
         BoundaryPolicy::OddReflect => {
             let reflected = reflect_into_domain(x, grid.xmin, grid.xmax);
-            -sample_chebyshev_1d(values, grid, reflected, m).unwrap_or(0.0)
+            -chebyshev_eval_with(values, grid, reflected, m, bary)
         }
     }
+}
+
+/// Chebyshev sample at `x` given the in-domain barycentric evaluator `bary`.
+///
+/// Out-of-domain `x` goes through the boundary policy (which may fold/wrap and
+/// come back here); in-domain `x` calls `bary(x)`. Shared by the direct sampler
+/// (virtual nodes resampled per call) and the prepared one (virtual nodes cached
+/// once per step, `crate::sample_table`), so both return the same bits.
+pub(crate) fn chebyshev_eval_with<B: Fn(f64) -> f64>(
+    values: &[f64],
+    grid: &Grid1D,
+    x: f64,
+    m: usize,
+    bary: &B,
+) -> f64 {
+    if x < grid.xmin || x > grid.xmax {
+        out_of_domain_sample(values, grid, x, m, bary)
+    } else {
+        bary(x)
+    }
+}
+
+/// Virtual-node abscissa `x_k = mid + half·node_k` (the one definition).
+#[inline]
+pub(crate) fn virtual_node_x(grid: &Grid1D, node: f64) -> f64 {
+    let mid = (grid.xmax + grid.xmin) * 0.5;
+    let half = (grid.xmax - grid.xmin) * 0.5;
+    mid + half * node
+}
+
+/// Septic sample of the `k`-th virtual node (what the per-step cache stores).
+#[inline]
+pub(crate) fn virtual_node_value(values: &[f64], grid: &Grid1D, node: f64) -> f64 {
+    sample_virtual_node(values, grid, virtual_node_x(grid, node))
 }
 
 // ---------------------------------------------------------------------------
@@ -240,16 +280,14 @@ fn out_of_domain_sample(values: &[f64], grid: &Grid1D, x: f64, m: usize) -> f64 
 ///
 /// Returns `Ok(f_k)` early when `x` is within epsilon of a node (removable
 /// singularity guard, Higham 2004 §3.1).  Otherwise accumulates `num/den`.
-fn barycentric_lobatto_eval(
-    values: &[f64],
+pub(crate) fn barycentric_lobatto_eval<V: Fn(usize, f64) -> f64>(
     grid: &Grid1D,
     x: f64,
     m: usize,
     nodes_ref: &[f64],
     weights_ref: &[f64],
+    virtual_value: &V,
 ) -> f64 {
-    let mid = (grid.xmax + grid.xmin) * 0.5;
-    let half = (grid.xmax - grid.xmin) * 0.5;
     let dx_abs = libm::fabs(grid.dx());
     let guard = EPSILON_FACTOR * f64::EPSILON * dx_abs;
 
@@ -258,14 +296,14 @@ fn barycentric_lobatto_eval(
 
     for k in 0..=m {
         // Map Chebyshev-Lobatto node from [-1,1] to [xmin, xmax].
-        let x_k = mid + half * nodes_ref[k];
+        let x_k = virtual_node_x(grid, nodes_ref[k]);
         let w_k = weights_ref[k];
         let diff = x - x_k;
         if libm::fabs(diff) < guard {
             // Removable singularity: x ≈ x_k → return f_k directly.
-            return sample_virtual_node(values, grid, x_k);
+            return virtual_value(k, x_k);
         }
-        let f_k = sample_virtual_node(values, grid, x_k);
+        let f_k = virtual_value(k, x_k);
         let term = w_k / diff;
         num += term * f_k;
         den += term;
@@ -288,24 +326,34 @@ pub(crate) fn sample_chebyshev_1d(
         });
     }
 
-    // ADR-0104 H3 fix: route out-of-domain samples through the boundary policy.
-    // Inside [xmin, xmax]: barycentric Lagrange is convergent (Berrut-Trefethen 2004).
-    // Outside: barycentric formula diverges polynomially; delegate to BC.
-    if x < grid.xmin || x > grid.xmax {
-        return Ok(out_of_domain_sample(values, grid, x, m));
-    }
-
+    // ADR-0104 H3 fix: out-of-domain samples go through the boundary policy
+    // (`chebyshev_eval_with`). Inside [xmin, xmax]: barycentric Lagrange is
+    // convergent (Berrut-Trefethen 2004); outside it diverges polynomially.
     let nodes_ref = chebyshev_nodes(m)?;
     let weights_ref = chebyshev_weights(m)?;
 
-    Ok(barycentric_lobatto_eval(
-        values,
-        grid,
-        x,
-        m,
-        nodes_ref,
-        weights_ref,
-    ))
+    let bary = |xx: f64| {
+        barycentric_lobatto_eval(grid, xx, m, nodes_ref, weights_ref, &|_, x_k| {
+            sample_virtual_node(values, grid, x_k)
+        })
+    };
+    Ok(chebyshev_eval_with(values, grid, x, m, &bary))
+}
+
+impl Grid1D<f64> {
+    /// The grid the Chebyshev sampler actually reads: `self` with the boundary
+    /// policy replaced as `OobPolicy` requests (`self` for any other interpolant).
+    pub(crate) fn chebyshev_effective_grid(&self) -> Self {
+        match self.interp {
+            InterpKind::ChebyshevSpectralWithBC { oob_policy, .. } => match oob_policy {
+                OobPolicy::Inherit => *self,
+                OobPolicy::ForceReflect => self.with_boundary(BoundaryPolicy::Reflect),
+                OobPolicy::ForcePeriodic => self.with_boundary(BoundaryPolicy::Periodic),
+                OobPolicy::ForceZero => self.with_boundary(BoundaryPolicy::ZeroExtend),
+            },
+            _ => *self,
+        }
+    }
 }
 
 #[cfg(test)]

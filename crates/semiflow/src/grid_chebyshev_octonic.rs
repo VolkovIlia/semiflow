@@ -32,9 +32,7 @@
 // Grid node index i (usize) cast to f64 for coordinate x = i * dx; indices ≪ 2^52.
 #![allow(clippy::cast_precision_loss)]
 
-use num_traits::float::FloatCore;
-
-use crate::grid::{bc_value, BoundaryPolicy, Grid1D};
+use crate::grid::{bc_value, Grid1D};
 use crate::simd::{F64x4, SimdF64x4};
 
 // ---------------------------------------------------------------------------
@@ -140,7 +138,8 @@ fn h_b4(s: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
-// Central FD helpers — compute scaled derivatives from the values array.
+// Central FD helpers — compute scaled derivatives from nodal values `get(k)`
+// (ghost-extended: `bc_value` on the direct path, a table on the prepared path).
 // All weights are Fornberg (1988) exact rationals, baked as f64 constants.
 // ---------------------------------------------------------------------------
 
@@ -152,17 +151,17 @@ fn h_b4(s: f64) -> f64 {
 #[allow(clippy::similar_names)]
 #[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
-fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm5 = bc_value(bnd, values, n, idx - 5, dx);
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
-    let fp5 = bc_value(bnd, values, n, idx + 5, dx);
+fn fd_scaled_prime_scalar<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let fm5 = get(idx - 5);
+    let fm4 = get(idx - 4);
+    let fm3 = get(idx - 3);
+    let fm2 = get(idx - 2);
+    let fm1 = get(idx - 1);
+    let fp1 = get(idx + 1);
+    let fp2 = get(idx + 2);
+    let fp3 = get(idx + 3);
+    let fp4 = get(idx + 4);
+    let fp5 = get(idx + 5);
     // Fornberg 10-pt k=1: (-2,25,-150,600,-2100,0,2100,-600,150,-25,2)/2520 skipping f0
     (-2.0 * fm5 + 25.0 * fm4 - 150.0 * fm3 + 600.0 * fm2 - 2100.0 * fm1 + 2100.0 * fp1
         - 600.0 * fp2
@@ -179,17 +178,17 @@ fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Uses 4+4 split since F64x4 holds 4 lanes; rem 1 added as scalar.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm5 = bc_value(bnd, values, n, idx - 5, dx);
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
-    let fp5 = bc_value(bnd, values, n, idx + 5, dx);
+fn fd_scaled_prime_simd<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let fm5 = get(idx - 5);
+    let fm4 = get(idx - 4);
+    let fm3 = get(idx - 3);
+    let fm2 = get(idx - 2);
+    let fm1 = get(idx - 1);
+    let fp1 = get(idx + 1);
+    let fp2 = get(idx + 2);
+    let fp3 = get(idx + 3);
+    let fp4 = get(idx + 4);
+    let fp5 = get(idx + 5);
 
     let wa = [-2.0_f64, 25.0, -150.0, 600.0];
     let wb = [-2100.0_f64, 2100.0, -600.0, 150.0];
@@ -209,12 +208,12 @@ fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64,
 /// Scaled first derivative `dx * f'` at grid index `idx`.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
+fn fd_scaled_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
     #[cfg(test)]
     if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-        return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
+        return fd_scaled_prime_scalar(get, idx);
     }
-    fd_scaled_prime_simd(values, bnd, n, idx, dx)
+    fd_scaled_prime_simd(get, idx)
 }
 
 /// Scaled second derivative `dx² * f''` at grid index `idx`.
@@ -223,16 +222,16 @@ fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: 
 /// Leading error: O(dx⁸) on `f''` → O(dx¹⁰) on `dx²·f''` (preserves floor).
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_double_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let f0 = bc_value(bnd, values, n, idx, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
+fn fd_scaled_double_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let fm4 = get(idx - 4);
+    let fm3 = get(idx - 3);
+    let fm2 = get(idx - 2);
+    let fm1 = get(idx - 1);
+    let f0 = get(idx);
+    let fp1 = get(idx + 1);
+    let fp2 = get(idx + 2);
+    let fp3 = get(idx + 3);
+    let fp4 = get(idx + 4);
     // Fornberg 9-pt k=2: (-9,128,-1008,8064,-14350,8064,-1008,128,-9)/5040
     (-9.0 * fm4 + 128.0 * fm3 - 1008.0 * fm2 + 8064.0 * fm1 - 14350.0 * f0 + 8064.0 * fp1
         - 1008.0 * fp2
@@ -247,17 +246,17 @@ fn fd_scaled_double_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Leading error: O(dx⁸) on `f'''` → O(dx¹¹) on scaled `dx³·f'''`.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_triple_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm5 = bc_value(bnd, values, n, idx - 5, dx);
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
-    let fp5 = bc_value(bnd, values, n, idx + 5, dx);
+fn fd_scaled_triple_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let fm5 = get(idx - 5);
+    let fm4 = get(idx - 4);
+    let fm3 = get(idx - 3);
+    let fm2 = get(idx - 2);
+    let fm1 = get(idx - 1);
+    let fp1 = get(idx + 1);
+    let fp2 = get(idx + 2);
+    let fp3 = get(idx + 3);
+    let fp4 = get(idx + 4);
+    let fp5 = get(idx + 5);
     // Fornberg 10-pt k=3 anti-sym (205,-2522,14607,-52428,70098)/30240
     (205.0 * fm5 - 2522.0 * fm4 + 14607.0 * fm3 - 52428.0 * fm2 + 70098.0 * fm1 - 70098.0 * fp1
         + 52428.0 * fp2
@@ -273,16 +272,16 @@ fn fd_scaled_triple_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Leading error: O(dx⁶) on `f''''` → O(dx¹⁰) on scaled `dx⁴·f''''`.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_quad_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let f0 = bc_value(bnd, values, n, idx, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
+fn fd_scaled_quad_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let fm4 = get(idx - 4);
+    let fm3 = get(idx - 3);
+    let fm2 = get(idx - 2);
+    let fm1 = get(idx - 1);
+    let f0 = get(idx);
+    let fp1 = get(idx + 1);
+    let fp2 = get(idx + 2);
+    let fp3 = get(idx + 3);
+    let fp4 = get(idx + 4);
     // Fornberg 9-pt k=4: (7,-96,676,-1952,2730,-1952,676,-96,7)/240
     (7.0 * fm4 - 96.0 * fm3 + 676.0 * fm2 - 1952.0 * fm1 + 2730.0 * f0 - 1952.0 * fp1 + 676.0 * fp2
         - 96.0 * fp3
@@ -321,38 +320,64 @@ pub(crate) mod octonic_generic;
 /// - `x` may be arbitrary real; BC extension handles out-of-domain.
 /// - Achieves O(dx¹⁰) on smooth f ∈ C⁴(ℝ); floor ≈ 9.1e-16 at N=512 (ADR-0117).
 pub(crate) fn sample_octonic_1d(values: &[f64], grid: &Grid1D, x: f64) -> f64 {
-    let dx = grid.dx();
-    let t_frac = (x - grid.xmin) / dx;
-    let t_floor = FloatCore::floor(t_frac);
-    #[allow(clippy::cast_possible_truncation)]
-    let idx = t_floor as i64;
-    let s = t_frac - t_floor;
+    let (idx, s) = crate::grid_chebyshev_septic::cell_of(grid, x);
+    let (bnd, n, dx) = (grid.boundary, grid.n, grid.dx());
+    let get = |k: i64| bc_value(bnd, values, n, k, dx);
+    octonic_combine(&octonic_weights(s), &octonic_cell_data(&get, idx))
+}
 
-    let bnd = grid.boundary;
-    let n = grid.n;
+/// Stencil radius of the widest octonic FD formula (the 10-point first/third derivatives).
+pub(crate) const OCTONIC_FD_RADIUS: i64 = 5;
 
-    let v0 = bc_value(bnd, values, n, idx, dx);
-    let v1 = bc_value(bnd, values, n, idx + 1, dx);
+/// The ten octonic-Hermite weights `[a0..a4, b0..b4](s)`.
+#[inline]
+pub(crate) fn octonic_weights(s: f64) -> [f64; 10] {
+    [
+        h_a0(s),
+        h_a1(s),
+        h_a2(s),
+        h_a3(s),
+        h_a4(s),
+        h_b0(s),
+        h_b1(s),
+        h_b2(s),
+        h_b3(s),
+        h_b4(s),
+    ]
+}
 
-    let v0p = fd_scaled_prime(values, bnd, n, idx, dx);
-    let v1p = fd_scaled_prime(values, bnd, n, idx + 1, dx);
-    let v0pp = fd_scaled_double_prime(values, bnd, n, idx, dx);
-    let v1pp = fd_scaled_double_prime(values, bnd, n, idx + 1, dx);
-    let v0ppp = fd_scaled_triple_prime(values, bnd, n, idx, dx);
-    let v1ppp = fd_scaled_triple_prime(values, bnd, n, idx + 1, dx);
-    let v0pppp = fd_scaled_quad_prime(values, bnd, n, idx, dx);
-    let v1pppp = fd_scaled_quad_prime(values, bnd, n, idx + 1, dx);
+/// Octonic nodal data `[f, dx·f′, dx²·f″, dx³·f‴, dx⁴·f⁗]` at node `j`.
+#[inline]
+pub(crate) fn octonic_node_data<G: Fn(i64) -> f64 + ?Sized>(get: &G, j: i64) -> [f64; 5] {
+    [
+        get(j),
+        fd_scaled_prime(get, j),
+        fd_scaled_double_prime(get, j),
+        fd_scaled_triple_prime(get, j),
+        fd_scaled_quad_prime(get, j),
+    ]
+}
 
-    h_a0(s) * v0
-        + h_a1(s) * v0p
-        + h_a2(s) * v0pp
-        + h_a3(s) * v0ppp
-        + h_a4(s) * v0pppp
-        + h_b0(s) * v1
-        + h_b1(s) * v1p
-        + h_b2(s) * v1pp
-        + h_b3(s) * v1ppp
-        + h_b4(s) * v1pppp
+/// Octonic data `[F0, F0p, F0pp, F0ppp, F0pppp, F1, …, F1pppp]` of cell `idx`.
+#[inline]
+pub(crate) fn octonic_cell_data<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> [f64; 10] {
+    let (a, b) = (octonic_node_data(get, idx), octonic_node_data(get, idx + 1));
+    [a[0], a[1], a[2], a[3], a[4], b[0], b[1], b[2], b[3], b[4]]
+}
+
+/// `Σ wₖ·dₖ` in the canonical left-to-right order.
+#[inline]
+pub(crate) fn octonic_combine(w: &[f64; 10], d: &[f64; 10]) -> f64 {
+    w[0] * d[0]
+        + w[1] * d[1]
+        + w[2] * d[2]
+        + w[3] * d[3]
+        + w[4] * d[4]
+        + w[5] * d[5]
+        + w[6] * d[6]
+        + w[7] * d[7]
+        + w[8] * d[8]
+        + w[9] * d[9]
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +389,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
+    use crate::grid::BoundaryPolicy;
 
     fn make_grid_and_values(n: usize, f: impl Fn(f64) -> f64) -> (Grid1D, Vec<f64>) {
         let grid = Grid1D::new(0.0, 1.0, n)

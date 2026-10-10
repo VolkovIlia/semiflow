@@ -52,9 +52,8 @@ use num_traits::Float;
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion4::Diffusion4thChernoff,
-    diffusion4_zeta4::apply_div_form,
+    diffusion4_zeta4::DivFormFaces,
     error::SemiflowError,
-    grid::Grid1D,
     grid_fn::GridFn1D,
     scratch::ScratchPool,
 };
@@ -121,27 +120,41 @@ pub(crate) const M_MAX: u32 = 30;
 /// Select `(s, m)` minimising `s·m` s.t. `(τ/s)·norm_a ≤ θ_m` and `m ≤ M_MAX`.
 ///
 /// `norm_a` is an upper bound on `‖A‖`. Returns the cheapest valid pair.
-/// Falls back to `(s_min, M_MAX)` if no entry in the table suffices at cost 1.
 ///
 /// Re-used by [`crate::phi_action`] for the augmented operator norm.
+///
+/// # Errors
+///
+/// [`SemiflowError::DomainViolation`] when `τ·norm_a` is NaN, `±∞` or negative, or
+/// so large that no degree fits with `s ≤ u32::MAX` substeps. Before issue #44 an
+/// `∞` argument skipped every table row and silently returned `(1, M_MAX)` (one
+/// substep: an inaccurate answer with no error), NaN returned `(0, 1)` (the input
+/// came back unchanged), and `s` saturated at `u32::MAX` above `arg ≈ 1.5e10`.
 #[allow(clippy::many_single_char_names)] // s, m are standard Al-Mohy–Higham notation
-pub(crate) fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
+pub(crate) fn select_s_m(norm_a: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
     let arg = tau * norm_a;
+    if !arg.is_finite() || arg < 0.0 {
+        return Err(SemiflowError::DomainViolation {
+            what: "expmv: tau * norm bound must be finite and >= 0",
+            value: arg,
+        });
+    }
     // Store (s, m, cost) so the comparison uses the actual cost, not m.
     let mut best: Option<(u32, u32, u64)> = None;
     for &(m, theta) in THETA_M {
         if m > M_MAX {
             break;
         }
-        // s = ceil(arg / theta), minimum 1.
+        // s = ceil(arg / theta), minimum 1; rows needing more than u32::MAX
+        // substeps are infeasible (the cast would saturate).
         let s_raw = (arg / theta).ceil();
-        // Skip entries where s is astronomically large (tiny theta, large arg).
-        if s_raw > 1.0e14_f64 {
+        if s_raw > f64::from(u32::MAX) {
             continue;
         }
         let s = if s_raw < 1.0 {
             1u32
         } else {
+            // 1 ≤ s_raw ≤ u32::MAX after the guard above — the cast is exact.
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             {
                 s_raw as u32
@@ -154,8 +167,11 @@ pub(crate) fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
             best = Some((s, m, cost));
         }
     }
-    // If no entry was feasible, fall back to large s at M_MAX.
-    best.map_or((1, M_MAX), |(s, m, _)| (s, m))
+    best.map(|(s, m, _)| (s, m))
+        .ok_or(SemiflowError::DomainViolation {
+            what: "expmv: tau * norm bound too large (more than u32::MAX Taylor substeps)",
+            value: arg,
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -188,10 +204,8 @@ pub(crate) fn select_s_m(norm_a: f64, tau: f64) -> (u32, u32) {
 /// ```
 #[derive(Clone)]
 pub struct DiffusionExpmvChernoff {
-    /// Inner divergence-form kernel — carrier of `apply_div_form` + grid.
+    /// Inner divergence-form kernel — carrier of the coefficient and the grid.
     inner: Diffusion4thChernoff<f64>,
-    /// Grid geometry (copy for direct access).
-    grid: Grid1D<f64>,
     /// Conservative analytic ‖A‖ estimate: `4 · a_norm_bound / dx²`.
     ///
     /// Over-estimation only raises `s` (more, cheaper steps) without harming
@@ -205,14 +219,9 @@ impl DiffusionExpmvChernoff {
     /// `‖A‖` is estimated conservatively as `4 · a_norm_bound / dx²`.
     #[must_use]
     pub fn new(inner: Diffusion4thChernoff<f64>) -> Self {
-        let grid = inner.grid;
-        let dx = grid.dx();
+        let dx = inner.grid.dx();
         let norm_a_est = 4.0 * inner.a_norm_bound / (dx * dx);
-        Self {
-            inner,
-            grid,
-            norm_a_est,
-        }
+        Self { inner, norm_a_est }
     }
 
     /// Override the default tolerance (reserved for future use).
@@ -232,33 +241,33 @@ impl DiffusionExpmvChernoff {
 
 /// Apply `T_m(τ_s · A)` to `y` in place: one outer step of the Horner loop.
 ///
-/// `τ_s = τ / s` is the per-step time. `w` is a scratch buffer (same shape as `y`).
-/// Returns error if `apply_div_form` fails.
+/// `τ_s = τ / s` is the per-step time. `w`, `av` are scratch buffers (same length
+/// as `y`). The face coefficients are evaluated once per call (ADR-0205), not
+/// per application; the arithmetic is that of `apply_div_form`.
 #[allow(clippy::many_single_char_names)] // k, m are standard Taylor-series indices
 fn horner_step(
-    inner: &Diffusion4thChernoff<f64>,
-    y: &mut GridFn1D<f64>,
-    w: &mut GridFn1D<f64>,
+    faces: &DivFormFaces,
+    y: &mut [f64],
+    w: &mut [f64],
     tau_s: f64,
     m: u32,
-    av_scratch: &mut GridFn1D<f64>,
-) -> Result<(), SemiflowError> {
+    av: &mut [f64],
+) {
     // w ← y (start of Horner: w accumulates the k-th term)
-    w.values.clone_from(&y.values);
+    w.copy_from_slice(y);
     for k in 1..=m {
-        // av_scratch = A · w
-        apply_div_form(inner, w, av_scratch)?;
+        // av = A · w
+        faces.apply(w, av);
         // w ← τ_s · (A·w) / k
         let factor = tau_s / f64::from(k);
-        for (wi, &avi) in w.values.iter_mut().zip(av_scratch.values.iter()) {
+        for (wi, &avi) in w.iter_mut().zip(av.iter()) {
             *wi = factor * avi;
         }
         // y ← y + w
-        for (yi, &wi) in y.values.iter_mut().zip(w.values.iter()) {
+        for (yi, &wi) in y.iter_mut().zip(w.iter()) {
             *yi += wi;
         }
     }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -322,54 +331,26 @@ impl ChernoffFunction<f64> for DiffusionExpmvChernoff {
             return Ok(());
         }
 
-        let (s, m) = select_s_m(self.norm_a_est, tau);
+        let (s, m) = select_s_m(self.norm_a_est, tau)?;
         let tau_s = tau / f64::from(s);
 
-        // Scratch buffers: y (accumulator), w (Horner term), av_scratch (A·w).
-        let (mut y, mut w, mut av_scratch) =
-            take_three_gridfn1d(self.grid, n, &src.values, scratch);
+        // Scratch buffers: y (accumulator), w (Horner term), av (A·w).
+        let faces = DivFormFaces::new(&self.inner, n);
+        let mut y = scratch.take_vec(n);
+        y.copy_from_slice(&src.values);
+        let (mut w, mut av) = (scratch.take_vec(n), scratch.take_vec(n));
 
         // s outer steps, each applying T_m(τ_s · A) in place.
         for _ in 0..s {
-            horner_step(&self.inner, &mut y, &mut w, tau_s, m, &mut av_scratch)?;
+            horner_step(&faces, &mut y, &mut w, tau_s, m, &mut av);
         }
 
-        dst.values.clone_from(&y.values);
-        scratch.return_vec(y.values);
-        scratch.return_vec(w.values);
-        scratch.return_vec(av_scratch.values);
+        dst.values.clone_from(&y);
+        for b in [y, w, av] {
+            scratch.return_vec(b);
+        }
         Ok(())
     }
-}
-
-/// Allocate three `GridFn1D<f64>` scratch buffers from `pool`:
-/// `y` (copy of `init`), `w` (zero), `av` (zero).
-fn take_three_gridfn1d(
-    grid: Grid1D<f64>,
-    n: usize,
-    init: &[f64],
-    pool: &mut ScratchPool<f64>,
-) -> (GridFn1D<f64>, GridFn1D<f64>, GridFn1D<f64>) {
-    let mut y_buf = pool.take_vec(n);
-    y_buf.clone_from(&init.to_vec());
-    let mut w_buf = pool.take_vec(n);
-    w_buf.resize(n, 0.0);
-    let mut av_buf = pool.take_vec(n);
-    av_buf.resize(n, 0.0);
-    (
-        GridFn1D {
-            grid,
-            values: y_buf,
-        },
-        GridFn1D {
-            grid,
-            values: w_buf,
-        },
-        GridFn1D {
-            grid,
-            values: av_buf,
-        },
-    )
 }
 
 #[cfg(test)]

@@ -496,4 +496,23 @@ emission_table:
   - method: "phi_combination"
     emits: [DomainViolation]   # w empty or w.len() > PHI_MAX+1 (4); any w_k length != n or non-finite entry; out length != n; τ < 0 or non-finite; τ^k·‖w_k‖∞ overflow (non-finite η-scale sum).
   - method: "phi_action / phi_action_batched (ADR-0202 amendment)"
-    emits: [DomainViolation]   # UNCHANGED error surface; only the (s,m) selection changed (§62.4).
+    emits: [DomainViolation]   # p/k > PHI_MAX; (issue #44) τ < 0 or non-finite, or a non-finite / negative generator norm bound. Before #44 a negative τ selected (1,1) and an ∞ bound one substep — silently wrong output.
+
+  # Issue #44 — a non-finite operator norm bound is an error, never a schedule.
+  # NO new variants: every case is DomainViolation { what, value = the offending bound }.
+  - method: "Laplacian::from_csr_parts (and SymmetricOperator::from_csr / with_diagonal / lumped_congruence)"
+    emits: [DomainViolation]   # dimension mismatch; col_idx >= n; non-finite entry. lumped_congruence additionally: a scaled entry A[i,j]/√(m_i m_j) overflows (it used to `.expect` and could build an `inf` entry). NOT an error: finite entries whose Gershgorin bound overflows (2×2 all-1e308) — legal with a mass (G_SPDR_OVERFLOW_ROBUST); the bound is stored as ∞ and every consumer below rejects it.
+  - method: "Graph::from_edges"
+    emits: [DomainViolation]   # self-loop; node out of range; weight non-finite or <= 0; duplicate edge; (issue #44) a weighted degree d_i that overflows (the Laplacian's diagonal entry would be ∞).
+  - method: "GeneralOperator::from_csr"
+    emits: [DomainViolation]   # CSR shape; column out of range; non-finite entry. norm_inf_bound() may be ∞ (issue #44); consumers reject it.
+  - method: "CsrGenerator::from_symmetric / from_general (mass = None)"
+    emits: [DomainViolation]   # (issue #44) the operator norm bound is non-finite.
+  - method: "GraphKrylovChernoff::new"
+    emits: [DomainViolation]   # tol <= 0 or non-finite; (issue #44) the Laplacian's Gershgorin bound is non-finite.
+  - method: "CsrExpmvChernoff::action_into_slice / DiffusionExpmvChernoff::apply_into"
+    emits: [DomainViolation]   # length mismatch; τ < 0 or non-finite; (issue #44) τ·‖A‖ non-finite or needing more than u32::MAX Taylor substeps (select_s_m no longer saturates s at u32::MAX or falls back to s = 1).
+  - method: "graph_expmv_krylov / GraphKrylovChernoff::apply_into / MassKOperator::evolve"
+    emits: [DomainViolation, ConvergenceFailed]   # τ < 0 or non-finite; (issue #44) lambda_max_bound() non-finite or negative, or τ·λ_max non-finite (external SymmetricLinearOp implementors and MassKOperator compute their own bound). ConvergenceFailed: ImplicitEuler path only (unchanged).
+  - method: "expmv_cost_probe / phi_cost_probe (public probes)"
+    emits: []   # infallible; return (0, 0) — "no valid schedule" — for the inputs on which the kernels return DomainViolation.

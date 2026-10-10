@@ -34,13 +34,13 @@
 use alloc::sync::Arc;
 
 use crate::{
-    boundary::InterpKind,
     chernoff::{ChernoffFunction, Growth},
     diffusion_storage::Storage,
     error::SemiflowError,
     float::SemiflowFloat,
     grid::Grid1D,
     grid_fn::GridFn1D,
+    sample_table::with_prepared,
     scratch::ScratchPool,
 };
 
@@ -284,7 +284,7 @@ impl<F: SemiflowFloat> Diffusion4thChernoff<F> {
     /// evaluations dominate at ≈ 1.49e-12 (ADR-0109). For sub-1.49e-12 precision,
     /// use `OctonicHermite` (ADR-0117) or `Grid1D::cheb_m` with a finer grid.
     ///
-    /// Chebyshev wins over `octonic_sampling` when both are set. f64-only; non-f64
+    /// `octonic_sampling` wins over Chebyshev when both are set. f64-only; non-f64
     /// callers will get a compile error from the ladder guard or a runtime `Unsupported`
     /// on `apply_into`.
     #[must_use]
@@ -410,46 +410,29 @@ impl ChernoffFunction<f64> for Diffusion4thChernoff<f64> {
     /// When `chebyshev_sampling` is set (ADR-0090/ADR-0104), `src` is re-viewed through a
     /// `ChebyshevSpectralWithBC { m, oob_policy: Inherit }` grid (effective floor ≈ 1e-10; ADR-0104 §H4).
     /// When `octonic_sampling` is set (ADR-0117), uses `OctonicHermite` O(dx¹⁰).
-    /// Chebyshev takes priority over Octonic when both flags are set.
+    /// Octonic takes priority over Chebyshev when both flags are set (as `Diffusion8thZeta8Chernoff::with_octonic_sampling` relies on).
     /// The default (`CubicHermite`) is bit-identical to v0.6.
     fn apply_into(
         &self,
         tau: f64,
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
+        scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
-        if self.octonic_sampling {
-            // ADR-0117: re-view src through OctonicHermite (degree-9) grid.
-            let oct_grid = self.grid.with_interp(InterpKind::OctonicHermite);
-            let src_o = GridFn1D {
-                grid: oct_grid,
-                values: src.values.clone(),
-            };
+        // Octonic / Chebyshev re-view `src` through the kernel grid with another
+        // interpolant (ADR-0117 / ADR-0090 / ADR-0104); the default samples `src`
+        // through its own grid. ADR-0204: either way one ghost table (or the
+        // M+1 Chebyshev virtual nodes) per step, no copy of `src`.
+        let sample_grid = helpers_f64::sample_grid(self, src);
+        let step = Zeta4Step::new(self, tau);
+        with_prepared(&src.values, sample_grid, scratch, |f| {
             crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-                apply_at_node_f64(self, tau, &src_o, i)
+                apply_at_node_f64(self, tau, f, i, step)
             })
-        } else if self.chebyshev_sampling {
-            // ADR-0090 / ADR-0104: re-view src through a ChebyshevSpectralWithBC grid.
-            let cheb_grid = self.grid.with_interp(InterpKind::ChebyshevSpectralWithBC {
-                m: self.chebyshev_m,
-                oob_policy: crate::boundary::OobPolicy::Inherit,
-            });
-            let src_c = GridFn1D {
-                grid: cheb_grid,
-                values: src.values.clone(),
-            };
-            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-                apply_at_node_f64(self, tau, &src_c, i)
-            })
-        } else {
-            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-                apply_at_node_f64(self, tau, src, i)
-            })
-        }
+        })
     }
 }
 
@@ -485,7 +468,7 @@ impl ChernoffFunction<f32> for Diffusion4thChernoff<f32> {
 
 #[path = "diffusion4_helpers.rs"]
 mod helpers_f64;
-use helpers_f64::{apply_at_node_f64, validate_tau_f64};
+use helpers_f64::{apply_at_node_f64, validate_tau_f64, Zeta4Step};
 
 #[path = "diffusion4_generic.rs"]
 mod helpers_generic;

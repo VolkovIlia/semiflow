@@ -68,6 +68,9 @@ use semiflow::{
     scratch::ScratchPool,
 };
 
+mod phi_dense;
+use phi_dense::{sup, sup_diff};
+
 const N: usize = 6;
 
 // ---------------------------------------------------------------------------
@@ -173,17 +176,10 @@ fn check_phi_k_accuracy(
         let mut phi_k_out = [0.0_f64; N];
         phi_action(gen, k, tau, v, &mut phi_k_out, scratch).expect("phi_action failed");
 
-        let action_err = phi_k_out
-            .iter()
-            .zip(&eigen_refs[k])
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0_f64, f64::max);
-        let pade_err = pade_ref[k]
-            .iter()
-            .zip(&eigen_refs[k])
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0_f64, f64::max);
-        let out_sup = phi_k_out.iter().map(|x| x.abs()).fold(0.0_f64, f64::max);
+        // Finiteness-checked helpers: `fold(0.0, f64::max)` swallows NaN (issue #44).
+        let action_err = sup_diff(&phi_k_out, &eigen_refs[k]);
+        let pade_err = sup_diff(&pade_ref[k], &eigen_refs[k]);
+        let out_sup = sup(&phi_k_out);
 
         eprintln!("  phi_{k}: {action_err:>18.3e}  {pade_err:>18.3e}  (out_sup={out_sup:.3e})");
 
@@ -224,15 +220,11 @@ fn check_batched_vs_single(gen: &TriDiagGen, tau: f64, v: &[f64], scratch: &mut 
         let mut single_out = [0.0_f64; N];
         phi_action(gen, k, tau, v, &mut single_out, scratch)
             .expect("phi_action single (recheck) failed");
-        let sup_diff = chunk
-            .iter()
-            .zip(&single_out)
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0_f64, f64::max);
-        eprintln!("  batched vs single phi_{k}: sup_diff = {sup_diff:.3e}");
+        let diff = sup_diff(chunk, &single_out);
+        eprintln!("  batched vs single phi_{k}: sup_diff = {diff:.3e}");
         assert!(
-            sup_diff <= 1e-14,
-            "G_PHI_AUG_DENSE batched != single phi_{k}: sup_diff={sup_diff:.3e}"
+            diff <= 1e-14,
+            "G_PHI_AUG_DENSE batched != single phi_{k}: sup_diff={diff:.3e}"
         );
     }
 }

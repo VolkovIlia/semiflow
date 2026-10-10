@@ -45,6 +45,8 @@ use semiflow::{
     ScratchPool,
 };
 
+mod phi_dense;
+
 const X_MIN: f64 = 0.0;
 const X_MAX: f64 = 20.0;
 const N_SPATIAL: usize = 64; // mirrors PRE-FLIGHT harness (N=64)
@@ -167,18 +169,8 @@ fn g_expmv_div_form_action_accuracy() {
         .expect("expmv apply_into must not fail");
 
     // sup-norm error against the reference.
-    let sup_error = u_test
-        .values
-        .iter()
-        .zip(u_ref.values.iter())
-        .map(|(&a_val, &b_val)| (a_val - b_val).abs())
-        .fold(0.0_f64, f64::max);
-
-    let ref_norm = u_ref
-        .values
-        .iter()
-        .map(|&v| v.abs())
-        .fold(0.0_f64, f64::max);
+    let sup_error = phi_dense::sup_diff(&u_test.values, &u_ref.values);
+    let ref_norm = phi_dense::sup(&u_ref.values);
 
     eprintln!("  ref_norm    = {ref_norm:.4e}");
     eprintln!("  sup_error   = {sup_error:.4e}  (gate ≤ 1e-11)");

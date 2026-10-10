@@ -14,11 +14,12 @@
 //!
 //! ## Adjoint (ADR-0114)
 //!
-//! The adjoint of `B = b·∂_x` in `L²([a,b])` is `Bᵀ = −b·∂_x` (integration
-//! by parts). Therefore `Aᵀ = (−Δ + b·∂_x)ᵀ = −Δ − b·∂_x`. The transpose
-//! semigroup `exp(τ Aᵀ)` is computed by the same RK2 formula with the drift
-//! sign negated. `DriftReactionChernoff` implements `AdjointApply<f64>` and
-//! overrides `ChernoffFunction::apply_adjoint_into` accordingly.
+//! The adjoint of `B = b·∂_x + c` in `L²` is `Bᵀ = −b·∂_x + (c − b′)`
+//! (integration by parts). The transpose semigroup `exp(τ Bᵀ)` is computed by
+//! the same RK2 formula with the drift negated and the reaction shifted by `−b′`
+//! (sixth-order central difference of `b`). `DriftReactionChernoff` implements
+//! `AdjointApply<f64>` and overrides `ChernoffFunction::apply_adjoint_into`
+//! accordingly.
 //!
 //! ## Generic-over-Float (ADR-0025, v0.9.0 Block D Wave 1)
 //!
@@ -37,6 +38,7 @@ use crate::{
     float::{half, SemiflowFloat},
     grid::Grid1D,
     grid_fn::GridFn1D,
+    sample_table::{with_prepared, Sample1D},
     scratch::ScratchPool,
 };
 
@@ -160,6 +162,17 @@ impl DriftReactionChernoff<f64> {
             None => (self.c)(x),
         }
     }
+
+    /// `b′(x)` by the sixth-order central difference with step `h = 2⁻⁹·max(1, |x|)`.
+    ///
+    /// Written as differences of symmetric pairs, so a constant `b` gives exactly
+    /// `0.0`. Truncation `≈ h⁶·|b⁽⁷⁾|/140`, rounding `≈ 1.9·u·|b|/h`: about `1e-13`
+    /// for unit-scale smooth `b`.
+    pub(crate) fn b_prime_fd(&self, x: f64) -> f64 {
+        let h = 0.001_953_125 * libm::fabs(x).max(1.0);
+        let d = |k: f64| self.eval_b(x + k * h) - self.eval_b(x - k * h);
+        (45.0 * d(1.0) - 9.0 * d(2.0) + d(3.0)) / (60.0 * h)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -221,13 +234,16 @@ impl ChernoffFunction<f64> for DriftReactionChernoff<f64> {
         tau: f64,
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
+        scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
-        crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-            apply_at_node_f64(self, tau, src, i)
+        // ADR-0204: per-step ghost/derivative table, bit-identical samples.
+        with_prepared(&src.values, src.grid, scratch, |f| {
+            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
+                apply_at_node_f64(self, tau, f, i)
+            })
         })?;
         dst.grid = src.grid;
         Ok(())
@@ -246,9 +262,12 @@ impl ChernoffFunction<f64> for DriftReactionChernoff<f64> {
         }
     }
 
-    /// Transpose (adjoint) apply: `exp(τ Aᵀ) src` into `dst` (ADR-0114).
+    /// Transpose (adjoint) apply: `exp(τ Bᵀ) src` into `dst` (ADR-0114).
     ///
-    /// `Aᵀ = (−Δ + b·∂_x)ᵀ = −Δ − b·∂_x` — same RK2 formula, drift negated.
+    /// `Bᵀ = (b·∂ₓ + c)ᵀ = −b·∂ₓ + (c − b′)` — same RK2 formula with the drift
+    /// negated and the reaction shifted by `−b′`. `b′` is the sixth-order central
+    /// difference of `b` (`b_prime_fd`); it is exactly `0` for constant `b`, so that
+    /// case is bit-identical to the drift-negation-only kernel it replaces.
     ///
     /// This override satisfies `|⟨S(τ)u,g⟩ − ⟨u,S*(τ)g⟩| ≤ C·τ³`
     /// (order-2 wrapper, p=2) for seeded-random `u`, `g`.
@@ -260,19 +279,23 @@ impl ChernoffFunction<f64> for DriftReactionChernoff<f64> {
         tau: f64,
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
+        scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
         let grid = self.grid;
-        // Capture b and c via closures to avoid a helper struct.
-        // eval_b_negated: -b(x); eval_c: c(x) unchanged.
+        // L²-adjoint of B = b∂ₓ + c is B* = −b∂ₓ + (c − b′): negated drift AND the
+        // divergence term −b′. (Dropping −b′ — the pre-fix behaviour — is exact only
+        // for constant b; for variable b the dual-pairing defect was O(τ), not O(τ³).)
         let eval_b_neg = |x: f64| -self.eval_b(x);
-        let eval_c = |x: f64| self.eval_c(x);
-        for i in 0..n {
-            dst.values[i] = apply_rk2_at_node(grid, tau, src, i, eval_b_neg, eval_c)?;
-        }
+        let eval_c_adj = |x: f64| self.eval_c(x) - self.b_prime_fd(x);
+        with_prepared(&src.values, src.grid, scratch, |f| {
+            for (i, d) in dst.values.iter_mut().enumerate() {
+                *d = apply_rk2_at_node(grid, tau, f, i, eval_b_neg, eval_c_adj)?;
+            }
+            Ok::<(), SemiflowError>(())
+        })?;
         dst.grid = src.grid;
         Ok(())
     }
@@ -338,10 +361,10 @@ fn validate_tau_f64(tau: f64) -> Result<(), SemiflowError> {
 
 /// RK2 characteristic step at a single grid node `i` (f64, uses `f.sample` = SIMD).
 #[inline]
-fn apply_at_node_f64(
+fn apply_at_node_f64<S: Sample1D>(
     r: &DriftReactionChernoff<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     i: usize,
 ) -> Result<f64, SemiflowError> {
     apply_rk2_at_node(r.grid, tau, f, i, |xx| r.eval_b(xx), |xx| r.eval_c(xx))
@@ -352,10 +375,10 @@ fn apply_at_node_f64(
 /// Used by both `apply_into` (forward) and `apply_adjoint_into` (transpose,
 /// with negated drift). Zero extra allocation.
 #[inline]
-fn apply_rk2_at_node(
+fn apply_rk2_at_node<S: Sample1D>(
     grid: Grid1D<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     i: usize,
     eval_b: impl Fn(f64) -> f64,
     eval_c: impl Fn(f64) -> f64,

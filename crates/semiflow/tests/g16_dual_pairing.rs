@@ -224,3 +224,55 @@ fn g16c_prime_genuine_adjoint_identity_drift_reaction_f64() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// G16c″ — adjoint identity with VARIABLE drift (divergence term −b′)
+//
+// B = b∂ₓ + c has L²-adjoint B* = −b∂ₓ + (c − b′). The kernel used to negate the
+// drift only, which is exact for constant b (G16c′) but leaves an O(τ·b′)
+// defect otherwise. Same identity and tolerances as G16c′.
+// ---------------------------------------------------------------------------
+
+fn b_var(x: f64) -> f64 {
+    0.8 + 0.5 * (2.0 * core::f64::consts::PI * x).sin()
+}
+fn c_var(x: f64) -> f64 {
+    0.3 * (3.0 * x).cos()
+}
+
+#[test]
+fn g16c_second_adjoint_identity_variable_drift_f64() {
+    let n = 256usize;
+    let grid = Grid1D::new(0.0_f64, 1.0, n).unwrap();
+    let adj = AdjointChernoff::new_general(DriftReactionChernoff::new(b_var, c_var, 0.3, grid));
+    let u = GridFn1D::from_fn(grid, |x| {
+        (-(x - 0.4) * (x - 0.4) / (2.0 * 0.06 * 0.06)).exp()
+    });
+    let g = GridFn1D::from_fn(grid, |x| {
+        (-(x - 0.55) * (x - 0.55) / (2.0 * 0.07 * 0.07)).exp()
+    });
+    let mut prev = f64::NAN;
+    for (tau, tol, label) in [(0.02_f64, 8e-5, "tau=0.02"), (0.01_f64, 1e-5, "tau=0.01")] {
+        let fwd = DriftReactionChernoff::new(b_var, c_var, 0.3, grid);
+        let lhs = dot_grid_f64(&fwd.apply_chernoff(tau, &u).unwrap(), &g);
+        let mut sg = g.clone();
+        let mut pool = ScratchPool::<f64>::new();
+        adj.apply_into(tau, &g, &mut sg, &mut pool).unwrap();
+        let rhs = dot_grid_f64(&u, &sg);
+        let diff = (lhs - rhs).abs() / (n as f64);
+        println!("G16c″ {label}: |⟨Su,g⟩ − ⟨u,S*g⟩|·dx = {diff:.4e} (tol={tol:.1e})");
+        assert!(
+            diff < tol,
+            "G16c″ FAIL {label}: residual {diff:.4e} >= {tol:.1e}"
+        );
+        if prev.is_finite() {
+            // Halving τ must cut the defect by ≥ 4 (order ≥ 2 in the dual pairing).
+            assert!(
+                prev / diff >= 4.0,
+                "G16c″: defect ratio {} < 4",
+                prev / diff
+            );
+        }
+        prev = diff;
+    }
+}

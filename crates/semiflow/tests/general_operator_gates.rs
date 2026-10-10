@@ -14,6 +14,8 @@
 
 use semiflow::general_operator::{expmv_cost_probe, GeneralOperator};
 
+mod phi_dense;
+
 /// Dense `e^{−tA}·v` by direct series summation — independent of the kernel.
 ///
 /// Converged by construction: terms are summed until they stop contributing at
@@ -106,11 +108,7 @@ fn run_case(n: usize, dense: &[f64], t: f64, tol: f64, label: &str) {
     kernel.action_into_slice(t, &v, &mut got).unwrap();
     let want = dense_expmv_ref(n, dense, t, &v);
 
-    let err = got
-        .iter()
-        .zip(want.iter())
-        .map(|(g, w)| (g - w).abs())
-        .fold(0.0_f64, f64::max);
+    let err = phi_dense::sup_diff(&got, &want);
     assert!(
         err <= tol,
         "{label}: sup_error={err:.3e} > {tol:.1e}\n got={got:?}\nwant={want:?}"
@@ -223,4 +221,57 @@ fn g_genop_cost_linear_advisory() {
              for this path, and this test exists to keep that measurable"
         );
     }
+}
+
+/// `G_EXPMV_SHIFT_COST` (`RELEASE_BLOCKING`, ADR-0205): the Taylor kernel runs on
+/// `A − μI`, `μ = tr(A)/n` (Al-Mohy & Higham 2011, §3.1), and multiplies by
+/// `e^{−τ_s μ}` per substep. On a diffusion-dominated stencil that halves the
+/// norm and so the mat-vec count; the answer still matches the dense reference.
+#[test]
+fn g_expmv_shift_cost() {
+    // Cost: n = 200 drifted Fokker–Planck, t‖A‖_∞ = 100.
+    let n = 200;
+    let (rp, ci, va) = to_csr(n, &drifted_fokker_planck(n));
+    let op = GeneralOperator::<f64>::from_csr(n, &rp, &ci, &va).expect("csr");
+    let (full, shifted) = (op.norm_inf_bound(), op.taylor_norm_bound());
+    let t = 100.0 / full;
+    let cost = |norm: f64| {
+        let (s, m) = expmv_cost_probe(norm, t);
+        f64::from(s) * f64::from(m)
+    };
+    let ratio = cost(shifted) / cost(full);
+    eprintln!(
+        "G_EXPMV_SHIFT_COST norm {full:.4e} -> {shifted:.4e} ({:.3}), mat-vecs ratio {ratio:.3}",
+        shifted / full
+    );
+    assert!(
+        shifted <= 0.55 * full,
+        "shifted norm {shifted:e} vs {full:e}"
+    );
+    assert!(
+        ratio <= 0.6,
+        "shift saves too little: cost ratio {ratio:.3}"
+    );
+    // Accuracy with the shift active: n = 40, t‖A‖ ≈ 6.7, dense reference.
+    let n = 40;
+    let dense = drifted_fokker_planck(n);
+    let (rp, ci, va) = to_csr(n, &dense);
+    let op = GeneralOperator::<f64>::from_csr(n, &rp, &ci, &va).expect("csr");
+    assert!(
+        op.taylor_norm_bound() < op.norm_inf_bound(),
+        "shift must be active"
+    );
+    run_case(
+        n,
+        &dense,
+        0.02,
+        1e-10,
+        "drifted Fokker-Planck n=40, shifted",
+    );
+    // No shift when it does not help: the kernel then equals the unshifted bits.
+    let op = GeneralOperator::<f64>::from_csr(2, &[0, 1, 2], &[1, 0], &[1.0, 1.0]).expect("csr");
+    assert_eq!(
+        op.taylor_norm_bound().to_bits(),
+        op.norm_inf_bound().to_bits()
+    );
 }

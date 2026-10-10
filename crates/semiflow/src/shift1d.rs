@@ -24,6 +24,7 @@ use alloc::sync::Arc;
 
 use num_traits::Float;
 
+use crate::sample_table::Sample1D;
 use crate::{
     chernoff::{ChernoffFunction, Growth},
     diffusion_storage::Storage3,
@@ -254,12 +255,14 @@ impl ChernoffFunction<f64> for ShiftChernoff1D<f64> {
         dst: &mut GridFn1D<f64>,
         scratch: &mut crate::scratch::ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
-        let _ = scratch;
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
-        crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-            apply_at_node_f64(self, tau, src, i)
+        // ADR-0204: per-step ghost/derivative table, bit-identical samples.
+        crate::sample_table::with_prepared(&src.values, src.grid, scratch, |f| {
+            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
+                apply_at_node_f64(self, tau, f, i)
+            })
         })
     }
 }
@@ -344,10 +347,10 @@ fn validate_a_f64(a_x: f64, x: f64) -> Result<(), SemiflowError> {
 
 /// Compute formula (6) at a single grid node `i` (f64, uses `f.sample` = SIMD `catmull_rom`).
 #[inline]
-fn apply_at_node_f64(
+fn apply_at_node_f64<S: Sample1D>(
     s: &ShiftChernoff1D<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     i: usize,
 ) -> Result<f64, SemiflowError> {
     let x = s.grid.x_at(i);
@@ -363,7 +366,7 @@ fn apply_at_node_f64(
     let term1 = 0.25 * f.sample(x + s_diff)?;
     let term2 = 0.25 * f.sample(x - s_diff)?;
     let term3 = 0.50 * f.sample(x + s_drift)?;
-    let term4 = tau * c_x * f.values[i];
+    let term4 = tau * c_x * f.node(i);
 
     Ok(term1 + term2 + term3 + term4)
 }

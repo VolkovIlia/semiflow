@@ -33,10 +33,10 @@ fn validate_a_x_f64(a_x: f64, x: f64) -> Result<(), SemiflowError> {
 ///
 /// IDENTICAL to the pre-v0.9.0 implementation to preserve bit-equality.
 #[inline]
-fn gamma_a_baseline_f64(
+fn gamma_a_baseline_f64<S: Sample1D>(
     dc: &DiffusionChernoff<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     x: f64,
 ) -> Result<f64, SemiflowError> {
     let s_half = 0.5 * tau;
@@ -73,10 +73,10 @@ fn gamma_a_baseline_f64(
 ///
 /// IDENTICAL to the pre-v0.9.0 implementation to preserve bit-equality.
 #[inline]
-fn zeta_correction_f64(
+fn zeta_correction_f64<S: Sample1D>(
     dc: &DiffusionChernoff<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     x: f64,
 ) -> Result<f64, SemiflowError> {
     let delta = libm::sqrt(tau).max(2.0 * dc.grid.dx());
@@ -108,10 +108,10 @@ fn zeta_correction_f64(
 ///
 /// No `a'` calls are made — only one `call_a` per node to fetch the constant value.
 #[inline]
-fn gamma_a_const_f64(
+fn gamma_a_const_f64<S: Sample1D>(
     dc: &DiffusionChernoff<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     x: f64,
 ) -> Result<f64, SemiflowError> {
     let a_val = dc.call_a(x);
@@ -132,10 +132,10 @@ fn gamma_a_const_f64(
 /// For the `ConstA` variant (D1, v0.13.0): skips the S-shift and the ζ-A
 /// τ²-correction entirely, as both are identically zero when `a'(x)=0, a''(x)=0`.
 #[inline]
-fn apply_at_node_f64(
+fn apply_at_node_f64<S: Sample1D>(
     dc: &DiffusionChernoff<f64>,
     tau: f64,
-    f: &GridFn1D<f64>,
+    f: &S,
     i: usize,
 ) -> Result<f64, SemiflowError> {
     let x = dc.grid.x_at(i);

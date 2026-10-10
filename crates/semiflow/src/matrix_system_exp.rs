@@ -1,18 +1,9 @@
-//! Per-M matrix-exponential helpers for `matrix_system` (Cayley-Hamilton + Taylor).
+//! Per-M matrix-exponential helpers for `matrix_system` (closed form + Padé-13).
 //!
-//! Provides `matrix_exp_dispatch`, `mat_vec_mul`, `mat_mul_mm`, and the
-//! per-size backends `matrix_exp_m{1,2,3,4}` + `mat_exp_taylor` +
-//! `scale_and_shift` + `mat_identity`.
+//! Provides `matrix_exp_dispatch`, `mat_vec_mul`, and the
+//! per-size backends `matrix_exp_m{1,2,3,4}`.
 //!
 //! All functions are `pub(super)` — visible only to `matrix_system.rs`.
-
-// Matrix scaling: log2(norm).ceil() as u32 where norm > 1 ⟹ log2 > 0 ⟹ cast is safe.
-// f64→u32 cast after clamp(.min(30)) prevents truncation beyond u32 range.
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_truncation
-)]
 
 // `f64` has inherent math methods only when `std` is linked; otherwise they come
 // from `num_traits::Float` (libm). Test builds link `std` even without the
@@ -27,8 +18,8 @@ use crate::{error::SemiflowError, float::SemiflowFloat, matrix_pade::mat_exp_pad
 // Dispatch
 // ---------------------------------------------------------------------------
 
-/// Dispatch matrix exponential: Cayley-Hamilton for M ∈ {1,2,3,4};
-/// Padé[13/13] (Higham 2005, ADR-0125) for M ≥ 5.
+/// Dispatch matrix exponential: closed form for M ∈ {1, 2};
+/// Padé[13/13] (Higham 2005, ADR-0125) for M ≥ 3.
 pub(super) fn matrix_exp_dispatch<F: SemiflowFloat, const M: usize>(
     a: &[[F; M]; M],
 ) -> Result<[[F; M]; M], SemiflowError> {
@@ -36,8 +27,8 @@ pub(super) fn matrix_exp_dispatch<F: SemiflowFloat, const M: usize>(
         0 => Ok([[F::zero(); M]; M]),
         1 => Ok(matrix_exp_m1(a)),
         2 => Ok(matrix_exp_m2(a)),
-        3 => Ok(matrix_exp_m3(a)),
-        4 => Ok(matrix_exp_m4(a)),
+        3 => matrix_exp_m3(a),
+        4 => matrix_exp_m4(a),
         _ => mat_exp_pade13(a),
     }
 }
@@ -69,164 +60,73 @@ fn matrix_exp_m1<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; 
     out
 }
 
-/// M=2: Cayley-Hamilton closed-form via eigenvalues (Higham 2008 §10.4).
+/// M=2: closed form `e^A = e^μ·[C(δ)·I + S(δ)·(A − μI)]`, `μ = tr/2`, `δ = (tr² − 4 det)/4`.
 ///
-/// For A ∈ ℝ²ˣ², e^A = α₀·I + α₁·A where α₀, α₁ are determined
-/// by the Putzer algorithm: λ₁, λ₂ = eigenvalues of A.
+/// `(A − μI)² = δ·I` (Cayley–Hamilton), so `C = cosh √δ`, `S = sinh(√δ)/√δ` for
+/// `δ > 0`, and `C = cos √−δ`, `S = sin(√−δ)/√−δ` for complex eigenvalues
+/// (`δ < 0`). For `|δ| ≤ 1/16` both are evaluated from their common even power
+/// series, which stays accurate as the eigenvalues coalesce.
 ///
-/// Degenerate (repeated eigenvalue λ): e^A = e^λ·(I + (A - λI)).
+/// Replaces a Putzer formula that (a) took `√|disc|` when the discriminant was
+/// NEGATIVE, i.e. used `cosh/sinh` where `cos/sin` belong — wrong for any coupling
+/// with complex eigenvalues (e.g. a rotation `[[0, 1], [−1, 0]]` gave `cosh 1`
+/// instead of `cos 1`); and (b) divided `(e^λ₁ − e^λ₂)/(λ₁ − λ₂)`, which loses
+/// `≈ u/|λ₁−λ₂|` relative accuracy for nearly repeated eigenvalues.
 fn matrix_exp_m2<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; M] {
-    let a00 = a[0][0];
-    let a01 = a[0][1];
-    let a10 = a[1][0];
-    let a11 = a[1][1];
-    // Characteristic polynomial: λ² - tr·λ + det = 0.
-    let tr = a00 + a11;
-    let det = a00 * a11 - a01 * a10;
-    let two = F::one() + F::one();
-    let four = two + two;
-    let disc = tr * tr - four * det;
-    let half = F::one() / two;
+    let half = F::from(0.5).unwrap_or(F::one());
+    let mu = half * (a[0][0] + a[1][1]);
+    // δ = ((a00 − a11)/2)² + a01·a10 — same value as (tr² − 4 det)/4, no cancellation of tr².
+    let d = half * (a[0][0] - a[1][1]);
+    let delta = d * d + a[0][1] * a[1][0];
+    let (c, s) = cosh_sinhc_of_sqrt(delta);
+    let e_mu = mu.libm_exp();
     let mut out = [[F::zero(); M]; M];
-    if disc.abs() < F::epsilon() * F::from(1000.0).unwrap_or(F::one()) {
-        // Repeated eigenvalue λ = tr/2: e^A = e^λ·(I + (A - λI)).
-        let lam = half * tr;
-        let e_lam = lam.libm_exp();
-        out[0][0] = e_lam * (F::one() + a00 - lam);
-        out[0][1] = e_lam * a01;
-        out[1][0] = e_lam * a10;
-        out[1][1] = e_lam * (F::one() + a11 - lam);
-    } else {
-        // Distinct eigenvalues λ₁ ≠ λ₂: Putzer formula.
-        // e^A = ((e^λ₁ - e^λ₂)/(λ₁ - λ₂))·A + ((λ₁·e^λ₂ - λ₂·e^λ₁)/(λ₁ - λ₂))·I.
-        let sqrt_disc = disc.abs().sqrt();
-        let lam1 = half * (tr + sqrt_disc);
-        let lam2 = half * (tr - sqrt_disc);
-        let e1 = lam1.libm_exp();
-        let e2 = lam2.libm_exp();
-        let diff = lam1 - lam2;
-        let c1 = (e1 - e2) / diff;
-        let c0 = (lam1 * e2 - lam2 * e1) / diff;
-        out[0][0] = c0 + c1 * a00;
-        out[0][1] = c1 * a01;
-        out[1][0] = c1 * a10;
-        out[1][1] = c0 + c1 * a11;
-    }
+    out[0][0] = e_mu * (c + s * (a[0][0] - mu));
+    out[0][1] = e_mu * (s * a[0][1]);
+    out[1][0] = e_mu * (s * a[1][0]);
+    out[1][1] = e_mu * (c + s * (a[1][1] - mu));
     out
 }
 
-/// M=3: matrix exponential via scaling-and-squaring with Taylor series.
-///
-/// Same algorithm as M=4 path (Higham 2008 §10.7.3). Degree-12 Taylor with
-/// scaling ensures ≤ 1 ULP error for matrices with ∞-norm ≤ 2^30.
-fn matrix_exp_m3<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; M] {
-    mat_exp_taylor::<F, M>(a, 3)
-}
-
-/// M=4: matrix exponential via scaling-and-squaring (delegates to `mat_exp_taylor`).
-fn matrix_exp_m4<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M]) -> [[F; M]; M] {
-    mat_exp_taylor::<F, M>(a, 4)
-}
-
-// ---------------------------------------------------------------------------
-// Scaling-and-squaring Taylor series
-// ---------------------------------------------------------------------------
-
-/// Scaling-and-squaring matrix exponential for M×M matrices (M = `dim`).
-///
-/// Algorithm (Higham 2008 §10.7.3):
-/// 1. Compute ∞-norm; choose k = ⌈log₂(‖A‖)⌉ so ‖A/2^k‖_∞ ≤ 1.
-/// 2. Taylor series degree 12: e^(A/2^k) = Σ_{n=0}^{12} (A/2^k)^n / n!.
-/// 3. Square k times: e^A = (e^(A/2^k))^(2^k).
-///
-/// Reliable for any matrix (no eigenvalue failure modes, no NaN from degenerate cases).
-// i,j used both for indexing and as arguments; range loops needed.
-#[allow(clippy::needless_range_loop)]
-fn mat_exp_taylor<F: SemiflowFloat, const M: usize>(a: &[[F; M]; M], dim: usize) -> [[F; M]; M] {
-    let (k, b) = scale_and_shift::<F, M>(a, dim);
-    let mut result = mat_identity::<F, M>(dim);
-    let mut term = mat_identity::<F, M>(dim);
-    // Accumulate Taylor series: result += B^n / n!
-    for d in 1u32..=12 {
-        term = mat_mul_mm::<F, M>(&term, &b, dim);
-        let inv_d = F::from(1.0 / f64::from(d)).unwrap_or(F::one());
-        for i in 0..dim {
-            for j in 0..dim {
-                result[i][j] += term[i][j] * inv_d;
-            }
+/// `(cosh √δ, sinh(√δ)/√δ)` for real `δ` of either sign (`cos`/`sin` branch for `δ < 0`).
+fn cosh_sinhc_of_sqrt<F: SemiflowFloat>(delta: F) -> (F, F) {
+    let small = F::from(0.0625).unwrap_or(F::zero());
+    if delta.abs() <= small {
+        // Σ δᵏ/(2k)! and Σ δᵏ/(2k+1)! to 10 terms: remainder ≤ (1/16)¹⁰/20! < 1e-30.
+        let (mut c, mut s) = (F::zero(), F::zero());
+        let (mut tc, mut ts) = (F::one(), F::one());
+        for k in 1_u32..=10 {
+            c += tc;
+            s += ts;
+            let two_k = F::from(f64::from(2 * k)).unwrap_or(F::one());
+            tc = tc * delta / ((two_k - F::one()) * two_k);
+            ts = ts * delta / (two_k * (two_k + F::one()));
         }
+        (c, s)
+    } else if delta > F::zero() {
+        let r = delta.sqrt();
+        (r.libm_cosh(), r.libm_sinh() / r)
+    } else {
+        let r = (-delta).sqrt();
+        let (sn, cs) = r.libm_sin_cos();
+        (cs, sn / r)
     }
-    // Squaring phase.
-    for _ in 0..k {
-        result = mat_mul_mm::<F, M>(&result, &result, dim);
-    }
-    result
 }
 
-/// Compute scaling factor k and scaled matrix B = A / 2^k (∞-norm ≤ 1).
+/// M=3: Padé[13/13] scaling-and-squaring (Higham 2005), shared with `M ≥ 5`.
 ///
-/// Returns `(k, B)` where k = ⌈log₂(‖A‖_∞)⌉ clamped to `[0, 30]`.
-#[allow(clippy::needless_range_loop)]
-fn scale_and_shift<F: SemiflowFloat, const M: usize>(
+/// The former degree-12 Taylor helper accumulated `Bᵈ/d` instead of `Bᵈ/d!`
+/// (the running term was never divided by `d`), so `MatrixDiffusionChernoff<F, 3|4>`
+/// exponentiated the wrong series: `e^{0.5}` came out as `1.6931` instead of `1.6487`.
+fn matrix_exp_m3<F: SemiflowFloat, const M: usize>(
     a: &[[F; M]; M],
-    dim: usize,
-) -> (u32, [[F; M]; M]) {
-    let mut norm = F::zero();
-    for i in 0..dim {
-        let mut row = F::zero();
-        for j in 0..dim {
-            row += a[i][j].abs();
-        }
-        if row > norm {
-            norm = row;
-        }
-    }
-    let k = {
-        let nf = norm.to_f64().unwrap_or(0.0);
-        if nf <= 1.0 {
-            0u32
-        } else {
-            (nf.libm_log2().ceil() as u32).min(30)
-        }
-    };
-    let scale = F::from(f64::from(1u32 << k)).unwrap_or(F::one());
-    let mut b = [[F::zero(); M]; M];
-    for i in 0..dim {
-        for j in 0..dim {
-            b[i][j] = a[i][j] / scale;
-        }
-    }
-    (k, b)
+) -> Result<[[F; M]; M], SemiflowError> {
+    mat_exp_pade13(a)
 }
 
-/// Return M×M identity matrix restricted to the `dim`×`dim` upper-left block.
-#[allow(clippy::needless_range_loop)]
-fn mat_identity<F: SemiflowFloat, const M: usize>(dim: usize) -> [[F; M]; M] {
-    let mut m = [[F::zero(); M]; M];
-    for i in 0..dim {
-        m[i][i] = F::one();
-    }
-    m
-}
-
-// ---------------------------------------------------------------------------
-// Matrix multiply
-// ---------------------------------------------------------------------------
-
-/// dim×dim matrix multiply C = A·B (works for M=2, 3, or 4 via `dim` parameter).
-#[inline]
-pub(super) fn mat_mul_mm<F: SemiflowFloat, const M: usize>(
+/// M=4: same Padé[13/13] backend as M=3.
+fn matrix_exp_m4<F: SemiflowFloat, const M: usize>(
     a: &[[F; M]; M],
-    b: &[[F; M]; M],
-    dim: usize,
-) -> [[F; M]; M] {
-    let mut c = [[F::zero(); M]; M];
-    for i in 0..dim {
-        for k in 0..dim {
-            for j in 0..dim {
-                c[i][j] += a[i][k] * b[k][j];
-            }
-        }
-    }
-    c
+) -> Result<[[F; M]; M], SemiflowError> {
+    mat_exp_pade13(a)
 }

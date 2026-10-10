@@ -75,6 +75,8 @@
 // Mathematical LaTeX symbols (A^k, C^4_b, etc.) are intentional; not code identifiers.
 #![allow(clippy::doc_markdown)]
 
+use alloc::vec::Vec;
+
 use crate::{
     approximation::ApproximationSubspace,
     chernoff::{ChernoffFunction, Growth},
@@ -270,6 +272,51 @@ pub(crate) fn apply_div_form(
         out.values[i] = (a_pos * (f_pos - f_i) - a_neg * (f_i - f_neg)) / dx2;
     }
     Ok(())
+}
+
+/// Face diffusivities `a(xᵢ ± dx/2)` of [`apply_div_form`], evaluated once for
+/// `n` nodes so repeated applications skip the coefficient closure (ADR-0205).
+///
+/// [`DivFormFaces::apply`] performs the very arithmetic of `apply_div_form` on the
+/// very same face values, so its output is bit-identical.
+pub(crate) struct DivFormFaces {
+    a_pos: Vec<f64>,
+    a_neg: Vec<f64>,
+    dx2: f64,
+}
+
+impl DivFormFaces {
+    /// Evaluate the `2n` face coefficients of `dc` (as `apply_div_form` does per call).
+    pub(crate) fn new(dc: &Diffusion4thChernoff<f64>, n: usize) -> Self {
+        let dx = dc.grid.dx();
+        let (mut a_pos, mut a_neg) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        for i in 0..n {
+            let x_i = dc.grid.x_at(i);
+            a_pos.push(dc.eval_a(x_i + 0.5 * dx));
+            a_neg.push(dc.eval_a(x_i - 0.5 * dx));
+        }
+        Self {
+            a_pos,
+            a_neg,
+            dx2: dx * dx,
+        }
+    }
+
+    /// Number of nodes.
+    pub(crate) fn n(&self) -> usize {
+        self.a_pos.len()
+    }
+
+    /// `out ← A·f` (`n ≥ 3`, both slices of length `n`).
+    pub(crate) fn apply(&self, f: &[f64], out: &mut [f64]) {
+        let n = self.a_pos.len();
+        for i in 0..n {
+            let f_pos = if i + 1 < n { f[i + 1] } else { f[n - 1] };
+            let f_neg = if i > 0 { f[i - 1] } else { f[0] };
+            let f_i = f[i];
+            out[i] = (self.a_pos[i] * (f_pos - f_i) - self.a_neg[i] * (f_i - f_neg)) / self.dx2;
+        }
+    }
 }
 
 /// Compute K-jet `[f, Af, ..., A^K f]` via K iterations of `apply_div_form`.

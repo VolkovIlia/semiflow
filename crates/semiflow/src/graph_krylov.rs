@@ -1,9 +1,12 @@
 //! Depth-independent graph-semigroup action `e^{-tL_G}·v` via Krylov methods.
 //!
-//! Implements `GraphKrylovChernoff<F>` with two paths (§54, ADR-0185):
-//! - **Chebyshev** (default): degree-m Chebyshev expansion on `[0, λ_max]`,
-//!   two work vectors, no Krylov basis stored. O(1) memory.
-//! - **Lanczos** (adaptive): m-dim Krylov basis + tridiagonal Padé, O(m·N) memory.
+//! Implements `GraphKrylovChernoff<F>` with two paths (§54, ADR-0185, ADR-0205):
+//! - **Chebyshev** (default): ONE expansion of degree `m ≈ √(2z·ln(1/tol))`,
+//!   `z = τλ_max/2`, with exponentially scaled Bessel coefficients
+//!   (`crate::cheb_coeffs`); four work vectors, no Krylov basis. Cost `∝ √(τλ)`.
+//! - **Lanczos**: `s` steps of an `m`-dimensional Krylov space (`m ≤ m_max`),
+//!   `(s, m)` from the Hochbruck–Lubich a-priori bound, `e^{−hT_m}` by a
+//!   tridiagonal eigen-decomposition; O(m·N) memory.
 //!
 //! `order()` returns `u32::MAX` (tolerance-driven; NOT fixed-order).
 
@@ -17,11 +20,13 @@ use alloc::{sync::Arc, vec::Vec};
 use num_traits::Float;
 
 use crate::{
+    cheb_coeffs::{exp_chebyshev_coefficients, exp_chebyshev_degree, MAX_CHEB_DEGREE},
     chernoff::{ChernoffFunction, Growth},
     error::SemiflowError,
     float::SemiflowFloat,
     graph::Laplacian,
     graph_signal::GraphSignal,
+    lanczos_sched::lanczos_schedule,
     matrix_pade::mat_exp_pade13,
     pcg::implicit_euler_action,
     scratch::ScratchPool,
@@ -31,44 +36,21 @@ use crate::{
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/// Maximum Krylov dimension for the Lanczos path (matches `THETA_M` max m).
-const MAX_LANCZOS_DIM: usize = 18;
-/// Minimum Chebyshev degree (safety floor — never return m=0 or m=1).
-const MIN_CHEB_DEGREE: usize = 3;
-/// Maximum Chebyshev degree cap.
-const MAX_CHEB_DEGREE: usize = 200;
 /// Maximum graph size for `dense_graph_expmv_ref` (gate test helper).
 pub const MAX_DENSE_N: usize = 12;
-/// Maximum `z = τ·λ_max/2` per Chebyshev substep such that all Bessel coefficients
-/// `c_k = e^{-z}·I_k(z)` are finite in f64 (e^{-200} ≈ 1.4e-87, representable).
-/// Stiff operators (`z_total > Z_SAFE`) use `s = ⌈z_total / Z_SAFE⌉` substeps.
-const Z_SAFE: f64 = 200.0;
-
-/// Al-Mohy–Higham 2011 Table 3.1 (`m`, `θ_m`).  Mirror of `expmv.rs::THETA_M`,
-/// truncated at `m = MAX_LANCZOS_DIM = 18` (a structural cap: the tridiagonal
-/// buffers are `[[F; 18]; 18]`).
-///
-/// CORRECTED in ADR-0198 — the previous values were mis-paired with their
-/// degrees, so `lanczos_select_s_m` under-substepped by up to 8×.
-#[rustfmt::skip]
-const THETA_M: &[(u32, f64)] = &[
-    (1, 2.220e-16), (2, 2.581e-8),  (3, 1.386e-5),  (4, 3.397e-4),  (5, 2.401e-3),
-    (6, 9.066e-3),  (7, 2.384e-2),  (8, 4.991e-2),  (9, 8.958e-2),  (10, 1.442e-1),
-    (11, 2.142e-1), (12, 2.996e-1), (13, 3.998e-1), (14, 5.139e-1), (15, 6.411e-1),
-    (16, 7.803e-1), (17, 9.305e-1), (18, 1.091),
-];
 
 // ── KrylovPath ───────────────────────────────────────────────────────────────
 
 /// Algorithm variant for [`GraphKrylovChernoff`].
 #[derive(Copy, Clone, Debug, Default)]
 pub enum KrylovPath {
-    /// Chebyshev expansion — two work vectors, degree from Bessel decay. Default.
+    /// Chebyshev expansion — one series of degree `≈ √(2z·ln(1/tol))`,
+    /// `z = τλ_max/2`; four work vectors. Default.
     #[default]
     Chebyshev,
-    /// Lanczos — m-dim Krylov basis + Padé on `T_m`.
+    /// Lanczos — `m`-dim Krylov basis, steps from the Hochbruck–Lubich bound.
     Lanczos {
-        /// Maximum Krylov dimension per outer step. Must be ≤ `MAX_LANCZOS_DIM = 18`.
+        /// Maximum Krylov dimension per step (clamped to `[1, 512]` and to `n`).
         m_max: usize,
     },
     /// Implicit backward-Euler shift-invert (§59, ADR-0190).
@@ -111,7 +93,10 @@ impl<F: SemiflowFloat> GraphKrylovChernoff<F> {
     /// Construct from a symmetric Laplacian and tolerance `tol`.
     ///
     /// # Errors
-    /// [`SemiflowError::DomainViolation`] if `tol ≤ 0` or not finite.
+    /// [`SemiflowError::DomainViolation`] if `tol ≤ 0` or not finite, or the
+    /// Laplacian's Gershgorin bound is non-finite (issue #44: finite entries such
+    /// as a 2×2 block of `1e308` overflow it; every degree / substep schedule is
+    /// derived from it).
     pub fn new(
         laplacian: Arc<Laplacian<F>>,
         path: KrylovPath,
@@ -124,6 +109,7 @@ impl<F: SemiflowFloat> GraphKrylovChernoff<F> {
             });
         }
         let lambda_max = laplacian.spectral_radius_bound();
+        check_schedule_arg(lambda_max, F::zero())?;
         Ok(Self {
             laplacian,
             lambda_max,
@@ -201,39 +187,25 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
         validate_tau(tau)?;
-        match &self.path {
-            KrylovPath::Chebyshev => chebyshev_action(
-                &*self.laplacian,
-                src,
-                dst,
-                tau,
-                self.lambda_max,
-                self.tol,
-                scratch,
-            ),
-            KrylovPath::Lanczos { m_max } => lanczos_action(
-                &*self.laplacian,
-                src,
-                dst,
-                tau,
-                self.lambda_max,
-                *m_max,
-                scratch,
-            ),
+        check_schedule_arg(self.lambda_max, tau)?;
+        let (op, lambda, tol, path) = (&*self.laplacian, self.lambda_max, self.tol, self.path);
+        via_slices(src, dst, scratch, |v, out, sc| match path {
+            KrylovPath::Chebyshev => expmv_chebyshev(op, lambda, tau, v, out, tol, sc),
+            KrylovPath::Lanczos { m_max } => expmv_lanczos(op, lambda, tau, v, out, m_max, tol, sc),
             KrylovPath::ImplicitEuler {
                 n_steps,
                 cg_max_iter,
-            } => implicit_euler_gk_action(
-                &*self.laplacian,
-                src,
-                dst,
+            } => implicit_euler_action(
+                op as &dyn SymmetricLinearOp<F>,
+                v,
+                out,
                 tau,
-                *n_steps,
-                self.tol,
-                *cg_max_iter,
-                scratch,
+                n_steps,
+                tol,
+                cg_max_iter,
+                sc,
             ),
-        }
+        })
     }
 
     /// `u32::MAX`: tolerance-driven, no fixed polynomial order (same as `DiffusionExpmvChernoff`).
@@ -251,43 +223,39 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for GraphKrylovChernoff<F> {
 
 /// Returns `(s, m)` where `s` = substep count and `m` = degree/Krylov dimension.
 ///
-/// Chebyshev: `s = ⌈z_total / Z_SAFE⌉` (1 for non-stiff), `m = chebyshev_degree(z_sub, tol)`.
-/// Lanczos: `(s, m)` from `THETA_M`, `m` capped at `m_max`.
-/// Total `SpMVs` = `s × m`. Used by `G_GRAPH_EXPMV_DEPTH_FLAT`.
-///
-/// # Panics
-/// Panics if `F::from(2.0_f64)` returns `None` (not possible for `f32` or `f64`).
+/// Chebyshev: `s = 1` and `m ≈ √(2z·ln(1/tol))`, `z = τλ_max/2` (`s > 1` only
+/// beyond `MAX_CHEB_DEGREE`, `z ≳ 1.5·10¹⁰`); `(1, 0)` for `z = 0`.
+/// Lanczos: `(s, m ≤ m_max)` from the Hochbruck–Lubich bound (`lanczos_sched`),
+/// with `n = m_max` (the operator size is not known here; the kernel also caps
+/// `m` at `n`). `ImplicitEuler`: `(n_steps, 0)`.
+/// Total `SpMVs` = `s × m`. Used by `G_GRAPH_EXPMV_DEPTH_FLAT` and the Fréchet
+/// planner. Saturates at `u32::MAX`.
+#[must_use]
 pub fn graph_expmv_matvec_count<F: SemiflowFloat>(
     lambda_max: F,
     tau: F,
     tol: F,
     path: &KrylovPath,
 ) -> (u32, u32) {
+    let sat = |x: u64| u32::try_from(x).unwrap_or(u32::MAX);
+    let tol_f = tol.to_f64().unwrap_or(1e-10);
     match path {
         KrylovPath::Chebyshev => {
-            let z_total = tau * lambda_max / F::from(2.0_f64).unwrap();
-            let s = cheb_substep_count(z_total);
-            let step_tau = tau / F::from(f64::from(s)).unwrap();
-            let z_sub = step_tau * lambda_max / F::from(2.0_f64).unwrap();
-            // chebyshev_degree is bounded by MAX_CHEB_DEGREE = 200 — fits u32.
-            #[allow(clippy::cast_possible_truncation)]
-            let m = chebyshev_degree(z_sub, tol) as u32;
-            (s, m)
+            let z = (tau * lambda_max).to_f64().unwrap_or(f64::NAN) * 0.5;
+            let (s, m) = chebyshev_schedule(z, tol_f);
+            (s, sat(m as u64))
         }
         KrylovPath::Lanczos { m_max } => {
-            let (s, m) = lanczos_select_s_m(lambda_max, tau);
-            // m_max is bounded by MAX_LANCZOS_DIM = 18 — fits u32.
-            #[allow(clippy::cast_possible_truncation)]
-            let m_max_u32 = *m_max as u32;
-            (s, m.min(m_max_u32))
+            let (s, m) = lanczos_schedule(
+                lambda_max.to_f64().unwrap_or(f64::NAN),
+                tau.to_f64().unwrap_or(f64::NAN),
+                tol_f,
+                *m_max,
+                *m_max,
+            );
+            (sat(s), sat(m as u64))
         }
-        KrylovPath::ImplicitEuler { n_steps, .. } => {
-            // n_steps backward-Euler sub-steps; 0 = no Chebyshev/Lanczos degree (§59.4).
-            // n_steps bounded by u32::MAX above — cast is exact.
-            #[allow(clippy::cast_possible_truncation)]
-            let s = (*n_steps).min(u32::MAX as usize) as u32;
-            (s, 0)
-        }
+        KrylovPath::ImplicitEuler { n_steps, .. } => (sat(*n_steps as u64), 0),
     }
 }
 
@@ -337,6 +305,23 @@ pub fn dense_graph_expmv_ref<F: SemiflowFloat>(
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
+/// Reject a schedule argument `τ·λ_max` that is non-finite or negative (issue #44).
+///
+/// `λ_max` comes from `SymmetricLinearOp::lambda_max_bound`, which external
+/// implementors (and derived operators such as `MassKOperator`) may compute
+/// themselves; an `∞` there used to select a single, silently inaccurate step.
+fn check_schedule_arg<F: SemiflowFloat>(lambda_max: F, tau: F) -> Result<(), SemiflowError> {
+    let arg = tau * lambda_max;
+    if lambda_max.is_finite() && lambda_max >= F::zero() && arg.is_finite() {
+        Ok(())
+    } else {
+        Err(SemiflowError::DomainViolation {
+            what: "Krylov expmv: lambda_max bound must be finite and >= 0 (tau*lambda_max finite)",
+            value: lambda_max.to_f64().unwrap_or(f64::NAN),
+        })
+    }
+}
+
 fn validate_tau<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
     if !tau.is_finite() || tau < F::zero() {
         return Err(SemiflowError::DomainViolation {
@@ -347,113 +332,8 @@ fn validate_tau<F: SemiflowFloat>(tau: F) -> Result<(), SemiflowError> {
     Ok(())
 }
 
-// ── Chebyshev degree selection ────────────────────────────────────────────────
-
-/// Minimum degree m such that `e^{-z} · I_{m+1}(z) ≤ tol/4` (Bessel tail bound).
-fn chebyshev_degree<F: SemiflowFloat>(z: F, tol: F) -> usize {
-    let threshold = tol / F::from(4.0_f64).unwrap();
-    let em_z = (-z).libm_exp();
-    let mut m = MIN_CHEB_DEGREE;
-    while m < MAX_CHEB_DEGREE {
-        if em_z * bessel_i_k(m + 1, z) <= threshold {
-            break;
-        }
-        m += 1;
-    }
-    m
-}
-
-// ── Chebyshev action (§54.3) ─────────────────────────────────────────────────
-//
-// e^{-τL_G}v = Σ_{k=0}^m c_k · T_k(B)v,  B = (2/λ_max)·L_G − I,  z = τλ_max/2.
-// c_0 = e^{-z}·I_0(z),  c_k = 2·e^{-z}·(−1)^k·I_k(z)  (k ≥ 1).
-// Recurrence: T_{k+1}(B)v = 2·B·T_k(B)v − T_{k-1}(B)v.
-
-// Private Chebyshev and Lanczos helpers — include! keeps them in module scope.
+// Private Chebyshev / Lanczos helpers — include! keeps them in module scope.
 include!("graph_krylov_helpers.rs");
-
-// ── Lanczos selection ─────────────────────────────────────────────────────────
-
-fn lanczos_select_s_m<F: SemiflowFloat>(lambda_max: F, tau: F) -> (u32, u32) {
-    let arg = tau.to_f64().unwrap_or(1.0) * lambda_max.to_f64().unwrap_or(1.0);
-    let mut best: Option<(u32, u32, u64)> = None;
-    for &(m, theta) in THETA_M {
-        if m as usize > MAX_LANCZOS_DIM {
-            break;
-        }
-        let s_raw = (arg / theta).ceil();
-        if s_raw > 1.0e14 {
-            continue;
-        }
-        let s = if s_raw < 1.0 {
-            1u32
-        } else {
-            // s_raw ≥ 1 (guarded above) and ≤ 1e14 — fits u32; ceil preserves sign.
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            {
-                s_raw as u32
-            }
-        };
-        let cost = u64::from(s) * u64::from(m);
-        if best.map_or(true, |(_, _, pc)| cost < pc) {
-            best = Some((s, m, cost));
-        }
-    }
-    // MAX_LANCZOS_DIM = 18 — fits u32.
-    #[allow(clippy::cast_possible_truncation)]
-    let fallback_m = MAX_LANCZOS_DIM as u32;
-    best.map_or((1, fallback_m), |(s, m, _)| (s, m))
-}
-
-fn build_exp_tridiag<F: SemiflowFloat>(
-    alpha: &[F; MAX_LANCZOS_DIM],
-    beta: &[F; MAX_LANCZOS_DIM],
-    tau: F,
-    m: usize,
-) -> Result<[[F; MAX_LANCZOS_DIM]; MAX_LANCZOS_DIM], SemiflowError> {
-    let mut t_mat = [[F::zero(); MAX_LANCZOS_DIM]; MAX_LANCZOS_DIM];
-    for k in 0..m {
-        t_mat[k][k] = -tau * alpha[k];
-        if k + 1 < m {
-            t_mat[k][k + 1] = -tau * beta[k + 1];
-            t_mat[k + 1][k] = -tau * beta[k + 1];
-        }
-    }
-    mat_exp_pade13::<F, MAX_LANCZOS_DIM>(&t_mat)
-}
-
-// 7 args by necessity — 4 LaplacianAction state vars + tau/lambda_max/m_max/scratch.
-#[allow(clippy::too_many_arguments)]
-fn lanczos_action<F: SemiflowFloat>(
-    op: &impl SymmetricLinearOp<F>,
-    src: &GraphSignal<F>,
-    dst: &mut GraphSignal<F>,
-    tau: F,
-    lambda_max: F,
-    m_max: usize,
-    scratch: &mut ScratchPool<F>,
-) -> Result<(), SemiflowError> {
-    let (s, m) = lanczos_select_s_m(lambda_max, tau);
-    let m = (m as usize).min(m_max);
-    // s is u32 — f64::from(s) is exact and infallible.
-    let step_tau = tau / F::from(f64::from(s)).unwrap();
-    let n = src.len();
-
-    let mut current = scratch.take_vec(n);
-    let mut next = scratch.take_vec(n);
-    current.copy_from_slice(src.values());
-
-    for _ in 0..s {
-        lanczos_step_inner(op, &current, &mut next, step_tau, m, scratch)?;
-        core::mem::swap(&mut current, &mut next);
-    }
-    dst.zero_into();
-    dst.axpy_into_slice(F::one(), &current);
-
-    scratch.return_vec(current);
-    scratch.return_vec(next);
-    Ok(())
-}
 
 // ── Slice-based helpers (graph_expmv_krylov) ─────────────────────────────────
 // Included at module scope: has full access to chebyshev_accumulate, lanczos_step_inner, etc.

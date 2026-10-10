@@ -59,17 +59,41 @@ const PHI_NORM_TIGHTEN: f64 = 2.0;
 /// most 1, the nilpotent block at most 1), tightened by `PHI_NORM_TIGHTEN`.
 /// Independent of every input vector by construction (§62.4,
 /// `G_PHI_COST_V_INVARIANT`).
+///
+/// Returns `(0, 0)` — no valid schedule — for a non-finite or negative `τ‖G‖`; the
+/// φ entry points return `DomainViolation` for the same inputs (issue #44).
 #[must_use]
 pub fn phi_cost_probe(norm_g: f64, tau: f64) -> (u32, u32) {
+    phi_schedule(norm_g, tau).unwrap_or((0, 0))
+}
+
+/// Fallible `(s, m)` for the augmented operator of norm `≤ τ‖G‖ + 2`.
+///
+/// # Errors
+/// `DomainViolation` if `tau` or the generator norm bound is negative or not
+/// finite (issue #44: a non-finite bound used to select a silently wrong schedule).
+fn phi_schedule(norm_g: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
+    for (value, what) in [
+        (tau, "phi_action: tau must be finite and >= 0"),
+        (
+            norm_g,
+            "phi_action: generator norm bound must be finite and >= 0",
+        ),
+    ] {
+        if !value.is_finite() || value < 0.0 {
+            return Err(SemiflowError::DomainViolation { what, value });
+        }
+    }
     select_s_m((tau * norm_g + 2.0) * PHI_NORM_TIGHTEN, 1.0)
 }
 
-/// `(s, m)` for `op` and `tau`.
-fn sweep_params<F: SemiflowFloat, Op: GeneratorAction<F>>(op: &Op, tau: F) -> (u32, u32) {
-    phi_cost_probe(
-        op.norm_bound().to_f64().unwrap_or(0.0),
-        tau.to_f64().unwrap_or(0.0),
-    )
+/// `(s, m)` for `op` and `tau` (see [`phi_schedule`]).
+fn sweep_params<F: SemiflowFloat, Op: GeneratorAction<F>>(
+    op: &Op,
+    tau: F,
+) -> Result<(u32, u32), SemiflowError> {
+    let norm = op.norm_bound().to_f64().unwrap_or(f64::NAN);
+    phi_schedule(norm, tau.to_f64().unwrap_or(f64::NAN))
 }
 
 /// `‖v‖∞` as `f64`.
@@ -95,7 +119,8 @@ fn sup_norm<F: SemiflowFloat>(v: &[F]) -> f64 {
 /// - `scratch`: reusable allocation pool.
 ///
 /// # Errors
-/// Returns `DomainViolation` if `p > PHI_MAX`.
+/// Returns `DomainViolation` if `p > PHI_MAX`, `tau` is negative or non-finite, or the
+/// generator norm bound is non-finite.
 #[allow(clippy::many_single_char_names)]
 pub fn phi_action_batched<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
@@ -114,7 +139,7 @@ pub fn phi_action_batched<F: SemiflowFloat, Op: GeneratorAction<F>>(
     }
     let n = op.dim();
     let dim_aug = n + PHI_MAX; // always n+3; uniform across all k
-    let (s, m) = sweep_params(op, tau);
+    let (s, m) = sweep_params(op, tau)?;
     let (eta, inv_eta) = eta_scaling::<F>(sup_norm(v));
     let coupling = Coupling {
         cols: &[v],
@@ -157,7 +182,8 @@ pub fn phi_action_batched<F: SemiflowFloat, Op: GeneratorAction<F>>(
 /// Equivalent to `phi_action_batched` restricted to one k.
 ///
 /// # Errors
-/// Returns `DomainViolation` if `k > PHI_MAX`.
+/// Returns `DomainViolation` if `k > PHI_MAX`, `tau` is negative or non-finite, or the
+/// generator norm bound is non-finite.
 #[allow(clippy::many_single_char_names)]
 pub fn phi_action<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
@@ -176,7 +202,7 @@ pub fn phi_action<F: SemiflowFloat, Op: GeneratorAction<F>>(
     }
     let n = op.dim();
     let dim_aug = n + PHI_MAX;
-    let (s, m) = sweep_params(op, tau);
+    let (s, m) = sweep_params(op, tau)?;
     let (eta, inv_eta) = eta_scaling::<F>(sup_norm(v));
     let coupling = Coupling {
         cols: &[v],
@@ -326,7 +352,7 @@ pub fn phi_combination<F: SemiflowFloat, Op: GeneratorAction<F>>(
         coef: &gains[..degree],
     };
 
-    let (s, m) = sweep_params(op, tau);
+    let (s, m) = sweep_params(op, tau)?;
     let mut y_aug = scratch.take_vec(n + degree);
     let mut w_aug = scratch.take_vec(n + degree);
     let mut av_buf = scratch.take_vec(n);

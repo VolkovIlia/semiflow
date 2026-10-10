@@ -316,17 +316,17 @@ pub struct BoundInputs {
     pub row_nnz: usize,
     pub tol: f64,
     pub n_chain: u64,
-    pub m_max: u32,
+    /// `FrechetPlan::chain_weight` (§63.7.a, Amendment 4).
+    pub chain_weight: u64,
     pub rho_t: f64,
     pub t: f64,
 }
 
 impl BoundInputs {
-    /// `η` of §63.7.a.
+    /// `η` of §63.7.a (Amendment 4: rounding weight `W` replaces `N_chain·m_max²`).
     pub fn eta(&self) -> f64 {
         let r = self.row_nnz as f64;
-        let m = f64::from(self.m_max);
-        2.0 * self.n_chain as f64 * (self.tol + (r + 3.0) * m * m * U)
+        2.0 * (self.n_chain as f64 * self.tol + (r + 3.0) * self.chain_weight as f64 * U)
             + self.tol
             + (r + self.n as f64) * U * self.rho_t
     }

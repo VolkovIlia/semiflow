@@ -32,6 +32,7 @@ use crate::{
     float::{from_f64, half, SemiflowFloat},
     grid::Grid1D,
     grid_fn::GridFn1D,
+    sample_table::{with_prepared, Sample1D},
     scratch::ScratchPool,
 };
 
@@ -326,13 +327,17 @@ impl ChernoffFunction<f64> for DiffusionChernoff<f64> {
         tau: f64,
         src: &GridFn1D<f64>,
         dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
+        scratch: &mut ScratchPool<f64>,
     ) -> Result<(), SemiflowError> {
         validate_tau_f64(tau)?;
         let n = src.values.len();
         dst.values.resize(n, 0.0);
-        crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
-            apply_at_node_f64(self, tau, src, i)
+        // ADR-0204: one ghost/derivative table per step; samples are bit-identical
+        // to `src.sample` (G_PLAN_BIT_EQUAL).
+        with_prepared(&src.values, src.grid, scratch, |f| {
+            crate::parallel1d::parallel_eval_into(&mut dst.values, |i| {
+                apply_at_node_f64(self, tau, f, i)
+            })
         })
     }
 }

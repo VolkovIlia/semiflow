@@ -3,7 +3,8 @@
 //! oracle at `λ_max t ∈ {1, 10, 1e2, 1e4, 1e6}`.
 //!
 //! Bound per parameter: `|g_k − g_k^ref| ≤ τ_k = (ε_Q + 2n²u)·G_k + η·N_k`
-//! with `N_chain`, `m_max` from `graph_expmv_frechet_plan` (never measured).
+//! with `N_chain` and the rounding weight `W` (Amendment 4) from
+//! `graph_expmv_frechet_plan` (never measured).
 //!
 //! Non-vacuity is PER CARRIER and per point, never pooled (Amendment 1):
 //! - F3-edge (clustered network, `W` solved per point): at least 2 of the 3
@@ -112,7 +113,7 @@ fn bound_for(case: &Case, t: f64) -> (BoundInputs, FrechetPlan) {
         row_nnz: case.row_nnz,
         tol: case.gk.tol(),
         n_chain: plan.n_chain,
-        m_max: plan.m_max,
+        chain_weight: plan.chain_weight,
         rho_t: rho * t,
         t,
     };

@@ -43,8 +43,9 @@ pub(crate) trait Preconditioner<F: SemiflowFloat> {
 
 /// Diagonal preconditioner `P = diag(I + Δt·Â)` (§59.2 v1 default).
 ///
-/// Built by N unit-vector matvecs; total cost = O(nnz).  For a tridiagonal
-/// N=400 operator that is ~1200 multiply-adds — negligible versus `n_steps` solves.
+/// Built from [`SymmetricLinearOp::diagonal_into`]: an `O(nnz)` CSR read for
+/// `Laplacian` / `SymmetricOperator` (it used to probe `n` unit vectors, `O(n·nnz)`,
+/// although this comment always promised `O(nnz)`); the values are identical.
 #[derive(Clone)]
 pub(crate) struct Jacobi<F> {
     inv_diag: Vec<F>,
@@ -60,8 +61,6 @@ impl<F: SemiflowFloat> Jacobi<F> {
         }
     }
 
-    /// Probe each standard basis vector to read diagonal entries of `Â`.
-    ///
     /// `inv_diag[i] = 1 / (1 + Δt · Â[i,i])`.  If a pivot is non-positive
     /// (unexpected for SPD `S`) it is silently replaced by `1` (§59.2 fallback).
     pub(crate) fn build(
@@ -71,19 +70,16 @@ impl<F: SemiflowFloat> Jacobi<F> {
     ) -> Self {
         let n = op.n();
         let tiny = F::from(1e-300_f64).unwrap();
-        let mut unit = scratch.take_vec(n);
-        let mut col = scratch.take_vec(n);
-        let mut inv_diag = Vec::with_capacity(n);
-        for i in 0..n {
-            unit[i] = F::one();
-            op.apply_into_slice(&unit, &mut col); // col = A·e_i
-            let s_ii = F::one() + dt * col[i];
-            let safe = if s_ii > tiny { s_ii } else { F::one() };
-            inv_diag.push(F::one() / safe);
-            unit[i] = F::zero();
-        }
-        scratch.return_vec(unit);
-        scratch.return_vec(col);
+        let mut diag = scratch.take_vec(n);
+        op.diagonal_into(&mut diag);
+        let inv_diag = diag
+            .iter()
+            .map(|&a_ii| {
+                let s_ii = F::one() + dt * a_ii;
+                F::one() / if s_ii > tiny { s_ii } else { F::one() }
+            })
+            .collect();
+        scratch.return_vec(diag);
         Self { inv_diag }
     }
 }

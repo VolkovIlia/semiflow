@@ -118,6 +118,10 @@ pub struct FrechetPlan {
     pub n_chain: u64,
     /// Largest polynomial degree / Krylov dimension among all calls.
     pub m_max: u32,
+    /// Largest rounding weight `Σ wᵢ` along any single chain (§63.7.a,
+    /// Amendment 4): `wᵢ = ⌈zᵢ/2⌉ + mᵢ` per Chebyshev evaluation (`zᵢ = ρ̄τᵢ/2`),
+    /// `mᵢ²` per Lanczos outer step, `0` for backward Euler.
+    pub chain_weight: u64,
     /// Upper bound on sparse mat-vecs per channel, `Σ substeps × degree`.
     pub spmv_upper: u64,
 }
@@ -126,45 +130,81 @@ pub struct FrechetPlan {
 #[derive(Default)]
 struct HalfCost {
     far_evals: u64,
+    far_weight: u64,
     near_max: u64,
+    near_weight_max: u64,
     m_max: u32,
     spmv: u64,
 }
 
+/// `(evaluations, rounding weight)` of one propagator action.
+type CallCost = (u64, u64);
+
+/// Rounding weight of an action with `s` evaluations of degree `m` (§63.7.a).
+///
+/// Chebyshev: the local error of step `j` of the three-term recurrence reaches
+/// `t_k` through `U_{k−j}(B)`, `‖U_i(B)‖₂ ≤ i + 1`, so the output error is at most
+/// `ε·Σ_{k≥1} cₖ k(k+1) = ε·(z/2 + Σ cₖ k) ≤ ε·(z/2 + m)`: the Skellam identity
+/// `Σ_{k≥1} cₖ k² = z/2` for `cₖ = e^{−z}Iₖ(z)`. Lanczos keeps `m²`.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)] // ceil of a finite non-negative f64; `as` saturates
+fn rounding_weight<F: SemiflowFloat>(rho: F, tau: F, s: u32, m: u32, path: &KrylovPath) -> u64 {
+    let (s, m) = (u64::from(s), u64::from(m));
+    match path {
+        KrylovPath::Chebyshev => {
+            let z = (tau * rho).to_f64().unwrap_or(f64::INFINITY) * 0.5;
+            let half_z = libm::ceil(z / (2.0 * s.max(1) as f64)) as u64;
+            s.saturating_mul(half_z.saturating_add(m))
+        }
+        _ => s.saturating_mul(m.saturating_mul(m)),
+    }
+}
+
 impl HalfCost {
-    /// Record one propagator action of length `tau`; returns its substep count.
-    fn call<F: SemiflowFloat>(&mut self, rho: F, tau: F, tol: F, path: &KrylovPath) -> u64 {
+    /// Record one propagator action of length `tau`: `(evaluations, weight)`.
+    fn call<F: SemiflowFloat>(&mut self, rho: F, tau: F, tol: F, path: &KrylovPath) -> CallCost {
         let (s, m) = graph_expmv_matvec_count(rho, tau, tol, path);
         self.m_max = self.m_max.max(m);
         self.spmv = self.spmv.saturating_add(u64::from(s) * u64::from(m));
-        u64::from(s)
+        (u64::from(s), rounding_weight(rho, tau, s, m, path))
     }
+}
+
+/// Component-wise saturating sum of two call costs.
+fn add(a: CallCost, b: CallCost) -> CallCost {
+    (a.0.saturating_add(b.0), a.1.saturating_add(b.1))
 }
 
 /// Walk one half exactly as the sweep does (outer to inner panel).
 fn walk_half_cost<F: SemiflowFloat>(rho: F, half: F, tol: F, path: &KrylovPath) -> HalfCost {
     let mut cost = HalfCost::default();
-    cost.far_evals = cost.call(rho, half, tol, path);
+    let mut far = cost.call(rho, half, tol, path);
     let mut r_far = half;
     for &(lo, h) in half_panels(half, rho).iter().rev() {
         let r = panel_nodes(lo, h);
         let mut near = cost.call(rho, r[0], tol, path);
         for q in 1..8 {
-            near += cost.call(rho, r[q] - r[q - 1], tol, path);
+            near = add(near, cost.call(rho, r[q] - r[q - 1], tol, path));
         }
-        cost.near_max = cost.near_max.max(near);
+        cost.near_max = cost.near_max.max(near.0);
+        cost.near_weight_max = cost.near_weight_max.max(near.1);
         for q in (0..8).rev() {
             let step = r_far - r[q];
             r_far = r[q];
             if step > F::zero() {
-                cost.far_evals += cost.call(rho, step, tol, path);
+                far = add(far, cost.call(rho, step, tol, path));
             }
         }
     }
+    (cost.far_evals, cost.far_weight) = far;
     cost
 }
 
-/// Predict node count, chain length, max degree and `SpMV` bound (§63.8). Pure.
+/// Predict node count, chain length, max degree, rounding weight and `SpMV`
+/// bound (§63.8). Pure.
 ///
 /// `rho_bar` is `GraphKrylovChernoff::lambda_max_bound`, `tol` is
 /// `GraphKrylovChernoff::tol`, `path` is `GraphKrylovChernoff::path`.
@@ -187,6 +227,7 @@ pub fn graph_expmv_frechet_plan<F: SemiflowFloat>(
         propagator_calls: 2 * (1 + n_nodes),
         n_chain: cost.far_evals.max(cost.near_max),
         m_max: cost.m_max,
+        chain_weight: cost.far_weight.max(cost.near_weight_max),
         spmv_upper: cost.spmv.saturating_mul(2),
     }
 }

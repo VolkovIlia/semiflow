@@ -41,7 +41,7 @@
 
 use num_traits::float::FloatCore;
 
-use crate::grid::{bc_value, BoundaryPolicy, Grid1D};
+use crate::grid::{bc_value, Grid1D};
 use crate::simd::{F64x4, SimdF64x4};
 
 // ---------------------------------------------------------------------------
@@ -137,8 +137,12 @@ fn h_b3(s: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
-// Central FD helpers — compute scaled derivatives from the values array.
-// BC extension via bc_value handles out-of-range nodes.
+// Central FD helpers — compute scaled derivatives from nodal values.
+//
+// `get(k)` returns the (ghost-extended) nodal value at index `k`: `bc_value` on
+// the direct path, or a plain slice read / precomputed ghost table on the
+// prepared path (`crate::sample_table`). The arithmetic below is the only
+// definition of each stencil, so every caller produces the same bits.
 // similar_names allowed: fm1/fp1 etc. are standard math stencil notation.
 // ---------------------------------------------------------------------------
 
@@ -152,15 +156,9 @@ fn h_b3(s: f64) -> f64 {
 #[allow(clippy::similar_names)]
 #[allow(dead_code)] // used by the test force-scalar hook
 #[inline]
-fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
+fn fd_scaled_prime_scalar<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let (fm4, fm3, fm2, fm1) = (get(idx - 4), get(idx - 3), get(idx - 2), get(idx - 1));
+    let (fp1, fp2, fp3, fp4) = (get(idx + 1), get(idx + 2), get(idx + 3), get(idx + 4));
     (3.0 * fm4 - 32.0 * fm3 + 168.0 * fm2 - 672.0 * fm1 + 672.0 * fp1 - 168.0 * fp2 + 32.0 * fp3
         - 3.0 * fp4)
         / 840.0
@@ -173,22 +171,12 @@ fn fd_scaled_prime_scalar(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// Result: `(sum_a + sum_b) / 840`.
 ///
 /// Bit-equality with scalar path tested in `septic_hermite_floor.rs`.
-#[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm4 = bc_value(bnd, values, n, idx - 4, dx);
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
-    let fp4 = bc_value(bnd, values, n, idx + 4, dx);
-
+fn fd_scaled_prime_simd<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let va = [get(idx - 4), get(idx - 3), get(idx - 2), get(idx - 1)];
+    let vb = [get(idx + 1), get(idx + 2), get(idx + 3), get(idx + 4)];
     let wa = [3.0_f64, -32.0, 168.0, -672.0];
     let wb = [672.0_f64, -168.0, 32.0, -3.0];
-    let va = [fm4, fm3, fm2, fm1];
-    let vb = [fp1, fp2, fp3, fp4];
 
     let sum_a = F64x4::load_unaligned(&va)
         .mul(F64x4::load_unaligned(&wa))
@@ -202,14 +190,13 @@ fn fd_scaled_prime_simd(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64,
 /// Scaled first derivative `dx * f'` at grid index `idx`.
 ///
 /// Always runs the lane path (intrinsics under `simd`, portable lanes otherwise).
-#[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
+pub(crate) fn fd_scaled_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
     #[cfg(test)]
     if crate::simd::FORCE_SCALAR.with(core::cell::Cell::get) {
-        return fd_scaled_prime_scalar(values, bnd, n, idx, dx);
+        return fd_scaled_prime_scalar(get, idx);
     }
-    fd_scaled_prime_simd(values, bnd, n, idx, dx)
+    fd_scaled_prime_simd(get, idx)
 }
 
 /// Scaled second derivative `dx² * f''` at grid index `idx`.
@@ -220,14 +207,9 @@ fn fd_scaled_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: 
 /// Leading error: O(dx⁸) on `dx²·f''`, keeping septic-Hermite accuracy intact.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_double_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let f0 = bc_value(bnd, values, n, idx, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
+pub(crate) fn fd_scaled_double_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let (fm3, fm2, fm1, f0) = (get(idx - 3), get(idx - 2), get(idx - 1), get(idx));
+    let (fp1, fp2, fp3) = (get(idx + 1), get(idx + 2), get(idx + 3));
     // Fornberg 1988 k=2 7-pt: (2,-27,270,-490,270,-27,2)/180
     (2.0 * fm3 - 27.0 * fm2 + 270.0 * fm1 - 490.0 * f0 + 270.0 * fp1 - 27.0 * fp2 + 2.0 * fp3)
         / 180.0
@@ -254,16 +236,77 @@ fn fd_scaled_double_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// computes `+dx³·f'''` (positive sign). See Fornberg 1988 Table 1, row k=3, N=7.
 #[allow(clippy::similar_names)]
 #[inline]
-fn fd_scaled_triple_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i64, dx: f64) -> f64 {
-    let fm3 = bc_value(bnd, values, n, idx - 3, dx);
-    let fm2 = bc_value(bnd, values, n, idx - 2, dx);
-    let fm1 = bc_value(bnd, values, n, idx - 1, dx);
-    let fp1 = bc_value(bnd, values, n, idx + 1, dx);
-    let fp2 = bc_value(bnd, values, n, idx + 2, dx);
-    let fp3 = bc_value(bnd, values, n, idx + 3, dx);
+pub(crate) fn fd_scaled_triple_prime<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> f64 {
+    let (fm3, fm2, fm1) = (get(idx - 3), get(idx - 2), get(idx - 1));
+    let (fp1, fp2, fp3) = (get(idx + 1), get(idx + 2), get(idx + 3));
     // Fornberg 1988 k=3 6-pt: (f[-3] - 8f[-2] + 13f[-1] - 13f[+1] + 8f[+2] - f[+3]) / 8
     // Computes +dx³·f''' with O(dx⁶) absolute error in the scaled derivative.
     (fm3 - 8.0 * fm2 + 13.0 * fm1 - 13.0 * fp1 + 8.0 * fp2 - fp3) / 8.0
+}
+
+/// Stencil radius of the widest septic FD formula (the 8-point first derivative).
+pub(crate) const SEPTIC_FD_RADIUS: i64 = 4;
+
+/// Cell index and fractional position `(idx, s)` of `x`, `s ∈ [0, 1)`.
+///
+/// The single definition shared by the f64 Hermite-family samplers and the
+/// precomputed sample plans.
+#[inline]
+pub(crate) fn cell_of(grid: &Grid1D, x: f64) -> (i64, f64) {
+    let dx = grid.dx();
+    let t_frac = (x - grid.xmin) / dx;
+    let t_floor = FloatCore::floor(t_frac);
+    // Safe cast: t_floor is an exact integer for any grid-aligned position.
+    #[allow(clippy::cast_possible_truncation)]
+    let idx = t_floor as i64;
+    (idx, t_frac - t_floor)
+}
+
+/// The eight septic-Hermite weights `[a0, a1, a2, a3, b0, b1, b2, b3](s)`.
+#[inline]
+pub(crate) fn septic_weights(s: f64) -> [f64; 8] {
+    [
+        h_a0(s),
+        h_a1(s),
+        h_a2(s),
+        h_a3(s),
+        h_b0(s),
+        h_b1(s),
+        h_b2(s),
+        h_b3(s),
+    ]
+}
+
+/// `Σ wₖ·dₖ` in the canonical left-to-right order for the cell data
+/// `[F0, F0p, F0pp, F0ppp, F1, F1p, F1pp, F1ppp]`.
+#[inline]
+pub(crate) fn septic_combine(w: &[f64; 8], d: &[f64; 8]) -> f64 {
+    w[0] * d[0]
+        + w[1] * d[1]
+        + w[2] * d[2]
+        + w[3] * d[3]
+        + w[4] * d[4]
+        + w[5] * d[5]
+        + w[6] * d[6]
+        + w[7] * d[7]
+}
+
+/// Septic nodal data `[f, dx·f′, dx²·f″, dx³·f‴]` at node `j`.
+#[inline]
+pub(crate) fn septic_node_data<G: Fn(i64) -> f64 + ?Sized>(get: &G, j: i64) -> [f64; 4] {
+    [
+        get(j),
+        fd_scaled_prime(get, j),
+        fd_scaled_double_prime(get, j),
+        fd_scaled_triple_prime(get, j),
+    ]
+}
+
+/// Septic data `[F0, F0p, F0pp, F0ppp, F1, F1p, F1pp, F1ppp]` of cell `idx`.
+#[inline]
+pub(crate) fn septic_cell_data<G: Fn(i64) -> f64 + ?Sized>(get: &G, idx: i64) -> [f64; 8] {
+    let (a, b) = (septic_node_data(get, idx), septic_node_data(get, idx + 1));
+    [a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]]
 }
 
 // ---------------------------------------------------------------------------
@@ -280,38 +323,11 @@ fn fd_scaled_triple_prime(values: &[f64], bnd: BoundaryPolicy, n: usize, idx: i6
 /// - `x` may be arbitrary real; BC extension handles out-of-domain.
 /// - Achieves O(dx⁸) on smooth f ∈ C³(ℝ); floor ≈ 1.49e-12 at N=512.
 pub(crate) fn sample_septic_1d(values: &[f64], grid: &Grid1D, x: f64) -> f64 {
-    let dx = grid.dx();
-    let t_frac = (x - grid.xmin) / dx;
-    let t_floor = FloatCore::floor(t_frac);
-    // Safe cast: t_floor is an exact integer for any grid-aligned position.
-    #[allow(clippy::cast_possible_truncation)]
-    let idx = t_floor as i64;
-    let s = t_frac - t_floor;
-
-    let bnd = grid.boundary;
-    let n = grid.n;
-
-    // Nodal values at cell endpoints.
-    let v0 = bc_value(bnd, values, n, idx, dx);
-    let v1 = bc_value(bnd, values, n, idx + 1, dx);
-
-    // Scaled derivatives at cell endpoints via FD.
-    let v0p = fd_scaled_prime(values, bnd, n, idx, dx);
-    let v1p = fd_scaled_prime(values, bnd, n, idx + 1, dx);
-    let v0pp = fd_scaled_double_prime(values, bnd, n, idx, dx);
-    let v1pp = fd_scaled_double_prime(values, bnd, n, idx + 1, dx);
-    let v0ppp = fd_scaled_triple_prime(values, bnd, n, idx, dx);
-    let v1ppp = fd_scaled_triple_prime(values, bnd, n, idx + 1, dx);
-
+    let (idx, s) = cell_of(grid, x);
+    let (bnd, n, dx) = (grid.boundary, grid.n, grid.dx());
+    let get = |k: i64| bc_value(bnd, values, n, k, dx);
     // Septic-Hermite evaluation (all weights are dimensionless in s).
-    h_a0(s) * v0
-        + h_a1(s) * v0p
-        + h_a2(s) * v0pp
-        + h_a3(s) * v0ppp
-        + h_b0(s) * v1
-        + h_b1(s) * v1p
-        + h_b2(s) * v1pp
-        + h_b3(s) * v1ppp
+    septic_combine(&septic_weights(s), &septic_cell_data(&get, idx))
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +357,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use super::*;
+    use crate::grid::BoundaryPolicy;
 
     /// Helper: uniform grid [0,1] with n nodes, values = `f(x_i)`.
     ///

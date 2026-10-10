@@ -26,15 +26,13 @@ use core::marker::PhantomData;
 
 use num_traits::{Float, One, ToPrimitive, Zero};
 
-use crate::float::SemiflowFloat;
-
 use crate::{
     approximation::ApproximationSubspace,
     chernoff::{ChernoffFunction, Growth},
     complex::SemiflowComplex,
     error::SemiflowError,
     grid::Grid1D,
-    matrix_pade_complex::{cmat_vec_mul, mat_exp_pade13_complex, real_from_f64_cplx},
+    matrix_pade_complex::{cmat_vec_mul, mat_exp_pade13_complex},
     scratch::ScratchPool,
     state::State,
 };
@@ -149,9 +147,7 @@ impl<C: SemiflowComplex, const M: usize> State<C::Real> for MatrixGridFnComplex1
 ///
 /// ## Matrix exponential (Phase 1/3)
 ///
-/// - M ≤ 4: two-component complex Cayley-Hamilton (via Taylor degree-12
-///   scaling-and-squaring — reused from the real helper `mat_exp_taylor_complex`).
-/// - M ≥ 5: Padé[13/13] scaling-and-squaring (ADR-0128).
+/// Padé[13/13] scaling-and-squaring for every `M` (ADR-0128).
 ///
 /// ## Phase 2 (complex block-CN Cayley map)
 ///
@@ -331,119 +327,21 @@ fn phase_reaction<C: SemiflowComplex, const M: usize>(
 }
 
 // ---------------------------------------------------------------------------
-// Complex matrix-exp dispatch (Cayley-Hamilton for M≤4; Padé for M≥5)
+// Complex matrix-exp dispatch (Padé[13/13] scaling-and-squaring for every M ≥ 1)
 // ---------------------------------------------------------------------------
 
+/// Complex `e^A` through Padé[13/13] scaling-and-squaring (Higham 2005) for all `M`.
+///
+/// `M ≤ 4` used a degree-12 Taylor sum scaled by the largest ENTRY of a row
+/// rather than the row sum, so `‖B‖_∞` reached `M` after scaling and the
+/// truncation error was `≈ M¹³/13!` (`1.3e-6` at `M = 2`, `1e-2` at `M = 4`).
 fn cmatrix_exp_dispatch<C: SemiflowComplex, const M: usize>(
     a: &[[C; M]; M],
 ) -> Result<[[C; M]; M], SemiflowError> {
     match M {
         0 => Ok([[C::zero(); M]; M]),
-        1..=4 => Ok(cmat_exp_taylor::<C, M>(a, M)),
         _ => mat_exp_pade13_complex::<C, M>(a),
     }
-}
-
-/// Scaling-and-squaring Taylor degree-12 for complex matrices (M ≤ 4).
-fn cmat_exp_taylor<C: SemiflowComplex, const M: usize>(a: &[[C; M]; M], dim: usize) -> [[C; M]; M] {
-    let (k, b) = taylor_scale::<C, M>(a, dim);
-    let result = taylor_series::<C, M>(&b, dim);
-    mat_square_k::<C, M>(result, k, dim)
-}
-
-/// Compute scaling count k and scaled matrix B = A / 2^k.
-fn taylor_scale<C: SemiflowComplex, const M: usize>(
-    a: &[[C; M]; M],
-    dim: usize,
-) -> (u32, [[C; M]; M]) {
-    let mut norm = C::Real::zero();
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..dim {
-        let rs = (0..dim).fold(C::Real::zero(), |acc, j| {
-            let av = a[i][j].abs();
-            if av > acc {
-                av
-            } else {
-                acc
-            }
-        });
-        if rs > norm {
-            norm = rs;
-        }
-    }
-    let k = {
-        let nf = norm.to_f64().unwrap_or(0.0);
-        if nf <= 1.0 {
-            0u32
-        } else {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            {
-                (nf.libm_log2().ceil() as u32).min(30)
-            }
-        }
-    };
-    let inv_s = C::from_real(real_from_f64_cplx::<C::Real>(
-        1.0 / <f64 as From<u32>>::from(1u32 << k),
-    ));
-    let mut b = [[C::zero(); M]; M];
-    for i in 0..dim {
-        for j in 0..dim {
-            b[i][j] = a[i][j] * inv_s;
-        }
-    }
-    (k, b)
-}
-
-/// Degree-12 Taylor sum starting from identity.
-fn taylor_series<C: SemiflowComplex, const M: usize>(b: &[[C; M]; M], dim: usize) -> [[C; M]; M] {
-    let mut result = [[C::zero(); M]; M];
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..dim {
-        result[i][i] = C::one();
-    }
-    let mut term = result;
-    for d in 1u32..=12 {
-        let mut t2 = [[C::zero(); M]; M];
-        for i in 0..dim {
-            for mid in 0..dim {
-                for j in 0..dim {
-                    t2[i][j] += term[i][mid] * b[mid][j];
-                }
-            }
-        }
-        let inv_d = C::from_real(real_from_f64_cplx::<C::Real>(
-            1.0 / <f64 as From<u32>>::from(d),
-        ));
-        for i in 0..dim {
-            for j in 0..dim {
-                t2[i][j] *= inv_d;
-                result[i][j] += t2[i][j];
-            }
-        }
-        term = t2;
-    }
-    result
-}
-
-/// Square a matrix k times: result^(2^k).
-fn mat_square_k<C: SemiflowComplex, const M: usize>(
-    mut r: [[C; M]; M],
-    k: u32,
-    dim: usize,
-) -> [[C; M]; M] {
-    for _ in 0..k {
-        let mut sq = [[C::zero(); M]; M];
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..dim {
-            for mid in 0..dim {
-                for j in 0..dim {
-                    sq[i][j] += r[i][mid] * r[mid][j];
-                }
-            }
-        }
-        r = sq;
-    }
-    r
 }
 
 // ---------------------------------------------------------------------------

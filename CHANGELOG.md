@@ -6,6 +6,117 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Performance overhaul and correctness audit (2026-10)
+
+The library was slow for algorithmic reasons, not for lack of micro-tuning.
+This section records the fixes and speedups in order; every existing gate
+threshold is unchanged or tightened, and every speedup that is claimed
+bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
+
+#### Fixed
+
+- **Issue #44 — a non-finite operator norm bound is an error, never a silent
+  schedule.** Finite entries can overflow the Gershgorin / row-sum bound (2×2
+  all-`1e308`). Such operators stay legal — with a diagonal mass `M⁻¹A` has a
+  finite norm — but every consumer of the bound now returns `DomainViolation`:
+  `CsrGenerator` without mass, `GraphKrylovChernoff::new`,
+  `graph_expmv_krylov` (also for an external `SymmetricLinearOp` returning
+  `∞`), the Taylor `expmv` kernels (`select_s_m` used to skip every θ row and
+  return ONE substep for `∞`, zero substeps for NaN, and saturate `s` at
+  `u32::MAX`) and the φ entry points (which also reject `τ < 0` / NaN / `∞`).
+  Non-finite entries are rejected in `Laplacian::from_csr_parts`,
+  `lumped_congruence` (no longer `.expect`s) and `Graph::from_edges`
+  (overflowing weighted degree). `expmv_cost_probe` / `phi_cost_probe` return
+  `(0, 0)` for such inputs. `SymNormalized` assembly no longer turns an
+  overflowing `dᵢdⱼ` into a zero entry. Test helpers that folded with
+  `f64::max` (which drops NaN) now assert finiteness. Gate
+  `G_NONFINITE_BOUND_REJECT`.
+- **`MatrixDiffusionChernoff` exponentiated the wrong matrices.** `M = 2`: a
+  negative discriminant (complex eigenvalues, e.g. any rotation-like coupling)
+  took `cosh/sinh` instead of `cos/sin`; `M = 3, 4`: the Taylor helper summed
+  `Bᵈ/d` instead of `Bᵈ/d!` (`e^{0.5}` came out as `1.6931`);
+  `MatrixDiffusionChernoffComplex`, `M ≤ 4`: scaled by the largest entry rather
+  than the row sum, truncation up to `M¹³/13!`. Now a stable closed form for
+  `M = 2` and Padé[13/13] for every other size. Gate `G_MATRIX_EXP_SMALL_M`
+  (old errors: 5e-3, 6e-4, 9e-5, 2e-6).
+- **`MassKOperator` under-estimated `λ_max(M⁻¹K)`**, so its Chebyshev series
+  diverged on P1 consistent mass (relative error `1.7e11` at `n = 12`): the
+  5-step inverse-power estimate of `λ_min(M)` started from an eigenvector of
+  `M`'s largest eigenvalue. Replaced by a rigorous `O(n²)` bound
+  `ρ̄(K)·‖R⁻¹‖₁‖R⁻¹‖_∞` (comparison matrix of the Cholesky factor). Gate
+  `G_MASSK_RIGOROUS_BOUND`; `G_MASSK_CONSISTENT` tightened `1e-8 → 1e-11`
+  (measured 3.5e-10 → 2.2e-13).
+- **Lanczos `m_max` cap** kept the substep count of the uncapped degree
+  (silently under-resolved). Gate `G_LANCZOS_M_MAX_CAP` (now against the new
+  a-priori bounds, recomputed independently).
+- **`DriftReactionChernoff::apply_adjoint_into`** dropped the divergence term:
+  the adjoint of `b∂ₓ + c` is `−b∂ₓ + (c − b′)`. Exact before only for
+  constant `b` (still bit-identical there). Gate `G16C_ADJOINT_VARIABLE_DRIFT`
+  (dual-pairing defect 1.3e-3 → 2.7e-6).
+- `Jacobi::build` read the diagonal through `n` unit-vector mat-vecs
+  (`O(n·nnz)`, its doc said `O(nnz)`); new provided method
+  `SymmetricLinearOp::diagonal_into`, overridden by the CSR operators.
+  Bit-identical.
+- `Diffusion4thChernoff` documented "Chebyshev wins over octonic" while the
+  code (and `Diffusion8thZeta8Chernoff::with_octonic_sampling`) relies on
+  octonic winning; the docs now say what the code does.
+
+#### Performance (bit-identical)
+
+- **Prepared sampling (ADR-0204).** Within one Chernoff step every sample reads
+  the same state, but `GridFn1D::sample` rebuilt the interpolant's ghost data
+  per sample: 44 `bc_value` calls for the default septic sampler, all `M + 1`
+  virtual nodes for the Chebyshev sampler. The grid engines now build that
+  data once per step (`sample_table`) and evaluate every sample from it with
+  the same functions in the same order. The ζ-corrections of
+  `Diffusion4th`/`6th` sample their shared stencil points once instead of three
+  times, and hoist the per-node `libm::pow` calls. Bit-identical (gate
+  `G_PLAN_BIT_EQUAL`, all `no_std` digests unchanged). Measured (this
+  container, best of 5): `ShiftChernoff1D` 17.9 → 6.3 ms, `DiffusionChernoff`
+  const-a 29.2 → 9.4 ms, variable-a 73.2 → 27.9 ms, `Diffusion6th` 21.9 → 6.8 ms,
+  `Diffusion4th` + Chebyshev sampling 104 → 2.7 ms, `Strang2D` 400² 3.30 → 1.14 s,
+  `Strang3D` 64³ 8.2 → 3.8 s.
+
+#### Performance (new algorithms; output bits change, ADR-0205)
+
+- **Chebyshev Krylov path: one expansion, cost `∝ √(λt)` instead of `∝ λt`.**
+  The coefficients `e^{−z}Iₖ(z)` were a power series for `Iₖ` times `e^{−z}`,
+  which overflows near `z ≈ 700`, so every action was split into `⌈z/200⌉`
+  substeps of degree ≈ 101, each with the FULL tolerance (error grew with the
+  substep count). Now exponentially scaled Bessel values by Miller's backward
+  recurrence, ONE expansion of degree `≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1`
+  (`L = ln(8/tol)`, Bennett bound, gate `G_CHEB_SQRT_COST`). Issue #16 operator
+  (`N = 400`, `λt ≈ 4e7`): 23.7 s → 42 ms (559×), error 6.8e-6 → 1.4e-11 at
+  `tol = 1e-10` (gate `G_CHEB_STIFF_ORACLE`, `≤ tol + 1e-11` up to `λt = 1e8`).
+  `λ_max = 0` / `τ = 0` no longer divide by zero.
+- **Lanczos path: a-priori schedule from Lanczos theory.** Substeps came from
+  the Taylor radii `θ_m` (`λh ≤ 1.09` at `m = 18`) plus a dense Padé-13 per
+  substep; now the Hochbruck–Lubich and Chebyshev-interpolation (`4xᵐ/m!`)
+  bounds and an `O(m²)` tridiagonal eigen-solve. 3.8–5.1× faster (gate
+  `G_LANCZOS_HL_COST`); `m_max` is no longer tied to 18; an unschedulable
+  `m_max` (1) is an error.
+- **ETDRK4: four φ sweeps per step instead of nine.** Each stage is one
+  `phi_combination` (`Σ τᵏφₖ(τL)wₖ`) sweep. Exactly `3·C(h/2) + C(h)`
+  generator applications per step, 2.25–2.6× fewer (gate `G_ETDRK4_SWEEPS`);
+  `G_ETDRK4_ORDER` and `G_ETD_AFFINE_EXACT` unchanged.
+- **`GeneralOperator` Taylor `expmv`: trace shift.** `e^{−τA} = e^{−τμ}e^{−τ(A−μI)}`,
+  `μ = tr(A)/n` when it lowers `‖·‖_∞` (Al-Mohy & Higham 2011, §3.1): half the
+  mat-vecs on diffusion-dominated stencils (gate `G_EXPMV_SHIFT_COST`); new
+  accessor `GeneralOperator::taylor_norm_bound`. `CsrExpmvChernoff::apply_into`
+  no longer allocates (scratch pool).
+- **Fréchet gradients** inherit the Chebyshev speedup in every propagator call.
+  `FrechetPlan` gains `chain_weight` and the §63.7.a bound uses it (rounding
+  `Σ(zᵢ/2 + mᵢ)` along a chain, Skellam variance identity) instead of
+  `N_chain·m_max²`; the bound is 1.03–25× TIGHTER at every gate point
+  (Amendment 4). The SpMV bound `B(ρ̄t)` is re-derived (`√(6L·N·ρ̄t) + N·2L/3`,
+  never above the old one, asserted).
+- `G_TPS_STIFF_STEPCOUNT` now counts what ADR-0188 defined (total mat-vecs,
+  not the per-substep degree; the old kernel had `X/Y = 3.96` under that
+  definition): `X/Y ≥ 300` (was 100), `Y ≤` the Bennett bound (was `2√X`,
+  below the minimax degree at `tol = 1e-12`). Measured 7.35e5 → 8829 mat-vecs.
+- Re-recorded once: `no_std` digests `graph_krylov_chebyshev`,
+  `graph_frechet_large_t` (identical in `no_std`, `std-ref`, AVX2).
+
 ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
 φ-combination that closes the affine and ETD gaps. All additive except one
 behaviour change in `phi_action` (see Changed). No ABI change; FFI and WASM are

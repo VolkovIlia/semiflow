@@ -373,8 +373,11 @@ fn public_grad<P: GeneratorSensitivity<f64>>(
     grad
 }
 
-/// Hash recorded from the pre-refactor implementation (same fixture, same flags).
-const PRE_REFACTOR_HASH: u64 = 0x6d87_193c_3a06_6bb0;
+/// Hash of the production gradient (same fixture, same flags). Recorded from the
+/// pre-refactor implementation (`0x6d87_193c_3a06_6bb0`); re-recorded once for
+/// ADR-0205, whose single Chebyshev expansion changes every propagator's bits.
+/// It still pins the sweep: any later refactor must leave it unchanged.
+const PRE_REFACTOR_HASH: u64 = 0x46ce_c302_2d2a_7b91;
 
 #[test]
 fn production_bit_identical_after_refactor() {

@@ -311,16 +311,21 @@ fn g_tps_stack_acceptance() {
     }
 }
 
-/// `G_TPS_STIFF_STEPCOUNT` (`RELEASE_BLOCKING`, §57.3): Chebyshev substep economy.
+/// `G_TPS_STIFF_STEPCOUNT` (`RELEASE_BLOCKING`, §57.3, ADR-0205 amendment):
+/// Chebyshev economy.
 ///
-/// X = ⌈τ·λ_max(Â)⌉, Y = m (Chebyshev degree per substep).
-/// Gate: X/Y ≥ 100 and Y ≤ 2√X.
+/// `X = ⌈τ·λ_max(Â)⌉` (explicit-CFL count), `Y = s·m` (total mat-vecs of the
+/// stable path, ADR-0188's definition; this test used to read the per-substep
+/// degree `m` only). Gate: `X/Y ≥ 300` AND `Y ≤ ⌈L/3 + √(L²/9 + 2zL)⌉ − 1`,
+/// `z = τλ_max/2`, `L = ln(8/tol)` (math §63.6.d). Teeth: the substep kernel it
+/// replaced (`⌈z/200⌉·101` mat-vecs) has `X/Y < 100`.
 #[test]
 #[ignore = "slow-test: run with --features slow-tests --release -- --ignored"]
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names // X, Y, s, m, z, L: the gate's own notation
 )]
 fn g_tps_stiff_stepcount() {
     let stack = tps_stack();
@@ -335,22 +340,30 @@ fn g_tps_stiff_stepcount() {
         .expect("G_TPS_STIFF_STEPCOUNT: lumped_congruence failed");
     let lambda_max = a_hat.lambda_max_bound();
 
-    let (_s, m) = graph_expmv_matvec_count(lambda_max, tau, tol, &KrylovPath::Chebyshev);
+    let (s, m) = graph_expmv_matvec_count(lambda_max, tau, tol, &KrylovPath::Chebyshev);
     let x: u64 = (tau * lambda_max).ceil() as u64;
-    let y: u32 = m;
+    let y = u64::from(s) * u64::from(m);
+    let z = 0.5 * tau * lambda_max;
+    let l = (8.0 / tol).ln();
+    let deg_bound = (l / 3.0 + (l * l / 9.0 + 2.0 * z * l).sqrt()).ceil() - 1.0;
+    let legacy = (z / 200.0).ceil() * 101.0;
 
-    let ratio = x as f64 / f64::from(y);
-    let deg_bound = 2.0 * (x as f64).sqrt();
+    let ratio = x as f64 / y as f64;
     eprintln!(
-        "G_TPS_STIFF_STEPCOUNT  lambda_max={lambda_max:.3e}  X={x}  Y={y}  \
-         X/Y={ratio:.1}  2√X={deg_bound:.1}"
+        "G_TPS_STIFF_STEPCOUNT  lambda_max={lambda_max:.3e}  X={x}  Y={y} (s={s}, m={m})  \
+         X/Y={ratio:.1}  bound={deg_bound}  legacy X/Y={:.2}",
+        x as f64 / legacy
     );
     assert!(
-        ratio >= 100.0,
-        "G_TPS_STIFF_STEPCOUNT: X/Y={ratio:.1} < 100 (economy gate failed)"
+        ratio >= 300.0,
+        "G_TPS_STIFF_STEPCOUNT: X/Y={ratio:.1} < 300 (economy gate failed)"
     );
     assert!(
-        f64::from(y) <= deg_bound,
-        "G_TPS_STIFF_STEPCOUNT: Y={y} > 2√X={deg_bound:.1} (degree bound violated)"
+        y as f64 <= deg_bound,
+        "G_TPS_STIFF_STEPCOUNT: Y={y} > Bennett bound {deg_bound} (degree bound violated)"
+    );
+    assert!(
+        x as f64 / legacy < 100.0,
+        "teeth: the substep kernel's X/Y must fail the economy gate"
     );
 }

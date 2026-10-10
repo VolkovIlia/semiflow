@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+mod phi_dense;
+
 use semiflow::{
     chernoff::ChernoffFunction,
     dense_graph_expmv_ref,
@@ -48,12 +50,7 @@ fn g_graph_expmv_dense() {
     dense_graph_expmv_ref(&lap, tau, src.values(), &mut dst_dense).expect("dense reference failed");
 
     // Supremum error.
-    let sup_error = dst_krylov
-        .values()
-        .iter()
-        .zip(dst_dense.iter())
-        .map(|(a, b)| (a - b).abs())
-        .fold(0.0_f64, f64::max);
+    let sup_error = phi_dense::sup_diff(dst_krylov.values(), &dst_dense);
 
     eprintln!("G_GRAPH_EXPMV_DENSE  n={n}  tau={tau}  sup_error={sup_error:.3e}");
     assert!(

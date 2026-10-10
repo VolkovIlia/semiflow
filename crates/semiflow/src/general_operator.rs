@@ -59,6 +59,10 @@ pub struct GeneralOperator<F: SemiflowFloat = f64> {
     t_col_idx: Arc<Vec<u32>>,
     t_vals: Arc<Vec<F>>,
     norm_inf: f64,
+    /// Trace shift `μ` of the Taylor kernel and `‖A − μI‖_∞` (`μ = 0` when the
+    /// shift does not lower the bound).
+    shift: f64,
+    norm_shifted: f64,
 }
 
 impl<F: SemiflowFloat> GeneralOperator<F> {
@@ -66,7 +70,7 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
     ///
     /// # Errors
     /// `DomainViolation` if the CSR shape is inconsistent or any entry is
-    /// non-finite.
+    /// non-finite. (The row-sum bound may still overflow; see [`Self::norm_inf_bound`].)
     pub fn from_csr(
         n: usize,
         row_ptr: &[usize],
@@ -74,7 +78,10 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
         vals: &[F],
     ) -> Result<Self, SemiflowError> {
         validate_csr(n, row_ptr, col_idx, vals)?;
+        // May be `∞` for finite entries (issue #44): legal with a mass, rejected by
+        // every consumer that schedules from it (`select_s_m`, `CsrGenerator`).
         let norm_inf = row_sum_norm(n, row_ptr, vals);
+        let (shift, norm_shifted) = trace_shift(n, row_ptr, col_idx, vals, norm_inf);
         let (t_row_ptr, t_col_idx, t_vals) = transpose_csr(n, row_ptr, col_idx, vals);
         Ok(Self {
             n,
@@ -85,6 +92,8 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
             t_col_idx: Arc::new(t_col_idx),
             t_vals: Arc::new(t_vals),
             norm_inf,
+            shift,
+            norm_shifted,
         })
     }
 
@@ -96,6 +105,9 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
 
     /// Gershgorin row-sum bound `‖A‖_∞ = maxᵢ Σₖ |aᵢₖ| ≥ ρ(A)`.
     ///
+    /// `∞` when finite entries overflow the row sum (issue #44); the Taylor kernel
+    /// and a mass-less `CsrGenerator` then return `DomainViolation`.
+    ///
     /// Deliberately **not** named `lambda_max_bound`: for a non-symmetric `A`
     /// this is an induced *norm* bound, not a spectral interval. Over-estimation
     /// only raises the Taylor scaling `s` (more, cheaper substeps) and never
@@ -103,6 +115,15 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
     #[must_use]
     pub fn norm_inf_bound(&self) -> f64 {
         self.norm_inf
+    }
+
+    /// `‖A − μI‖_∞`, the bound the Taylor kernel ([`Self::expmv`]) schedules from:
+    /// `μ = tr(A)/n` when that lowers the bound (Al-Mohy & Higham 2011, §3.1),
+    /// else `μ = 0` and this equals [`Self::norm_inf_bound`]. Pass it to
+    /// [`expmv_cost_probe`] to predict the kernel's `(s, m)`.
+    #[must_use]
+    pub fn taylor_norm_bound(&self) -> f64 {
+        self.norm_shifted
     }
 
     /// Borrowed CSR view `(row_ptr, col_idx, vals)` (crate-internal: row-wise bounds).
@@ -194,6 +215,44 @@ fn row_sum_norm<F: SemiflowFloat>(n: usize, row_ptr: &[usize], vals: &[F]) -> f6
     best
 }
 
+/// Trace shift `(μ, ‖A − μI‖_∞)`, `μ = tr(A)/n` (Al-Mohy & Higham 2011, §3.1):
+/// `e^{−τA} = e^{−τμ}·e^{−τ(A−μI)}`, and the Taylor cost scales with the norm of
+/// the shifted matrix — half of `‖A‖_∞` for a diffusion stencil. Kept only when
+/// it lowers the bound; otherwise `(0, ‖A‖_∞)` (and the kernel's bits are those
+/// of the unshifted one).
+#[allow(clippy::cast_precision_loss)] // n < 2^53
+fn trace_shift<F: SemiflowFloat>(
+    n: usize,
+    row_ptr: &[usize],
+    col_idx: &[u32],
+    vals: &[F],
+    norm_inf: f64,
+) -> (f64, f64) {
+    if n == 0 || !norm_inf.is_finite() {
+        return (0.0, norm_inf);
+    }
+    let to64 = |v: &F| v.to_f64().unwrap_or(f64::NAN);
+    let row = |i: usize| (row_ptr[i]..row_ptr[i + 1]).map(move |k| (col_idx[k] as usize, &vals[k]));
+    let diag = |i: usize| -> f64 { row(i).filter(|&(j, _)| j == i).map(|(_, v)| to64(v)).sum() };
+    let mu = (0..n).map(diag).sum::<f64>() / n as f64;
+    let mut norm = 0.0_f64;
+    for i in 0..n {
+        let off: f64 = row(i)
+            .filter(|&(j, _)| j != i)
+            .map(|(_, v)| libm::fabs(to64(v)))
+            .sum();
+        let r = off + libm::fabs(diag(i) - mu);
+        if r.is_nan() || r > norm {
+            norm = r; // NaN propagates and fails the comparison below
+        }
+    }
+    if mu.is_finite() && norm < norm_inf {
+        (mu, norm)
+    } else {
+        (0.0, norm_inf)
+    }
+}
+
 /// Build the transposed CSR by counting sort over columns.
 fn transpose_csr<F: SemiflowFloat>(
     n: usize,
@@ -271,6 +330,20 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
     /// `DomainViolation` on a length mismatch or a non-finite result.
     pub fn action_into_slice(&self, tau: F, src: &[F], dst: &mut [F]) -> Result<(), SemiflowError> {
         let n = self.op.n;
+        let (mut work, mut av) = (vec![F::zero(); n], vec![F::zero(); n]);
+        self.action_with(tau, src, dst, &mut work, &mut av)
+    }
+
+    /// [`Self::action_into_slice`] with caller-provided work buffers (length `n`).
+    fn action_with(
+        &self,
+        tau: F,
+        src: &[F],
+        dst: &mut [F],
+        work: &mut [F],
+        av: &mut [F],
+    ) -> Result<(), SemiflowError> {
+        let n = self.op.n;
         if src.len() != n || dst.len() != n {
             #[allow(clippy::cast_precision_loss)]
             return Err(SemiflowError::DomainViolation {
@@ -285,21 +358,24 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
                 value: tau_f,
             });
         }
-        let (n_sub, degree) = select_s_m_tight(self.op.norm_inf, tau_f);
-        let tau_s = from_f64::<F>(tau_f / f64::from(n_sub));
-        let mut y = src.to_vec();
-        let mut work = vec![F::zero(); n];
-        let mut av = vec![F::zero(); n];
+        let (n_sub, degree) = select_s_m_tight(self.op.norm_shifted, tau_f)?;
+        let tau_s_f = tau_f / f64::from(n_sub);
+        let sub = Substep {
+            tau_s: from_f64::<F>(tau_s_f),
+            m: degree,
+            mu: from_f64::<F>(self.op.shift),
+            decay: from_f64::<F>(libm::exp(-tau_s_f * self.op.shift)),
+        };
+        dst.copy_from_slice(src);
         for _ in 0..n_sub {
-            horner_substep(&self.op, &mut y, &mut work, &mut av, tau_s, degree);
+            sub.apply(&self.op, dst, work, av);
         }
-        if y.iter().any(|v| !v.is_finite()) {
+        if dst.iter().any(|v| !v.is_finite()) {
             return Err(SemiflowError::DomainViolation {
                 what: "CsrExpmvChernoff: non-finite result (operator norm too large?)",
                 value: self.op.norm_inf,
             });
         }
-        dst.copy_from_slice(&y);
         Ok(())
     }
 }
@@ -321,31 +397,46 @@ impl<F: SemiflowFloat> CsrExpmvChernoff<F> {
 /// (`θ_18 = 1.091`) agree to within 10%, so the duplication no longer buys
 /// anything and the shared selector — which also offers degrees up to 30, and so
 /// fewer substeps — is used instead.
-fn select_s_m_tight(norm_a: f64, tau: f64) -> (u32, u32) {
+fn select_s_m_tight(norm_a: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
     crate::expmv::select_s_m(norm_a, tau)
 }
 
-/// One Horner substep of `e^{−τ_s A}` truncated at degree `m`.
+/// One Horner substep `y ← e^{−τ_s μ}·T_m(−τ_s(A − μI))·y` (trace shift `μ`).
 ///
 /// Note the sign: the term factor is `−τ_s/k`, giving `e^{−τ_s A}`, matching the
-/// graph/symmetric convention rather than `expmv.rs`'s `e^{+τA}`.
-fn horner_substep<F: SemiflowFloat>(
-    op: &GeneralOperator<F>,
-    y: &mut [F],
-    w: &mut [F],
-    av: &mut [F],
+/// graph/symmetric convention rather than `expmv.rs`'s `e^{+τA}`. With `μ = 0`
+/// the arithmetic is exactly the unshifted kernel's.
+struct Substep<F> {
     tau_s: F,
     m: u32,
-) {
-    w.copy_from_slice(y);
-    for k in 1..=m {
-        op.apply_into_slice(w, av);
-        let factor = F::zero() - tau_s / from_f64::<F>(f64::from(k));
-        for (wi, &avi) in w.iter_mut().zip(av.iter()) {
-            *wi = factor * avi;
+    mu: F,
+    decay: F,
+}
+
+impl<F: SemiflowFloat> Substep<F> {
+    fn apply(&self, op: &GeneralOperator<F>, y: &mut [F], w: &mut [F], av: &mut [F]) {
+        let shifted = self.mu != F::zero();
+        w.copy_from_slice(y);
+        for k in 1..=self.m {
+            op.apply_into_slice(w, av);
+            let factor = F::zero() - self.tau_s / from_f64::<F>(f64::from(k));
+            if shifted {
+                for (wi, &avi) in w.iter_mut().zip(av.iter()) {
+                    *wi = factor * (avi - self.mu * *wi);
+                }
+            } else {
+                for (wi, &avi) in w.iter_mut().zip(av.iter()) {
+                    *wi = factor * avi;
+                }
+            }
+            for (yi, &wi) in y.iter_mut().zip(w.iter()) {
+                *yi += wi;
+            }
         }
-        for (yi, &wi) in y.iter_mut().zip(w.iter()) {
-            *yi += wi;
+        if shifted {
+            for yi in y.iter_mut() {
+                *yi *= self.decay;
+            }
         }
     }
 }
@@ -358,13 +449,23 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for CsrExpmvChernoff<F> {
         tau: F,
         src: &GraphSignal<F>,
         dst: &mut GraphSignal<F>,
-        _scratch: &mut ScratchPool<F>,
+        scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
-        let mut out = vec![F::zero(); self.op.n];
-        self.action_into_slice(tau, src.values(), &mut out)?;
-        dst.zero_into();
-        dst.axpy_into_slice(F::one(), &out);
-        Ok(())
+        let n = self.op.n;
+        let (mut out, mut work, mut av) = (
+            scratch.take_vec(n),
+            scratch.take_vec(n),
+            scratch.take_vec(n),
+        );
+        let result = self.action_with(tau, src.values(), &mut out, &mut work, &mut av);
+        if result.is_ok() {
+            dst.zero_into();
+            dst.axpy_into_slice(F::one(), &out);
+        }
+        for b in [out, work, av] {
+            scratch.return_vec(b);
+        }
+        result
     }
 
     /// Tolerance-driven, not a fixed-order Chernoff function.
@@ -382,12 +483,17 @@ impl<F: SemiflowFloat> ChernoffFunction<F> for CsrExpmvChernoff<F> {
     }
 }
 
-/// Taylor scaling/degree `(s, m)` this kernel selects for `‖A‖` at time `tau`.
+/// Taylor scaling/degree `(s, m)` this kernel selects for the bound `norm_a` at
+/// time `tau` (the kernel itself uses [`GeneralOperator::taylor_norm_bound`]).
 ///
 /// Exposed so the ADVISORY cost gate can measure that this path's work is
 /// `Θ(τ‖A‖)` — linear, not depth-flat. Making the anti-claim measurable is the
 /// point; `G_GRAPH_EXPMV_DEPTH_FLAT` must never be extended to this path.
+///
+/// Returns `(0, 0)` — no valid schedule — when `τ·‖A‖` is non-finite, negative or
+/// needs more than `u32::MAX` substeps; the kernel itself returns `DomainViolation`
+/// for the same inputs.
 #[must_use]
 pub fn expmv_cost_probe(norm_a: f64, tau: f64) -> (u32, u32) {
-    select_s_m_tight(norm_a, tau)
+    select_s_m_tight(norm_a, tau).unwrap_or((0, 0))
 }

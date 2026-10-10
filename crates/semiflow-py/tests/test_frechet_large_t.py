@@ -6,9 +6,10 @@ G_PY_FRECHET_LARGE_T (RELEASE_BLOCKING, ADR-0203, math §63.7).
 fixture F2 at ``lambda_max t in {1, 10, 1e2, 1e4, 1e6}``.
 
 Bound per parameter: ``|g_k - g_k^ref| <= tau_k = (eps_Q + 2 n^2 u) G_k + eta N_k``
-with ``tol = 1e-12`` and ``N_chain``, ``m_max`` from a Python replica of the
-Rust ``graph_expmv_frechet_plan`` (same mesh, same substep rule, same Bessel
-degree rule; the planner itself is deliberately not bound).
+with ``tol = 1e-12`` and ``N_chain``, ``W`` (rounding weight, Amendment 4) from a
+Python replica of the Rust ``graph_expmv_frechet_plan`` (same mesh, same single
+Chebyshev expansion, same Bessel-tail degree rule; the planner itself is
+deliberately not bound).
 """
 
 from __future__ import annotations
@@ -25,7 +26,6 @@ FAST = 3e3  # W of F2: lambda_max / lambda_min in [5e5, 2e6] (asserted)
 TOL = 1e-12
 U = 2.0**-53
 EPS_Q = 1.1e-14
-Z_SAFE = 200.0
 GRID = [1.0, 10.0, 1e2, 1e4, 1e6]
 X8, W8 = np.polynomial.legendre.leggauss(8)
 NODES = (X8 + 1) / 2
@@ -84,32 +84,63 @@ def oracle(lam, vec, u0, dj, t, entries):
 # --- Python replica of graph_expmv_frechet_plan (Chebyshev path) -----------------
 
 
-def bessel_i(k: int, z: float) -> float:
-    """Modified Bessel ``I_k(z)`` by its power series (as in the Rust core)."""
-    half = z / 2.0
-    term = half**k / math.factorial(k)
-    total = term
-    for m in range(1000):
-        term *= half * half / ((m + 1) * (m + 1 + k))
-        if total + term == total:
-            break
-        total += term
-    return total
+def scaled_bessel(z: float, n: int) -> list[float]:
+    """``c_k = e^{-z} I_k(z)``, ``k < n`` (power series for ``z <= 1``, else Miller
+    backward recurrence normalised by ``c_0 + 2 sum c_k = 1``), as in the Rust core."""
+    out = [0.0] * n
+    if z <= 0.0:
+        out[0] = 1.0
+        return out
+    if z <= 1.0:
+        em_z, hz = math.exp(-z), z / 2.0
+        lead = 1.0
+        for k in range(n):
+            if k > 0:
+                lead *= hz / k
+            term = total = lead
+            for j in range(1, 200):
+                term *= hz * hz / (j * (j + k))
+                if total + term == total:
+                    break
+                total += term
+            out[k] = em_z * total
+        return out
+    k_max = n - 1
+    k_start = max(k_max, int(math.sqrt(2.0 * 138.0 * z))) + 64
+    j_next, j_k, acc = 0.0, 2.2250738585072014e-308 * 1e10, 0.0
+    for k in range(k_start, 0, -1):
+        if k <= k_max:
+            out[k] = j_k
+        acc += j_k
+        j_next, j_k = j_k, (2.0 * k / z) * j_k + j_next
+        if j_k > 2.0**512:
+            j_k, j_next, acc = j_k * 2.0**-512, j_next * 2.0**-512, acc * 2.0**-512
+            for i in range(max(k, 1), k_max + 1):
+                out[i] *= 2.0**-512
+    out[0] = j_k
+    norm = 1.0 / (j_k + 2.0 * acc)
+    return [c * norm for c in out]
 
 
 def cheb_degree(z: float, tol: float) -> int:
-    """Smallest m >= 3 with ``e^{-z} I_{m+1}(z) <= tol/4`` (cap 200)."""
-    m, em_z = 3, math.exp(-z)
-    while m < 200 and em_z * bessel_i(m + 1, z) > tol / 4.0:
-        m += 1
-    return m
+    """Smallest m >= 3 with ``2 sum_{k>m} e^{-z} I_k(z) <= tol/4`` (ADR-0205)."""
+    decay = -math.log(tol) + 8.0
+    length = max(int(math.sqrt(2.0 * decay * z) + 2.0 * decay + 16.0), 5)
+    c = scaled_bessel(z, length)
+    tail = 0.0
+    for k in range(length - 1, 3, -1):
+        tail += 2.0 * c[k]
+        if tail > tol / 4.0:
+            return k
+    return 3
 
 
-def action_cost(rho: float, tau: float, tol: float) -> tuple[int, int]:
-    """``(substeps, degree)`` of one Chebyshev action (``graph_expmv_matvec_count``)."""
-    z_total = tau * rho / 2.0
-    s = 1 if z_total <= Z_SAFE else math.ceil(z_total / Z_SAFE)
-    return s, cheb_degree(tau / s * rho / 2.0, tol)
+def action_cost(rho: float, tau: float, tol: float) -> tuple[int, int, int]:
+    """``(evaluations, degree, rounding weight)`` of one Chebyshev action:
+    one expansion (``z < 1.5e10`` here), weight ``ceil(z/2) + m`` (§63.7.a, Amendment 4)."""
+    z = tau * rho / 2.0
+    m = cheb_degree(z, tol)
+    return 1, m, math.ceil(z / 2.0) + m
 
 
 def half_panels(half: float, rho: float) -> list[tuple[float, float]]:
@@ -122,30 +153,30 @@ def half_panels(half: float, rho: float) -> list[tuple[float, float]]:
 
 
 def plan_chain(rho: float, t: float, tol: float) -> tuple[int, int]:
-    """``(N_chain, m_max)`` of the §63.5 sweep."""
+    """``(N_chain, W)`` of the §63.5 sweep: evaluations and rounding weight of the
+    longest chain (far chain, or the costliest near chain)."""
     half = t / 2.0
-    s0, m0 = action_cost(rho, half, tol)
-    far, near_max, m_max, r_far = s0, 0, m0, half
+    s, _, w = action_cost(rho, half, tol)
+    far, near_max, r_far = (s, w), (0, 0), half
     for lo, h in reversed(half_panels(half, rho)):
         r = lo + h * NODES
-        s, m = action_cost(rho, r[0], tol)
-        near, m_max = s, max(m_max, m)
+        near = action_cost(rho, r[0], tol)[::2]
         for q in range(1, 8):
-            s, m = action_cost(rho, r[q] - r[q - 1], tol)
-            near, m_max = near + s, max(m_max, m)
-        near_max = max(near_max, near)
+            s, _, w = action_cost(rho, r[q] - r[q - 1], tol)
+            near = (near[0] + s, near[1] + w)
+        near_max = (max(near_max[0], near[0]), max(near_max[1], near[1]))
         for q in reversed(range(8)):
             step, r_far = r_far - r[q], r[q]
             if step > 0:
-                s, m = action_cost(rho, step, tol)
-                far, m_max = far + s, max(m_max, m)
-    return max(far, near_max), m_max
+                s, _, w = action_cost(rho, step, tol)
+                far = (far[0] + s, far[1] + w)
+    return max(far[0], near_max[0]), max(far[1], near_max[1])
 
 
-def tau_bound(g_abs, norm_k, nd, nv, n_chain, m_max, row_nnz, rho_t, t):
-    """``tau_k`` of §63.7.a."""
+def tau_bound(g_abs, norm_k, nd, nv, n_chain, weight, row_nnz, rho_t, t):
+    """``tau_k`` of §63.7.a (Amendment 4)."""
     eta = (
-        2.0 * n_chain * (TOL + (row_nnz + 3.0) * m_max**2 * U)
+        2.0 * (n_chain * TOL + (row_nnz + 3.0) * weight * U)
         + TOL
         + (row_nnz + N) * U * rho_t
     )
@@ -231,10 +262,10 @@ def _check_point(mat, entries, u0, dj, t, lt, bridges):
     row_nnz = int(np.max((mat != 0).sum(axis=1)))
     rho = float(np.max(np.abs(mat).sum(axis=1)))  # Gershgorin, as in Rust
     g_ref, g_abs = oracle(lam, vec, u0, dj, t, entries)
-    n_chain, m_max = plan_chain(rho, t, TOL)
+    n_chain, weight = plan_chain(rho, t, TOL)
     tau = tau_bound(
         g_abs, np.ones(len(entries)), np.linalg.norm(dj), np.linalg.norm(u0),
-        n_chain, m_max, row_nnz, rho * t, t,
+        n_chain, weight, row_nnz, rho * t, t,
     )
     got = semiflow.symmetric_op_expmv_frechet(
         _operator(mat), u0[:, None], dj[:, None], t=t, entries=entries, tol=TOL

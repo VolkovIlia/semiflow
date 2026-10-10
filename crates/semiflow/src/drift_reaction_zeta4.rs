@@ -56,6 +56,7 @@ use crate::{
     error::SemiflowError,
     grid::Grid1D,
     grid_fn::GridFn1D,
+    sample_table::{with_prepared, Sample1D},
     scratch::ScratchPool,
 };
 
@@ -122,7 +123,7 @@ impl PalindromicStrang {
     /// Symmetric (palindromic to O(τ⁵)) for any b(x) with bounded b'(x).
     /// Exact for linear b(x) (one Newton step = exact implicit midpoint).
     #[inline]
-    fn apply_r_sym_at(&self, tau: f64, f: &GridFn1D<f64>, i: usize) -> Result<f64, SemiflowError> {
+    fn apply_r_sym_at<S: Sample1D>(&self, tau: f64, f: &S, i: usize) -> Result<f64, SemiflowError> {
         let x = self.grid.x_at(i);
         // Newton-step implicit midpoint for characteristic foot.
         let b_x = (self.b)(x);
@@ -164,9 +165,13 @@ impl PalindromicStrang {
             values: scratch.take_vec(n),
         };
         tmp1.values.resize(n, 0.0);
-        for i in 0..n {
-            tmp1.values[i] = self.apply_r_sym_at(half_tau, src, i)?;
-        }
+        // ADR-0204: per-step ghost/derivative table, bit-identical samples.
+        with_prepared(&src.values, src.grid, scratch, |f| {
+            for (i, v) in tmp1.values.iter_mut().enumerate() {
+                *v = self.apply_r_sym_at(half_tau, f, i)?;
+            }
+            Ok::<(), SemiflowError>(())
+        })?;
         tmp1.grid = src.grid;
 
         // K5(τ) · tmp1 → tmp2
@@ -178,9 +183,12 @@ impl PalindromicStrang {
 
         // R_sym(τ/2) · tmp2 → dst
         dst.values.resize(n, 0.0);
-        for i in 0..n {
-            dst.values[i] = self.apply_r_sym_at(half_tau, &tmp2, i)?;
-        }
+        with_prepared(&tmp2.values, tmp2.grid, scratch, |f| {
+            for (i, v) in dst.values.iter_mut().enumerate() {
+                *v = self.apply_r_sym_at(half_tau, f, i)?;
+            }
+            Ok::<(), SemiflowError>(())
+        })?;
         dst.grid = src.grid;
 
         scratch.return_vec(tmp1.values);
