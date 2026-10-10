@@ -157,6 +157,8 @@ pub(crate) mod pow2;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
 pub mod quantum_schrodinger;
+pub mod reaction;
+pub mod reaction_diffusion;
 pub mod reflection;
 pub mod reflection_regions;
 pub mod resolvent;
@@ -171,6 +173,7 @@ pub mod reverse_ad;
 pub mod reverse_region;
 /// Backward sweep internals for `reverse_ad` (additive split, ≤500-line cap).
 pub(crate) mod reverse_sweep;
+pub mod richardson;
 pub mod robin;
 pub(crate) mod sample_table;
 pub mod schrodinger;
@@ -340,6 +343,11 @@ pub use crate::{
     point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
+    reaction::{
+        AllenCahnReaction, Brusselator, FisherKpp, FitzHughNagumo, FnReaction, GrayScott, Kinetics,
+        LinearReaction, Nagumo,
+    },
+    reaction_diffusion::{NodalField, ReactionDiffusion, Species, SpeciesEngine},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff, ReflectingRegion},
     resolvent::{
         LaplaceChernoffResolvent, LaplaceChernoffResolventResidual, LaplaceQuadrature, Sampleable,
@@ -352,6 +360,7 @@ pub use crate::{
         ReverseChernoff, TransposeApply,
     },
     reverse_region::RegionMap,
+    richardson::{extrapolate_into, richardson_weights, StepIntegrator, MAX_RICHARDSON_LEVELS},
     robin::{HalfSpaceRobin, RobinHeatChernoff, RobinRegion},
     schrodinger::{SchrodingerChernoff, SchrodingerState},
     schrodinger_complex::SchrödingerChernoffComplex,

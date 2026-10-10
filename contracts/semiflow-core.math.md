@@ -13862,3 +13862,11 @@ split out for the 1024 KB git-guard (precedent §62). It replaces the one-panel
 8-point Gauss–Legendre rule of `graph_expmv_frechet` (§54.5 / §55.5), whose error
 grows like `(λ_max t)^{17}` (§63.2), by a geometric two-sided mesh with an a-priori
 bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
+
+---
+
+## §64 — Semilinear reaction–diffusion splitting and Richardson extrapolation (in its own file)
+
+> NORMATIVE body (ADR-0207, ADR-0208) lives in
+> [`contracts/semiflow-core.math-semilinear.md`](semiflow-core.math-semilinear.md)
+> (file-size precedent §62); every "§64.x" citation resolves there.

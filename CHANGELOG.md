@@ -13,6 +13,26 @@ This section records the fixes and speedups in order; every existing gate
 threshold is unchanged or tightened, and every speedup that is claimed
 bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 
+#### Added — semilinear systems and extrapolation
+
+- **Reaction–diffusion systems on every engine (ADR-0208, math §64.1).**
+  `ReactionDiffusion` evolves `∂ₜu_k = L_k u_k + f_k(t, x, u)`, `K` species,
+  each diffusing with its own engine (any `ChernoffFunction` on a `GridFn1D`,
+  `GridFn2D`, `GridFn3D` or `GraphSignal`: any boundary policy, interpolant,
+  Strang/ADI composition, graph Laplacian), Strang-split with an exact or
+  RK4 (`with_reaction_substeps`) reaction flow; time-dependent kinetics and
+  source terms. `Kinetics` evaluates all nodes per call (one host callback
+  per RK stage). Catalogue: `FisherKpp`, `AllenCahnReaction`, `Nagumo`,
+  `GrayScott`, `FitzHughNagumo`, `Brusselator`, `LinearReaction`,
+  `FnReaction`; `Species<S>`, `NodalField`. Gates `G_SEMILIN_*` (exact
+  fronts of Fisher–KPP and Nagumo, MMS, commuting linear system, Gray–Scott
+  2-D).
+- **Richardson extrapolation for any engine (ADR-0207, math §64.2).**
+  `Evolver::evolve_extrapolated_into(t, levels, …)`, `extrapolate_into` for any
+  `StepIntegrator` (`Evolver`, `ReactionDiffusion`), `richardson_weights`.
+  Order `p` → `p + levels − 1`; `ShiftChernoff1D` at 96 steps: 3.3e-4 → 7.2e-8.
+  Gates `G_RICHARDSON_*`.
+
 #### Fixed
 
 - **Issue #44 — a non-finite operator norm bound is an error, never a silent
