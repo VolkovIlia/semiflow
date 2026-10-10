@@ -58,7 +58,7 @@ class Heat1D:
         """
         ...
 
-    def evolve(self, t: float, n_steps: int = 100) -> None:
+    def evolve(self, t: float, n_steps: int = 100, richardson: int = 1) -> None:
         """Advance the state by time t using n_steps Chernoff iterations.
 
         Mutates self in-place; returns None.  The GIL is released during the
@@ -71,6 +71,9 @@ class Heat1D:
             Time to advance.  Must be non-negative and finite.
         n_steps : int, optional
             Number of Chernoff steps (default 100).  Must be >= 1.
+        richardson : int, optional
+            Richardson levels ``L`` (default 1, f64 only): combines runs with
+            ``n, 2n, …, Ln`` steps (ADR-0207), order ``L + 1`` for smooth data.
 
         Raises
         ------
@@ -6856,4 +6859,145 @@ def shift1d_coeff_grad(
     - Trajectory memory is ``O(n_steps * n)``; no checkpointing.
     - One field per call; f64 only.
     """
+    ...
+
+
+# ---------------------------------------------------------------------------
+# ADR-0208/0209 — semilinear reaction–diffusion systems + Richardson
+# ---------------------------------------------------------------------------
+
+ReactionName = Literal[
+    "fisher_kpp", "allen_cahn", "nagumo", "gray_scott",
+    "fitzhugh_nagumo", "brusselator", "linear",
+]
+"""Built-in kinetics and their ``params`` (defaults in brackets):
+
+* ``"fisher_kpp"``: ``u' = r u (1 − u/K)`` — ``rate`` [1], ``capacity`` [1]; exact flow.
+* ``"allen_cahn"``: ``u' = κ (u − u³)`` — ``kappa`` [1]; exact flow.
+* ``"nagumo"``: ``u' = u (1 − u)(u − a)`` — ``a`` [0.25].
+* ``"gray_scott"``: ``u' = −uv² + f(1 − u)``, ``v' = uv² − (f + k)v`` — ``feed`` [0.04], ``kill`` [0.06].
+* ``"fitzhugh_nagumo"``: ``v' = v − v³/3 − w + I``, ``w' = ε(v + a − b w)`` —
+  ``a`` [0.7], ``b`` [0.8], ``eps`` [0.08], ``current`` [0.5].
+* ``"brusselator"``: ``u' = a − (b + 1)u + u²v``, ``v' = bu − u²v`` — ``a`` [1], ``b`` [3].
+* ``"linear"``: ``u' = C u`` — ``matrix`` (``K×K``, required); exact flow.
+"""
+
+Kinetics = Callable[[float, NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
+"""Vectorised reaction ``f(t, x, u) -> du``: ``x`` has shape ``(dim, N)`` (node
+coordinates, x fastest), ``u`` and ``du`` have shape ``(K, N)``. Called once per
+Runge–Kutta stage with all ``N`` nodes."""
+
+
+class _ReactionDiffusion:
+    """Shared methods of :class:`ReactionDiffusion1D`/``2D``/``3D``.
+
+    Solves ``∂ₜu_k = D_k Δu_k + f_k(t, x, u)`` for ``K`` species by Strang splitting
+    (order 2): each species diffuses with its own constant ``D_k ≥ 0``
+    (``DiffusionChernoff``, Strang across axes; ``D_k = 0`` leaves the species
+    exactly in place), the reaction ``f`` is a
+    built-in model (exact flow where available) or a vectorised callable
+    (classical RK4 with ``substeps`` per reaction step). The GIL is released
+    during :meth:`evolve`; a callable re-acquires it once per RK stage, and an
+    exception it raises propagates unchanged (the state is then not updated).
+    """
+
+    def evolve(self, t: float, n_steps: int = 100, richardson: int = 1) -> None:
+        """Advance by ``t`` with ``n_steps`` Strang steps.
+
+        ``richardson=L`` (``1 ≤ L ≤ 6``) combines runs with ``n, 2n, …, Ln``
+        steps (ADR-0207): order ``1 + L`` for smooth data, cost ``L(L+1)/2``.
+        """
+        ...
+
+    def values(self) -> NDArray[np.float64]:
+        """Copy of the state, shape ``(K, *grid_shape)`` (last axis = x)."""
+        ...
+
+    @property
+    def time(self) -> float:
+        """Current time: ``t0`` plus every evolved interval."""
+        ...
+
+    @property
+    def species(self) -> int:
+        """Number of species ``K``."""
+        ...
+
+    def __len__(self) -> int:
+        """Grid nodes per species."""
+        ...
+
+
+@final
+class ReactionDiffusion1D(_ReactionDiffusion):
+    """1-D reaction–diffusion system on ``[xmin, xmax]``; ``u0`` of shape ``(K, n)``."""
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        n: int,
+        u0: NDArray[np.float64],
+        *,
+        diffusivity: Sequence[float],
+        reaction: Union[ReactionName, Kinetics],
+        params: dict[str, Any] | None = None,
+        boundary: str = "reflect",
+        substeps: int = 1,
+        t0: float = 0.0,
+    ) -> None: ...
+
+
+@final
+class ReactionDiffusion2D(_ReactionDiffusion):
+    """2-D system on ``[xmin, xmax]×[ymin, ymax]``; ``u0`` of shape ``(K, ny, nx)``."""
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        u0: NDArray[np.float64],
+        *,
+        diffusivity: Sequence[float],
+        reaction: Union[ReactionName, Kinetics],
+        params: dict[str, Any] | None = None,
+        boundary: str = "reflect",
+        substeps: int = 1,
+        t0: float = 0.0,
+    ) -> None: ...
+
+
+@final
+class ReactionDiffusion3D(_ReactionDiffusion):
+    """3-D system on a box; ``u0`` of shape ``(K, nz, ny, nx)``."""
+
+    def __init__(
+        self,
+        xmin: float,
+        xmax: float,
+        nx: int,
+        ymin: float,
+        ymax: float,
+        ny: int,
+        zmin: float,
+        zmax: float,
+        nz: int,
+        u0: NDArray[np.float64],
+        *,
+        diffusivity: Sequence[float],
+        reaction: Union[ReactionName, Kinetics],
+        params: dict[str, Any] | None = None,
+        boundary: str = "reflect",
+        substeps: int = 1,
+        t0: float = 0.0,
+    ) -> None: ...
+
+
+def richardson_weights(order: int, levels: int) -> list[float]:
+    """Weights ``w_j`` for step counts ``(j+1)·n``, ``j < levels``, that cancel the
+    error terms ``n^{-order}``, …, ``n^{-(order+levels-2)}`` (ADR-0207)."""
     ...

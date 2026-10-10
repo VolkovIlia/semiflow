@@ -165,6 +165,41 @@ print(f"integral ≈ {u_t.sum() * (np.pi / nx) * (2 * np.pi / ny):.4f}")
 Available manifolds: `"torus"` (flat T²), `"sphere2"` (S²(r)), `"hyperbolic2"`
 (Poincaré disk H²(s)). The `radius` parameter sets r or s.
 
+### 3. `ReactionDiffusion2D` — Gray–Scott patterns, or your own kinetics
+
+Any number of species, each with its own diffusivity; built-in kinetics by
+name (`fisher_kpp`, `allen_cahn`, `nagumo`, `gray_scott`, `fitzhugh_nagumo`,
+`brusselator`, `linear`) or any NumPy-vectorised callable `f(t, x, u) -> du`,
+called once per Runge–Kutta stage with all nodes (`x`: `(dim, N)`, `u`:
+`(K, N)`), never once per node:
+
+```python
+import numpy as np
+import semiflow
+
+n = 128
+x, y = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+bump = np.exp(-((x - 0.5)**2 + (y - 0.5)**2) / 0.005)
+u0 = np.stack([1.0 - 0.5 * bump, 0.25 * bump])          # shape (K=2, ny, nx)
+
+rd = semiflow.ReactionDiffusion2D(
+    0.0, 1.0, n, 0.0, 1.0, n, u0,
+    diffusivity=[2e-5, 1e-5], reaction="gray_scott",
+    params={"feed": 0.037, "kill": 0.06}, boundary="periodic",
+)
+rd.evolve(2000.0, n_steps=2000)            # Strang splitting, order 2
+u, v = rd.values()
+
+# Custom kinetics + a source term, with Richardson extrapolation (order 3):
+def kinetics(t, xs, u):
+    return np.stack([u[0] * (1 - u[0]) - u[0] * u[1] + 0.1 * np.sin(t),
+                     0.5 * u[0] * u[1] - 0.2 * u[1]])
+
+rd2 = semiflow.ReactionDiffusion1D(-10, 10, 401, np.full((2, 401), 0.5),
+                                   diffusivity=[1.0, 0.1], reaction=kinetics)
+rd2.evolve(5.0, n_steps=50, richardson=2)
+```
+
 ---
 
 ## Class reference
@@ -188,6 +223,14 @@ Classes are grouped by kernel family. All stateful classes expose at least
 | `DriftReaction1D` | `DriftReactionChernoff` | 2 | `b(x) ∂_x u + c(x) u`; `.with_arrays` |
 | `Shift1D` | `ShiftChernoff1D` | 1 | Universal `a ∂² + b ∂ + c`; `.with_arrays` |
 | `Strang1D` | `StrangSplit` (diffusion + drift) | 2 | Advection-diffusion `∂²u + b ∂u`; default `b=0.5` |
+
+### Reaction–diffusion systems (ADR-0208)
+
+| Class | Kernel | Order | Notes |
+|-------|--------|-------|-------|
+| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)` |
+| `ReactionDiffusion2D` | … + `Strang2D` | 2 | `u0` `(K, ny, nx)` |
+| `ReactionDiffusion3D` | … + `Strang3D` | 2 | `u0` `(K, nz, ny, nx)` |
 
 ### Operator splitting — multi-dimensional
 

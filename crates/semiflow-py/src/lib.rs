@@ -126,6 +126,9 @@ mod obstacle_gamma_py;
 mod obstacle_py;
 mod panic;
 mod phi_etdrk4_py;
+mod rd_kinetics_py;
+mod rd_setup_py;
+mod reaction_diffusion_py;
 mod resolvent_jump_nd_py;
 mod resolvent_jump_py;
 mod reverse_ad_py;
@@ -262,7 +265,9 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Issue #24: non-symmetric CSR operator action
     general_op_py::register(py, m)?;
     // Issue #25: coefficient-field gradients
-    shift1d_vjp_py::register(py, m)
+    shift1d_vjp_py::register(py, m)?;
+    // ADR-0208/0209: semilinear reaction-diffusion systems + Richardson
+    reaction_diffusion_py::register(py, m)
 }
 
 // ---------------------------------------------------------------------------

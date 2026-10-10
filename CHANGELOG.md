@@ -33,6 +33,20 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   Order `p` → `p + levels − 1`; `ShiftChernoff1D` at 96 steps: 3.3e-4 → 7.2e-8.
   Gates `G_RICHARDSON_*`.
 
+#### Python
+
+- **Python 3.15** (ADR-0209): `requires-python = ">=3.10,<3.16"`, classifiers
+  3.14/3.15, CI `py-smoke` on 3.10/3.13/3.15; PyO3 and rust-numpy 0.28 → 0.29.
+  The abi3-py310 wheel serves 3.10–3.15; the suite passes on 3.13.16 and
+  3.15.0b4.
+- **`ReactionDiffusion1D/2D/3D`**: `K` species with per-species diffusivity,
+  built-in kinetics by name (`fisher_kpp`, `allen_cahn`, `nagumo`,
+  `gray_scott`, `fitzhugh_nagumo`, `brusselator`, `linear`, with `params=`) or
+  any NumPy-vectorised callable `f(t, x, u)` called once per RK stage (not per
+  node); `evolve(t, n_steps, richardson=L)`, `values()` `(K, *grid)`, `time`,
+  `species`; GIL released; callback exceptions propagate unchanged.
+  `semiflow.richardson_weights`. Stubs and README updated.
+
 #### Fixed
 
 - **Issue #44 — a non-finite operator norm bound is an error, never a silent

@@ -319,7 +319,10 @@ less memory than the competitor.
 adaptive ODE solvers and spectral methods at matched accuracy (e.g. 730× slower
 than SUNDIALS-CVODE on 1D heat at 5e-5 accuracy; 7303× slower than QuantLib
 FDM-CEV). If raw solve speed is the primary concern, an adaptive solver is likely
-the better choice.
+the better choice. (These comparisons predate the 2026-10 overhaul —
+`docs/perf/overhaul-v0_15.md`: grid engines 2.6–39× faster, stiff graph Krylov
+up to 559×, and Richardson extrapolation for higher order at fewer steps; they
+have not been re-run since.)
 
 **Parallelism** (`--features parallel`) scales well only at large problem sizes:
 eta8=0.908 for 3D Strang at fine resolution; eta8≈0.125 for 2D problems (Amdahl

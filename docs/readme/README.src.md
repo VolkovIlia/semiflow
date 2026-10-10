@@ -94,6 +94,12 @@ not allocate.
 > (`Diffusion4thChernoff` ≈ 41 ns p99.9 per tick) and L1-resident low-rank
 > carriers (`TtChernoff`, `ReverseChernoff`). Treat memory and latency as
 > measured properties of the concrete grid types, not guarantees of the traits.
+> The 2026-10 overhaul ([`docs/perf/overhaul-v0_15.md`](docs/perf/overhaul-v0_15.md))
+> made the grid engines 2.6–39× faster bit-for-bit, the stiff Chebyshev graph
+> action `O(√(λt))` instead of `O(λt)` (559× on issue #16), ETDRK4 2.1× and the
+> general Taylor action 2.1× faster; Richardson extrapolation (`richardson=`)
+> raises any engine's order by `levels − 1`. Head-to-head comparisons quoted in
+> the user guide predate it.
 
 ## Install
 

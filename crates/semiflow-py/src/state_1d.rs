@@ -46,7 +46,9 @@ use crate::{
     graph_heat_f32::compute_heat1d_f32,
     handle::{build_heat_unit, SemiflowStateInner},
     panic::catch_panic_py,
-    state_1d_chunked::{build_heat1d_from_arrays, compute_chunk, make_coeff_closure},
+    state_1d_chunked::{
+        build_heat1d_from_arrays, compute_chunk, compute_evolve, make_coeff_closure,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -148,11 +150,26 @@ impl Heat1D {
     ///
     /// When ``dtype="f32"`` was set at construction the compute runs in f32;
     /// the internal state is updated from the f32 result (cast back to f64).
-    #[pyo3(signature = (t, n_steps = 100))]
-    fn evolve(&mut self, py: Python<'_>, t: f64, n_steps: usize) -> PyResult<()> {
+    ///
+    /// ``richardson=L`` (``1 ≤ L ≤ 6``, f64 only) combines runs with ``n, 2n, …,
+    /// Ln`` steps (ADR-0207): order ``2 + L − 1`` for smooth data.
+    #[pyo3(signature = (t, n_steps = 100, richardson = 1))]
+    fn evolve(
+        &mut self,
+        py: Python<'_>,
+        t: f64,
+        n_steps: usize,
+        richardson: usize,
+    ) -> PyResult<()> {
         catch_panic_py!({
             // Phase 1: validate + extract (GIL held)
             validate_evolve_params(t, n_steps)?;
+            if richardson != 1 && (self.dtype != Dtype::F64 || richardson == 0) {
+                return Err(new_pyerr(
+                    "OutOfDomain",
+                    "richardson must be >= 1 (f64 only)",
+                ));
+            }
             let input_values: Vec<f64> = self.inner.current.values.clone();
 
             let result_values: Vec<f64> = match self.dtype {
@@ -160,8 +177,9 @@ impl Heat1D {
                     let chernoff_func = self.inner.semigroup.func.clone();
                     let grid = self.inner.current.grid;
                     let chernoff_for_sg = chernoff_func.clone();
-                    let res: Result<Vec<f64>, _> =
-                        py.detach(|| compute_evolve(chernoff_func, grid, input_values, t, n_steps));
+                    let res: Result<Vec<f64>, _> = py.detach(|| {
+                        compute_evolve(chernoff_func, grid, input_values, t, (n_steps, richardson))
+                    });
                     let vals = res.map_err(|e| from_core(&e))?;
                     // Rebuild semigroup for next call.
                     let sg = semiflow::ChernoffSemigroup::new(chernoff_for_sg, n_steps)
@@ -443,26 +461,6 @@ pub(crate) fn validate_evolve_params(t: f64, n_steps: usize) -> PyResult<()> {
 // ---------------------------------------------------------------------------
 // Phase 2 helper: pure-Rust compute (called inside py.allow_threads)
 // ---------------------------------------------------------------------------
-
-/// Run the Chernoff iteration on an owned buffer, returning an owned result.
-///
-/// No Python types cross this boundary.  All parameters are `Send + Sync`.
-///
-/// # Errors
-/// Propagates [`semiflow::SemiflowError`] from `ChernoffSemigroup`.
-fn compute_evolve(
-    chernoff_func: semiflow::DiffusionChernoff<f64>,
-    grid: semiflow::Grid1D<f64>,
-    input: Vec<f64>,
-    t: f64,
-    n_steps: usize,
-) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    use semiflow::{ChernoffSemigroup, GridFn1D};
-    let sg = ChernoffSemigroup::new(chernoff_func, n_steps)?;
-    let f = GridFn1D::new(grid, input)?;
-    let result = sg.evolve(t, &f)?;
-    Ok(result.values)
-}
 
 // ---------------------------------------------------------------------------
 // Utility: extract f64 slice from any numpy-compatible Python object

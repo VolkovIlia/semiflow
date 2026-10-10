@@ -12,6 +12,33 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
+## Performance overhaul + semilinear systems (ADRs 0204–0209) — DONE (branch `claude/jolly-cori-x6wbmd`)
+
+- Correctness audit: issue #44, matrix exponentials (`M ≤ 4`), `MassKOperator`
+  bound, Lanczos cap, drift-reaction adjoint, Jacobi diagonal (ADR-0205).
+- Prepared per-step sampling, bit-identical, 2.6–39× (ADR-0204).
+- Single-expansion Chebyshev (`√(λt)` cost), a-priori Lanczos schedule, ETDRK4
+  in four sweeps, trace-shifted Taylor `expmv`, Fréchet bound re-derived
+  (ADR-0205).
+- Richardson extrapolation for any engine (ADR-0207); reaction–diffusion
+  systems on every engine with a kinetics catalogue (ADR-0208); Python 3.15,
+  PyO3 0.29, `ReactionDiffusion1D/2D/3D` (ADR-0209).
+
+**Next (not started):**
+- Rational (shift-invert) Krylov through `SpdResolvent` for very stiff SPD
+  problems: cost independent of `λ_max`, decisive for tridiagonal operators.
+- τ-keyed step plans (per-sample weights cached across steps; ≈2–3× more on the
+  grid engines, needs a trait hook).
+- `GridFnND::sample`: the D-dimensional tensor-product cubic interpolant needs
+  all `4^D` node values of a sample (`SmolyakD6V8.apply` ≈ 50 s on `4⁶` nodes);
+  only a cheaper interpolant (multilinear, sparse-grid) or batching samples
+  that share a cell can reduce that.
+- Shift for the augmented φ operator (≈2× on diffusion generators).
+- Non-symmetric adaptive Arnoldi (KIOPS/phipm); IMEX kinetics for stiff
+  reactions; cross-diffusion.
+
+---
+
 ## ADR-0202 — SPD resolvent / steady solve, operator composition, φ-combination — PLANNED (math §62, `contracts/semiflow-core.math-spd-resolvent.md`)
 
 Triggered by an applied case study (steady 1-D heat with sink and source was O(N³)

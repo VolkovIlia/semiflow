@@ -37,6 +37,12 @@ not allocate.
 > (`Diffusion4thChernoff` ≈ 41 ns p99.9 per tick) and L1-resident low-rank
 > carriers (`TtChernoff`, `ReverseChernoff`). Treat memory and latency as
 > measured properties of the concrete grid types, not guarantees of the traits.
+> The 2026-10 overhaul ([`docs/perf/overhaul-v0_15.md`](https://github.com/VolkovIlia/semiflow/blob/master/docs/perf/overhaul-v0_15.md))
+> made the grid engines 2.6–39× faster bit-for-bit, the stiff Chebyshev graph
+> action `O(√(λt))` instead of `O(λt)` (559× on issue #16), ETDRK4 2.1× and the
+> general Taylor action 2.1× faster; Richardson extrapolation (`richardson=`)
+> raises any engine's order by `levels − 1`. Head-to-head comparisons quoted in
+> the user guide predate it.
 
 ## Install
 
@@ -240,6 +246,41 @@ print(f"integral ≈ {u_t.sum() * (np.pi / nx) * (2 * np.pi / ny):.4f}")
 Available manifolds: `"torus"` (flat T²), `"sphere2"` (S²(r)), `"hyperbolic2"`
 (Poincaré disk H²(s)). The `radius` parameter sets r or s.
 
+### 3. `ReactionDiffusion2D` — Gray–Scott patterns, or your own kinetics
+
+Any number of species, each with its own diffusivity; built-in kinetics by
+name (`fisher_kpp`, `allen_cahn`, `nagumo`, `gray_scott`, `fitzhugh_nagumo`,
+`brusselator`, `linear`) or any NumPy-vectorised callable `f(t, x, u) -> du`,
+called once per Runge–Kutta stage with all nodes (`x`: `(dim, N)`, `u`:
+`(K, N)`), never once per node:
+
+```python
+import numpy as np
+import semiflow
+
+n = 128
+x, y = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+bump = np.exp(-((x - 0.5)**2 + (y - 0.5)**2) / 0.005)
+u0 = np.stack([1.0 - 0.5 * bump, 0.25 * bump])          # shape (K=2, ny, nx)
+
+rd = semiflow.ReactionDiffusion2D(
+    0.0, 1.0, n, 0.0, 1.0, n, u0,
+    diffusivity=[2e-5, 1e-5], reaction="gray_scott",
+    params={"feed": 0.037, "kill": 0.06}, boundary="periodic",
+)
+rd.evolve(2000.0, n_steps=2000)            # Strang splitting, order 2
+u, v = rd.values()
+
+# Custom kinetics + a source term, with Richardson extrapolation (order 3):
+def kinetics(t, xs, u):
+    return np.stack([u[0] * (1 - u[0]) - u[0] * u[1] + 0.1 * np.sin(t),
+                     0.5 * u[0] * u[1] - 0.2 * u[1]])
+
+rd2 = semiflow.ReactionDiffusion1D(-10, 10, 401, np.full((2, 401), 0.5),
+                                   diffusivity=[1.0, 0.1], reaction=kinetics)
+rd2.evolve(5.0, n_steps=50, richardson=2)
+```
+
 ---
 
 ## Class reference
@@ -263,6 +304,14 @@ Classes are grouped by kernel family. All stateful classes expose at least
 | `DriftReaction1D` | `DriftReactionChernoff` | 2 | `b(x) ∂_x u + c(x) u`; `.with_arrays` |
 | `Shift1D` | `ShiftChernoff1D` | 1 | Universal `a ∂² + b ∂ + c`; `.with_arrays` |
 | `Strang1D` | `StrangSplit` (diffusion + drift) | 2 | Advection-diffusion `∂²u + b ∂u`; default `b=0.5` |
+
+### Reaction–diffusion systems (ADR-0208)
+
+| Class | Kernel | Order | Notes |
+|-------|--------|-------|-------|
+| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)` |
+| `ReactionDiffusion2D` | … + `Strang2D` | 2 | `u0` `(K, ny, nx)` |
+| `ReactionDiffusion3D` | … + `Strang3D` | 2 | `u0` `(K, nz, ny, nx)` |
 
 ### Operator splitting — multi-dimensional
 
@@ -548,7 +597,7 @@ assert np.max(np.abs(u - v0.mean())) < 1e-6
 
 ### Free functions
 
-`version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()` — see `__init__.pyi` for their signatures.
+`version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()` — see `__init__.pyi` for their signatures.
 
 ---
 
@@ -582,7 +631,7 @@ to `extraPaths` so local development also resolves the stubs correctly
 | Language | Package | Notes |
 |----------|---------|-------|
 | Rust | [`semiflow`](https://crates.io/crates/semiflow) ([docs.rs](https://docs.rs/semiflow)) | The full engine catalogue; `no_std + alloc` |
-| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 86 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
+| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 86 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
 | JavaScript / WASM | [`@semiflow/wasm`](https://www.npmjs.com/package/@semiflow/wasm) | Lite build on npm; the heavy-grid engines need a `--features full` build; see the [npm page](https://www.npmjs.com/package/@semiflow/wasm) |
 | C / C++ | `semiflow-ffi` | `extern "C"` ABI with `catch_unwind` on every entry point; header `semiflow.h` |
 

@@ -133,6 +133,11 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     phi_combination,
     # reverse-mode AD (ADR-0156) — registered natively but was never re-exported
     ReverseHeat1D,
+    # ADR-0208/0209 — semilinear reaction-diffusion systems + Richardson
+    ReactionDiffusion1D,
+    ReactionDiffusion2D,
+    ReactionDiffusion3D,
+    richardson_weights,
 )
 
 __all__ = [
@@ -265,4 +270,9 @@ __all__ = [
     "SpdResolvent",
     "phi_combination",
     "ReverseHeat1D",
+    # ADR-0208/0209
+    "ReactionDiffusion1D",
+    "ReactionDiffusion2D",
+    "ReactionDiffusion3D",
+    "richardson_weights",
 ]

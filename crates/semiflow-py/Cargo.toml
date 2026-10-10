@@ -17,8 +17,8 @@ doc = false  # cdylib; same name as parent crate → suppress doc collision
 
 [dependencies]
 semiflow = { path = "../semiflow", default-features = false, features = ["std", "simd", "parallel"] }
-pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
-numpy = "0.28"  # MUST match pyo3 major version
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"] }
+numpy = "0.29"  # MUST match pyo3 major version
 tracing = "0.1"  # Wave 5 (ADR-0045): zero-copy fallback warn
 
 [dev-dependencies]

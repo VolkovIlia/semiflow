@@ -7,7 +7,7 @@ name = "semiflow-pde"
 dynamic = ["version"]
 description = "Python bindings for SemiFlow: evolution-equation / PDE engines via Chernoff approximation of operator semigroups"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.10,<3.16"
 dependencies = ["numpy >= 1.24"]
 license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "Ilia Volkov", email = "ilia.volkov@outlook.com" }]
@@ -21,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Operating System :: OS Independent",
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -43,7 +45,7 @@ markers = [
 [tool.maturin]
 # Use the shared binding-crate profile (panic = "unwind" required).
 profile = "release-ffi"
-# PyO3 stable ABI: one wheel covers Python 3.10–3.13.
+# PyO3 stable ABI (abi3-py310): one wheel covers Python 3.10–3.15.
 features = ["pyo3/extension-module"]
 module-name = "semiflow"
 # PEP 561: copy python/semiflow/ (stubs + py.typed) into the wheel.

@@ -176,3 +176,33 @@ pub(crate) fn compute_chunk(
     let result = if src_is_a { buf_a } else { buf_b };
     Ok(result.values)
 }
+
+/// Run the Chernoff iteration on an owned buffer, returning an owned result.
+///
+/// No Python types cross this boundary.  All parameters are `Send + Sync`.
+///
+/// # Errors
+/// Propagates [`semiflow::SemiflowError`] from `ChernoffSemigroup`.
+pub(crate) fn compute_evolve(
+    chernoff_func: semiflow::DiffusionChernoff<f64>,
+    grid: semiflow::Grid1D<f64>,
+    input: Vec<f64>,
+    t: f64,
+    (n_steps, levels): (usize, usize),
+) -> Result<Vec<f64>, semiflow::SemiflowError> {
+    use semiflow::{ChernoffSemigroup, Evolver, GridFn1D, ScratchPool};
+    let f = GridFn1D::new(grid, input)?;
+    if levels > 1 {
+        let mut out = f.clone();
+        Evolver::new(chernoff_func, n_steps)?.evolve_extrapolated_into(
+            t,
+            levels,
+            &f,
+            &mut out,
+            &mut ScratchPool::new(),
+        )?;
+        return Ok(out.values);
+    }
+    let sg = ChernoffSemigroup::new(chernoff_func, n_steps)?;
+    Ok(sg.evolve(t, &f)?.values)
+}

@@ -62,7 +62,8 @@ jobs:
           package-dir: crates/semiflow-py
           output-dir: dist
         env:
-          # Build only CPython 3.10–3.13; skip PyPy and 3.14-dev.
+          # The wheel is abi3-py310 (one build loads on CPython 3.10–3.15);
+          # building per interpreter re-tests it on each. Skip PyPy.
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           # Linux: manylinux_2_28 (glibc 2.28+) for broad compat.
           # Restrict to x86_64 only; i686 (32-bit) lacks a rustup installer.
