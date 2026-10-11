@@ -32,7 +32,7 @@ use crate::{
     state::State,
 };
 
-// Per-M matrix exponentials and arithmetic helpers (Cayley-Hamilton + Taylor s&s).
+// Per-M matrix exponentials and arithmetic helpers (closed form M ≤ 2, Padé[13/13] M ≥ 3).
 #[path = "matrix_system_exp.rs"]
 mod matrix_system_exp;
 
@@ -148,8 +148,9 @@ impl<F: SemiflowFloat, const M: usize> State<F> for MatrixGridFn1D<F, M> {
 ///
 /// ## Matrix exponential coverage
 ///
-/// - M ≤ 4: closed-form Cayley-Hamilton (Higham 2008 §10.4). Fast, exact.
-/// - M ≥ 5: Padé[13/13] scaling-and-squaring (Higham 2005, ADR-0125).
+/// - M ≤ 2: closed form (Cayley–Hamilton, Higham 2008 §10.4). Fast, exact.
+/// - M ≥ 3: Padé[13/13] scaling-and-squaring (Higham 2005, ADR-0125; dispatch in
+///   `matrix_system_exp::matrix_exp_dispatch`).
 ///   Relative error ≤ 1e-12 for symmetric reaction matrices with
 ///   `‖τC(x)/2‖_∞ ≤ 10`. Stiffer reaction: reduce τ via more sub-steps.
 ///
@@ -365,6 +366,6 @@ fn precompute_strang_coeffs<F: SemiflowFloat, const M: usize>(
     Ok((a_at_k, b_at_k, exp_half_c))
 }
 
-// Matrix exponential backends (dispatch, per-M Cayley-Hamilton, Taylor s&s,
+// Matrix exponential backends (dispatch, closed form M ≤ 2, Padé[13/13] M ≥ 3,
 // matrix multiply) live in the sibling module.
 use matrix_system_exp::{mat_vec_mul, matrix_exp_dispatch};

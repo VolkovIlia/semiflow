@@ -124,8 +124,12 @@ fn evolve_2d(
     t: f64,
     n_steps: usize,
 ) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
-    let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
+    // Every axis kernel integrates its reaction half-steps over a total time τ, so
+    // the composition applies Σ_axes c_axis = c only when each axis carries c/2
+    // (ADR-0124 Amendment 1; before, c was applied 2× per step).
+    let c_axis = c_coupling / 2.0;
+    let kx = build_axis_kernel(a_diag, c_axis, g.x)?;
+    let ky = build_axis_kernel(a_diag, c_axis, g.y)?;
     let kernel = MatrixDiffusionChernoff2D::new(kx, ky);
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let mut src = MatrixGridFn2D::<f64, 2>::new(g);
@@ -146,9 +150,13 @@ fn evolve_3d(
     t: f64,
     n_steps: usize,
 ) -> Result<Vec<f64>, semiflow::SemiflowError> {
-    let kx = build_axis_kernel(a_diag, c_coupling, g.x)?;
-    let ky = build_axis_kernel(a_diag, c_coupling, g.y)?;
-    let kz = build_axis_kernel(a_diag, c_coupling, g.z)?;
+    // Every axis kernel integrates its reaction half-steps over a total time τ, so
+    // the composition applies Σ_axes c_axis = c only when each axis carries c/3
+    // (ADR-0124 Amendment 1; before, c was applied 3× per step).
+    let c_axis = c_coupling / 3.0;
+    let kx = build_axis_kernel(a_diag, c_axis, g.x)?;
+    let ky = build_axis_kernel(a_diag, c_axis, g.y)?;
+    let kz = build_axis_kernel(a_diag, c_axis, g.z)?;
     let kernel = MatrixDiffusionChernoff3D::new(kx, ky, kz);
     let sg = ChernoffSemigroup::new(kernel, n_steps)?;
     let mut src = MatrixGridFn3D::<f64, 2>::new(g);
@@ -386,5 +394,47 @@ impl MatrixDiffusion3D {
     #[must_use]
     pub fn size(&self) -> usize {
         self.current.len()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// G_MATRIX_ND_COUPLING_EXACT (WASM, native) — ADR-0124 Amendment 1
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod coupling_tests {
+    use super::{evolve_2d, evolve_3d};
+    use semiflow::{Grid1D, Grid2D, Grid3D};
+
+    const C: f64 = 1.0;
+    const T: f64 = 0.5;
+    const U: [f64; 2] = [1.0, 0.5];
+
+    /// A uniform Neumann field is a fixed point of the diffusion part, so the
+    /// result must be `e^{tC}u₀` with `C = [[0, c], [c, 0]]` at every node.
+    fn check(values: &[f64]) {
+        let (ch, sh) = ((C * T).cosh(), (C * T).sinh());
+        let want = [ch * U[0] + sh * U[1], sh * U[0] + ch * U[1]];
+        for pair in values.chunks_exact(2) {
+            for c in 0..2 {
+                assert!(
+                    (pair[c] - want[c]).abs() <= 1e-12,
+                    "{} vs {}",
+                    pair[c],
+                    want[c]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn g_matrix_nd_coupling_exact_wasm() {
+        let ax = |n| Grid1D::new(-1.0, 1.0, n).unwrap();
+        let g2 = Grid2D::new(ax(9), ax(7));
+        let u2: Vec<f64> = (0..9 * 7).flat_map(|_| U).collect();
+        check(&evolve_2d(0.3, C, g2, &u2, T, 8).unwrap());
+        let g3 = Grid3D::new(ax(7), ax(6), ax(5)).unwrap();
+        let u3: Vec<f64> = (0..7 * 6 * 5).flat_map(|_| U).collect();
+        check(&evolve_3d(0.3, C, g3, &u3, T, 8).unwrap());
     }
 }

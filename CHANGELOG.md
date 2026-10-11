@@ -60,6 +60,13 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 
 #### Fixed
 
+- **`MatrixDiffusion2D/3D` (Python, C FFI, WASM) applied the coupling `c` once per
+  axis** — `e^{2tC}` in 2-D, `e^{3tC}` in 3-D instead of the documented `e^{tC}`. Each
+  axis kernel now carries `c/d`. Gate `G_MATRIX_ND_COUPLING_EXACT` (ADR-0124 Amendment 1).
+- Stale docs: `MatrixDiffusionChernoff` claimed closed-form exponentials for M ≤ 4 (closed
+  form is M ≤ 2; M ≥ 3 uses Padé[13/13]); `PHI_NORM_TIGHTEN` quoted a pre-ADR-0198
+  schedule (now pinned by a `phi_cost_probe` doctest: `τ‖G‖ = 2` → `(s, m) = (3, 30)`).
+
 - **Issue #44 — a non-finite operator norm bound is an error, never a silent
   schedule.** Finite entries can overflow the Gershgorin / row-sum bound (2×2
   all-`1e308`). Such operators stay legal — with a diagonal mass `M⁻¹A` has a

@@ -66,6 +66,9 @@ jobs:
           cargo --version
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --release
+      # `full`-gated binding code (e.g. G_MATRIX_ND_COUPLING_EXACT, WASM side) is not
+      # built by the default-feature workspace run above.
+      - run: cargo test -p semiflow-wasm --release --features full --lib
 
   msrv:
     runs-on: ubuntu-latest

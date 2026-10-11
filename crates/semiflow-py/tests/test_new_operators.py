@@ -327,3 +327,31 @@ class TestMatrixDiffusion3D:
             rp.MatrixDiffusion3D(
                 -2.0, 2.0, NX3D, -2.0, 2.0, NY3D, -2.0, 2.0, NZ3D, bad_buf
             )
+
+
+# ---------------------------------------------------------------------------
+# G_MATRIX_ND_COUPLING_EXACT (Python) — ADR-0124 Amendment 1
+# ---------------------------------------------------------------------------
+
+
+def _coupling_exact(c: float, t: float, u: tuple[float, float]) -> np.ndarray:
+    """``e^{tC}u`` for ``C = [[0, c], [c, 0]]``."""
+    ch, sh = np.cosh(c * t), np.sinh(c * t)
+    return np.array([ch * u[0] + sh * u[1], sh * u[0] + ch * u[1]])
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_matrix_nd_coupling_exact(dim: int) -> None:
+    """A uniform Neumann field is a fixed point of the diffusion part, so the
+    result must be ``e^{tC}u0`` at every node (before the fix: ``e^{dim·tC}u0``)."""
+    c, t, u = 1.0, 0.5, (1.0, 0.5)
+    shape = (9, 7) if dim == 2 else (7, 6, 5)
+    nodes = int(np.prod(shape))
+    u0 = np.tile(np.array(u, dtype=np.float64), nodes)
+    axes = [arg for n in shape for arg in (-1.0, 1.0, n)]
+    cls = rp.MatrixDiffusion2D if dim == 2 else rp.MatrixDiffusion3D
+    s = cls(*axes, u0, a_diag=0.3, c_coupling=c)
+    s.evolve(t, 8)
+    got = np.asarray(s.values()).reshape(nodes, 2)
+    want = _coupling_exact(c, t, u)
+    assert np.max(np.abs(got - want)) <= 1e-12

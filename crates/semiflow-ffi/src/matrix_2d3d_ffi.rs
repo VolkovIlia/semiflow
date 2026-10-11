@@ -244,8 +244,12 @@ fn build_matrix2d(
 
 fn evolve_matrix2d(inner: &mut InnerMatrix2D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let g = inner.grid2d;
-    let kx = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.x)?;
-    let ky = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.y)?;
+    // Every axis kernel integrates its reaction half-steps over a total time τ, so
+    // the composition applies Σ_axes c_axis = c only when each axis carries c/2
+    // (ADR-0124 Amendment 1; before, c was applied 2× per step).
+    let c_axis = inner.c_coupling / 2.0;
+    let kx = build_matrix_kernel(inner.a_diag, c_axis, g.x)?;
+    let ky = build_matrix_kernel(inner.a_diag, c_axis, g.y)?;
     let kernel = MatrixDiffusionChernoff2D::new(kx, ky);
     let sg = ChernoffSemigroup::new(kernel, inner.n_steps)?;
     let mut src = MatrixGridFn2D::<f64, 2>::new(g);
@@ -442,9 +446,13 @@ fn build_matrix3d(
 
 fn evolve_matrix3d(inner: &mut InnerMatrix3D, t: f64) -> Result<(), semiflow::SemiflowError> {
     let g = inner.grid3d;
-    let kx = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.x)?;
-    let ky = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.y)?;
-    let kz = build_matrix_kernel(inner.a_diag, inner.c_coupling, g.z)?;
+    // Every axis kernel integrates its reaction half-steps over a total time τ, so
+    // the composition applies Σ_axes c_axis = c only when each axis carries c/3
+    // (ADR-0124 Amendment 1; before, c was applied 3× per step).
+    let c_axis = inner.c_coupling / 3.0;
+    let kx = build_matrix_kernel(inner.a_diag, c_axis, g.x)?;
+    let ky = build_matrix_kernel(inner.a_diag, c_axis, g.y)?;
+    let kz = build_matrix_kernel(inner.a_diag, c_axis, g.z)?;
     let kernel = MatrixDiffusionChernoff3D::new(kx, ky, kz);
     let sg = ChernoffSemigroup::new(kernel, inner.n_steps)?;
     let mut src = MatrixGridFn3D::<f64, 2>::new(g);

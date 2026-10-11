@@ -8933,7 +8933,7 @@ $$
 \tag{33.1}
 $$
 
-where $C(x) = (c_{ij}(x))_{i,j=1}^M$ is the per-grid-point reaction matrix and $\exp(\tau C(x))$ is the matrix exponential. For $M \le 4$, closed-form Cayley-Hamilton formulas give the matrix exponential in $O(M^3)$ arithmetic operations per grid point per step; for $M \ge 5$, the Padé approximation of Higham 2008 *Functions of Matrices* §10 is used (cost: $O(M^3 \log_2 \|\tau C\|)$ per grid point per step).
+where $C(x) = (c_{ij}(x))_{i,j=1}^M$ is the per-grid-point reaction matrix and $\exp(\tau C(x))$ is the matrix exponential. For $M \le 2$, closed-form Cayley-Hamilton formulas give the matrix exponential in $O(M^3)$ arithmetic operations per grid point per step; for $M \ge 3$ (ADR-0125 dispatch), the Padé approximation of Higham 2008 *Functions of Matrices* §10 is used (cost: $O(M^3 \log_2 \|\tau C\|)$ per grid point per step).
 
 **Per-step algorithm (NORMATIVE library)**:
 
@@ -13570,6 +13570,8 @@ symmetry — and already runs on the non-symmetric variable-`a(x)` 1-D generator
 the augmented block requires FORWARD accuracy, so `phi_action` passes `2·‖Ã‖` to
 `select_s_m` — at the canonical z≈2 test point this promotes the Taylor degree from
 13 to 18 (m=18, s=1), dropping truncation at z=1.624 from ~9e-9 to ~8e-14.
+(Historical: with the η-scaled bound `τ‖G‖ + 2` and the ADR-0198 θ table, `τ‖G‖ = 2`
+now gives `(s, m) = (3, 30)` — pinned by the `phi_cost_probe` doctest.)
 One code path serves 1-D and graph. (A symmetric-only optimisation — Chebyshev coefficients of `φ_k`
 in place of the Bessel `e^{−z}I_k(z)` coefficients of `exp`, keeping the §54.3
 O(1)-vector symmetric kernel — is a deferred ADR-0189 §"deferred" item.)

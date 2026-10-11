@@ -31,3 +31,25 @@ VERDICT: **GO** — order-2 sympy-verified; 3D inductive.
 - **Engineer wave** builds `MatrixAxisLift` + `MatrixGridFn2D`/`3D` + the two evolvers; gates `G_MATRIX_2D`/`G_MATRIX_3D` self-convergence `slope ≤ −0.80`. M≤4 only (M≥5 is ADR-0125).
 - **Honest scope**: the `≤ −0.80` (not `−1.95`) threshold is the documented matrix-kernel lower slope (freeze #24) — the matrix reaction half-step's per-point exp cost and the cross-axis reaction non-commutation degrade the *measured* asymptotic constant, not the order class; the τ²-zero proof above guarantees the order class is 2.
 - **No coupling to scalar Strang2D**: dedicated types keep stable v0.5.0+ tensor code untouched.
+
+## Amendment 1 (2026-10) — binding coupling split per axis
+
+**Defect.** The Python (`MatrixDiffusion2D/3D`), C FFI (`smf_matrix2d/3d_*`) and WASM
+bindings document `∂ₜu = a∂²u + C·u` but built EVERY axis kernel with the full coupling
+`C`. Each axis kernel integrates its reaction half-steps over a total time τ per step
+(`Lx(τ/2)·Ly(τ)·Lx(τ/2)`: x twice at τ/2, y once at τ; the 3-D five-leg composition
+likewise), so the composition applied `Σ_axes C = d·C`: `e^{2tC}` in 2-D, `e^{3tC}` in 3-D.
+The core types were correct — they take per-axis kernels whose reactions sum to the
+total (`C_x + C_y` in the PRE-FLIGHT model above); only the binding builders were wrong.
+No test covered `c ≠ 0` in 2-D/3-D.
+
+**Fix.** Each binding passes `C/d` to every axis kernel (`d` = 2 or 3). Results for
+`c_coupling ≠ 0` change (they were wrong); `c_coupling = 0` is bit-identical.
+
+**Gate `G_MATRIX_ND_COUPLING_EXACT`.** A uniform field with Neumann ends is a fixed
+point of the block-CN diffusion step (up to Thomas rounding), so the result must be
+`e^{tC}u₀` at every node: `‖u(t) − e^{tC}u₀‖∞ ≤ 1e−12·‖u₀‖∞`, `C = [[0, 1], [1, 0]]`,
+`t = 0.5`, 2-D 9×7 and 3-D 7×6×5. FFI (`semiflow-ffi/tests/g_matrix_nd_coupling_exact_ffi.rs`),
+WASM (native unit test, run by `cargo test -p semiflow-wasm --features full --lib` in CI)
+and Python (`test_new_operators.py::test_matrix_nd_coupling_exact`). Without the fix the
+error is 0.74 (2-D) and 2.03 (3-D).

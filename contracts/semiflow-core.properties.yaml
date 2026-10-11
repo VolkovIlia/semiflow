@@ -11374,3 +11374,23 @@ implementation_notes:
     introduced_in: adr-0204-prepared-sampling
     authority: ADR-0204
 
+
+  - name: G_MATRIX_ND_COUPLING_EXACT
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 1e−12; unfixed bindings miss by 0.74 in 2-D, 2.03 in 3-D)"
+    rationale: |
+      ADR-0124 Amendment 1: the Python / C FFI / WASM MatrixDiffusion2D/3D bindings
+      built every axis kernel with the full coupling C, so the Strang composition
+      applied e^{2tC} (2-D) / e^{3tC} (3-D). A uniform Neumann field is a fixed point
+      of the block-CN diffusion step, so the result must be e^{tC}u₀ at every node:
+      ‖u(t) − e^{tC}u₀‖∞ ≤ 1e−12·‖u₀‖∞ with C = [[0,1],[1,0]], t = 0.5, 9×7 and 7×6×5.
+      Same check in the FFI test (primary), a native WASM unit test (ci.yml runs
+      `cargo test -p semiflow-wasm --features full --lib`) and the Python suite
+      (test_new_operators.py::test_matrix_nd_coupling_exact).
+    gate: "max |u(t) − e^{tC}u₀| ≤ 1e−12·‖u₀‖∞ (2-D and 3-D)"
+    test_file: "crates/semiflow-ffi/tests/g_matrix_nd_coupling_exact_ffi.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0124

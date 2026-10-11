@@ -48,9 +48,10 @@ pub const PHI_MAX: usize = 3;
 ///
 /// `THETA_M` is calibrated for the exponential BACKWARD error; the φ-extraction
 /// from the augmented block requires FORWARD accuracy.  Multiplying the norm
-/// estimate by this factor nudges `select_s_m` to choose a higher Taylor degree
-/// (m=18 instead of m=13 at the canonical z≈2 test point), reducing the per-substep
-/// truncation from ~9e-9 to ~8e-14 without adding extra squarings.
+/// estimate by this factor makes `select_s_m` pick a schedule for twice the
+/// augmented norm. With the current θ table (ADR-0198) and the η-scaled bound
+/// `τ‖G‖ + 2`, `τ‖G‖ = 2` gives `(s, m) = (3, 30)`: 90 generator mat-vecs (pinned by
+/// the [`phi_cost_probe`] doctest).
 const PHI_NORM_TIGHTEN: f64 = 2.0;
 
 /// `(s, m)` used by every φ entry point for a generator-norm bound `norm_g` and step `tau`.
@@ -62,6 +63,12 @@ const PHI_NORM_TIGHTEN: f64 = 2.0;
 ///
 /// Returns `(0, 0)` — no valid schedule — for a non-finite or negative `τ‖G‖`; the
 /// φ entry points return `DomainViolation` for the same inputs (issue #44).
+///
+/// ```
+/// use semiflow::phi_action::phi_cost_probe;
+/// assert_eq!(phi_cost_probe(1.0, 2.0), (3, 30)); // τ‖G‖ = 2: 90 mat-vecs
+/// assert_eq!(phi_cost_probe(f64::NAN, 1.0), (0, 0));
+/// ```
 #[must_use]
 pub fn phi_cost_probe(norm_g: f64, tau: f64) -> (u32, u32) {
     phi_schedule(norm_g, tau).unwrap_or((0, 0))
