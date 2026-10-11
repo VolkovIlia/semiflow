@@ -55,10 +55,15 @@ Python, CPython 3.13: Gray–Scott on 64² nodes, 2 species, 200 Strang steps:
 0.94 s; a callable `K = 2` system on 401 nodes, 50 steps with two Richardson
 levels: 22 ms (the callable is invoked once per RK stage, not per node).
 
+## N-D shift engines (ADR-0214)
+
+Constant coefficients sample through `D` whole-array axis passes with prefix
+sharing instead of a `4^D` recursion per sample, bit-identically:
+`SmolyakD6V8.apply` on `4⁶` nodes (CPython 3.13, release wheel) ≈ 50 s → 0.09 s per
+step; `test_smolyak_v8.py` ≈ 8 min → 1.1 s with unchanged goldens. Variable
+coefficients keep the per-node loop (parallel for `f64`).
+
 ## Known slow paths (not addressed here)
 
-- `GridFnND::sample` (tensor-product cubic) needs all `4^D` node values per
-  sample: `SmolyakD6V8.apply` on `4⁶` nodes takes ≈ 50 s (unchanged by this
-  overhaul; see ROADMAP).
 - Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer
   Chebyshev, or the planned rational Krylov path, for very stiff problems.

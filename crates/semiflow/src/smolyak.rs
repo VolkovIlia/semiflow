@@ -20,11 +20,12 @@ use crate::{
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     grid_nd::{GridFnND, GridND},
+    grid_nd_sweep::{apply_shift_step, ShiftStep},
     scratch::ScratchPool,
     shift_nd::{
-        build_cholesky_cache, flat_to_x, SquareMatrix, GH1_NODES_F64, GH1_WEIGHTS_F64,
-        GH3_NODES_F64, GH3_WEIGHTS_F64, GH5_NODES_F64, GH5_WEIGHTS_F64, GH7_NODES_F64,
-        GH7_WEIGHTS_F64, GH9_NODES_F64, GH9_WEIGHTS_F64,
+        build_cholesky_cache, SquareMatrix, GH1_NODES_F64, GH1_WEIGHTS_F64, GH3_NODES_F64,
+        GH3_WEIGHTS_F64, GH5_NODES_F64, GH5_WEIGHTS_F64, GH7_NODES_F64, GH7_WEIGHTS_F64,
+        GH9_NODES_F64, GH9_WEIGHTS_F64,
     },
 };
 
@@ -97,7 +98,9 @@ fn binom(n: usize, k: usize) -> i64 {
 /// with duplicate nodes merged (nested rules share nodes across sub-rules).
 ///
 /// Nodes rounded to 14 decimal places for deduplication; weights carry SIGNS.
-fn build_smolyak<const D: usize>(ell: usize) -> Result<Vec<([f64; D], f64)>, SemiflowError> {
+pub(crate) fn build_smolyak<const D: usize>(
+    ell: usize,
+) -> Result<Vec<([f64; D], f64)>, SemiflowError> {
     if ell < D {
         #[allow(clippy::cast_precision_loss)]
         return Err(SemiflowError::DomainViolation {
@@ -246,10 +249,10 @@ pub struct SmolyakGridND<F: SemiflowFloat = f64, const D: usize = 5> {
     c: ReactionFn<F, D>,
     /// Cached Cholesky factors at each grid point.
     cholesky_cache: Vec<SquareMatrix<F, D>>,
-    /// Smolyak sparse-grid nodes (physical space, pre-scaled; raw η values).
-    sm_nodes: Vec<[f64; D]>,
-    /// Smolyak sparse-grid weights (signed combination coefficients × GH weights).
-    sm_weights: Vec<f64>,
+    /// Smolyak sparse-grid nodes and signed weights `(η_q, w_q)` (raw η values,
+    /// combination coefficients × GH weights), cast to `F` once at construction so
+    /// `apply_into` stays allocation-free.
+    quad: Vec<([F; D], F)>,
     /// Smolyak level ℓ (default: D+3).
     level: usize,
     /// Reference grid geometry.
@@ -311,16 +314,14 @@ impl<F: SemiflowFloat, const D: usize> SmolyakGridND<F, D> {
                 value: rel_err,
             });
         }
-        let sm_nodes: Vec<[f64; D]> = nw.iter().map(|(n, _)| *n).collect();
-        let sm_weights: Vec<f64> = nw.iter().map(|(_, w)| *w).collect();
 
         let cholesky_cache = build_cholesky_cache(&a_ij, &grid)?;
+        let quad = cast_quad(&nw);
         Ok(Self {
             b_i: alloc::boxed::Box::new(b_i),
             c: alloc::boxed::Box::new(c),
             cholesky_cache,
-            sm_nodes,
-            sm_weights,
+            quad,
             level: ell,
             grid,
             _f: PhantomData,
@@ -329,7 +330,7 @@ impl<F: SemiflowFloat, const D: usize> SmolyakGridND<F, D> {
 
     /// Number of Smolyak quadrature nodes (sparse grid size).
     pub fn n_nodes(&self) -> usize {
-        self.sm_nodes.len()
+        self.quad.len()
     }
 
     /// Smolyak level `ℓ` used by this kernel.
@@ -347,6 +348,18 @@ impl<F: SemiflowFloat, const D: usize> SmolyakGridND<F, D> {
 // ChernoffFunction<F> impl — math §32.4 algorithm with Smolyak quadrature
 // ---------------------------------------------------------------------------
 
+/// The Smolyak table `(η_q, w_q)` cast to `F` (once, at construction).
+fn cast_quad<F: SemiflowFloat, const D: usize>(nw: &[([f64; D], f64)]) -> Vec<([F; D], F)> {
+    nw.iter()
+        .map(|(node, w)| {
+            (
+                core::array::from_fn(|d| from_f64::<F>(node[d])),
+                from_f64::<F>(*w),
+            )
+        })
+        .collect()
+}
+
 impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, D> {
     type S = GridFnND<F, D>;
 
@@ -360,7 +373,7 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
         tau: F,
         src: &GridFnND<F, D>,
         dst: &mut GridFnND<F, D>,
-        _scratch: &mut ScratchPool<F>,
+        scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
         if !tau.is_finite() || tau < F::zero() {
             return Err(SemiflowError::DomainViolation {
@@ -368,40 +381,18 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for SmolyakGridND<F, 
                 value: tau.to_f64().unwrap_or(f64::NAN),
             });
         }
-        let ns: [usize; D] = core::array::from_fn(|d| self.grid.axes[d].n);
-        let total = src.values.len();
-        // Node scale: 2√τ (matches AnisotropicShiftChernoffND, ADR-0112).
-        let two_sqrt_tau = from_f64::<F>(2.0_f64) * tau.sqrt();
-        // Normalization: π^{-D/2} (required for F(0)=I, ADR-0112 §Decision 1).
-        // Not `powf`: this multiplies every output, and `pow` is not correctly
-        // rounded, so a 1-ULP platform difference here moves every value
-        // (ADR-0191 AMENDMENT 5).
-        let inv_pi_dhalf = crate::float::inv_pi_pow_half::<F>(D);
-        let n_q = self.sm_nodes.len();
-
-        for flat in 0..total {
-            let xk = flat_to_x::<F, D>(flat, &ns, &self.grid);
-            let mut b_val = [F::zero(); D];
-            (self.b_i)(&xk, &mut b_val);
-            let c_val = (self.c)(&xk);
-            let exp_factor = (tau * c_val).libm_exp();
-            let l_k = &self.cholesky_cache[flat];
-            let mut acc = F::zero();
-            for qi in 0..n_q {
-                // η_q from the Smolyak table (pre-stored as f64, cast to F).
-                let eta_q: [F; D] = core::array::from_fn(|d| from_f64::<F>(self.sm_nodes[qi][d]));
-                let w_q = from_f64::<F>(self.sm_weights[qi]);
-                // y_q = x_k + τ·b(x_k) + 2√τ · L_k · η_q
-                let mut l_eta = [F::zero(); D];
-                l_k.mat_vec(&eta_q, &mut l_eta);
-                let y_q: [F; D] =
-                    core::array::from_fn(|d| xk[d] + tau * b_val[d] + two_sqrt_tau * l_eta[d]);
-                let f_y = src.sample(&y_q).unwrap_or(F::zero());
-                // CRITICAL: weight may be negative — do NOT clamp or abs.
-                acc += w_q * f_y;
-            }
-            dst.values[flat] = exp_factor * inv_pi_dhalf * acc;
-        }
+        // y_q = x_k + τ·b(x_k) + 2√τ·L_k·η_q, node scale 2√τ and normalisation π^{−D/2}
+        // as in AnisotropicShiftChernoffND (ADR-0112); constant coefficients take the
+        // bit-identical separable path (ADR-0214).
+        let step = ShiftStep {
+            tau,
+            grid: &self.grid,
+            b: &*self.b_i,
+            c: &*self.c,
+            chol: &self.cholesky_cache,
+            quad: &self.quad,
+        };
+        apply_shift_step(&step, src, dst, scratch);
         Ok(())
     }
 

@@ -24,18 +24,28 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
   systems on every engine with a kinetics catalogue (ADR-0208); Python 3.15,
   PyO3 0.29, `ReactionDiffusion1D/2D/3D` (ADR-0209).
 
-**Next (not started):**
+**Follow-ups:** tracked in the next section.
+
+---
+
+## Roadmap completion (ADR-0124 Amdt 1, ADRs 0206, 0210–0215) — IN PROGRESS (branch `claude/jolly-cori-x6wbmd`)
+
+Done:
+- **Bug:** the Python/FFI/WASM `MatrixDiffusion2D/3D` applied the coupling once
+  per axis (`e^{2tC}`, `e^{3tC}`); fixed, gate `G_MATRIX_ND_COUPLING_EXACT`
+  (ADR-0124 Amendment 1).
+- **N-D shift engines, constant coefficients (ADR-0214):** `D` whole-array axis
+  passes with prefix sharing replace the `4^D` recursion per sample,
+  bit-identically (`G_ND_SWEEP_BIT_EQUAL`): `SmolyakD6V8.apply` ≈ 50 s → 0.09 s.
+
+Next:
 - Rational (shift-invert) Krylov through `SpdResolvent` for very stiff SPD
-  problems: cost independent of `λ_max`, decisive for tridiagonal operators.
-- τ-keyed step plans (per-sample weights cached across steps; ≈2–3× more on the
-  grid engines, needs a trait hook).
-- `GridFnND::sample`: the D-dimensional tensor-product cubic interpolant needs
-  all `4^D` node values of a sample (`SmolyakD6V8.apply` ≈ 50 s on `4⁶` nodes);
-  only a cheaper interpolant (multilinear, sparse-grid) or batching samples
-  that share a cell can reduce that.
-- Shift for the augmented φ operator (≈2× on diffusion generators).
-- Non-symmetric adaptive Arnoldi (KIOPS/phipm); IMEX kinetics for stiff
-  reactions; cross-diffusion.
+  problems: cost independent of `λ_max` (ADR-0206).
+- Shift for the augmented φ operator (≈2× on diffusion generators, ADR-0210).
+- Non-symmetric adaptive Arnoldi (phipm/KIOPS) for φ/exp actions (ADR-0211).
+- Stiff kinetics: adaptive Rosenbrock reaction step (ADR-0212).
+- Cross-diffusion with a constant diagonalisable matrix (ADR-0213).
+- τ-keyed step plans for the grid engines (≈2–3×, a trait hook, ADR-0215).
 
 ---
 

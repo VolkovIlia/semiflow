@@ -36,6 +36,7 @@ use crate::{
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
     grid_nd::{GridFnND, GridND},
+    grid_nd_sweep::{apply_shift_step, ShiftStep},
     scratch::ScratchPool,
 };
 
@@ -281,8 +282,9 @@ pub struct AnisotropicShiftChernoffND<F: SemiflowFloat = f64, const D: usize = 2
     c: CField<F, D>,
     /// Cached Cholesky factor `L(x_k)` at each grid point (math §32.4 step 1).
     cholesky_cache: Vec<SquareMatrix<F, D>>,
-    /// Pre-computed 5-pt tensor-product Gauss-Hermite quadrature.
-    quadrature: GaussHermiteTensor<F, D>,
+    /// The 5-pt tensor-product Gauss-Hermite rule as `(η_q, w_q)`, built once so
+    /// `apply_into` stays allocation-free.
+    quad: Vec<([F; D], F)>,
     /// Reference grid geometry.
     grid: GridND<F, D>,
     _f: PhantomData<F>,
@@ -317,12 +319,16 @@ impl<F: SemiflowFloat, const D: usize> AnisotropicShiftChernoffND<F, D> {
             });
         }
         let cache = build_cholesky_cache(&a_ij, &grid)?;
+        let quadrature = GaussHermiteTensor::new();
+        let quad = (0..quadrature.n_nodes())
+            .map(|q| (quadrature.node(q), quadrature.weight(q)))
+            .collect();
         Ok(Self {
             a_ij: Box::new(a_ij),
             b_i: Box::new(b_i),
             c: Box::new(c),
             cholesky_cache: cache,
-            quadrature: GaussHermiteTensor::new(),
+            quad,
             grid,
             _f: PhantomData,
         })
@@ -380,14 +386,14 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for AnisotropicShiftC
 
     /// Apply one step: `f_dst[k] = exp(τ·c(x_k)) · Σ_q w_q · f_src(x_k + τ·b(x_k) + √(2τ)·L_k·η_q)`.
     ///
-    /// Per math §32.4 equation 32.3. Cost: O(N^D · 5^D) per step.
-    #[allow(clippy::too_many_lines)]
+    /// Per math §32.4 equation 32.3. Cost: O(N^D · 5^D) per step; with constant
+    /// coefficients O(N^D · 5^D · D·4) through the separable path (ADR-0214).
     fn apply_into(
         &self,
         tau: F,
         src: &GridFnND<F, D>,
         dst: &mut GridFnND<F, D>,
-        _scratch: &mut ScratchPool<F>,
+        scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
         if !tau.is_finite() || tau < F::zero() {
             return Err(SemiflowError::DomainViolation {
@@ -395,35 +401,18 @@ impl<F: SemiflowFloat, const D: usize> ChernoffFunction<F> for AnisotropicShiftC
                 value: tau.to_f64().unwrap_or(f64::NAN),
             });
         }
-        let ns: [usize; D] = core::array::from_fn(|d| self.grid.axes[d].n);
-        let total = src.values.len();
-        // Node scale: 2√τ (NOT √(2τ)) — required for correct heat variance 2τA (ADR-0112).
-        let two_sqrt_tau = from_f64::<F>(2.0_f64) * tau.sqrt();
-        // Normalization: π^{-D/2} — required for F(0)=I (ADR-0112 §Decision 1).
-        // Exact-ops, not `powf` — see `float::inv_pi_pow_half`.
-        let inv_pi_dhalf = crate::float::inv_pi_pow_half::<F>(D);
-        let n_q = self.quadrature.n_nodes();
-        for flat in 0..total {
-            let xk = flat_to_x::<F, D>(flat, &ns, &self.grid);
-            let mut b_val = [F::zero(); D];
-            (self.b_i)(&xk, &mut b_val);
-            let c_val = (self.c)(&xk);
-            let exp_factor = (tau * c_val).libm_exp();
-            let l_k = &self.cholesky_cache[flat];
-            let mut acc = F::zero();
-            for q_idx in 0..n_q {
-                let eta_q = self.quadrature.node(q_idx);
-                let w_q = self.quadrature.weight(q_idx);
-                let mut l_eta = [F::zero(); D];
-                l_k.mat_vec(&eta_q, &mut l_eta);
-                // y_q = x_k + tau * b(x_k) + 2√τ * L_k * eta_q  (ADR-0112 eq 32.3)
-                let y_q: [F; D] =
-                    core::array::from_fn(|d| xk[d] + tau * b_val[d] + two_sqrt_tau * l_eta[d]);
-                let f_y = src.sample(&y_q).unwrap_or(F::zero());
-                acc += w_q * f_y;
-            }
-            dst.values[flat] = exp_factor * inv_pi_dhalf * acc;
-        }
+        // Node scale 2√τ (NOT √(2τ)) — required for correct heat variance 2τA — and
+        // normalisation π^{−D/2} for F(0) = I (ADR-0112) live in `grid_nd_sweep`;
+        // constant coefficients take the bit-identical separable path (ADR-0214).
+        let step = ShiftStep {
+            tau,
+            grid: &self.grid,
+            b: &*self.b_i,
+            c: &*self.c,
+            chol: &self.cholesky_cache,
+            quad: &self.quad,
+        };
+        apply_shift_step(&step, src, dst, scratch);
         Ok(())
     }
 

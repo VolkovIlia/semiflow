@@ -177,15 +177,15 @@ impl<F: SemiflowFloat, const D: usize> GridND<F, D> {
 /// so resolving the policy inside it cost 1364 [`bc_index`] calls per sample at
 /// `D = 5` against the 20 that are distinct.
 #[derive(Clone, Copy)]
-struct AxisStencil<F: SemiflowFloat> {
+pub(crate) struct AxisStencil<F: SemiflowFloat> {
     /// Number of meaningful entries in `weights` / `hits`.
-    k: usize,
+    pub(crate) k: usize,
     /// Nodal weights; `Σ weights[..k] == 1`.
-    weights: [F; K_MAX],
+    pub(crate) weights: [F; K_MAX],
     /// Boundary resolution of each stencil node, computed once.
-    hits: [BoundaryHit<F>; K_MAX],
+    pub(crate) hits: [BoundaryHit<F>; K_MAX],
     /// Flat-index stride of this axis: `Π_{e<d} n_e`.
-    stride: usize,
+    pub(crate) stride: usize,
 }
 
 impl<F: SemiflowFloat> AxisStencil<F> {
@@ -301,7 +301,7 @@ impl<F: SemiflowFloat, const D: usize> GridFnND<F, D> {
     }
 
     /// Weights, resolved boundary hits and stride for axis `d` at coordinate `xd`.
-    fn axis_stencil(&self, d: usize, xd: F) -> Result<AxisStencil<F>, SemiflowError> {
+    pub(crate) fn axis_stencil(&self, d: usize, xd: F) -> Result<AxisStencil<F>, SemiflowError> {
         let ax = &self.grid.axes[d];
         let t_frac = (xd - ax.xmin) / ax.dx();
         let t_floor = num_traits::Float::floor(t_frac);

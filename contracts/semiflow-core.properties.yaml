@@ -11394,3 +11394,51 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0124
+
+  - name: G_ND_SWEEP_BIT_EQUAL
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (0 ULP; SmolyakD6V8.apply 50 s → 0.09 s, goldens unchanged)"
+    rationale: |
+      ADR-0214: with constant b and L the N-D shift engines (SmolyakGridND,
+      AnisotropicShiftChernoffND) sample through D whole-array axis passes with
+      prefix sharing instead of a K^D recursion per sample. The separable path (both
+      scratch modes), the shared per-node path and the pre-ADR-0214 loop copied
+      verbatim must agree to the bit (non-NaN outputs), every case also asserting
+      max|Sf − f| > 1e−3: D = 2 and 3 × CubicHermite/Linear × all eight
+      BoundaryPolicy variants × τ ∈ {0.05, 0.6} × {Smolyak ℓ = 5, tensor GH} (f64; the
+      D = 2 Smolyak matrix also in f32); D = 5, ℓ = 8, three policy rotations (Linear
+      full table, CubicHermite first 40 nodes); D = 6, ℓ = 9 (Linear first 160 nodes,
+      CubicHermite first 8 and every 41st node). Engine level: both engines'
+      apply_into with constant dense A, b ≠ 0, variable c (separable) and variable b
+      (per-node), D = 2, 3, against the verbatim loop. Refusal: variable b, an L one
+      ULP off at one node, ±0 drift, scratch cap < 3N. NaN inputs (NaN, payload NaN,
+      ±inf): non-NaN outputs bit-identical, NaN outputs coincide as a class (IEEE 754
+      leaves the payload of NaN ⊕ NaN unspecified). End to end, the no_std digest
+      smolyak_heat_d2 and the Python SmolyakD6V8 goldens are unchanged.
+    gate: "to_bits equal (separable, per-node, pre-ADR-0214 loop) for non-NaN outputs; is_nan equal"
+    test_file: "src/grid_nd_sweep_tests.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0214
+
+  - name: G_ND_SWEEP_ZERO_ALLOC
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (0 allocations per steady-state apply_into, both paths)"
+    rationale: |
+      ADR-0214: SmolyakGridND / AnisotropicShiftChernoffND::apply_into keep the
+      zero-allocation contract of ChernoffFunction::apply_into (ADR-0041): the
+      quadrature list is built at construction and every buffer of the separable
+      path (pass levels, accumulator, per-axis bases) comes from the ScratchPool;
+      stencils are computed per axis node, not stored. After one warm-up call, a
+      second identical call allocates nothing on the separable path (constant b)
+      and, in the serial build, on the per-node path (variable b; the parallel
+      build spawns worker threads there). The first R3 draft allocated 8 times per call.
+    gate: "allocation_counter count_total == 0 for the second apply_into"
+    test_file: "tests/nd_shift_zero_alloc.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0214

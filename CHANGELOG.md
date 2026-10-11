@@ -115,6 +115,14 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 
 #### Performance (bit-identical)
 
+- **N-D shift engines with constant coefficients sample separably (ADR-0214).**
+  `SmolyakGridND` / `AnisotropicShiftChernoffND` replace the `4^D` recursion per
+  sample by `D` whole-array axis passes with prefix sharing over the stored
+  quadrature order; same operations in the same order (`G_ND_SWEEP_BIT_EQUAL`,
+  0 ULP against the old loop; digests and Python goldens unchanged).
+  `SmolyakD6V8.apply` (4⁶ nodes): ≈ 50 s → 0.09 s; the variable-coefficient loop is
+  shared by both engines and runs its nodes in parallel for `f64`.
+
 - **Prepared sampling (ADR-0204).** Within one Chernoff step every sample reads
   the same state, but `GridFn1D::sample` rebuilt the interpolant's ghost data
   per sample: 44 `bc_value` calls for the default septic sampler, all `M + 1`

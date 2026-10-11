@@ -95,6 +95,7 @@ pub mod grid_fn;
 pub mod grid_fn2d;
 pub mod grid_fn3d;
 pub mod grid_nd;
+pub(crate) mod grid_nd_sweep;
 pub mod gridless;
 pub(crate) mod gridless_reduce;
 pub mod hdr;

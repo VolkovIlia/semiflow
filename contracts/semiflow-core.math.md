@@ -13872,3 +13872,9 @@ bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
 > NORMATIVE body (ADR-0207, ADR-0208) lives in
 > [`contracts/semiflow-core.math-semilinear.md`](semiflow-core.math-semilinear.md)
 > (file-size precedent §62); every "§64.x" citation resolves there.
+
+## §65 — Separable sampling for the constant-coefficient N-D shift engines (in its own file)
+
+> NORMATIVE body (ADR-0214) lives in
+> [`contracts/semiflow-core.math-nd-sweep.md`](semiflow-core.math-nd-sweep.md); every
+> "§65.x" citation resolves there.
