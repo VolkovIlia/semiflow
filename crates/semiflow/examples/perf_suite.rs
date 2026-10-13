@@ -283,22 +283,7 @@ fn expmv_phi() {
     let kern = gop.expmv();
     let (ms, ()) = time_best(3, || kern.action_into_slice(1.0, &v, &mut out).unwrap());
     row("expmv/general N=1000 ‖A‖t≈4e3", ms, None, "");
-    let taylor = out.clone();
-    let mut scratch = ScratchPool::new();
-    let opts = KrylovPhiOptions::default();
-    let (ms, ()) = time_best(3, || {
-        expmv_krylov(&gop, 1.0, &v, &mut out, opts, &mut scratch).unwrap();
-    });
-    let diff = out
-        .iter()
-        .zip(&taylor)
-        .fold(0.0_f64, |m, (a, b)| m.max((a - b).abs()));
-    row(
-        "expmv/general-krylov N=1000 ‖A‖t≈4e3",
-        ms,
-        Some(diff),
-        "vs Taylor",
-    );
+    krylov_rows(&gop, &v);
 
     let op = laplacian_1d(n, 1.0e3, false);
     let gen = CsrGenerator::from_symmetric(&op, None).unwrap();
@@ -321,6 +306,43 @@ fn expmv_phi() {
     let mut x = vec![0.0; 100_000];
     let (ms, _) = time_best(5, || res.solve_into(&b, &mut x, &mut scratch).unwrap());
     row("spdr/tridiag N=1e5 solve", ms, None, "");
+}
+
+/// Taylor vs adaptive Arnoldi `e^{−tA}v` on the drift stencil at `‖A‖∞t ≈ 4.2e3, 4.2e4,
+/// 4.2e5` (ADR-0211 table): wall clock, `max |Krylov − Taylor|` and `‖Taylor‖∞`.
+fn krylov_rows(gop: &GeneralOperator<f64>, v: &[f64]) {
+    let kern = gop.expmv();
+    let mut scratch = ScratchPool::new();
+    for t in [1.0, 10.0, 100.0] {
+        let z = gop.norm_inf_bound() * t;
+        let mut taylor = vec![0.0; v.len()];
+        let reps = if t > 50.0 { 1 } else { 3 };
+        let (ms, ()) = time_best(reps, || kern.action_into_slice(t, v, &mut taylor).unwrap());
+        let sup = taylor.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
+        row(
+            &format!("expmv/taylor ‖A‖t={z:.1e}"),
+            ms,
+            None,
+            &format!("‖y‖∞={sup:.1e}"),
+        );
+        for m in [30, 15] {
+            let opts = KrylovPhiOptions::default().with_m(m);
+            let mut out = vec![0.0; v.len()];
+            let (ms, ()) = time_best(3, || {
+                expmv_krylov(gop, t, v, &mut out, opts, &mut scratch).unwrap();
+            });
+            let diff = out
+                .iter()
+                .zip(&taylor)
+                .fold(0.0_f64, |a, (x, y)| a.max((x - y).abs()));
+            row(
+                &format!("expmv/krylov m={m} ‖A‖t={z:.1e}"),
+                ms,
+                Some(diff),
+                "abs vs Taylor",
+            );
+        }
+    }
 }
 
 fn main() {

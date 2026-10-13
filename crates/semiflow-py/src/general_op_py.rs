@@ -36,7 +36,7 @@ use crate::{
 /// -------------
 /// - Cost is ``Θ(t·‖A‖_∞)`` matvecs on the default Taylor path — **linear in the
 ///   depth, not flat**. ``evolve_batched(..., method="krylov")`` (adaptive Arnoldi,
-///   ADR-0211) grows like ``√(t·‖A‖)`` for a dissipative ``A``.
+///   ADR-0211) needs far fewer matvecs at large ``t·‖A‖``.
 /// - Only the **backward** error is certified. For a severely non-normal ``A``
 ///   the forward error can exceed the backward radius by ``κ(V)``, which is not
 ///   estimated.

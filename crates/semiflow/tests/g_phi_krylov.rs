@@ -184,15 +184,28 @@ impl GeneratorAction<f64> for Counted<'_> {
     }
 }
 
-/// `(krylov result, its exact count, report matvecs, taylor result, taylor s·m)`.
-fn both_paths(
-    gen: &CsrGenerator<f64>,
-    z: f64,
-    tol: f64,
-) -> (Vec<f64>, usize, usize, Vec<f64>, u64, f64) {
+/// One Krylov and one Taylor combination of the same data (`p = w.len() − 1 ≤ 1`).
+struct Paths {
+    kry: Vec<f64>,
+    calls: usize,
+    matvecs: usize,
+    tay: Vec<f64>,
+    taylor_sm: u64,
+    /// `‖y(0)‖₂` of the augmented start vector `[w₀; 1/η]` (`w₀` for `p = 0`), the
+    /// norm `tol` is relative to.
+    y0_norm: f64,
+    est_error: f64,
+}
+
+/// `2^{⌈log₂ M⌉}` (`1/η` of the η-scaling, §62.4).
+#[allow(clippy::cast_possible_truncation)] // |log₂| < 1100
+fn inv_eta(max_mag: f64) -> f64 {
+    2f64.powi(max_mag.log2().ceil() as i32)
+}
+
+fn both_paths(gen: &CsrGenerator<f64>, z: f64, tol: f64, w: &[Vec<f64>]) -> Paths {
     let n = gen.dim();
     let tau = z / gen.norm_bound();
-    let w: Vec<Vec<f64>> = (0..=1).map(|k| lcg_vec(60 + k, n)).collect();
     let refs: Vec<&[f64]> = w.iter().map(Vec::as_slice).collect();
     let counted = Counted {
         inner: gen,
@@ -205,19 +218,22 @@ fn both_paths(
     let mut tay = vec![0.0; n];
     phi_combination(gen, tau, &refs, &mut tay, &mut sc).unwrap();
     let (s, m) = phi_sweep_probe(gen, tau);
-    let w_norm = refs
-        .iter()
-        .map(|v| v.iter().map(|x| x * x).sum::<f64>())
-        .sum::<f64>()
-        .sqrt();
-    (
+    let w0_sq: f64 = w[0].iter().map(|x| x * x).sum();
+    let tail = w.get(1).map_or(0.0, |w1| inv_eta(tau * sup(w1)).powi(2));
+    let y0_norm = (w0_sq + tail).sqrt();
+    Paths {
         kry,
-        counted.calls.load(Ordering::Relaxed),
-        rep.matvecs,
+        calls: counted.calls.load(Ordering::Relaxed),
+        matvecs: rep.matvecs,
         tay,
-        u64::from(s) * u64::from(m),
-        w_norm,
-    )
+        taylor_sm: u64::from(s) * u64::from(m),
+        y0_norm,
+        est_error: rep.est_error,
+    }
+}
+
+fn lcg_pair(n: usize) -> Vec<Vec<f64>> {
+    (0..=1).map(|k| lcg_vec(60 + k, n)).collect()
 }
 
 #[test]
@@ -225,16 +241,20 @@ fn g_phi_krylov_cost() {
     let n = 1000;
     let op = general(&fokker_planck(n, 1.0), n);
     let gen = CsrGenerator::from_general(&op, None).unwrap();
-    let (kry, calls, matvecs, tay, taylor, _) = both_paths(&gen, 4e3, 1e-10);
-    let err = sup_diff(&kry, &tay) / sup(&tay);
+    let p = both_paths(&gen, 4e3, 1e-10, &lcg_pair(n));
+    let err = sup_diff(&p.kry, &p.tay) / sup(&p.tay);
     eprintln!(
-        "G_PHI_KRYLOV_COST: krylov {calls} vs taylor {taylor} (x{:.1}), rel diff {err:.2e}",
-        taylor as f64 / calls as f64
+        "G_PHI_KRYLOV_COST: krylov {} vs taylor {} (x{:.1}), rel diff {err:.2e}",
+        p.calls,
+        p.taylor_sm,
+        p.taylor_sm as f64 / p.calls as f64
     );
-    assert_eq!(calls, matvecs, "report vs counter");
+    assert_eq!(p.calls, p.matvecs, "report vs counter");
     assert!(
-        20 * calls as u64 <= taylor,
-        "krylov {calls} vs taylor {taylor}"
+        20 * p.calls as u64 <= p.taylor_sm,
+        "krylov {} vs taylor {}",
+        p.calls,
+        p.taylor_sm
     );
     assert!(err <= 1e-8, "krylov vs taylor: {err:e}");
 }
@@ -246,16 +266,72 @@ fn g_phi_krylov_tol() {
     let gen = CsrGenerator::from_general(&op, None).unwrap();
     let mut prev_calls = 0;
     for tol in [1e-6, 1e-9, 1e-12] {
-        let (kry, calls, _, tay, _, w_norm) = both_paths(&gen, 4e2, tol);
-        let err = sup_diff(&kry, &tay);
+        let p = both_paths(&gen, 4e2, tol, &lcg_pair(n));
+        let err = sup_diff(&p.kry, &p.tay);
         eprintln!(
-            "G_PHI_KRYLOV_TOL tol={tol:e}: err={err:.2e} (bound {:.2e}) calls={calls}",
-            10.0 * tol * w_norm
+            "G_PHI_KRYLOV_TOL tol={tol:e}: err={err:.2e} (bound {:.2e}) est={:.2e} calls={}",
+            10.0 * tol * p.y0_norm,
+            p.est_error,
+            p.calls
         );
-        assert!(err <= 10.0 * tol * w_norm, "tol={tol:e}: {err:e}");
-        // The tolerance drives the work: a tighter one never costs less.
-        assert!(calls >= prev_calls, "tol={tol:e}: {calls} < {prev_calls}");
-        prev_calls = calls;
+        assert!(err <= 10.0 * tol * p.y0_norm, "tol={tol:e}: {err:e}");
+        // §68.3: the estimate is positive and within the accepted budget.
+        assert!(
+            p.est_error > 0.0 && p.est_error <= 1.2 * tol,
+            "tol={tol:e}: est {}",
+            p.est_error
+        );
+        // The tolerance drives the work: a tighter one costs strictly more.
+        assert!(
+            p.calls > prev_calls,
+            "tol={tol:e}: {} <= {prev_calls}",
+            p.calls
+        );
+        prev_calls = p.calls;
+    }
+}
+
+/// The stationary vector `π` of the drifted Fokker–Planck chain (detailed balance:
+/// `π_{i+1}·rate(i+1→i) = π_i·rate(i→i+1)`), unit `‖·‖₂`.
+fn stationary(n: usize, d: f64) -> Vec<f64> {
+    let dx = 6.0 / (n - 1) as f64;
+    let mut pi = vec![1.0; n];
+    for i in 0..n - 1 {
+        let b = 1.5 - (-3.0 + (i as f64 + 0.5) * dx);
+        let up = d / (dx * dx) + b.max(0.0) / dx;
+        let down = d / (dx * dx) + (-b).max(0.0) / dx;
+        pi[i + 1] = pi[i] * up / down;
+    }
+    let norm = pi.iter().map(|x| x * x).sum::<f64>().sqrt();
+    pi.iter().map(|x| x / norm).collect()
+}
+
+/// Near equilibrium the Arnoldi residual is tiny but not within `tol`: a happy
+/// breakdown taken as exact (the draft) missed `tol` by 2–14× here (`≤ tol·‖y₀‖₂`).
+#[test]
+fn g_phi_krylov_tol_near_equilibrium() {
+    let n = 1000;
+    let op = general(&fokker_planck(n, 1.0), n);
+    let gen = CsrGenerator::from_general(&op, None).unwrap();
+    let pi = stationary(n, 1.0);
+    let x: Vec<f64> = (0..n)
+        .map(|i| -3.0 + 6.0 * i as f64 / (n - 1) as f64)
+        .collect();
+    let bump: Vec<f64> = pi.iter().zip(&x).map(|(p, x)| p * (x - 1.5)).collect();
+    let bn = bump.iter().map(|v| v * v).sum::<f64>().sqrt();
+    for eps in [1e-8, 1e-7] {
+        let w0: Vec<f64> = pi
+            .iter()
+            .zip(&bump)
+            .map(|(p, b)| p + eps * b / bn)
+            .collect();
+        let p = both_paths(&gen, 4e4, 1e-10, &[w0]);
+        let err = sup_diff(&p.kry, &p.tay);
+        eprintln!(
+            "G_PHI_KRYLOV_TOL near-equilibrium eps={eps:e}: err={err:.2e} calls={}",
+            p.calls
+        );
+        assert!(err <= 1e-10 * p.y0_norm, "eps={eps:e}: {err:e}");
     }
 }
 
@@ -292,18 +368,35 @@ fn g_etdrk4_krylov_order() {
     let u0: Vec<f64> = (0..8)
         .map(|i| 0.5 * (2.0 * std::f64::consts::PI * f64::from(i) / 8.0).sin())
         .collect();
-    let kry = PhiSolver::Krylov(KrylovPhiOptions::default().with_tol(1e-14));
+    // m = 4 < the augmented dimension: the adaptive substep control runs.
+    let opts = KrylovPhiOptions::default().with_tol(1e-14).with_m(4);
+    let kry = PhiSolver::Krylov(opts);
     let h = 0.05;
     let u_h = integrate_ac(h, 4, &u0, kry);
     let u_h2 = integrate_ac(h / 2.0, 8, &u0, kry);
     let u_ref = integrate_ac(h / 4.0, 16, &u0, kry);
     let slope = (sup_diff(&u_h, &u_ref) / sup_diff(&u_h2, &u_ref)).log2();
-    eprintln!("G_ETDRK4_KRYLOV_ORDER: slope {slope:.3}");
-    assert!((3.7..=4.3).contains(&slope), "slope {slope}");
     let taylor = integrate_ac(h, 4, &u0, PhiSolver::Taylor);
-    assert!(
-        sup_diff(&u_h, &taylor) <= 1e-12,
-        "krylov vs taylor driver: {:e}",
-        sup_diff(&u_h, &taylor)
+    // On a 100× stiffer copy of the generator (`τ‖G‖ ≈ 13`) m = 4 must substep.
+    let rep = phi_combination_krylov(
+        &PeriodLaplacian(64.0),
+        h,
+        &[&u0, &u0, &u0, &u0],
+        &mut [0.0; 8],
+        opts,
+        &mut ScratchPool::new(),
+    )
+    .unwrap();
+    // A loose tolerance must show in the result: the Krylov path is really wired in.
+    let loose = PhiSolver::Krylov(KrylovPhiOptions::default().with_tol(1e-4).with_m(4));
+    let gap = sup_diff(&integrate_ac(h, 4, &u0, loose), &taylor);
+    eprintln!(
+        "G_ETDRK4_KRYLOV_ORDER: slope {slope:.3}, vs taylor {:.2e}, substeps {}, loose gap {gap:.2e}",
+        sup_diff(&u_h, &taylor),
+        rep.substeps
     );
+    assert!((3.7..=4.3).contains(&slope), "slope {slope}");
+    assert!(sup_diff(&u_h, &taylor) <= 1e-12, "krylov vs taylor driver");
+    assert!(rep.substeps > 1 && rep.matvecs > rep.substeps, "{rep:?}");
+    assert!(gap > 1e-12 && gap <= 1e-3, "loose-tol gap {gap:e}");
 }

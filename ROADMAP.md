@@ -48,8 +48,8 @@ Done:
   (`phi_action` φ₁ 300 → 145 ms, ETDRK4 195 → 96 ms).
 
 - **Adaptive Krylov φ / exp actions (ADR-0211):** Expokit-style Arnoldi for any
-  generator, `√(τ‖G‖)` growth: 33× fewer applications at `τ‖G‖ = 4·10³`,
-  92 s → 3.7 s at `4·10⁵`; `PhiSolver` for ETDRK4; Python `method="krylov"`.
+  generator: 33× fewer applications at `τ‖G‖ = 4·10³`, 2.3–12× faster at
+  `‖A‖t = 4·10³ … 4·10⁵`; `PhiSolver` for ETDRK4; Python `method="krylov"`.
 
 - **Stiff kinetics (ADR-0212):** adaptive ROS2 reaction step for
   `ReactionDiffusion` (L-stable, analytic or finite-difference Jacobian): Robertson

@@ -7,8 +7,8 @@
 //! ```
 //!
 //! `"taylor"` (the default everywhere) is the augmented Taylor sweep with exact
-//! application counts; `"krylov"` is the adaptive Arnoldi path whose cost grows
-//! like `√(τ‖G‖)` for a dissipative generator.
+//! application counts; `"krylov"` is the adaptive Arnoldi path, far cheaper at
+//! large `τ‖G‖`.
 
 use pyo3::prelude::*;
 use semiflow::{

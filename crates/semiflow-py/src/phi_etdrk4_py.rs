@@ -253,7 +253,7 @@ pub fn phi_action_batched_py<'py>(
 /// method : str
 ///     ``"taylor"`` (default: augmented Taylor sweep, ``Θ(τ‖G‖)`` generator
 ///     applications) or ``"krylov"`` (adaptive Arnoldi, ADR-0211: about
-///     ``√(τ‖G‖)``·``m`` applications for a dissipative ``G``).
+///     far fewer applications at large ``τ‖G‖``).
 /// tol : float
 ///     Krylov accuracy relative to the augmented start vector (``"krylov"`` only).
 /// m : int

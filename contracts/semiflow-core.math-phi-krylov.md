@@ -18,13 +18,18 @@ Al-Mohy–Higham selector on `Δt‖Ĥ‖₁`; `φ₁ = β|f_m|`, `φ₂ = β|f_
 `err ≤ 1.2·Δt·tol·‖y₀‖₂`; then `y ← β·V_m f_{0..m}`. Reject:
 `Δt ← round₂(0.9·Δt·(Δt·tol·‖y₀‖₂/err)^{1/m})` (exponent `1/(m−1)` in the third case),
 at most 10 times. Next step: `round₂(0.9·Δt·(Δt·tol·‖y₀‖₂/err)^{1/m})` from the
-accepted `err` (the remaining time when `err = 0`). Happy
-breakdown `h_{j+1,j} ≤ 1e−12·max(1, τ‖G‖ + 2)`: `f = e^{(1−t)H_j}e₁`, done.
+accepted `err` (the remaining time when `err = 0`). Happy breakdown iff
+`h_{j+1,j} ≤ 1e−12·max(1, τ‖G‖ + 2)` AND (`β·h_{j+1,j} ≤ tol·‖y₀‖₂` or
+`j + 1 = n + p`): `f = e^{(1−t)H_j}e₁`, error `β·h_{j+1,j}·(1 − t)`, done; otherwise
+the iteration continues with `v_{j+1} = z/h_{j+1,j}`. `y₀` is prescaled by `2^{−e}`
+(`‖y₀‖∞ ∈ [1, 2)`) and the result by `2^{e}`.
 
 ## §68.3 — Accuracy
 
 Each accepted substep has estimated local error `≤ 1.2·Δt·tol·‖y₀‖₂`; the estimates
-sum to `≤ 1.2·tol·‖y₀‖₂` over `t ∈ [0, 1]`. Estimates, not bounds (Sidje 1998).
+sum to `≤ 1.2·tol·‖y₀‖₂` over `t ∈ [0, 1]`. Estimates, not bounds (Sidje 1998). The
+reported `est_error` is `Σ max(err, (τ‖G‖ + 2)·ε·β)/‖y₀‖₂` (Expokit's round-off
+floor), which can exceed `tol` at large `τ‖G‖`.
 
 ## §68.4 — Gates
 

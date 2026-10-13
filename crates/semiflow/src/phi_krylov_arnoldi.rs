@@ -19,6 +19,7 @@ use crate::{
     generator_action::GeneratorAction,
     phi_action_helpers::{aug_matvec_inplace, Coupling},
     phi_krylov::{axpy, dot, norm2, KrylovPhiOptions, KrylovPhiReport},
+    pow2::pow2_scale,
     scratch::ScratchPool,
 };
 
@@ -61,7 +62,8 @@ struct Basis<F> {
     mb: usize,
     /// `0` on a happy breakdown (exact), `2` otherwise (corrector rows present).
     k1: usize,
-    /// `‖B·v_{m+1}‖₂` for the `φ₂` error term.
+    /// `‖B·v_{m+1}‖₂` for the `φ₂` error term; on a happy breakdown the neglected
+    /// `h_{j+1,j}` (the substep error is then `≈ β·h_{j+1,j}·Δt`).
     avnorm: f64,
 }
 
@@ -115,7 +117,7 @@ fn arnoldi<F: SemiflowFloat, Op: GeneratorAction<F>>(
     y: &[F],
     beta: f64,
     m: usize,
-    anorm: f64,
+    (anorm, tol): (f64, f64),
     av: &mut [F],
     rep: &mut KrylovPhiReport,
 ) -> Basis<F> {
@@ -133,13 +135,15 @@ fn arnoldi<F: SemiflowFloat, Op: GeneratorAction<F>>(
             axpy(&mut z, -c, vi);
         }
         let hn = norm2(&z);
-        if hn <= BREAKDOWN * anorm.max(1.0) {
+        // Dropping `h_{j+1,j}·v_{j+1}` over the remaining time costs `≈ β·h_{j+1,j}`:
+        // exact only at round-off level AND within `tol`, or on the whole space.
+        if hn <= BREAKDOWN * anorm.max(1.0) && (j + 1 == y.len() || hn * beta <= tol) {
             return Basis {
                 v,
                 h,
                 mb: j + 1,
                 k1: 0,
-                avnorm: 0.0,
+                avnorm: hn,
             };
         }
         h[(j + 1) * dim + j] = hn;
@@ -193,15 +197,24 @@ pub(crate) fn expv<F: SemiflowFloat, Op: GeneratorAction<F>>(
         });
     }
     let mut rep = KrylovPhiReport::default();
-    let beta0 = norm2(y);
-    if beta0 == 0.0 {
+    // ‖y‖₂ is formed from f64 squares (overflow above ~1e154, underflow below
+    // ~1e−162): run on 2^{−e}·y, ‖·‖∞ ∈ [1, 2), and scale back. Exact, and the
+    // algorithm is homogeneous, so in-range inputs keep their bits.
+    let Some((down, up)) = pow2_scale(y) else {
         return Ok(rep);
+    };
+    for x in y.iter_mut() {
+        *x *= down;
     }
+    let beta0 = norm2(y);
     let tol = opts.tol * beta0;
     let m = opts.m.clamp(2, y.len().max(2));
     let mut av = scratch.take_vec(aug.n);
     let result = substeps(aug, anorm, y, tol, m, opts.max_substeps, &mut av, &mut rep);
     scratch.return_vec(av);
+    for x in y.iter_mut() {
+        *x *= up;
+    }
     rep.est_error /= beta0;
     result.map(|()| rep)
 }
@@ -235,7 +248,7 @@ fn substeps<F: SemiflowFloat, Op: GeneratorAction<F>>(
                 max_iter: max_substeps,
             });
         }
-        let basis = arnoldi(aug, y, beta, m, anorm, av, rep);
+        let basis = arnoldi(aug, y, beta, m, (anorm, tol), av, rep);
         let remaining = 1.0 - elapsed;
         let (t_step, coeff, err) = trial_steps(&basis, m, beta, tol, (next_step, remaining), rep)?;
         y.fill(F::zero());
@@ -272,7 +285,8 @@ fn trial_steps<F: SemiflowFloat>(
 ) -> Result<(f64, Vec<f64>, f64), SemiflowError> {
     let dim = m + 2;
     if b.k1 == 0 {
-        return Ok((remaining, hess_exp_e1(&b.h, dim, b.mb, remaining)?, 0.0));
+        let f = hess_exp_e1(&b.h, dim, b.mb, remaining)?;
+        return Ok((remaining, f, beta * b.avnorm * remaining));
     }
     let mut t_step = t_new.min(remaining);
     for _ in 0..=MAX_REJECT {

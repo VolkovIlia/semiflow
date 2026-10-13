@@ -242,11 +242,13 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 - **`phi_combination_krylov`, `expmv_krylov`, `PhiSolver`.** Expokit-style adaptive
   Arnoldi (Sidje 1998) on the η-scaled augmented φ operator: `Σ τᵏφ_k(τG)w_k` for
   any `GeneratorAction` (non-symmetric welcome) and `e^{−τA}v` for a
-  `GeneralOperator`, at a cost growing like `√(τ‖G‖)` instead of `τ‖G‖`. Drifted
-  Fokker–Planck, `n = 1000`, `τ‖G‖ = 4·10³`: 1 023 generator applications instead of
-  33 960 (`G_PHI_KRYLOV_COST`). Wall clock on a tridiagonal drift stencil: 90 → 44 ms
-  at `‖A‖t = 4·10³`, 92 s → 3.7 s at `4·10⁵` (one-pass Gram–Schmidt; only
-  `e^{tH}e₁` of the Hessenberg, by a Taylor vector action).
+  `GeneralOperator`, with far fewer generator applications than the Taylor path at
+  large `τ‖G‖` (still growing with it for a fixed Krylov dimension). Drifted
+  Fokker–Planck, `n = 1000`, `τ‖G‖ = 4·10³`: 1 023 generator applications instead
+  of 33 960 (`G_PHI_KRYLOV_COST`). Wall clock on a tridiagonal drift stencil
+  (`perf_suite -- expmv`): 84 → 36 ms at `‖A‖t = 4.2·10³`, 895 → 289 ms at
+  `4.2·10⁴` (one-pass Gram–Schmidt; only `e^{tH}e₁` of the Hessenberg, by a Taylor
+  vector action). A happy breakdown is taken only within `tol`.
   `Etdrk4::with_phi_solver(PhiSolver::Krylov(..))` keeps order 4
   (`G_ETDRK4_KRYLOV_ORDER`). Gates `G_PHI_KRYLOV_DENSE`, `G_PHI_KRYLOV_TOL`. Honest
   limit: on cheap stencils below `τ‖G‖ ≈ 10³` the Taylor path is competitive and

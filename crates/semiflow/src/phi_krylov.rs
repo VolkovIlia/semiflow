@@ -1,15 +1,18 @@
 //! Adaptive Krylov (Arnoldi) φ-combination for any generator (ADR-0211, math §68).
 //!
 //! The Taylor φ path (§62.4, ADR-0210) needs `Θ(τ‖G‖)` generator applications —
-//! fine for `τ‖G‖ ≲ 10²`, prohibitive for a stiff non-symmetric generator (a
-//! drifted Fokker–Planck operator at `τ‖G‖ = 4·10³` costs ≈ 66 000). This path
-//! runs Arnoldi on the SAME η-scaled augmented operator
-//! `B̃_η = [[τG, ηW], [0, J_p]]` and time-steps `y(1) = e^{B̃_η}y(0)` with the
-//! adaptive substep control of Expokit's `expv` (Sidje, ACM TOMS 24 (1998)):
-//! Krylov dimension `m`, local error from the `φ₁`/`φ₂` corrector terms of the
-//! `(m+2)`-augmented Hessenberg exponential, step rejection reuses the basis.
-//! Cost `≈ O(√(τ‖G‖))·m` applications for a dissipative `G`. All control is pure
-//! arithmetic on deterministic quantities: the result is reproducible bit for bit.
+//! fine for `τ‖G‖ ≲ 10²`, costly for a stiff non-symmetric generator (a drifted
+//! Fokker–Planck operator at `τ‖G‖ = 4·10³` costs 33 960 per combination, already
+//! halved by the ADR-0210 shift). This path runs Arnoldi on the SAME η-scaled
+//! augmented operator `B̃_η = [[τG, ηW], [0, J_p]]` and time-steps
+//! `y(1) = e^{B̃_η}y(0)` with the adaptive substep control of Expokit's `expv`
+//! (Sidje, ACM TOMS 24 (1998)): Krylov dimension `m`, local error from the `φ₁`/`φ₂`
+//! corrector terms of the `(m+2)`-augmented Hessenberg exponential, step rejection
+//! reuses the basis. For a fixed `m` each substep covers a bounded share of
+//! `τ‖G‖`, so the application count still grows with `τ‖G‖` (4–5× per decade on the
+//! gate operator) but from a far smaller constant: 1 023 against 33 960 at
+//! `4·10³`. All control is pure arithmetic on deterministic quantities: the result
+//! is reproducible bit for bit.
 
 use crate::{
     error::SemiflowError,
@@ -75,7 +78,10 @@ pub struct KrylovPhiReport {
     pub substeps: usize,
     /// Rejected substep sizes (the basis is reused).
     pub rejected: usize,
-    /// Sum of the local error estimates, relative to `‖y(0)‖₂`.
+    /// Expokit's accumulated estimate `Σ max(errᵢ, ‖B̃_η‖·ε·‖yᵢ‖₂) / ‖y(0)‖₂` over the
+    /// substeps (`errᵢ` the accepted local estimate, §68.2; a happy breakdown adds
+    /// `β·h_{j+1,j}·Δt`). An estimate, not a bound: the round-off term dominates once
+    /// `τ‖G‖·ε` approaches `tol` and can exceed `tol` by orders of magnitude.
     pub est_error: f64,
 }
 
@@ -85,7 +91,7 @@ pub struct KrylovPhiReport {
 /// # Errors
 /// The `DomainViolation`s of `phi_combination` (shapes, non-finite input, `τ < 0`,
 /// overflow of `τ^k‖w_k‖`); `DomainViolation` for `tol ∉ (0, 1)`; `Unsupported`
-/// for `F` wider than `f64` (forward-mode `Dual`);
+/// for `F` other than `f32` / `f64` (forward-mode `Dual`);
 /// `ConvergenceFailed` when the substep cap or the rejection cap (10 per substep)
 /// is hit.
 pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
@@ -98,11 +104,11 @@ pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
 ) -> Result<KrylovPhiReport, SemiflowError> {
     let n = op.dim();
     validate_combination(n, tau, w, out.len())?;
-    // Arnoldi coefficients are f64 scalars: a float type wider than f64
-    // (forward-mode `Dual`) would silently lose its tangent.
-    if core::mem::size_of::<F>() > core::mem::size_of::<f64>() {
+    // Arnoldi coefficients are f64 scalars: a forward-mode `Dual` (of f32 or f64)
+    // would silently lose its tangent.
+    if !crate::float::is_plain_ieee::<F>() {
         return Err(SemiflowError::Unsupported {
-            feature: "phi_combination_krylov: float types wider than f64 (forward-mode Dual)",
+            feature: "phi_combination_krylov: forward-mode Dual (only f32 / f64)",
         });
     }
     if !(opts.tol > 0.0 && opts.tol < 1.0) {
@@ -138,8 +144,9 @@ pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
 }
 
 /// `out ← e^{−τA}v` for a general CSR operator `A` by adaptive Arnoldi
-/// (`G = −A`; non-symmetric `A` welcome). Cost grows like `√(τ‖A‖)` for a
-/// dissipative `A`, against `Θ(τ‖A‖)` for the Taylor `expmv`.
+/// (`G = −A`; non-symmetric `A` welcome). Far fewer applications than the Taylor
+/// `expmv` at large `τ‖A‖` (module docs; 2.3–12× faster in wall clock on a
+/// tridiagonal stencil at `τ‖A‖ = 4·10³ … 4·10⁵`).
 ///
 /// # Errors
 /// As [`phi_combination_krylov`]; `DomainViolation` for a non-finite norm bound.
@@ -162,7 +169,7 @@ pub enum PhiSolver {
     /// Augmented Taylor sweeps (§62.4, ADR-0210): `Θ(τ‖G‖)`, exact counts. Default.
     #[default]
     Taylor,
-    /// Adaptive Arnoldi (this module): `≈ O(√(τ‖G‖))` for stiff dissipative `G`.
+    /// Adaptive Arnoldi (this module): far fewer applications for stiff `G`.
     Krylov(KrylovPhiOptions),
 }
 

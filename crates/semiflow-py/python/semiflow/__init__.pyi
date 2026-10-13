@@ -6704,8 +6704,8 @@ def phi_combination(
 
     ``method="taylor"`` (default): augmented Taylor sweep, ``Θ(τ‖G‖)`` generator
     applications. ``method="krylov"``: adaptive Arnoldi (ADR-0211), ``tol`` relative
-    to the augmented start vector, Krylov dimension ``m``; about ``√(τ‖G‖)``·``m``
-    applications for a dissipative ``G``.
+    to the augmented start vector, Krylov dimension ``m``; far fewer generator
+    applications than ``"taylor"`` at large ``τ‖G‖``.
 
     Returns ndarray of shape ``(n,)``.
     """
@@ -6845,8 +6845,8 @@ class GeneralOperator:
     -------------
     - Cost is ``Theta(t * ||A||_inf)`` matvecs on the default Taylor path —
       **linear in the depth, not flat**. ``evolve_batched(method="krylov")``
-      (adaptive Arnoldi, ADR-0211) grows like ``sqrt(t * ||A||)`` for a
-      dissipative ``A``.
+      (adaptive Arnoldi, ADR-0211) needs far fewer matvecs at large
+      ``t * ||A||`` (2.3-12x faster at 4e3 ... 4e5 on a stencil).
     - Only the **backward** error is certified. For a severely non-normal ``A``
       the forward error can exceed the backward radius by ``kappa(V)``, which is
       not estimated.

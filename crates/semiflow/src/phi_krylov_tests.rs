@@ -157,3 +157,89 @@ fn dual_numbers_are_rejected() {
     );
     assert!(matches!(r, Err(SemiflowError::Unsupported { .. })), "{r:?}");
 }
+
+#[test]
+fn near_breakdown_respects_tol() {
+    // diag(0, 10, 4e5), v = (1, 3e−8, 0): h₁₀ ≈ 3e−7 is "round-off small" for
+    // ‖A‖ = 4e5 but not within tol — the step must not be taken as exact.
+    let a = GeneralOperator::from_csr(3, &[0, 1, 2, 3], &[0, 1, 2], &[0.0, 10.0, 4e5]).unwrap();
+    let v = [1.0, 3e-8, 0.0];
+    let want = [1.0, 3e-8 * (-10.0_f64).exp(), 0.0];
+    let mut out = [0.0; 3];
+    let mut scratch = ScratchPool::new();
+    for tol in [1e-10, 1e-12] {
+        let opts = KrylovPhiOptions::default().with_tol(tol);
+        expmv_krylov(&a, 1.0, &v, &mut out, opts, &mut scratch).unwrap();
+        assert!(
+            max_err(&out, &want) <= tol,
+            "tol={tol:e}: {}",
+            max_err(&out, &want)
+        );
+    }
+}
+
+#[test]
+fn power_of_two_scale_is_free() {
+    // Bitwise homogeneity at extreme scales (no overflow/underflow in ‖y‖₂).
+    let op = drift(40, 40.0, 12.0);
+    let base_v = vector(40);
+    let mut base = vec![0.0; 40];
+    let mut scratch = ScratchPool::new();
+    expmv_krylov(
+        &op,
+        0.3,
+        &base_v,
+        &mut base,
+        KrylovPhiOptions::default(),
+        &mut scratch,
+    )
+    .unwrap();
+    for k in [-600_i32, 600] {
+        let s = 2.0_f64.powi(k);
+        let vs: Vec<f64> = base_v.iter().map(|x| x * s).collect();
+        let mut got = vec![0.0; 40];
+        expmv_krylov(
+            &op,
+            0.3,
+            &vs,
+            &mut got,
+            KrylovPhiOptions::default(),
+            &mut scratch,
+        )
+        .unwrap();
+        assert!(
+            got.iter()
+                .zip(&base)
+                .all(|(g, b)| g.to_bits() == (b * s).to_bits()),
+            "2^{k}"
+        );
+    }
+}
+
+#[test]
+fn dual_f32_is_rejected() {
+    use crate::{dual::Dual, generator_action::GeneratorAction};
+    struct DualId;
+    impl GeneratorAction<Dual<f32>> for DualId {
+        fn dim(&self) -> usize {
+            2
+        }
+        fn apply_generator(&self, src: &[Dual<f32>], dst: &mut [Dual<f32>]) {
+            dst.copy_from_slice(src);
+        }
+        fn norm_bound(&self) -> Dual<f32> {
+            Dual::constant(1.0)
+        }
+    }
+    let w = [Dual::constant(1.0_f32), Dual::variable(2.0)];
+    let mut out = [Dual::constant(0.0_f32); 2];
+    let r = phi_combination_krylov(
+        &DualId,
+        Dual::constant(0.5),
+        &[&w],
+        &mut out,
+        KrylovPhiOptions::default(),
+        &mut ScratchPool::new(),
+    );
+    assert!(matches!(r, Err(SemiflowError::Unsupported { .. })), "{r:?}");
+}

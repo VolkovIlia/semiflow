@@ -13,8 +13,8 @@ The φ-actions (`phi_action`, `phi_combination`, ETDRK4, ADR-0202/0205/0210) and
 `GeneralOperator` Taylor `expmv` (ADR-0195/0205) cost `Θ(τ‖G‖)` generator
 applications. For a stiff non-symmetric generator — a drifted Fokker–Planck operator,
 an inventory ladder — at `τ‖G‖ = 4·10³` that is 33 960 applications per
-`phi_combination` (after the ADR-0210 shift, which does not help a drift-dominated
-hull), and the cost grows linearly with the horizon. The symmetric Krylov paths
+`phi_combination`, already halved from 67 860 by the ADR-0210 shift; the cost still
+grows linearly with the horizon. The symmetric Krylov paths
 (Chebyshev, Lanczos, rational) do not apply: the spectrum is complex.
 
 ## Decision
@@ -29,7 +29,12 @@ hull), and the cost grows linearly with the horizon. The symmetric Krylov paths
    `err = φ₂` if `φ₁ > 10φ₂`, `φ₁φ₂/(φ₁ − φ₂)` if `φ₁ > φ₂`, else `φ₁`, acceptance
    `err ≤ 1.2·Δt·tol·‖y(0)‖₂`, rejection with the same basis (≤ 10 per substep), and
    `Δt ← round₂(0.9·Δt·(Δt·tol/err)^{1/m})`. A happy breakdown
-   (`h_{j+1,j} ≤ 1e−12·max(1, ‖B̃_η‖)`) takes the whole remaining time exactly.
+   — `h_{j+1,j} ≤ 1e−12·max(1, ‖B̃_η‖)` AND (`β·h_{j+1,j} ≤ tol·‖y(0)‖₂` or the
+   basis spans the whole space) — takes the whole remaining time with the projected
+   operator and reports `β·h_{j+1,j}·Δt` as its error. (A first draft took any
+   round-off-small `h_{j+1,j}` as exact, ignoring `tol`: near an equilibrium of a
+   stiff generator that missed `tol` by up to 2·10⁴×.) `y` is prescaled by an exact
+   power of two, so `‖y‖₂` cannot under- or overflow.
 2. **Only `e^{tH}e₁`.** Every quantity used (the coefficients and the two corrector
    entries) is in the first column of the Hessenberg exponential, so it is computed
    as a vector action: `s` scaled Taylor steps of degree `m_T` with `(s, m_T)` from
@@ -51,18 +56,23 @@ hull), and the cost grows linearly with the horizon. The symmetric Krylov paths
 ## Consequences
 
 - Generator applications, drifted Fokker–Planck `n = 1000`, `τ‖G‖ = 4·10³`,
-  `p = 3` combination (`G_PHI_KRYLOV_COST`, exact counter): 1 023 against 33 960
-  for the Taylor path actually used (33×), agreement `9e−13` relative.
-- Wall clock, upwind-drift tridiagonal `N = 1000`, `e^{−tA}v`, same session (the
-  `perf_suite` row and a sweep over `t`):
+  `p = 1` combination (`G_PHI_KRYLOV_COST`, exact counter, `m = 30`): 1 023 against
+  33 960 for the Taylor path actually used (33×), agreement `9e−13` relative. For a
+  fixed `m` the count still grows with `τ‖G‖` (4–5× per decade), not like
+  `√(τ‖G‖)`; the gain is the much smaller constant.
+- Wall clock, upwind-drift tridiagonal `N = 1000`, `e^{−tA}v`, same session
+  (`perf_suite -- expmv`, rows `expmv/taylor` and `expmv/krylov`):
 
-  | `‖A‖t` | Taylor `expmv` | Krylov `m = 30` | Krylov `m = 15` |
+  | `‖A‖∞t` | Taylor `expmv` | Krylov `m = 30` | Krylov `m = 15` |
   |---:|---:|---:|---:|
-  | 4·10³ | 90 ms | 44 ms | 31 ms |
-  | 4·10⁴ | 973 ms | 311 ms | 171 ms |
-  | 4·10⁵ | 92 s | 3.7 s | 1.9 s |
+  | 4.2·10³ | 84 ms | 36 ms | 27 ms |
+  | 4.2·10⁴ | 895 ms | 289 ms | 202 ms |
+  | 4.2·10⁵ | 9.3 s | 2.1 s | 0.79 s |
 
-  Differences against the Taylor result `≤ 1e−13`.
+  `max |Krylov − Taylor|` (absolute; `tol = 1e−10` is relative to `‖v‖₂ ≈ 22`):
+  `3.1e−13 / 2.3e−13 / 1.6e−21` (`m = 30`) and `1.3e−12 / 4.4e−13 / 2.0e−16`
+  (`m = 15`). At `4.2·10⁵` the solution itself is `≈ 1e−88`: the two agree only in
+  absolute terms there.
 - ETDRK4 keeps order 4 with the Krylov φ (`G_ETDRK4_KRYLOV_ORDER`, slope 4.08) and
   matches the Taylor driver to `1e−12`.
 
@@ -71,16 +81,17 @@ hull), and the cost grows linearly with the horizon. The symmetric Krylov paths
 - **Orthogonalisation dominates cheap generators.** Each substep costs `O(m²n)` for
   Gram–Schmidt against `O(m·nnz)` for the applications; on a tridiagonal stencil a
   substep with `m = 30` is mostly orthogonalisation. The default `m = 30` (Expokit's)
-  minimises applications; `m ≈ 15` is 1.4–2× faster in wall clock on sparse
+  minimises applications; `m ≈ 15` is 1.3–2.7× faster in wall clock on sparse
   stencils. Below `τ‖G‖ ≈ 10³` the Taylor path is competitive, and it keeps exact,
   input-independent application counts (`G_ETDRK4_SWEEPS`); it stays the default.
 - `est_error` is Expokit's estimate (the sum over substeps of
-  `max(local estimate, ‖B̃_η‖·ε·‖y‖)`, relative to `‖y(0)‖₂`), not a bound; for a strongly non-normal `G` the
+  `max(local estimate, ‖B̃_η‖·ε·‖y‖)`, relative to `‖y(0)‖₂`), not a bound; the
+  round-off term can exceed `tol` by orders of magnitude at large `τ‖G‖`; for a strongly non-normal `G` the
   forward error is not certified. `tol` is relative to `‖y(0)‖₂` of the augmented
   start vector `[w₀; 0; …; 1/η]`.
 - The basis vectors are allocated per substep (not zero-alloc).
-- The Arnoldi coefficients are `f64`: `F = f32` runs at `f32` accuracy; float types
-  wider than `f64` (forward-mode `Dual`) are rejected with `Unsupported`.
+- The Arnoldi coefficients are `f64`: `F = f32` runs at `f32` accuracy; any other
+  `F` (forward-mode `Dual<f32>` / `Dual<f64>`) is rejected with `Unsupported`.
 
 ## Gates
 
@@ -92,7 +103,12 @@ hull), and the cost grows linearly with the horizon. The symmetric Krylov paths
 - `G_PHI_KRYLOV_COST`: the counts above, `≥ 20×` fewer applications, agreement
   `≤ 1e−8` relative.
 - `G_PHI_KRYLOV_TOL`: `τ‖G‖ = 4·10²`, `p = 1`, `tol ∈ {1e−6, 1e−9, 1e−12}`: error
-  against the Taylor result `≤ 10·tol·‖[w₀; w₁]‖₂`, and a tighter `tol` never costs
-  fewer applications (217 / 248 / 310).
-- `G_ETDRK4_KRYLOV_ORDER`: slope `∈ [3.7, 4.3]` on the Allen–Cahn problem of
-  `G_ETDRK4_ORDER`, Taylor agreement `≤ 1e−12`.
+  against the Taylor result `≤ 10·tol·‖y(0)‖₂` (augmented start vector), `est_error`
+  `∈ (0, 1.2·tol]`, and a tighter `tol` costs strictly more applications
+  (217 / 248 / 310). Near equilibrium (`w₀ = π + ε·bump`, `π` the stationary vector,
+  `ε ∈ {1e−8, 1e−7}`, `τ‖G‖ = 4·10⁴`, `tol = 1e−10`): error `≤ tol·‖y(0)‖₂`
+  (the first draft's breakdown rule missed it).
+- `G_ETDRK4_KRYLOV_ORDER`: Krylov dimension 4 (the adaptive control runs; asserted
+  `> 1` substep on a stiffer copy), slope `∈ [3.7, 4.3]` on the Allen–Cahn problem
+  of `G_ETDRK4_ORDER`, Taylor agreement `≤ 1e−12`, and a loose `tol = 1e−4` visibly
+  changes the result (`1e−12 <` gap `≤ 1e−3`: the Krylov path is wired in).

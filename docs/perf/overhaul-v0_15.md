@@ -95,14 +95,19 @@ enabled; the host was loaded, so the absolute numbers are above the ADR-0205 tab
 
 ## Adaptive Krylov φ / exp (ADR-0211)
 
-Upwind-drift tridiagonal `N = 1000`, `e^{−tA}v`, same session (agreement with the
-Taylor result `≤ 1e−13`):
+Upwind-drift tridiagonal `N = 1000`, `e^{−tA}v`, same session
+(`cargo run --release -p semiflow --example perf_suite -- expmv`, rows
+`expmv/taylor` and `expmv/krylov`):
 
-| `‖A‖t` | Taylor `expmv` | Krylov `m = 30` | Krylov `m = 15` |
+| `‖A‖∞t` | Taylor `expmv` | Krylov `m = 30` | Krylov `m = 15` |
 |---:|---:|---:|---:|
-| 4·10³ | 90 ms | 44 ms | 31 ms |
-| 4·10⁴ | 973 ms | 311 ms | 171 ms |
-| 4·10⁵ | 92 s | 3.7 s | 1.9 s |
+| 4.2·10³ | 84 ms | 36 ms | 27 ms |
+| 4.2·10⁴ | 895 ms | 289 ms | 202 ms |
+| 4.2·10⁵ | 9.3 s | 2.1 s | 0.79 s |
+
+`max |Krylov − Taylor|` is absolute (`tol = 1e−10` scales with `‖v‖₂ ≈ 22`):
+`3.1e−13 / 2.3e−13 / 1.6e−21` (`m = 30`), `1.3e−12 / 4.4e−13 / 2.0e−16` (`m = 15`);
+at `4.2·10⁵` the solution itself is `≈ 1e−88`.
 
 Generator applications (deterministic, `G_PHI_KRYLOV_COST`): drifted Fokker–Planck
 `n = 1000`, `τ‖G‖ = 4·10³`: 1 023 (Krylov) vs 33 960 (Taylor). One-pass Gram–Schmidt
