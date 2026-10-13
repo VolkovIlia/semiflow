@@ -84,5 +84,9 @@ def test_identity_and_errors() -> None:
         op.rational_krylov(1.0, solver="cholmod")
     with pytest.raises(sf.SemiflowError):
         op.rational_krylov(1.0).apply(np.ones(9))
-    with pytest.raises(sf.SemiflowError):
+    with pytest.raises(sf.SemiflowError, match="'rational'"):
         op.evolve_batched(1.0, np.ones((10, 1)), path="nope")
+    # A shift ratio the a-priori bound cannot resolve fails loudly, not silently.
+    # (n = 100 > m_max = 64, so the iteration cannot end on the whole space.)
+    with pytest.raises(sf.SemiflowError):
+        neumann(100).rational_krylov(1.0, gamma=1e-7).apply(np.arange(100.0))

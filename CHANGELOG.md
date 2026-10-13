@@ -23,9 +23,12 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   solve count is an a-priori Chebyshev bound — 27 at `tol = 1e−10`, independent of
   `λ_max t` and `n` — where Chebyshev needs up to 471 877 mat-vecs at `1e10`; it
   cannot stop before a small slow component enters the Krylov space. Lumped masses
-  are used directly. `RationalKrylovChernoff` plugs it into `evolve_batched`. Gates
+  are used directly (PCG inner tolerance scaled by `1/√(mass contrast)`, so the
+  `M`-norm accuracy holds for graded masses). A user shift ratio `t/γ` the a-priori
+  bound cannot resolve reports `ConvergenceFailed` instead of an `O(1)` error.
+  `RationalKrylovChernoff` plugs it into `evolve_batched`. Gates
   `G_RATKRYLOV_NEUMANN_ORACLE`, `G_RATKRYLOV_SOLVE_COUNT`, `G_RATKRYLOV_MASS_DENSE`,
-  `G_RATKRYLOV_ISSUE16`; no_std scenario `ratkrylov_stiff`.
+  `G_RATKRYLOV_ISSUE16`, `G_RATKRYLOV_PCG_GRID`; no_std scenario `ratkrylov_stiff`.
 
 - **Reaction–diffusion systems on every engine (ADR-0208, math §64.1).**
   `ReactionDiffusion` evolves `∂ₜu_k = L_k u_k + f_k(t, x, u)`, `K` species,

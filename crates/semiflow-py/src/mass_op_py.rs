@@ -33,7 +33,7 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_py::{gather_nc_to_cn, scatter_cn_to_nc, validate_batched_shape, validate_t_final},
     panic::catch_panic_py,
-    rational_krylov_py::{rational_batched, rational_settings},
+    rational_krylov_py::{check_rational_menu, rational_batched, rational_settings},
     symmetric_op_py::{krylov_path, no_edge_graph, PySymmetricOperator},
 };
 
@@ -82,6 +82,7 @@ pub fn mass_lumped_evolve_py<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     catch_panic_py!({
         validate_t_final(t)?;
+        check_rational_menu(path)?;
         if path == "rational" {
             let masses = extract_masses(&m_diag, k_op.op.n())?;
             let s = rational_settings(tol, None, m_max);

@@ -164,7 +164,7 @@ impl<F: SemiflowFloat> Lanczos<F> {
         scratch: &mut ScratchPool<F>,
     ) -> Result<usize, SemiflowError> {
         for (i, (r, &q)) in rhs.iter_mut().zip(&self.basis[j]).enumerate() {
-            *r = rk.weight(i) * q;
+            *r = rk.mass_at(i) * q;
         }
         let iterations = rk.inner.solve(rhs, w, scratch)?;
         let alpha = rk.dot_m(w, &self.basis[j]);

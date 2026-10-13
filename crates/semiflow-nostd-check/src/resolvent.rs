@@ -330,7 +330,7 @@ pub(crate) fn ratkrylov_stiff() -> ScenarioResult {
     let mut digest = Digest::new();
     digest.extend(&y);
     digest.push(f64::from(u32::try_from(rep.solves).unwrap_or(0)));
-    let v_inf = v.iter().fold(0.0_f64, |a, x| a.max(x.abs()));
+    let v_inf = v.iter().fold(0.0_f64, |a, &x| a.max(m::abs(x)));
     check(
         sup_diff(&y, &exact),
         (1e-10 + 1e-11) * v_inf,

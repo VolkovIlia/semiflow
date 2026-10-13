@@ -41,7 +41,8 @@ use crate::{
     graph_py::{gather_nc_to_cn, scatter_cn_to_nc, validate_batched_shape, validate_t_final},
     panic::catch_panic_py,
     rational_krylov_py::{
-        new_rational, rational_batched, rational_settings, PyRationalKrylov, RationalSettings,
+        check_rational_menu, new_rational, rational_batched, rational_settings, PyRationalKrylov,
+        RationalSettings,
     },
     spd_resolvent_py::{build_resolvent, contiguous_vec, parse_solver, PySpdResolvent},
 };
@@ -146,6 +147,7 @@ impl PySymmetricOperator {
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
+            check_rational_menu(path)?;
             if path == "rational" {
                 let s = rational_settings(tol, None, m_max);
                 return rational_batched(py, &self.op, None, t, &v_nc, &s);

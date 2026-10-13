@@ -413,6 +413,17 @@ pub(crate) fn half<F: SemiflowFloat>() -> F {
     one::<F>() / two::<F>()
 }
 
+/// `true` when `F` is a plain IEEE scalar (`f32`, `f64`): its size is that of the
+/// IEEE format with `F`'s epsilon. `false` for wider carriers such as forward-mode
+/// `Dual<f32>` / `Dual<f64>`, whose tangents an `f64`-coefficient algorithm (the
+/// rational and Arnoldi Krylov paths) would silently drop.
+#[must_use]
+pub(crate) fn is_plain_ieee<F: SemiflowFloat>() -> bool {
+    let eps = F::epsilon().to_f64().unwrap_or(0.0);
+    let ieee_bytes = if eps > 1e-10 { 4 } else { 8 };
+    core::mem::size_of::<F>() == ieee_bytes
+}
+
 /// Convert an `f64` literal to `F`.
 ///
 /// Uses `num_traits::cast::ToPrimitive` + `from_f64`.  Panics in debug if

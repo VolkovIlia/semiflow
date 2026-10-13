@@ -211,3 +211,75 @@ fn dual_numbers_are_rejected_not_silently_wrong() {
     let r = RationalKrylov::new(&dop, None, Dual::constant(1.0), RationalOptions::default());
     assert!(matches!(r, Err(SemiflowError::Unsupported { .. })));
 }
+
+#[test]
+fn unresolved_ratios_report_failure_instead_of_a_wrong_result() {
+    // r = t/γ beyond what the interpolant resolves: no a-priori dimension.
+    for (r, tol) in [(1.45e6, 1e-10), (1e7, 1e-10), (1e-16, 1e-10), (1e-12, 1e-6)] {
+        assert_eq!(
+            factor::a_priori_dim(r, tol, 64),
+            None,
+            "r={r:e} tol={tol:e}"
+        );
+    }
+    // ... and the action says so: γ = t/1e7 with the default m_max.
+    let n = 200;
+    let op = spd(n);
+    let v = vector(n);
+    let mut out = vec![0.0; n];
+    let opts = RationalOptions::default().with_gamma(1e-7);
+    let r = rational_krylov_expmv(&op, None, 1.0, &v, &mut out, opts, &mut ScratchPool::new());
+    assert!(
+        matches!(r, Err(SemiflowError::ConvergenceFailed { .. })),
+        "{r:?}"
+    );
+    // The point count adapts: a huge m_cap costs what the default does.
+    assert_eq!(factor::a_priori_dim(10.0, 1e-10, 40_000), Some(27));
+}
+
+#[test]
+fn tiny_t_is_the_identity_and_huge_masses_do_not_overflow() {
+    let n = 8;
+    let op = spd(n);
+    let v = vector(n);
+    let mut out = vec![0.0; n];
+    let mut scratch = ScratchPool::new();
+    // Default γ = t/10 has 1/γ = inf: the identity path must come first.
+    let rep = rational_krylov_expmv(
+        &op,
+        None,
+        1e-308,
+        &v,
+        &mut out,
+        RationalOptions::default(),
+        &mut scratch,
+    )
+    .unwrap();
+    assert_eq!((out.clone(), rep.solves), (v.clone(), 0));
+    // M·1e300 and A·1e300 give the same action as M and A.
+    let mass: Vec<f64> = (0..n)
+        .map(|i| 0.5 + 0.1 * f64::from(u32::try_from(i).unwrap()))
+        .collect();
+    let big: Vec<f64> = mass.iter().map(|m| m * 1e300).collect();
+    let (rp, ci, va) = op.csr();
+    let scaled: Vec<f64> = va.iter().map(|x| x * 1e300).collect();
+    let op_big = SymmetricOperator::from_csr(n, rp, ci, &scaled, 0.0).unwrap();
+    let opts = RationalOptions::default().with_tol(1e-12);
+    let mut want = vec![0.0; n];
+    rational_krylov_expmv(&op, Some(&mass), 2.0, &v, &mut want, opts, &mut scratch).unwrap();
+    rational_krylov_expmv(&op_big, Some(&big), 2.0, &v, &mut out, opts, &mut scratch).unwrap();
+    assert!(max_err(&out, &want) <= 1e-12, "{}", max_err(&out, &want));
+}
+
+#[test]
+fn dual_f32_is_rejected_too() {
+    use crate::dual::Dual;
+    let op = spd(4);
+    let (rp, ci, va) = op.csr();
+    #[allow(clippy::cast_possible_truncation)]
+    let vals: Vec<Dual<f32>> = va.iter().map(|&v| Dual::constant(v as f32)).collect();
+    let dop = SymmetricOperator::from_csr(4, rp, ci, &vals, Dual::constant(0.0)).unwrap();
+    let r = RationalKrylov::new(&dop, None, Dual::constant(1.0), RationalOptions::default());
+    assert!(matches!(r, Err(SemiflowError::Unsupported { .. })));
+    assert!(crate::float::is_plain_ieee::<f32>() && crate::float::is_plain_ieee::<f64>());
+}

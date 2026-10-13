@@ -23,8 +23,9 @@ instead of `e^{−λt}`.
    (`M = diag(mass)`, default `I`), spectrum `θ = 1/(1/γ + λ) ∈ (0, γ]`. Result
    `y = ‖v‖_M·Q_m f(T_m)e₁` with `f(θ) = e^{t/γ − t/θ}` (`= e^{−tλ}`), `θ ≤ 0 → 0`.
    The stiff modes all map to `θ ≈ 0` where `f` is flat, so the number of solves is
-   independent of `λ_max`. Default `γ = t/10` (within one solve of the best ratio
-   `t/γ` for `tol ∈ [1e−10, 1e−6]`, within three at `1e−12`).
+   independent of `λ_max`. Default `γ = t/10`: 16 / 21 / 27 / 33 solves at
+   `tol = 1e−6 / 1e−8 / 1e−10 / 1e−12`, against a best over the ratio `t/γ` of
+   15 / 20 / 25 / 30 — at most three solves above the best.
 2. **One factor, many solves; cancellation-free on tridiagonal M-matrices.** The
    factor of `S = M/γ + A` is built once and reused by every Krylov step and every
    vector. When `A` is tridiagonal with non-positive off-diagonals (every path-graph
@@ -39,30 +40,42 @@ instead of `e^{−λt}`.
    on the gate carrier, the floor an earlier draft of this ADR attributed to every
    shift-and-invert method). Every other pattern, a positive off-diagonal, a
    negative excess, or a forced `SpdSolver::Pcg`, uses `SpdResolvent` (tridiagonal
-   `LDLᵀ`, or PCG with IC(0)/Jacobi at inner tolerance `0.1·tol`) through its
-   checked `solve_into`.
+   `LDLᵀ`, or PCG with IC(0)/Jacobi) through its checked `solve_into`. PCG stops on
+   `‖b − Sx‖₂ ≤ tol_in·‖b‖₂` with `b = M·q`, which bounds the `M`-norm error of `Zq`
+   only by `γ·tol_in·√(max m / min m)`; the inner tolerance is therefore
+   `0.1·tol/√(max m / min m)` (floor `1e−15`). Unscaled, a graded mass of contrast
+   `1e8` missed `tol` by 12× (`G_RATKRYLOV_MASS_DENSE`).
 3. **Stopping rule: a-priori dimension.** For self-adjoint `Z` with spectrum in
    `[0, γ]`, `‖f(Z)v − y_m‖_M ≤ 2·E_{m−1}(f; [0, γ])·‖v‖_M` (Saad 1992; Hochbruck &
    Lubich 1997) and `E_{m−1} ≤ Σ_{k≥m}|c_k|` for the Chebyshev coefficients `c_k` of
    `f`, which depend only on `r = t/γ`. `RationalKrylov::new` computes `m_min`, the
-   smallest `m` with `2·Σ_{k≥m}|c_k| ≤ tol` (interpolant at `2·m_max + 65` Chebyshev
-   points, phases reduced exactly; coefficients below `64ε` are rounding noise and are
-   not summed), and the iteration runs exactly `m_min` solves — 16 / 21 / 27 / 33 at
+   smallest `m` with `2·Σ_{k≥m}|c_k| ≤ tol` (interpolant at `N` Chebyshev points,
+   `N` doubling from 65 until the last quarter of the coefficients sits at the
+   rounding plateau, at most `2·m_max + 65`: cost `O(m_min²)`; phases reduced
+   exactly; coefficients below `64ε` are rounding noise and are not summed), and the
+   iteration runs exactly `m_min` solves — 16 / 21 / 27 / 33 at
    `tol = 1e−6 / 1e−8 / 1e−10 / 1e−12` with `γ = t/10` — or stops earlier on an
-   invariant subspace (`β ≤ ε·γ`, or `m = n`). `m_min > m_max` (and `n > m_max`) →
+   invariant subspace (`β ≤ ε·γ`, or `m = n`). The truncation must also reproduce the
+   exactly known `f(0) = 0` and `f(γ) = 1` to `tol/2` (necessary for the bound): an
+   extreme user ratio `r = t/γ` (`γ ≲ t/1.5·10⁶`, or `γ ≳ 10¹²…10¹⁶·t` depending on `tol`)
+   puts the boundary layer or the step of `f` between the grid points, the samples
+   all sit on one plateau, and without this check the tail looked like 0 (one solve,
+   `Ok`, `O(1)` error). `m_min` undefined, or `> m_max` (and `n > m_max`) →
    `ConvergenceFailed { last_residual: a-posteriori estimate, max_iter: m_max }`.
    An a-posteriori rule (two consecutive small coefficient differences, the first
    draft) is unsafe: when every early Ritz value is stiff, `f ≈ 0` on all of them,
    the differences are tiny, and a small slow component that has not yet entered the
-   Krylov space is dropped (start vector `cos(0.97πi) + 10⁻⁶`: error `1e−6` after 4
-   solves). Full `M`-reorthogonalisation; `f(T)e₁` is evaluated once at the end with
+   Krylov space is dropped (start vector `cos(0.97πi) + 10⁻⁶` at
+   `λ_max t ∈ {1e7, 1e8}`: error `1e−6·‖v‖∞` after 2 solves). Full `M`-reorthogonalisation; `f(T)e₁` is evaluated once at the end with
    the QL code of the Lanczos path (`tridiag_fn_e1`; the old `tridiag_exp_e1`
    delegates to it, bit-identical). `est_error` reports `‖y_m − y_{m−1}‖_M/‖v‖_M`
    as a diagnostic.
 4. **Scaling.** `v` is prescaled by an exact power of two (`‖v‖∞ ∈ [1, 2)`): the
-   result is bitwise homogeneous under `v ↦ 2ʲv` and `‖v‖_M` cannot under- or
-   overflow. `t·‖M⁻¹A‖ < ε` (including `t = 0`) is the identity without a factor;
-   `1/γ` must be finite.
+   result is bitwise homogeneous under `v ↦ 2ʲv`; the inner-product weights are the
+   mass scaled by a power of two (`max ∈ [1, 2)`; any positive multiple of `M` gives
+   the same Lanczos), so `‖v‖_M` cannot under- or overflow for any mass. `t·‖M⁻¹A‖ < ε`
+   (including `t = 0` and a positive `t` too small for `1/t` to be finite) is the
+   identity without a factor; otherwise `1/γ` must be finite.
 5. **API** (additive): `RationalKrylov<F>` (`new`, `apply_into → RationalReport`,
    `n`, `t`, `gamma`), `RationalOptions` (`tol`, `gamma`, `m_max`, `solver`;
    `with_*` setters), `RationalReport` (`solves`, `krylov_dim`, `est_error`,
@@ -80,9 +93,10 @@ instead of `e^{−λt}`.
 Neumann path Laplacian, `tol = 1e−10` (gate carriers, `n = 400` and `4000`,
 `λ_max t ∈ [1e2, 1e10]`): 27 solves everywhere, error `≤ 3.4e−12·‖v‖∞`
 (`9.4e−16` at `λ_max t = 1e10`), against 49 … 471 877 Chebyshev mat-vecs. The issue
-#16 operator (×1e7, `t = 0.7`): `3.3e−14·‖v‖∞` in 27 solves. A 40×40 grid
-Laplacian on the PCG path (IC(0)): `≤ 1.8e−13·‖v‖∞` up to `λ_max t = 1e8`, about
-`13 … 90` CG iterations per solve.
+#16 operator (×1e7, `t = 0.7`): `3.3e−14·‖v‖∞` in 27 solves. A 40×40 Neumann grid
+Laplacian on the PCG path (IC(0), inner tolerance `1e−11`): `≤ 1.3e−11·‖v‖∞`
+(`λ_max t = 1e2`; `≤ 3.4e−13` at `1e4 … 1e8`), 13 … 91 CG iterations per solve
+(`G_RATKRYLOV_PCG_GRID`).
 
 ## Honest limits
 
@@ -95,10 +109,14 @@ Laplacian on the PCG path (IC(0)): `≤ 1.8e−13·‖v‖∞` up to `λ_max t =
   the data, not of the method (the factor is exact for the stored matrix).
 - **Tolerance plateau.** Chebyshev coefficients below `64ε` are not summed, so a
   `tol` below `≈ 1e−13` is met only to that plateau.
-- **PCG path.** Accuracy follows the inner tolerance `0.1·tol`; CG iterations per
-  solve grow like `√(1 + γλ_max)`. A singular `A` with a pattern that is not a
-  tridiagonal M-matrix has no cancellation-free factor; no floor was measured on
-  the grid carrier, but none is gated beyond `G_RATKRYLOV_MASS_DENSE`.
+- **PCG path.** Accuracy follows the inner tolerance `0.1·tol/√(mass contrast)`;
+  once its floor `1e−15` binds (contrast above `(1e−14/tol)²`, `1e8` at
+  `tol = 1e−10`) the bound degrades by `√contrast·1e−15/(0.1·tol)`. CG iterations
+  per solve grow like `√(1 + γλ_max)`. A singular `A` with a pattern that is not a
+  tridiagonal M-matrix has no cancellation-free factor; no rounding floor was
+  measured on the grid carrier (`G_RATKRYLOV_PCG_GRID`).
+- **Extreme `γ`.** A user ratio `t/γ` the a-priori grid cannot resolve reports
+  `ConvergenceFailed` (unless `n ≤ m_max`, where the whole space is exact).
 - `m_max` basis vectors are held (`64·N` values by default).
 - The projected coefficients and the bound are `f64` scalars: `F = f32` runs at
   `f32` accuracy; float types wider than `f64` (forward-mode `Dual`) are rejected
@@ -113,11 +131,17 @@ Laplacian on the PCG path (IC(0)): `≤ 1.8e−13·‖v‖∞` up to `λ_max t =
   (`tests/g_rational_krylov.rs`): cosine-eigenbasis oracle, `n = 400` at
   `λ_max t ∈ {1e2, 1e4, 1e6, 1e8, 1e10}` and `n = 4000` at `{1e6, 1e8}` (slow modes
   alive at ≥ 100× the allowance), error `≤ (tol + 1e−11)·‖v‖∞` at every stiffness;
-  the adversarial start vector `cos(0.97πi) + 10⁻⁶` at `λ_max t ∈ {1e4, 1e6}` to the
-  same allowance; ≤ 30 solves everywhere; Chebyshev degree ≥ 100× the solve count at
-  `λ_max t ≥ 1e6`.
+  the adversarial start vector `cos(0.97πi) + 10⁻⁶` at `λ_max t ∈ {1e6, 1e7, 1e8}`
+  to the same allowance (an a-posteriori stop loses the constant at `1e7`, `1e8`);
+  exactly the a-priori 27 solves everywhere (pins the stop rule); Chebyshev degree
+  ≥ 100× the solve count at `λ_max t ≥ 1e6`.
 - `G_RATKRYLOV_MASS_DENSE`: `n = 12`, lumped mass, tridiagonal and PCG paths,
-  `t ∈ {0.01, 0.3, 2, 40}` against `M^{−½}e^{−tÂ}M^{½}v`: `≤ 1e−10‖v‖∞`.
+  `t ∈ {0.01, 0.3, 2, 40}` against `M^{−½}e^{−tÂ}M^{½}v`: `≤ 1e−10‖v‖∞`; graded
+  masses of contrast `1e4, 1e6, 1e8` on the PCG path, default `tol`, `t ∈ {0.01, 1}`:
+  relative `M`-norm error `≤ tol`.
+- `G_RATKRYLOV_PCG_GRID`: 40×40 Neumann grid (PCG, IC(0)) against the separable
+  cosine eigenbasis, `λ_max t ∈ {1e2, 1e4, 1e6, 1e8}`: `≤ (tol + 1e−11)·‖v‖∞`,
+  27 solves, CG iterations run.
 - `G_RATKRYLOV_ISSUE16`: singular Neumann ×1e7, `n = 400`, `t = 0.7`, `O(1)`
   constant component: `≤ 1e−12‖v‖∞`.
 - no_std `ratkrylov_stiff`: `n = 64`, ×1e4, `λ_max t = 1e3` (slow modes alive),

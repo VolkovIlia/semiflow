@@ -22,12 +22,16 @@ uniform polynomial approximation error (Saad 1992; Hochbruck & Lubich 1997), and
 
 `m_min(tol, r) = min{m ≥ 1 : 2·Σ_{k≥m, |c_k| > 64ε} |c_k| ≤ tol}`,
 
-with `c_k` from the interpolant at `N = 2·m_max + 65` Chebyshev points (phases
-`(2i + 1)kπ/(2N)` reduced exactly mod `4N`); coefficients `≤ 64ε` are the rounding
-plateau of the transform and are not summed. The iteration returns `y_m` at
-`m = m_min`, or earlier when `β_m ≤ ε·γ` or `m = n` (invariant subspace: exact in
-exact arithmetic). `m_min` undefined within `m_max`, and `n > m_max` →
-`ConvergenceFailed` at `m = m_max`. Reference values for `r = 10` (`γ = t/10`, the
+with `c_k` from the interpolant at `N` Chebyshev points (phases `(2i + 1)kπ/(2N)`
+reduced exactly mod `4N`; `N = 65, 129, 257, …` until `|c_k| ≤ 64ε` for every
+`k ≥ 3N/4`, at most `2·m_max + 65`); coefficients `≤ 64ε` are the rounding plateau
+of the transform and are not summed. `m_min` is accepted only if
+`|Σ_{k<m}c_k − 1| ≤ tol/2` and `|Σ_{k<m}(−1)ᵏc_k| ≤ tol/2` (the truncation reproduces
+`f(γ) = 1`, `f(0) = 0`; necessary for the bound, and violated when the grid misses
+the layer of `f` at an extreme `r`). The iteration returns `y_m` at `m = m_min`, or
+earlier when `β_m ≤ ε·γ` or `m = n` (invariant subspace: exact in exact arithmetic).
+`m_min` undefined within `m_max`, and `n > m_max` → `ConvergenceFailed` at
+`m = m_max`. Reference values for `r = 10` (`γ = t/10`, the
 default): `m_min = 16, 21, 27, 33` at `tol = 1e−6, 1e−8, 1e−10, 1e−12`.
 
 `est_error = ‖y_m − y_{m−1}‖_M/‖v‖_M = ‖c_m − [c_{m−1}; 0]‖₂` (diagnostic only). A
@@ -43,8 +47,10 @@ with TwoSum compensation), then `S = LDLᵀ` with `l_i = βᵢ₋₁/dᵢ₋₁`
 `dᵢ = −βᵢ + eᵢ`, `e₀ = s₀`, `eᵢ = sᵢ + (−βᵢ₋₁)·eᵢ₋₁/dᵢ₋₁` (all terms `≥ 0`).
 Identity: `dᵢ = δᵢ − βᵢ₋₁²/dᵢ₋₁` with `δᵢ = sᵢ − βᵢ₋₁ − βᵢ`. A non-positive or
 non-finite pivot, or any other pattern, uses `SpdResolvent` (§62.2; PCG inner
-tolerance `0.1·tol`). `v` is prescaled by `2^{−e}`, `e = ⌊log₂‖v‖∞⌋`, and the result
-by `2^{e}` (bitwise homogeneity); `t·‖M⁻¹A‖ < ε` returns `v`.
+tolerance `max(1e−15, 0.1·tol/√(max m / min m))`, so that the `M`-norm error of each
+`Zq` is `≤ 0.1·γ·tol`). `v` is prescaled by `2^{−e}`, `e = ⌊log₂‖v‖∞⌋`, and the result
+by `2^{e}` (bitwise homogeneity); the inner-product weights are `m·2^{−e_m}`,
+`max m·2^{−e_m} ∈ [1, 2)`. `t·‖M⁻¹A‖ < ε` returns `v` (checked before `1/γ`).
 
 ## §66.4 — Accuracy
 
@@ -59,4 +65,4 @@ ideal operator.
 ## §66.5 — Gates
 
 `G_RATKRYLOV_NEUMANN_ORACLE`, `G_RATKRYLOV_SOLVE_COUNT`, `G_RATKRYLOV_MASS_DENSE`,
-`G_RATKRYLOV_ISSUE16` (ADR-0206 §Gates).
+`G_RATKRYLOV_ISSUE16`, `G_RATKRYLOV_PCG_GRID` (ADR-0206 §Gates).

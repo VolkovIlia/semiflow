@@ -11447,7 +11447,7 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (max err 3.4e−12·‖v‖∞; 9.4e−16 at λ_max t = 1e10; slow component kept to 1.1e−15)"
+    pass_status: "PASS (max err 3.4e−12·‖v‖∞; 9.4e−16 at λ_max t = 1e10; slow component kept to 5.9e−18)"
     rationale: |
       ADR-0206: shift-and-invert Lanczos on Z = (M/γ + A)⁻¹M, γ = t/10, one factor
       (cancellation-free LDLᵀ on tridiagonal M-matrices, §66.3), a-priori stopping
@@ -11456,8 +11456,9 @@ implementation_notes:
       1e6, 1e8, 1e10} and n = 4000 at {1e6, 1e8} with the slow modes alive at ≥ 100×
       the allowance: ‖y − exact‖∞ ≤ (tol + 1e−11)·‖v‖∞, tol = 1e−10, at every
       stiffness (the textbook LDLᵀ misses this by 4.9e−9 at 1e10). Plus the
-      adversarial start vector cos(0.97πi) + 1e−6 at λ_max t ∈ {1e4, 1e6}, where an
-      a-posteriori stop loses the 1e−6 constant after 4 solves: same allowance.
+      adversarial start vector cos(0.97πi) + 1e−6 at λ_max t ∈ {1e6, 1e7, 1e8}; at
+      1e7 and 1e8 every early Ritz value is stiff and an a-posteriori stop loses the
+      1e−6 constant after 2 solves: same allowance.
     gate: "err ≤ (1e−10 + 1e−11)·‖v‖∞ at every point and for the adversarial vector"
     test_file: "tests/g_rational_krylov.rs"
     feature_gate: none
@@ -11472,10 +11473,11 @@ implementation_notes:
     rationale: |
       ADR-0206: the number of resolvent solves is the a-priori dimension m_min(tol,
       t/γ) (27 at tol = 1e−10, γ = t/10), independent of λ_max t and n. At every
-      oracle point above: at most 30 solves (deterministic count), and at
-      λ_max t ≥ 1e6 the Chebyshev degree for the same tol
+      oracle point above, the slow-component vector and the PCG grid: exactly 27
+      solves (pins the a-priori stop; an a-posteriori rule takes 2–22; tightened
+      from "≤ 30"), and at λ_max t ≥ 1e6 the Chebyshev degree for the same tol
       (graph_expmv_matvec_count) is ≥ 100× the solve count.
-    gate: "solves ≤ 30 AND chebyshev_degree ≥ 100·solves for λ_max t ≥ 1e6"
+    gate: "solves == 27 AND chebyshev_degree ≥ 100·solves for λ_max t ≥ 1e6"
     test_file: "tests/g_rational_krylov.rs"
     feature_gate: none
     introduced_in: audit-2026-10
@@ -11490,8 +11492,11 @@ implementation_notes:
       ADR-0206: lumped mass M = diag(m) ≠ I used directly (M-inner-product Lanczos,
       no congruence). n = 12, tridiagonal (excess LDLᵀ) and 4×3 grid (PCG + IC(0))
       operators, t ∈ {0.01, 0.3, 2, 40}, tol = 1e−12, against the dense congruence
-      reference M^{−½} e^{−tÂ} M^{½} v (dense_csr_expmv_ref): ≤ 1e−10·‖v‖∞.
-    gate: "max |y − ref| ≤ 1e−10·‖v‖∞"
+      reference M^{−½} e^{−tÂ} M^{½} v (dense_csr_expmv_ref): ≤ 1e−10·‖v‖∞. Plus graded
+      masses of contrast 1e4, 1e6, 1e8 on the PCG path at the default tol = 1e−10,
+      t ∈ {0.01, 1}: relative M-norm error ≤ tol (≤ 3.2e−13; with the unscaled PCG
+      inner tolerance contrast 1e8 missed tol by 12×).
+    gate: "max |y − ref| ≤ 1e−10·‖v‖∞ AND contrast cases ‖y − ref‖_M ≤ tol·‖v‖_M"
     test_file: "tests/g_rational_krylov.rs"
     feature_gate: none
     introduced_in: audit-2026-10
@@ -11629,3 +11634,20 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0211
+
+  - name: G_RATKRYLOV_PCG_GRID
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 1.3e−11·‖v‖∞; 13–91 CG iterations per solve)"
+    rationale: |
+      ADR-0206: the non-tridiagonal path. Unit 40×40 Neumann 5-point grid (Auto →
+      PCG with IC(0)) against the separable cosine eigenbasis (the 1-D oracle of
+      G_RATKRYLOV_NEUMANN_ORACLE along rows, then columns), λ_max t ∈ {1e2, 1e4, 1e6,
+      1e8}, default tol = 1e−10: ≤ (tol + 1e−11)·‖v‖∞, exactly 27 solves, CG
+      iterations actually run.
+    gate: "err ≤ 1.1e−10·‖v‖∞ AND solves == 27 AND inner_iterations > 0"
+    test_file: "tests/g_rational_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0206

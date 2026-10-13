@@ -8,16 +8,20 @@
 //!   tridiagonal factor resolves the slow eigenvalues to relative accuracy (the
 //!   textbook `LDLᵀ` loses `≈ log₁₀(λ_max t)` digits: `4.9e−9` at `1e10`). The slow
 //!   modes must be alive at ≥ 100× the allowance where marked. Plus the adversarial
-//!   start vector `cos(0.97πi) + 10⁻⁶` at `λ_max t ∈ {1e4, 1e6}`: every early Ritz
-//!   value is stiff, so a stop on small a-posteriori differences returns after 4
-//!   solves with the `10⁻⁶` constant lost; the a-priori dimension must keep it.
-//! * `G_RATKRYLOV_SOLVE_COUNT`: at every point above, at most 30 resolvent solves
-//!   (deterministic: the a-priori dimension is 27 at `tol = 1e−10`, `γ = t/10`); at
-//!   `λ_max t ≥ 1e6` the Chebyshev degree for the same `tol` is at least 100× the
-//!   solve count.
+//!   start vector `cos(0.97πi) + 10⁻⁶` at `λ_max t ∈ {1e6, 1e7, 1e8}`: at `1e7` and
+//!   `1e8` every early Ritz value is stiff, so a stop on small a-posteriori
+//!   differences returns after 2 solves with the `10⁻⁶` constant lost; the a-priori
+//!   dimension must keep it.
+//! * `G_RATKRYLOV_SOLVE_COUNT`: at every point above (and on the PCG grid) exactly
+//!   the a-priori dimension, 27 resolvent solves at `tol = 1e−10`, `γ = t/10` — this
+//!   pins the stopping rule; at `λ_max t ≥ 1e6` the Chebyshev degree for the same
+//!   `tol` is at least 100× the solve count.
 //! * `G_RATKRYLOV_MASS_DENSE`: a lumped mass `M ≠ I` on the tridiagonal path and a
 //!   non-tridiagonal 4×3 grid operator on the PCG path (`n = 12`) against the dense
-//!   congruence reference `M^{−½}e^{−tÂ}M^{½}v`: `≤ 1e−10·‖v‖_∞`.
+//!   congruence reference `M^{−½}e^{−tÂ}M^{½}v`: `≤ 1e−10·‖v‖_∞`; graded masses of
+//!   contrast `1e4…1e8` on the PCG path: relative `M`-norm error `≤ tol`.
+//! * `G_RATKRYLOV_PCG_GRID`: a 40×40 Neumann grid on the PCG path against the
+//!   separable cosine eigenbasis, `λ_max t ∈ {1e2 … 1e8}`: `≤ (tol + 1e−11)·‖v‖_∞`.
 //! * `G_RATKRYLOV_ISSUE16`: the singular Neumann Laplacian ×1e7 of
 //!   `G_SYMOP_IMPLICIT_STIFF` (`n = 400`, `t = 0.7`, so `1/γ` is not a power of
 //!   two) with an `O(1)` constant component: every non-constant mode underflows,
@@ -37,6 +41,9 @@ const TOL: f64 = 1e-10;
 const ERR_FLOOR: f64 = 1e-11;
 /// `tol + 1e−11` (module docs).
 const ALLOWANCE: f64 = TOL + ERR_FLOOR;
+/// The a-priori Krylov dimension at `tol = 1e−10`, `γ = t/10` (≤ 30): the stop is
+/// pinned, so a regression to an a-posteriori rule fails here.
+const A_PRIORI_DIM: usize = 27;
 
 /// Neumann path Laplacian `n×n` scaled by `s`: CSR triple.
 fn path_laplacian(n: usize, s: f64) -> (Vec<usize>, Vec<u32>, Vec<f64>) {
@@ -155,9 +162,9 @@ fn check_carrier(n: usize, points: &[f64], informative: bool) -> Vec<String> {
         if !(err <= ALLOWANCE) {
             fails.push(format!("ORACLE n={n} lt={lt:e}: err {err:e} > {ALLOWANCE}"));
         }
-        if rep.solves > 30 {
+        if rep.solves != A_PRIORI_DIM {
             fails.push(format!(
-                "SOLVE_COUNT n={n} lt={lt:e}: {} solves > 30",
+                "SOLVE_COUNT n={n} lt={lt:e}: {} solves != {A_PRIORI_DIM}",
                 rep.solves
             ));
         }
@@ -183,8 +190,10 @@ fn g_ratkrylov_neumann_oracle_and_solve_count() {
     assert!(fails.is_empty(), "{fails:#?}");
 }
 
-/// The adversarial start vector of the module docs: a high-frequency mode (stiff
-/// Ritz values only) plus a `1e−6` constant that must survive.
+/// The adversarial start vector of the module docs: a high-frequency mode plus a
+/// `1e−6` constant that must survive. At `λ_max t ∈ {1e7, 1e8}` every early Ritz
+/// value is stiff and an a-posteriori stop returns after 2 solves with the constant
+/// lost (error `1e−6·‖v‖∞`).
 #[test]
 #[allow(clippy::neg_cmp_op_on_partial_ord)] // `!(x <= y)`: NaN must fail
 fn g_ratkrylov_neumann_oracle_slow_component() {
@@ -196,7 +205,7 @@ fn g_ratkrylov_neumann_oracle_slow_component() {
         .collect();
     let v_inf = sup(v.iter().copied());
     let mut scratch = ScratchPool::new();
-    for lt in [1e4, 1e6] {
+    for lt in [1e6, 1e7, 1e8] {
         let t = lt / op.lambda_max_bound();
         let want = exact(&v, t);
         let mut got = vec![0.0; n];
@@ -210,7 +219,7 @@ fn g_ratkrylov_neumann_oracle_slow_component() {
             rep.solves
         );
         assert!(
-            err <= ALLOWANCE && rep.solves <= 30,
+            err <= ALLOWANCE && rep.solves == A_PRIORI_DIM,
             "lt={lt:e}: err {err:e}, {rep:?}"
         );
         assert!(
@@ -231,7 +240,16 @@ fn dense_mass_ref(op: &SymmetricOperator<f64>, mass: &[f64], t: f64, v: &[f64]) 
 
 /// 4×3 grid 5-point Laplacian with Neumann ends (non-tridiagonal: PCG path).
 fn grid_laplacian() -> SymmetricOperator<f64> {
-    let (nx, ny) = (4, 3);
+    grid5(4, 3, |i| 1.0 + 0.1 * i as f64, |j| 0.7 + 0.2 * j as f64)
+}
+
+/// `nx×ny` Neumann 5-point Laplacian, face weights `wx(i)` (x-faces) and `wy(j)`.
+fn grid5(
+    nx: usize,
+    ny: usize,
+    wx: impl Fn(usize) -> f64,
+    wy: impl Fn(usize) -> f64,
+) -> SymmetricOperator<f64> {
     let n = nx * ny;
     let mut dense = vec![0.0; n * n];
     let mut link = |a: usize, b: usize, w: f64| {
@@ -244,10 +262,10 @@ fn grid_laplacian() -> SymmetricOperator<f64> {
         for i in 0..nx {
             let k = j * nx + i;
             if i + 1 < nx {
-                link(k, k + 1, 1.0 + 0.1 * i as f64);
+                link(k, k + 1, wx(i));
             }
             if j + 1 < ny {
-                link(k, k + nx, 0.7 + 0.2 * j as f64);
+                link(k, k + nx, wy(j));
             }
         }
     }
@@ -288,6 +306,44 @@ fn g_ratkrylov_mass_dense() {
             assert!(err <= 1e-10, "{name} t={t}: err {err:e}");
         }
     }
+    mass_contrast(&grid, &v, &mut scratch);
+}
+
+/// PCG path with a graded mass of contrast `10^E`, default `tol = 1e−10`: the
+/// relative `M`-norm error stays `≤ tol` (the inner tolerance is scaled by
+/// `1/√contrast`; unscaled it misses by up to 75×).
+fn mass_contrast(grid: &SymmetricOperator<f64>, v: &[f64], scratch: &mut ScratchPool<f64>) {
+    let n = v.len();
+    let m_norm = |x: &[f64], m: &[f64]| x.iter().zip(m).map(|(a, w)| w * a * a).sum::<f64>().sqrt();
+    for e in [4.0, 6.0, 8.0] {
+        let mass: Vec<f64> = (0..n)
+            .map(|k| 10f64.powf(e * (k as f64 / (n - 1) as f64 - 0.5)))
+            .collect();
+        for t in [0.01, 1.0] {
+            let want = dense_mass_ref(grid, &mass, t, v);
+            let mut got = vec![0.0; n];
+            let rep = rational_krylov_expmv(
+                grid,
+                Some(&mass),
+                t,
+                v,
+                &mut got,
+                RationalOptions::default(),
+                scratch,
+            )
+            .expect("rational");
+            let diff: Vec<f64> = got.iter().zip(&want).map(|(g, w)| g - w).collect();
+            let err = m_norm(&diff, &mass) / m_norm(v, &mass);
+            eprintln!(
+                "G_RATKRYLOV_MASS_DENSE contrast=1e{e} t={t}: M-err={err:.3e} cg={}",
+                rep.inner_iterations
+            );
+            assert!(
+                rep.inner_iterations > 0 && err <= TOL,
+                "contrast 1e{e} t={t}: {err:e}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -315,4 +371,53 @@ fn g_ratkrylov_issue16() {
         rep.solves
     );
     assert!(err <= 1e-12, "err {err:e}");
+}
+
+/// `G_RATKRYLOV_PCG_GRID`: unit 40×40 Neumann 5-point grid (PCG with IC(0) under
+/// `Auto`) against the separable cosine eigenbasis (the 1-D oracle along rows, then
+/// columns), `λ_max t ∈ {1e2, 1e4, 1e6, 1e8}`: `≤ (tol + 1e−11)·‖v‖∞`, the
+/// a-priori count of solves, and CG iterations actually run.
+#[test]
+fn g_ratkrylov_pcg_grid() {
+    let k = 40;
+    let op = grid5(k, k, |_| 1.0, |_| 1.0);
+    let v = test_vector(k * k);
+    let v_inf = sup(v.iter().copied());
+    let mut scratch = ScratchPool::new();
+    for lt in [1e2, 1e4, 1e6, 1e8] {
+        let t = lt / op.lambda_max_bound();
+        let mut want = v.clone();
+        for row in want.chunks_exact_mut(k) {
+            let e = exact(row, t);
+            row.copy_from_slice(&e);
+        }
+        for c in 0..k {
+            let col: Vec<f64> = (0..k).map(|r| want[r * k + c]).collect();
+            for (r, x) in exact(&col, t).into_iter().enumerate() {
+                want[r * k + c] = x;
+            }
+        }
+        let mut got = vec![0.0; k * k];
+        let rep = rational_krylov_expmv(
+            &op,
+            None,
+            t,
+            &v,
+            &mut got,
+            RationalOptions::default(),
+            &mut scratch,
+        )
+        .expect("rational");
+        let err = sup(got.iter().zip(&want).map(|(g, w)| g - w)) / v_inf;
+        eprintln!(
+            "G_RATKRYLOV_PCG_GRID lt={lt:e}: err/|v|={err:.3e} solves={} cg/solve={:.1}",
+            rep.solves,
+            rep.inner_iterations as f64 / rep.solves as f64
+        );
+        assert!(err <= ALLOWANCE, "lt={lt:e}: err {err:e}");
+        assert!(
+            rep.solves == A_PRIORI_DIM && rep.inner_iterations > 0,
+            "{rep:?}"
+        );
+    }
 }

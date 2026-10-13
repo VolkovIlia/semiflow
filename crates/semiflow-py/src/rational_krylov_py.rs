@@ -53,6 +53,19 @@ pub(crate) struct RationalSettings {
     pub(crate) precond: String,
 }
 
+/// `path=` of `evolve_batched` / `mass_lumped_evolve`, which (unlike
+/// `MassKOperator.evolve`) also accept `"rational"`: an unknown name is reported with
+/// the full menu here, before the shared polynomial-path parser sees it.
+pub(crate) fn check_rational_menu(path: &str) -> PyResult<()> {
+    if matches!(path, "chebyshev" | "lanczos" | "implicit" | "rational") {
+        return Ok(());
+    }
+    Err(new_pyerr(
+        "Unsupported",
+        &format!("path must be 'chebyshev', 'lanczos', 'implicit' or 'rational', got '{path}'"),
+    ))
+}
+
 /// Rational-path settings from the `evolve_batched` keyword set.
 pub(crate) fn rational_settings(
     tol: f64,

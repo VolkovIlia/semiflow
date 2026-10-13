@@ -201,16 +201,13 @@ impl<F: SemiflowFloat> Inner<F> {
 }
 
 /// Chebyshev coefficients below this are rounding noise of the discrete transform
-/// (`≈ ε·√N` for `N ≤ 2·m_cap + 65` points) and are not summed into the tail.
+/// (`≈ ε·√N` for the point counts used here) and are not summed into the tail.
 const COEFF_NOISE: f64 = 64.0 * f64::EPSILON;
 
-/// Smallest `m ∈ [1, m_cap]` with `2·Σ_{k≥m}|c_k| ≤ tol` for the Chebyshev
-/// coefficients of `f(θ) = e^{r(1 − γ/θ)}` on `[0, γ]` (module docs), from the
-/// interpolant at `N = 2·m_cap + 65` Chebyshev points (phases reduced exactly mod
-/// `4N`). Coefficients below [`COEFF_NOISE`] are dropped, so a `tol` below
-/// `≈ 1e−13` is met only down to that plateau. `None`: no `m ≤ m_cap` qualifies.
-pub(super) fn a_priori_dim(r: f64, tol: f64, m_cap: usize) -> Option<usize> {
-    let pts = 2 * m_cap + 65;
+/// Signed Chebyshev coefficients `c_0 … c_{N−1}` of `f(θ) = e^{r(1 − γ/θ)}` on
+/// `[0, γ]` from the interpolant at `N = pts` first-kind Chebyshev points (phases
+/// `(2k + 1)jπ/(2N)` reduced exactly mod `4N`).
+fn cheb_coeffs(r: f64, pts: usize) -> Vec<f64> {
     #[allow(clippy::cast_precision_loss)] // pts < 2^20
     let pts_f = pts as f64;
     #[allow(clippy::cast_precision_loss)]
@@ -227,18 +224,27 @@ pub(super) fn a_priori_dim(r: f64, tol: f64, m_cap: usize) -> Option<usize> {
             }
         })
         .collect();
-    let coeff = |j: usize| {
-        let s: f64 = (0..pts)
-            .map(|k| fx[k] * table[(j * (2 * k + 1)) % (4 * pts)])
-            .sum();
-        libm::fabs(if j == 0 { s / pts_f } else { 2.0 * s / pts_f })
-    };
-    let abs_c: Vec<f64> = (0..pts).map(coeff).collect();
+    (0..pts)
+        .map(|j| {
+            let s: f64 = (0..pts)
+                .map(|k| fx[k] * table[(j * (2 * k + 1)) % (4 * pts)])
+                .sum();
+            if j == 0 {
+                s / pts_f
+            } else {
+                2.0 * s / pts_f
+            }
+        })
+        .collect()
+}
+
+/// Smallest `m ∈ [1, m_cap]` with `2·Σ_{k≥m, |c_k| > COEFF_NOISE}|c_k| ≤ tol`.
+fn tail_dim(c: &[f64], tol: f64, m_cap: usize) -> Option<usize> {
     let mut tail = 0.0;
     let mut best = None;
-    for m in (1..pts).rev() {
-        if abs_c[m] > COEFF_NOISE {
-            tail += abs_c[m];
+    for m in (1..c.len()).rev() {
+        if libm::fabs(c[m]) > COEFF_NOISE {
+            tail += libm::fabs(c[m]);
         }
         if 2.0 * tail > tol {
             break;
@@ -248,4 +254,41 @@ pub(super) fn a_priori_dim(r: f64, tol: f64, m_cap: usize) -> Option<usize> {
         }
     }
     best
+}
+
+/// `p_{m−1} = Σ_{k<m} c_k T_k` must reproduce the exactly known `f(γ) = 1` and
+/// `f(0) = 0` (`x = ±1`) to `tol/2`: necessary for `E_{m−1} ≤ tol/2`, and violated
+/// whenever the grid misses the boundary layer at `θ ≈ γ` (`r ≫ 1`) or the step at
+/// `θ ≈ rγ` (`r ≪ 1`) — every sample then sits on one plateau of `f`.
+fn endpoints_resolved(c: &[f64], m: usize, tol: f64) -> bool {
+    let (mut hi, mut lo) = (0.0, 0.0);
+    for (k, &ck) in c[..m].iter().enumerate() {
+        hi += ck;
+        lo += if k % 2 == 0 { ck } else { -ck };
+    }
+    libm::fabs(hi - 1.0) <= 0.5 * tol && libm::fabs(lo) <= 0.5 * tol
+}
+
+/// Smallest `m ∈ [1, m_cap]` with `2·Σ_{k≥m}|c_k| ≤ tol` for the Chebyshev
+/// coefficients of `f(θ) = e^{r(1 − γ/θ)}` on `[0, γ]` (module docs). The point
+/// count doubles from 65 until the last quarter of the coefficients sits at the
+/// rounding plateau (or reaches `2·m_cap + 65`), so the cost is `O(m_min²)`, not
+/// `O(m_cap²)`. Coefficients below [`COEFF_NOISE`] are dropped, so a `tol` below
+/// `≈ 1e−13` is met only down to that plateau. `None`: no `m ≤ m_cap` qualifies, or
+/// the interpolant does not reproduce `f(0) = 0` and `f(γ) = 1` to `tol/2` (an
+/// extreme ratio `r = t/γ` the grid cannot resolve) — the action then reports
+/// `ConvergenceFailed` rather than a silently wrong result.
+pub(super) fn a_priori_dim(r: f64, tol: f64, m_cap: usize) -> Option<usize> {
+    let max_pts = 2 * m_cap + 65;
+    let mut pts = max_pts.min(65);
+    loop {
+        let c = cheb_coeffs(r, pts);
+        let plateau = c[3 * pts / 4..]
+            .iter()
+            .all(|x| libm::fabs(*x) <= COEFF_NOISE);
+        if plateau || pts == max_pts {
+            return tail_dim(&c, tol, m_cap).filter(|&m| endpoints_resolved(&c, m, tol));
+        }
+        pts = (2 * pts - 1).min(max_pts);
+    }
 }

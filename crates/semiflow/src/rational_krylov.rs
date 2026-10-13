@@ -2,7 +2,7 @@
 //! operators (ADR-0206, math §66).
 //!
 //! Polynomial Krylov methods (Chebyshev, Lanczos) need `O(√(λ_max t))` mat-vecs:
-//! `≈ 54 000` at `λ_max t = 1e8`. Shift-and-invert Lanczos (van den Eshof &
+//! 47 188 at `λ_max t = 1e8`. Shift-and-invert Lanczos (van den Eshof &
 //! Hochbruck, SIAM J. Sci. Comput. 27 (2006)) runs Lanczos on
 //! `Z = (M/γ + A)⁻¹M` — self-adjoint in `⟨x, y⟩_M = xᵀMy`, spectrum
 //! `θ = 1/(1/γ + λ) ∈ (0, γ]` — and needs a number of solves that is independent
@@ -112,6 +112,9 @@ pub struct RationalKrylov<F: SemiflowFloat = f64> {
     inner: Inner<F>,
     n: usize,
     mass: Option<Vec<F>>,
+    /// `mass·2^{−e}` with `max mass·2^{−e} ∈ [1, 2)`: the weights of `⟨·,·⟩_M` (any
+    /// positive multiple of `M` gives the same Lanczos), free of under/overflow.
+    weights: Option<Vec<F>>,
     t: F,
     gamma: F,
     m_max: usize,
@@ -136,11 +139,11 @@ fn validate<F: SemiflowFloat>(
             0.0,
         ));
     }
-    // The projected coefficients and the Chebyshev bound are f64 scalars: a float
-    // type wider than f64 (forward-mode `Dual`) would silently lose its tangent.
-    if core::mem::size_of::<F>() > core::mem::size_of::<f64>() {
+    // The projected coefficients and the Chebyshev bound are f64 scalars: a
+    // forward-mode `Dual` (of f32 or f64) would silently lose its tangent.
+    if !crate::float::is_plain_ieee::<F>() {
         return Err(SemiflowError::Unsupported {
-            feature: "rational_krylov: float types wider than f64 (forward-mode Dual)",
+            feature: "rational_krylov: forward-mode Dual (only f32 / f64)",
         });
     }
     if !t64.is_finite() || t64 < 0.0 {
@@ -166,27 +169,60 @@ fn validate<F: SemiflowFloat>(
     Ok(())
 }
 
-/// `‖M⁻¹A‖ ≤ λ_max_bound(A) / min mᵢ` in `f64`.
-fn generator_bound<F: SemiflowFloat>(op: &SymmetricOperator<F>, mass: Option<&[F]>) -> f64 {
-    let m_min = mass.map_or(1.0, |m| {
-        m.iter().fold(f64::INFINITY, |lo, x| {
-            lo.min(x.to_f64().unwrap_or(f64::NAN))
+/// `(max mᵢ / min mᵢ, ‖M⁻¹A‖ ≤ λ_max_bound(A) / min mᵢ)` in `f64` (`(1, ‖A‖)`
+/// without a mass).
+fn mass_stats<F: SemiflowFloat>(op: &SymmetricOperator<F>, mass: Option<&[F]>) -> (f64, f64) {
+    let (lo, hi) = mass.map_or((1.0, 1.0), |m| {
+        m.iter().fold((f64::INFINITY, 0.0_f64), |(lo, hi), x| {
+            let x = x.to_f64().unwrap_or(f64::NAN);
+            (lo.min(x), hi.max(x))
         })
     });
-    op.lambda_max_bound().to_f64().unwrap_or(f64::NAN) / m_min
+    (
+        hi / lo,
+        op.lambda_max_bound().to_f64().unwrap_or(f64::NAN) / lo,
+    )
+}
+
+/// The solver and the a-priori dimension, or the identity when `t·‖M⁻¹A‖ < ε`.
+///
+/// PCG stops on `‖b − Sx‖₂ ≤ tol_in·‖b‖₂` with `b = M·q`, `‖q‖_M = 1`, which bounds
+/// the `M`-norm error of `Zq` only by `γ·tol_in·√(max m / min m)`: the inner
+/// tolerance is divided by that square root (floor `1e−15`).
+///
+/// # Errors
+/// `1/γ` not finite (`DomainViolation`); as [`Inner::build`].
+fn build_inner<F: SemiflowFloat>(
+    op: &SymmetricOperator<F>,
+    mass: Option<&[F]>,
+    (t64, gamma): (f64, f64),
+    opts: &RationalOptions,
+    m_max: usize,
+) -> Result<(Inner<F>, Option<usize>), SemiflowError> {
+    let (contrast, bound) = mass_stats(op, mass);
+    if t64 * bound < f64::EPSILON {
+        return Ok((Inner::Identity, None));
+    }
+    if !(1.0 / gamma).is_finite() {
+        return Err(domain("rational_krylov: 1/gamma must be finite", gamma));
+    }
+    let inner_tol = from_f64::<F>((0.1 * opts.tol / libm::sqrt(contrast)).max(1e-15));
+    let inner = Inner::build(op, from_f64(1.0 / gamma), mass, opts.solver, inner_tol)?;
+    Ok((inner, factor::a_priori_dim(t64 / gamma, opts.tol, m_max)))
 }
 
 impl<F: SemiflowFloat> RationalKrylov<F> {
     /// Factor `M/γ + A` for `A = op`, `M = diag(mass)` (default `I`).
     ///
-    /// When `t·‖M⁻¹A‖ < ε` (including `t = 0`) the action is the identity to
-    /// rounding and no factor is built.
+    /// When `t·‖M⁻¹A‖ < ε` (including `t = 0` and a positive `t` too small for
+    /// `1/γ` to be finite) the action is the identity to rounding and no factor
+    /// is built.
     ///
     /// # Errors
-    /// `Unsupported`: `F` wider than `f64` (forward-mode `Dual`: the coefficients
-    /// `f(T)e₁` are `f64` scalars, so tangents would be dropped).
+    /// `Unsupported`: `F` is not `f32` / `f64` (forward-mode `Dual`: the
+    /// coefficients `f(T)e₁` are `f64` scalars, so tangents would be dropped).
     /// `DomainViolation`: `n = 0`; `t < 0` or non-finite; `γ ≤ 0`, non-finite, or
-    /// with `1/γ` non-finite; `tol ∉ (0, 1)`; `m_max == 0`; `mass.len() != n`, a
+    /// (unless the action is the identity) with `1/γ` non-finite; `tol ∉ (0, 1)`; `m_max == 0`; `mass.len() != n`, a
     /// mass `≤ 0` or non-finite; and every error of [`crate::SpdResolvent::new`]
     /// on the non-tridiagonal / forced-PCG path (a non-SPD pattern).
     pub fn new(
@@ -201,26 +237,23 @@ impl<F: SemiflowFloat> RationalKrylov<F> {
         let gamma = opts
             .gamma
             .unwrap_or(if t64 > 0.0 { t64 / 10.0 } else { 1.0 });
-        if !(gamma.is_finite() && gamma > 0.0 && (1.0 / gamma).is_finite()) {
+        if !(gamma.is_finite() && gamma > 0.0) {
             return Err(domain(
-                "rational_krylov: gamma must be finite and > 0 with 1/gamma finite",
+                "rational_krylov: gamma must be finite and > 0",
                 gamma,
             ));
         }
         let m_max = opts.m_max.max(3).min(n);
-        let (inner, m_min) = if t64 * generator_bound(op, mass) < f64::EPSILON {
-            (Inner::Identity, None)
-        } else {
-            let inner_tol = from_f64::<F>((0.1 * opts.tol).max(1e-15));
-            (
-                Inner::build(op, from_f64(1.0 / gamma), mass, opts.solver, inner_tol)?,
-                factor::a_priori_dim(t64 / gamma, opts.tol, m_max),
-            )
-        };
+        let (inner, m_min) = build_inner(op, mass, (t64, gamma), &opts, m_max)?;
+        let weights = mass.map(|m| {
+            let (down, _) = pow2_scale(m).unwrap_or((F::one(), F::one()));
+            m.iter().map(|&x| x * down).collect()
+        });
         Ok(Self {
             inner,
             n,
             mass: mass.map(<[F]>::to_vec),
+            weights,
             t,
             gamma: from_f64(gamma),
             m_max,
@@ -297,7 +330,13 @@ impl<F: SemiflowFloat> RationalKrylov<F> {
         result.map(|(_, report)| report)
     }
 
+    /// Weight of `⟨·,·⟩_M` (the power-of-two-scaled mass).
     fn weight(&self, i: usize) -> F {
+        self.weights.as_ref().map_or(F::one(), |m| m[i])
+    }
+
+    /// The mass `mᵢ` itself (right-hand sides `M·q`).
+    fn mass_at(&self, i: usize) -> F {
         self.mass.as_ref().map_or(F::one(), |m| m[i])
     }
 
