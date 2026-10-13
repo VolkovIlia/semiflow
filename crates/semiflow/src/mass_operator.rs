@@ -128,7 +128,7 @@ impl<F: SemiflowFloat> MassKOperator<F> {
     ///
     /// The spectral bound is RIGOROUS: `λ_max(Â) ≤ ρ̄(K) · ‖R⁻¹‖₁ · ‖R⁻¹‖_∞`, with
     /// `‖R⁻¹‖₂² ≤ ‖R⁻¹‖₁‖R⁻¹‖_∞` and both norms bounded through the comparison matrix
-    /// of `R` in `O(n²)` (see [`inverse_norm_bounds`]). The Chebyshev path requires a
+    /// of `R` in `O(n²)` (see `inverse_norm_bounds`). The Chebyshev path requires a
     /// true upper bound: the previous 5-step inverse-power estimate of `λ_min(M)`
     /// started from the constant vector — an eigenvector of the consistent P1 mass
     /// matrix with its LARGEST eigenvalue — so it under-estimated `λ_max(Â)` by up to
