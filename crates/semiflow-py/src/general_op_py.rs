@@ -34,8 +34,9 @@ use crate::{
 ///
 /// Honest limits
 /// -------------
-/// - Cost is ``Θ(t·‖A‖_∞)`` matvecs — **linear in the depth, not flat**. The
-///   depth-independence `GraphKrylov` has does not transfer to this path.
+/// - Cost is ``Θ(t·‖A‖_∞)`` matvecs on the default Taylor path — **linear in the
+///   depth, not flat**. ``evolve_batched(..., method="krylov")`` (adaptive Arnoldi,
+///   ADR-0211) grows like ``√(t·‖A‖)`` for a dissipative ``A``.
 /// - Only the **backward** error is certified. For a severely non-normal ``A``
 ///   the forward error can exceed the backward radius by ``κ(V)``, which is not
 ///   estimated.
@@ -82,22 +83,32 @@ impl PyGeneralOperator {
 
     /// ``e^{-tA}·v`` for `C` right-hand sides. ``v_nc`` is ``[N, C]``; result too.
     ///
+    /// ``method="taylor"`` (default): scaled truncated Taylor, ``Θ(t‖A‖)`` matvecs.
+    /// ``method="krylov"``: adaptive Arnoldi (ADR-0211), accuracy ``tol`` relative to
+    /// ``‖v‖₂``, Krylov dimension ``m``.
+    ///
     /// Raises
     /// ------
     /// `SemiflowError`
     ///     ``kind='GridMismatch'`` if ``v_nc`` is not 2-D with ``shape[0] == n``;
-    ///     ``kind='OutOfDomain'`` if ``t`` is negative or non-finite.
-    #[pyo3(signature = (t, v_nc))]
+    ///     ``kind='OutOfDomain'`` if ``t`` is negative or non-finite or ``method``
+    ///     is unknown; ``kind='ConvergenceFailed'`` if the Krylov substep cap is hit.
+    #[pyo3(signature = (t, v_nc, method = "taylor", tol = 1e-10_f64, m = 30_usize))]
+    #[allow(clippy::too_many_arguments)] // PyO3 keyword surface
     fn evolve_batched<'py>(
         &self,
         py: Python<'py>,
         t: f64,
         v_nc: PyReadonlyArray2<'py, f64>,
+        method: &str,
+        tol: f64,
+        m: usize,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
         catch_panic_py!({
             if !t.is_finite() || t < 0.0 {
                 return Err(new_pyerr("OutOfDomain", "t must be finite and >= 0"));
             }
+            let solver = crate::phi_krylov_py::parse_phi_method(method, tol, m)?;
             let view = v_nc.as_array();
             let n = self.inner.n();
             if view.shape()[0] != n {
@@ -108,8 +119,16 @@ impl PyGeneralOperator {
             }
             let n_cols = view.shape()[1];
             let src_cn = crate::graph_py::gather_nc_to_cn(&view, n, n_cols);
-            let kernel = self.inner.expmv();
             let mut dst_cn = vec![0.0_f64; n * n_cols];
+            if let semiflow::PhiSolver::Krylov(opts) = solver {
+                let op = Arc::clone(&self.inner);
+                let result = py.detach(|| {
+                    crate::phi_krylov_py::expmv_krylov_columns(&op, t, opts, &src_cn, &mut dst_cn)
+                });
+                result.map_err(|e| from_core(&e))?;
+                return Ok(crate::graph_py::scatter_cn_to_nc(&dst_cn, n, n_cols, py));
+            }
+            let kernel = self.inner.expmv();
             let result: Result<(), semiflow::SemiflowError> = py.detach(|| {
                 for c in 0..n_cols {
                     kernel.action_into_slice(

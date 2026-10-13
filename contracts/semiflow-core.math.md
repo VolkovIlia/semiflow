@@ -13890,3 +13890,9 @@ bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
 > NORMATIVE body (ADR-0210) lives in
 > [`contracts/semiflow-core.math-phi-shift.md`](semiflow-core.math-phi-shift.md); every
 > "§67.x" citation resolves there.
+
+## §68 — Adaptive Krylov (Arnoldi) φ-combination (in its own file)
+
+> NORMATIVE body (ADR-0211) lives in
+> [`contracts/semiflow-core.math-phi-krylov.md`](semiflow-core.math-phi-krylov.md);
+> every "§68.x" citation resolves there.

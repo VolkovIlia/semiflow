@@ -12,6 +12,7 @@
 //!
 //! # ADR-0202: Σ τ^k φ_k(τG) w_k in one sweep; mass= and GeneralOperator on all three
 //! y = semiflow.phi_combination(op, tau, w, mass=None)   # w.shape = (p+1, n)
+//! y = semiflow.phi_combination(op, tau, w, method="krylov")  # adaptive Arnoldi, ADR-0211
 //!
 //! # ETDRK4 driver (menu-based nonlinearity, ADR-0189)
 //! driver = semiflow.Etdrk4.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)
@@ -34,14 +35,15 @@ use std::sync::Arc;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use semiflow::{
-    general_operator::GeneralOperator, phi_action, phi_action_batched, phi_combination, AllenCahn,
-    CsrGenerator, Etdrk4, NegLaplacianGenerator, ScratchPool, SymmetricOperator, PHI_MAX,
+    general_operator::GeneralOperator, phi_action, phi_action_batched, AllenCahn, CsrGenerator,
+    Etdrk4, NegLaplacianGenerator, ScratchPool, SymmetricOperator, PHI_MAX,
 };
 
 use crate::{
     error::{from_core, new_pyerr},
     general_op_py::PyGeneralOperator,
     panic::catch_panic_py,
+    phi_krylov_py::{combination, parse_phi_method},
     spd_resolvent_py::contiguous_vec,
     symmetric_op_py::PySymmetricOperator,
 };
@@ -248,18 +250,31 @@ pub fn phi_action_batched_py<'py>(
 ///     Rows ``w_0 … w_p``, ``p <= PHI_MAX = 3``.
 /// mass : ndarray[float64, shape (n,)] or None
 ///     Diagonal mass ``M > 0`` (default identity).
+/// method : str
+///     ``"taylor"`` (default: augmented Taylor sweep, ``Θ(τ‖G‖)`` generator
+///     applications) or ``"krylov"`` (adaptive Arnoldi, ADR-0211: about
+///     ``√(τ‖G‖)``·``m`` applications for a dissipative ``G``).
+/// tol : float
+///     Krylov accuracy relative to the augmented start vector (``"krylov"`` only).
+/// m : int
+///     Krylov dimension per substep (``"krylov"`` only, default 30).
 ///
 /// Returns ndarray[float64, shape (n,)].
 #[pyfunction]
-#[pyo3(name = "phi_combination", signature = (op, tau, w, mass = None))]
+#[pyo3(name = "phi_combination",
+       signature = (op, tau, w, mass = None, method = "taylor", tol = 1e-10_f64, m = 30_usize))]
 pub fn phi_combination_py<'py>(
     py: Python<'py>,
     op: &Bound<'py, PyAny>,
     tau: f64,
     w: PyReadonlyArray2<'py, f64>,
     mass: Option<PyReadonlyArray1<'py, f64>>,
+    method: &str,
+    tol: f64,
+    m: usize,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     catch_panic_py!({
+        let solver = parse_phi_method(method, tol, m)?;
         let (op, mass) = phi_inputs(op, tau, mass.as_ref())?;
         let n = op.n();
         let view = w.as_array();
@@ -274,7 +289,7 @@ pub fn phi_combination_py<'py>(
             let gen = op.generator(mass.as_deref())?;
             let refs: Vec<&[f64]> = rows.iter().map(Vec::as_slice).collect();
             let mut out = vec![0.0_f64; n];
-            phi_combination(&gen, tau, &refs, &mut out, &mut ScratchPool::new())?;
+            combination(&solver, &gen, tau, &refs, &mut out, &mut ScratchPool::new())?;
             Ok(out)
         });
         let out = result.map_err(|e| from_core(&e))?;
@@ -317,19 +332,33 @@ impl PyEtdrk4 {
     ///     Nonlinearity name.  Currently only ``"allen_cahn"`` (``N(u) = u − u³``).
     /// h : float
     ///     Fixed time-step size ``h > 0``.
+    /// phi : str
+    ///     φ evaluator: ``"taylor"`` (default) or ``"krylov"`` (adaptive Arnoldi,
+    ///     ADR-0211, for ``h‖L‖ ≫ 10²``).
+    /// tol : float
+    ///     Krylov accuracy (``phi="krylov"`` only).
     ///
-    /// Raises ``SemiflowError(OutOfDomain)`` for unknown nonlinearity or ``h <= 0``.
+    /// Raises ``SemiflowError(OutOfDomain)`` for unknown nonlinearity / ``phi`` or ``h <= 0``.
     #[staticmethod]
-    #[pyo3(signature = (op, nonlinearity, h))]
-    fn from_symmetric_op(op: &PySymmetricOperator, nonlinearity: &str, h: f64) -> PyResult<Self> {
+    #[pyo3(signature = (op, nonlinearity, h, phi = "taylor", tol = 1e-10_f64))]
+    fn from_symmetric_op(
+        op: &PySymmetricOperator,
+        nonlinearity: &str,
+        h: f64,
+        phi: &str,
+        tol: f64,
+    ) -> PyResult<Self> {
         catch_panic_py!({
             let nl = parse_nonlinearity(nonlinearity)?;
+            let solver = parse_phi_method(phi, tol, 30)?;
             if !h.is_finite() || h <= 0.0 {
                 return Err(new_pyerr("OutOfDomain", "h must be finite and positive"));
             }
             let n = op.op.n();
             let gen = NegLaplacianGenerator::new(op.op.as_ref().clone());
-            let driver = Etdrk4::new(gen, nl, h).map_err(|e| from_core(&e))?;
+            let driver = Etdrk4::new(gen, nl, h)
+                .map_err(|e| from_core(&e))?
+                .with_phi_solver(solver);
             Ok(Self {
                 driver: Arc::new(driver),
                 n,

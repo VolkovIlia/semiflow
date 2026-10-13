@@ -23,11 +23,11 @@ use std::time::Instant;
 use semiflow::general_operator::GeneralOperator;
 
 use semiflow::{
-    graph_expmv_krylov, phi_action, AllenCahn, ChernoffSemigroup, CsrGenerator,
+    expmv_krylov, graph_expmv_krylov, phi_action, AllenCahn, ChernoffSemigroup, CsrGenerator,
     Diffusion4thChernoff, Diffusion6thChernoff, DiffusionChernoff, Etdrk4, Grid1D, Grid2D, Grid3D,
-    GridFn1D, GridFn2D, GridFn3D, KrylovPath, MatrixDiffusionChernoff, MatrixGridFn1D,
-    NegLaplacianGenerator, ScratchPool, ShiftChernoff1D, SpdResolvent, SpdSolver, Strang2D,
-    Strang3D, SymmetricOperator,
+    GridFn1D, GridFn2D, GridFn3D, KrylovPath, KrylovPhiOptions, MatrixDiffusionChernoff,
+    MatrixGridFn1D, NegLaplacianGenerator, ScratchPool, ShiftChernoff1D, SpdResolvent, SpdSolver,
+    Strang2D, Strang3D, SymmetricOperator,
 };
 
 /// Best-of-`reps` wall time in milliseconds, plus the last result.
@@ -283,6 +283,22 @@ fn expmv_phi() {
     let kern = gop.expmv();
     let (ms, ()) = time_best(3, || kern.action_into_slice(1.0, &v, &mut out).unwrap());
     row("expmv/general N=1000 ‖A‖t≈4e3", ms, None, "");
+    let taylor = out.clone();
+    let mut scratch = ScratchPool::new();
+    let opts = KrylovPhiOptions::default();
+    let (ms, ()) = time_best(3, || {
+        expmv_krylov(&gop, 1.0, &v, &mut out, opts, &mut scratch).unwrap();
+    });
+    let diff = out
+        .iter()
+        .zip(&taylor)
+        .fold(0.0_f64, |m, (a, b)| m.max((a - b).abs()));
+    row(
+        "expmv/general-krylov N=1000 ‖A‖t≈4e3",
+        ms,
+        Some(diff),
+        "vs Taylor",
+    );
 
     let op = laplacian_1d(n, 1.0e3, false);
     let gen = CsrGenerator::from_symmetric(&op, None).unwrap();

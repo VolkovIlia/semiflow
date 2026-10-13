@@ -29,7 +29,7 @@ use crate::{
     float::{from_f64, half, two, SemiflowFloat},
     generator_action::GeneratorAction,
     nonlinearity::Nonlinearity,
-    phi_action::phi_combination,
+    phi_krylov::{combine, PhiSolver},
     scratch::ScratchPool,
 };
 
@@ -57,8 +57,9 @@ fn update_columns<F: SemiflowFloat>(
 ///
 /// All temporary buffers are taken from `scratch` and returned before this
 /// function exits — no allocation occurs if the pool already has capacity.
-#[allow(clippy::many_single_char_names)]
+#[allow(clippy::many_single_char_names, clippy::too_many_arguments)]
 pub(crate) fn etdrk4_step<F, Op, Nl>(
+    solver: &PhiSolver,
     op: &Op,
     nl: &Nl,
     h: F,
@@ -77,18 +78,18 @@ where
     let result = (|| {
         let [n_u, a, n_a, b, n_b, c, n_c, w] = &mut bufs;
         nl.eval(u, n_u)?;
-        phi_combination(op, hh, &[u, n_u], a, scratch)?;
+        combine(solver, op, hh, &[u, n_u], a, scratch)?;
         nl.eval(a, n_a)?;
-        phi_combination(op, hh, &[u, n_a], b, scratch)?;
+        combine(solver, op, hh, &[u, n_a], b, scratch)?;
         nl.eval(b, n_b)?;
         for i in 0..n {
             w[i] = two::<F>() * n_b[i] - n_u[i];
         }
-        phi_combination(op, hh, &[a, w], c, scratch)?;
+        combine(solver, op, hh, &[a, w], c, scratch)?;
         nl.eval(c, n_c)?;
         // `a` and `b` are no longer needed: reuse them for the update columns.
         update_columns(h, n_u, n_a, n_b, n_c, a, b);
-        phi_combination(op, h, &[u, n_u, a, b], u_next, scratch)
+        combine(solver, op, h, &[u, n_u, a, b], u_next, scratch)
     })();
     for buf in bufs {
         scratch.return_vec(buf);

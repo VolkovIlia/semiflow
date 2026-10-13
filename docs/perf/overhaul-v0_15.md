@@ -93,6 +93,21 @@ enabled; the host was loaded, so the absolute numbers are above the ADR-0205 tab
 | `phi_action` φ₁, N = 1000, `‖G‖t ≈ 4e3` | 300 | 145 | 2.1× |
 | ETDRK4 Allen–Cahn, N = 256, 100 steps | 195 | 96 | 2.0× |
 
+## Adaptive Krylov φ / exp (ADR-0211)
+
+Upwind-drift tridiagonal `N = 1000`, `e^{−tA}v`, same session (agreement with the
+Taylor result `≤ 1e−13`):
+
+| `‖A‖t` | Taylor `expmv` | Krylov `m = 30` | Krylov `m = 15` |
+|---:|---:|---:|---:|
+| 4·10³ | 90 ms | 44 ms | 31 ms |
+| 4·10⁴ | 973 ms | 311 ms | 171 ms |
+| 4·10⁵ | 92 s | 3.7 s | 1.9 s |
+
+Generator applications (deterministic, `G_PHI_KRYLOV_COST`): drifted Fokker–Planck
+`n = 1000`, `τ‖G‖ = 4·10³`: 1 023 (Krylov) vs 33 960 (Taylor). One-pass Gram–Schmidt
+dominates a substep on cheap stencils; `m ≈ 15` trades applications for wall clock.
+
 ## Known slow paths (not addressed here)
 
 - Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer

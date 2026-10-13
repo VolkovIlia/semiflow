@@ -11564,3 +11564,68 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0210
+
+  - name: G_PHI_KRYLOV_DENSE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 8.1e−13)"
+    rationale: |
+      ADR-0211: adaptive Arnoldi (Expokit expv) on the η-scaled augmented operator.
+      φ_k, k = 0..3, and a full phi_combination for non-normal generators (drifted
+      Fokker–Planck, birth–death inventory ladder; n = 12; with and without a lumped
+      mass) against the dense augmented exponential, tol = 1e−12, τ‖G‖ ∈ {1, 30, 300},
+      Krylov dimension 30 (the whole augmented space: exact projection) and 6
+      (adaptive substeps, asserted > 1 at τ‖G‖ ≥ 30): ≤ 1e−10·max(1, ‖want‖∞).
+    gate: "err ≤ 1e−10·max(1, ‖want‖∞) for every k, generator, z and m"
+    test_file: "tests/g_phi_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0211
+
+  - name: G_PHI_KRYLOV_COST
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (1 023 vs 33 960 generator applications, 33×; agreement 9e−13)"
+    rationale: |
+      ADR-0211: drifted Fokker–Planck, n = 1000, τ‖G‖ = 4·10³, p = 1 combination,
+      tol = 1e−10, default m = 30: a counting wrapper sees exactly the reported
+      matvecs, at least 20× fewer than s·m of the Taylor path actually used
+      (shift-aware phi_sweep_probe), and the results agree to 1e−8·‖ref‖∞.
+    gate: "calls == report.matvecs AND 20·calls ≤ taylor_s·m AND rel diff ≤ 1e−8"
+    test_file: "tests/g_phi_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0211
+
+  - name: G_PHI_KRYLOV_TOL
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (err ≤ 4.9e−12; 217 / 248 / 310 applications)"
+    rationale: |
+      ADR-0211: same operator at τ‖G‖ = 4·10², tol ∈ {1e−6, 1e−9, 1e−12}: error
+      against the Taylor result ≤ 10·tol·‖[w₀; w₁]‖₂, and a tighter tol never costs
+      fewer generator applications (the tolerance drives the work).
+    gate: "err ≤ 10·tol·‖w‖₂ AND calls non-decreasing as tol tightens"
+    test_file: "tests/g_phi_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0211
+
+  - name: G_ETDRK4_KRYLOV_ORDER
+    type: CONVERGENCE_ORDER
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (slope 4.078)"
+    rationale: |
+      ADR-0211: Etdrk4::with_phi_solver(PhiSolver::Krylov) on the Allen–Cahn problem
+      of G_ETDRK4_ORDER (8-node periodic Laplacian, h = 0.05, 0.025 vs 0.0125
+      reference, tol = 1e−14) keeps order 4 (slope ∈ [3.7, 4.3]) and matches the
+      Taylor driver to 1e−12.
+    gate: "slope ∈ [3.7, 4.3] AND ‖krylov − taylor‖∞ ≤ 1e−12"
+    test_file: "tests/g_phi_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0211

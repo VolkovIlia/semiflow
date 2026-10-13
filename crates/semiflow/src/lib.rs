@@ -154,6 +154,8 @@ pub(crate) mod pcg_ic0;
 pub(crate) mod pencil;
 pub mod phi_action;
 pub(crate) mod phi_action_helpers;
+pub mod phi_krylov;
+pub(crate) mod phi_krylov_arnoldi;
 pub(crate) mod phi_shift;
 pub mod point_eval;
 pub(crate) mod pow2;
@@ -343,6 +345,9 @@ pub use crate::{
     obstacle_nd::ObstacleChernoffND,
     phi_action::{
         dense_phi_aug_ref, phi_action, phi_action_batched, phi_combination, phi_cost_probe, PHI_MAX,
+    },
+    phi_krylov::{
+        expmv_krylov, phi_combination_krylov, KrylovPhiOptions, KrylovPhiReport, PhiSolver,
     },
     phi_shift::phi_sweep_probe,
     point_eval::{sample_gridfn2d, PointEval},

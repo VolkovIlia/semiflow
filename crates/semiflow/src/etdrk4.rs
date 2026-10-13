@@ -35,7 +35,8 @@
 
 use crate::{
     error::SemiflowError, etdrk4_helpers::etdrk4_step as step_impl, float::SemiflowFloat,
-    generator_action::GeneratorAction, nonlinearity::Nonlinearity, scratch::ScratchPool,
+    generator_action::GeneratorAction, nonlinearity::Nonlinearity, phi_krylov::PhiSolver,
+    scratch::ScratchPool,
 };
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ pub struct Etdrk4<F: SemiflowFloat, Op: GeneratorAction<F>, Nl: Nonlinearity<F>>
     nl: Nl,
     h: F,
     n: usize,
+    solver: PhiSolver,
 }
 
 impl<F, Op, Nl> Etdrk4<F, Op, Nl>
@@ -78,7 +80,22 @@ where
                 value: 0.0,
             });
         }
-        Ok(Self { op, nl, h, n })
+        Ok(Self {
+            op,
+            nl,
+            h,
+            n,
+            solver: PhiSolver::Taylor,
+        })
+    }
+
+    /// Choose the φ evaluator (ADR-0211): [`PhiSolver::Taylor`] (default, exact
+    /// sweep counts) or [`PhiSolver::Krylov`] (adaptive Arnoldi, for stiff
+    /// non-symmetric generators where `h‖G‖ ≫ 10²`).
+    #[must_use]
+    pub fn with_phi_solver(mut self, solver: PhiSolver) -> Self {
+        self.solver = solver;
+        self
     }
 
     /// Advance one step: `u_next ← ETDRK4(u, h)`.
@@ -94,7 +111,7 @@ where
         u_next: &mut [F],
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
-        step_impl(&self.op, &self.nl, self.h, u, u_next, scratch)
+        step_impl(&self.solver, &self.op, &self.nl, self.h, u, u_next, scratch)
     }
 
     /// Integrate `n_steps` steps from `u0`; final state written to `out[..n]`.

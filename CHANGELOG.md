@@ -53,6 +53,10 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `mass_lumped_evolve(..., path="rational")`. `m_max` of `evolve_batched` /
   `mass_lumped_evolve` now defaults to `None` (18 for Lanczos, 64 for rational).
 
+- `phi_combination(..., method="krylov", tol=1e-10, m=30)`,
+  `GeneralOperator.evolve_batched(..., method="krylov", tol=1e-10, m=30)` and
+  `Etdrk4.from_symmetric_op(..., phi="krylov", tol=1e-10)` (ADR-0211).
+
 - **Python 3.15** (ADR-0209): `requires-python = ">=3.10,<3.16"`, classifiers
   3.14/3.15, CI `py-smoke` on 3.10/3.13/3.15; PyO3 and rust-numpy 0.28 → 0.29.
   The abi3-py310 wheel serves 3.10–3.15; the suite passes on 3.13.16 and
@@ -212,6 +216,21 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `≤ 7.1e−15` against the dense augmented exponential (`G_PHI_SHIFT_DENSE`);
   bitwise power-of-two homogeneity kept (`G_PHI_SHIFT_HOMOGENEITY`). Re-recorded
   once: `no_std` digest `phi_combination`.
+
+#### Added — adaptive Krylov φ / exponential actions (ADR-0211)
+
+- **`phi_combination_krylov`, `expmv_krylov`, `PhiSolver`.** Expokit-style adaptive
+  Arnoldi (Sidje 1998) on the η-scaled augmented φ operator: `Σ τᵏφ_k(τG)w_k` for
+  any `GeneratorAction` (non-symmetric welcome) and `e^{−τA}v` for a
+  `GeneralOperator`, at a cost growing like `√(τ‖G‖)` instead of `τ‖G‖`. Drifted
+  Fokker–Planck, `n = 1000`, `τ‖G‖ = 4·10³`: 1 023 generator applications instead of
+  33 960 (`G_PHI_KRYLOV_COST`). Wall clock on a tridiagonal drift stencil: 90 → 44 ms
+  at `‖A‖t = 4·10³`, 92 s → 3.7 s at `4·10⁵` (one-pass Gram–Schmidt; only
+  `e^{tH}e₁` of the Hessenberg, by a Taylor vector action).
+  `Etdrk4::with_phi_solver(PhiSolver::Krylov(..))` keeps order 4
+  (`G_ETDRK4_KRYLOV_ORDER`). Gates `G_PHI_KRYLOV_DENSE`, `G_PHI_KRYLOV_TOL`. Honest
+  limit: on cheap stencils below `τ‖G‖ ≈ 10³` the Taylor path is competitive and
+  stays the default; `est_error` is an estimate.
 
 ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
 φ-combination that closes the affine and ETD gaps. All additive except one

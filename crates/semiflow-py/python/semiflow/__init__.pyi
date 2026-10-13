@@ -6692,12 +6692,20 @@ def phi_combination(
     tau: float,
     w: NDArray[np.float64],
     mass: NDArray[np.float64] | None = None,
+    method: str = "taylor",
+    tol: float = 1e-10,
+    m: int = 30,
 ) -> NDArray[np.float64]:
     """``Σ_{k=0}^{p} τ^k φ_k(τG) w_k`` in one augmented sweep (ADR-0202, §62.4).
 
     ``G = −M⁻¹A``; ``w`` has shape ``(p+1, n)`` with ``p <= 3``. With the recipes of
     §62.5 this is exact affine evolution ``M u' = −A u + s`` (``w = [u₀, M⁻¹s]``),
     ETD-RK2 and ETDRK4; the caller evaluates the nonlinearity (no callbacks).
+
+    ``method="taylor"`` (default): augmented Taylor sweep, ``Θ(τ‖G‖)`` generator
+    applications. ``method="krylov"``: adaptive Arnoldi (ADR-0211), ``tol`` relative
+    to the augmented start vector, Krylov dimension ``m``; about ``√(τ‖G‖)``·``m``
+    applications for a dissipative ``G``.
 
     Returns ndarray of shape ``(n,)``.
     """
@@ -6780,6 +6788,8 @@ class Etdrk4:
         op: SymmetricOperator,
         nonlinearity: str = "allen_cahn",
         h: float = 0.01,
+        phi: str = "taylor",
+        tol: float = 1e-10,
     ) -> "Etdrk4":
         """Build ETDRK4 driver from operator and step size.
 
@@ -6790,6 +6800,11 @@ class Etdrk4:
             ``"allen_cahn"`` (default) — ``N(u) = u − u³``.
         h : float
             Time step.
+        phi : str
+            φ evaluator: ``"taylor"`` (default) or ``"krylov"`` (adaptive Arnoldi,
+            ADR-0211, for ``h‖L‖ ≫ 10²``).
+        tol : float
+            Krylov accuracy (``phi="krylov"`` only).
         """
         ...
 
@@ -6828,8 +6843,10 @@ class GeneralOperator:
 
     Honest limits
     -------------
-    - Cost is ``Theta(t * ||A||_inf)`` matvecs — **linear in the depth, not
-      flat**. ``GraphKrylov``'s depth-independence does NOT transfer here.
+    - Cost is ``Theta(t * ||A||_inf)`` matvecs on the default Taylor path —
+      **linear in the depth, not flat**. ``evolve_batched(method="krylov")``
+      (adaptive Arnoldi, ADR-0211) grows like ``sqrt(t * ||A||)`` for a
+      dissipative ``A``.
     - Only the **backward** error is certified. For a severely non-normal ``A``
       the forward error can exceed the backward radius by ``kappa(V)``, which is
       not estimated.
@@ -6855,9 +6872,18 @@ class GeneralOperator:
         ...
 
     def evolve_batched(
-        self, t: float, v_nc: NDArray[np.float64]
+        self,
+        t: float,
+        v_nc: NDArray[np.float64],
+        method: str = "taylor",
+        tol: float = 1e-10,
+        m: int = 30,
     ) -> NDArray[np.float64]:
-        """``e^{-tA}v`` for C right-hand sides. ``v_nc`` is ``[N, C]``; result too."""
+        """``e^{-tA}v`` for C right-hand sides. ``v_nc`` is ``[N, C]``; result too.
+
+        ``method="taylor"`` (default) or ``"krylov"`` (adaptive Arnoldi, ADR-0211:
+        ``tol`` relative to ``‖v‖₂``, Krylov dimension ``m``).
+        """
         ...
 
     def apply_transpose(self, v: Sequence[float]) -> NDArray[np.float64]:

@@ -47,8 +47,11 @@ Done:
   ≈ half the generator applications per φ sweep on diffusion generators
   (`phi_action` φ₁ 300 → 145 ms, ETDRK4 195 → 96 ms).
 
+- **Adaptive Krylov φ / exp actions (ADR-0211):** Expokit-style Arnoldi for any
+  generator, `√(τ‖G‖)` growth: 33× fewer applications at `τ‖G‖ = 4·10³`,
+  92 s → 3.7 s at `4·10⁵`; `PhiSolver` for ETDRK4; Python `method="krylov"`.
+
 Next:
-- Non-symmetric adaptive Arnoldi (phipm/KIOPS) for φ/exp actions (ADR-0211).
 - Stiff kinetics: adaptive Rosenbrock reaction step (ADR-0212).
 - Cross-diffusion with a constant diagonalisable matrix (ADR-0213).
 - τ-keyed step plans for the grid engines (≈2–3×, a trait hook, ADR-0215).
