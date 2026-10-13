@@ -20,7 +20,16 @@ use crate::{
 };
 
 /// Maximum number of coupling columns (`PHI_MAX`).
-const MAX_COUPLING_COLS: usize = 3;
+pub(crate) const MAX_COUPLING_COLS: usize = 3;
+
+/// Taylor schedule of the augmented sweeps: `s` substeps of degree `m`, and the
+/// trace shift `μ` (ADR-0210): `μ = 0` runs the unshifted arithmetic verbatim;
+/// otherwise every sweep applies `T_m((B̃_η − μI)/s)` and rescales by `e^{μ/s}`.
+pub(crate) struct SweepPlan<F> {
+    pub(crate) s: u32,
+    pub(crate) m: u32,
+    pub(crate) mu: F,
+}
 
 /// Clamp for the η exponent (§62.4): keeps `2^{±e}` a normal `f64`.
 const ETA_EXP_CLAMP: i32 = 1000;
@@ -82,7 +91,7 @@ pub(crate) fn eta_scaling<F: SemiflowFloat>(max_mag: f64) -> (F, F) {
 /// # Invariant
 /// `av_buf` must not alias `w_u` or `w_c`.
 #[allow(clippy::too_many_arguments, clippy::many_single_char_names)]
-fn aug_matvec_inplace<F: SemiflowFloat, Op: GeneratorAction<F>>(
+pub(crate) fn aug_matvec_inplace<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
     coupling: &Coupling<'_, F>,
     w_u: &mut [F],
@@ -129,9 +138,11 @@ fn aug_matvec_inplace<F: SemiflowFloat, Op: GeneratorAction<F>>(
 // One outer Horner iteration
 // ---------------------------------------------------------------------------
 
-/// Apply `T_m((1/s)·B̃_η)` to `y_aug` in-place (one outer Horner sweep).
+/// Apply `T_m((1/s)·(B̃_η − μI))` to `y_aug` in-place (one outer Horner sweep;
+/// `μ = plan.mu`, `0` = the unshifted operator, arithmetic unchanged).
 ///
-/// After `s` calls the accumulated state approximates `exp(B̃_η)·z_init`.
+/// After `s` calls (each followed by the `e^{μ/s}` rescale in [`run_sweeps`]) the
+/// accumulated state approximates `exp(B̃_η)·z_init`.
 ///
 /// # Arguments
 /// - `y_aug` size `n + p`.  Updated in-place.
@@ -150,35 +161,44 @@ pub(crate) fn aug_horner_outer<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
     coupling: &Coupling<'_, F>,
     tau: F,
-    s: u32,
-    m: u32,
+    plan: &SweepPlan<F>,
     y_aug: &mut [F],
     w_aug: &mut [F],
     av_buf: &mut [F],
 ) -> Result<(), SemiflowError> {
     let n = op.dim();
     let p = y_aug.len() - n;
-    let s_f64 = f64::from(s);
+    let s_f64 = f64::from(plan.s);
+    let mu_f64 = plan.mu.to_f64().unwrap_or(0.0);
 
     // w ← y (start of Horner inner loop: w^(0) = y)
     w_aug.copy_from_slice(y_aug);
 
-    for j in 1..=m {
+    for j in 1..=plan.m {
         let j_f64 = f64::from(j);
         let tau_over_js: F = from_f64(tau.to_f64().unwrap_or(1.0) / (j_f64 * s_f64));
         let one_over_js: F = from_f64(1.0 / (j_f64 * s_f64));
 
         // split w_aug into [w_u | w_c]
         let (w_u, w_c) = w_aug.split_at_mut(n);
-        aug_matvec_inplace(
-            op,
-            coupling,
-            w_u,
-            &mut w_c[..p],
-            tau_over_js,
-            one_over_js,
-            av_buf,
-        );
+        if plan.mu == F::zero() {
+            aug_matvec_inplace(
+                op,
+                coupling,
+                w_u,
+                &mut w_c[..p],
+                tau_over_js,
+                one_over_js,
+                av_buf,
+            );
+        } else {
+            let scales = crate::phi_shift::Scales {
+                tau: tau_over_js,
+                one: one_over_js,
+                mu: from_f64(mu_f64 / (j_f64 * s_f64)),
+            };
+            crate::phi_shift::aug_matvec_shifted(op, coupling, w_u, &mut w_c[..p], &scales, av_buf);
+        }
 
         // y ← y + w
         for (yi, &wi) in y_aug.iter_mut().zip(w_aug.iter()) {
@@ -188,7 +208,8 @@ pub(crate) fn aug_horner_outer<F: SemiflowFloat, Op: GeneratorAction<F>>(
     Ok(())
 }
 
-/// Run `s` outer Horner sweeps `y_aug ← T_m(B̃_η/s)·y_aug`, returning early on error.
+/// Run `s` outer Horner sweeps `y_aug ← e^{μ/s}·T_m((B̃_η − μI)/s)·y_aug` (no
+/// rescale when `μ = 0`), returning early on error.
 ///
 /// # Errors
 /// Propagates the first error from [`aug_horner_outer`].
@@ -197,14 +218,19 @@ pub(crate) fn run_sweeps<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
     coupling: &Coupling<'_, F>,
     tau: F,
-    s: u32,
-    m: u32,
+    plan: &SweepPlan<F>,
     y_aug: &mut [F],
     w_aug: &mut [F],
     av_buf: &mut [F],
 ) -> Result<(), SemiflowError> {
-    for _ in 0..s {
-        aug_horner_outer(op, coupling, tau, s, m, y_aug, w_aug, av_buf)?;
+    let rescale = (plan.mu / from_f64::<F>(f64::from(plan.s))).libm_exp();
+    for _ in 0..plan.s {
+        aug_horner_outer(op, coupling, tau, plan, y_aug, w_aug, av_buf)?;
+        if plan.mu != F::zero() {
+            for y in y_aug.iter_mut() {
+                *y *= rescale;
+            }
+        }
     }
     Ok(())
 }

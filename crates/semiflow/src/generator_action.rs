@@ -45,6 +45,15 @@ pub trait GeneratorAction<F: SemiflowFloat>: Send + Sync {
     fn apply_generator_transpose(&self, src: &[F], dst: &mut [F]) {
         self.apply_generator(src, dst);
     }
+
+    /// Diagonal shift `(ḡ, ‖A − ḡI‖_∞)` when it lowers the norm bound (ADR-0210):
+    /// the φ-actions then sweep `e^{B̃ − τḡI}` and rescale by `e^{τḡ}`. The
+    /// built-in generators return the Gershgorin-hull centre, which roughly halves
+    /// the generator applications of a diffusion generator. Default `None`: no
+    /// shift (the unshifted arithmetic, bit for bit).
+    fn diagonal_shift(&self) -> Option<(F, F)> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +102,25 @@ impl GeneratorAction<f64> for DivFormGenerator {
     fn norm_bound(&self) -> f64 {
         self.norm_est
     }
+
+    /// Rows: `diag = −(a₊ + a₋)/dx²` and `|off| = (a₊ + a₋)/dx²` inside;
+    /// `−a₊/dx²`, `a₊/dx²` (first) and `−a₋/dx²`, `a₋/dx²` (last row).
+    fn diagonal_shift(&self) -> Option<(f64, f64)> {
+        let (a_pos, a_neg, dx2) = self.faces.faces();
+        let n = a_pos.len();
+        if n < 3 {
+            return None;
+        }
+        let rows = (0..n).map(|i| {
+            let pos = if i + 1 < n { a_pos[i] } else { 0.0 };
+            let neg = if i > 0 { a_neg[i] } else { 0.0 };
+            (
+                -(pos + neg) / dx2,
+                (libm::fabs(pos) + libm::fabs(neg)) / dx2,
+            )
+        });
+        crate::csr_shift::midpoint_shift(rows, self.norm_est)
+    }
     // apply_generator_transpose = apply_generator (self-adjoint)
 }
 
@@ -137,6 +165,13 @@ impl<F: SemiflowFloat, Op: SymmetricLinearOp<F>> GeneratorAction<F>
 
     fn norm_bound(&self) -> F {
         self.op.lambda_max_bound()
+    }
+
+    /// From the operator's CSR when it exposes one ([`SymmetricLinearOp::csr_view`]):
+    /// the same triples and bound as `CsrGenerator::from_symmetric(op, None)`.
+    fn diagonal_shift(&self) -> Option<(F, F)> {
+        let rows = self.op.csr_view()?;
+        crate::phi_shift::negated_csr_shift(self.op.n(), rows, self.op.lambda_max_bound())
     }
     // apply_generator_transpose = apply_generator (symmetric)
 }
@@ -336,6 +371,18 @@ impl<F: SemiflowFloat> GeneratorAction<F> for CsrGenerator<F> {
 
     fn norm_bound(&self) -> F {
         self.norm
+    }
+
+    /// Of `G = −Q`, `Q = M⁻¹A` (or `A`): from the row-normalised values when a
+    /// mass is present, else from the operator's own CSR.
+    fn diagonal_shift(&self) -> Option<(F, F)> {
+        let (rp, ci) = self.pattern();
+        let vals: &[F] = match (&self.scaled, &self.backend) {
+            (Some(q), _) => q,
+            (None, CsrBackend::Symmetric(lap)) => lap.vals(),
+            (None, CsrBackend::General(op)) => op.csr_parts().2,
+        };
+        crate::phi_shift::negated_csr_shift(self.dim(), (rp, ci, vals), self.norm)
     }
 
     fn apply_generator_transpose(&self, src: &[F], dst: &mut [F]) {

@@ -81,6 +81,18 @@ The count is the a-priori dimension of `tol` (16 / 21 / 27 / 33 solves at
 `LDLᵀ` sweep; a 40×40 grid Laplacian on the PCG path (IC(0)) takes 13 … 90 CG
 iterations per solve for `λ_max t = 1e2 … 1e8`.
 
+## φ shift (ADR-0210)
+
+Generator applications per φ sweep (deterministic, `G_PHI_SHIFT_COST`, 64-node
+diffusion generators): `τ‖G‖ = 40`: 720 → 390; `τ‖G‖ = 400`: 6 840 → 3 510
+(div-form 3 450). Wall clock, same session back to back (shift disabled vs
+enabled; the host was loaded, so the absolute numbers are above the ADR-0205 table):
+
+| Workload | Unshifted | Shifted | Speedup |
+|---|---:|---:|---:|
+| `phi_action` φ₁, N = 1000, `‖G‖t ≈ 4e3` | 300 | 145 | 2.1× |
+| ETDRK4 Allen–Cahn, N = 256, 100 steps | 195 | 96 | 2.0× |
+
 ## Known slow paths (not addressed here)
 
 - Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer

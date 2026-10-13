@@ -43,8 +43,11 @@ Done:
   `λ_max t` (Chebyshev: up to 471 877 mat-vecs at `1e10`); Python `rational_krylov`,
   `path="rational"`.
 
+- **Shift of the augmented φ operator (ADR-0210):** Gershgorin-midpoint shift,
+  ≈ half the generator applications per φ sweep on diffusion generators
+  (`phi_action` φ₁ 300 → 145 ms, ETDRK4 195 → 96 ms).
+
 Next:
-- Shift for the augmented φ operator (≈2× on diffusion generators, ADR-0210).
 - Non-symmetric adaptive Arnoldi (phipm/KIOPS) for φ/exp actions (ADR-0211).
 - Stiff kinetics: adaptive Rosenbrock reaction step (ADR-0212).
 - Cross-diffusion with a constant diagonalisable matrix (ADR-0213).

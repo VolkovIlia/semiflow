@@ -30,7 +30,7 @@ static EXPECTED: &[(&str, u64)] = &[
     ("octonic_heat", 0x399e_f380_eb86_fb81),
     ("spdr_tridiag", 0xa216_35ae_041b_f865),
     ("spdr_pcg_ic0", 0x6f8f_19a8_3b27_ccaa),
-    ("phi_combination", 0xb4f0_594e_c035_7da5),
+    ("phi_combination", 0x6d93_f269_72f4_8080),
     ("ratkrylov_stiff", 0xb009_fc03_da3f_1741),
 ];
 

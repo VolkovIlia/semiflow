@@ -11512,3 +11512,55 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0206
+
+
+  - name: G_PHI_SHIFT_COST
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (720 → 390 at τ‖G‖ = 40; 6 840 → 3 510 at 400)"
+    rationale: |
+      ADR-0210: the φ sweeps run on B̃_η − μI, μ = τ·ḡ with ḡ the Gershgorin-hull centre
+      of G, and rescale by e^{μ/s}. A counting wrapper (forwarding diagonal_shift)
+      around NegLaplacianGenerator, CsrGenerator (with and without a lumped mass of
+      contrast 50) and DivFormGenerator on 64-node diffusion operators: one
+      phi_combination (p = 3) applies the generator exactly s·m times of
+      phi_sweep_probe, and at τ‖G‖ ∈ {40, 400} that is ≤ 0.6× the unshifted s·m of
+      phi_cost_probe (measured 0.50–0.54).
+    gate: "calls == s·m(phi_sweep_probe) AND 10·calls ≤ 6·unshifted"
+    test_file: "tests/g_phi_shift.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0210
+
+  - name: G_PHI_SHIFT_DENSE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 7.1e−15)"
+    rationale: |
+      ADR-0210: on the shifted path (asserted active) φ_k, k = 0..3, and a full
+      phi_combination against the dense augmented exponential, n = 10 SPD operator with
+      lumped mass contrast 50, symmetric / general CSR / graph generators, τ‖G‖ ∈
+      {2, 20, 200}: ≤ 1e−12·max(1, ‖want‖∞), the G_PHI_MASS_DENSE bar. The combination
+      reference sums the dense φ_k (the dense augmented exponential has no η-scaling).
+    gate: "err ≤ 1e−12·max(1, ‖want‖∞)"
+    test_file: "tests/g_phi_shift.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0210
+
+  - name: G_PHI_SHIFT_HOMOGENEITY
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (bitwise)"
+    rationale: |
+      ADR-0210: the bitwise homogeneity φ(2⁴⁰v) = 2⁴⁰φ(v) of G_PHI_COST_V_INVARIANT
+      on the shifted path, which that gate (a generator without diagonal_shift) never
+      reaches: φ_k, k = 0..3, and phi_combination, CsrGenerator with mass, τ‖G‖ = 20.
+    gate: "to_bits(φ(2⁴⁰v)) == to_bits(2⁴⁰·φ(v))"
+    test_file: "tests/g_phi_shift.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0210

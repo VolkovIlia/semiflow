@@ -43,6 +43,7 @@ pub(crate) mod complex_libm;
 pub mod conservative;
 pub mod conservative_assemble;
 pub mod controller;
+pub(crate) mod csr_shift;
 pub mod diffusion;
 pub mod diffusion4;
 pub mod diffusion4_zeta4;
@@ -153,6 +154,7 @@ pub(crate) mod pcg_ic0;
 pub(crate) mod pencil;
 pub mod phi_action;
 pub(crate) mod phi_action_helpers;
+pub(crate) mod phi_shift;
 pub mod point_eval;
 pub(crate) mod pow2;
 pub mod quantum_graph;
@@ -342,6 +344,7 @@ pub use crate::{
     phi_action::{
         dense_phi_aug_ref, phi_action, phi_action_batched, phi_combination, phi_cost_probe, PHI_MAX,
     },
+    phi_shift::phi_sweep_probe,
     point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},

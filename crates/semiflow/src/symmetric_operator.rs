@@ -29,6 +29,13 @@ pub trait SymmetricLinearOp<F: SemiflowFloat>: Send + Sync {
     /// `dst ← A · src`.  Both slices must have length `self.n()`.
     fn apply_into_slice(&self, src: &[F], dst: &mut [F]);
 
+    /// The operator's CSR `(row_ptr, col_idx, values)` when it is stored as one
+    /// (`Laplacian`, `SymmetricOperator`); default `None`. Used for the φ trace
+    /// shift (ADR-0210).
+    fn csr_view(&self) -> Option<(&[usize], &[u32], &[F])> {
+        None
+    }
+
     /// `dst[i] ← A[i,i]` (`dst.len() == self.n()`).
     ///
     /// The default probes `A·eᵢ` for every `i` — `n` matvecs, `O(n·nnz)`. CSR-backed
@@ -78,6 +85,10 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for Laplacian<F> {
 
     fn diagonal_into(&self, dst: &mut [F]) {
         csr_diagonal_into(self, dst);
+    }
+
+    fn csr_view(&self) -> Option<(&[usize], &[u32], &[F])> {
+        Some((self.row_ptr(), self.col_idx(), self.vals()))
     }
 }
 
@@ -273,6 +284,14 @@ impl<F: SemiflowFloat> SymmetricLinearOp<F> for SymmetricOperator<F> {
 
     fn diagonal_into(&self, dst: &mut [F]) {
         csr_diagonal_into(&self.inner, dst);
+    }
+
+    fn csr_view(&self) -> Option<(&[usize], &[u32], &[F])> {
+        Some((
+            self.inner.row_ptr(),
+            self.inner.col_idx(),
+            self.inner.vals(),
+        ))
     }
 }
 

@@ -38,6 +38,7 @@ use crate::{
     graph_krylov::MAX_DENSE_N,
     matrix_pade::mat_exp_pade13,
     phi_action_helpers::{eta_scaling, run_sweeps, Coupling},
+    phi_shift::sweep_plan,
     scratch::ScratchPool,
 };
 
@@ -52,7 +53,7 @@ pub const PHI_MAX: usize = 3;
 /// augmented norm. With the current θ table (ADR-0198) and the η-scaled bound
 /// `τ‖G‖ + 2`, `τ‖G‖ = 2` gives `(s, m) = (3, 30)`: 90 generator mat-vecs (pinned by
 /// the [`phi_cost_probe`] doctest).
-const PHI_NORM_TIGHTEN: f64 = 2.0;
+pub(crate) const PHI_NORM_TIGHTEN: f64 = 2.0;
 
 /// `(s, m)` used by every φ entry point for a generator-norm bound `norm_g` and step `tau`.
 ///
@@ -79,7 +80,7 @@ pub fn phi_cost_probe(norm_g: f64, tau: f64) -> (u32, u32) {
 /// # Errors
 /// `DomainViolation` if `tau` or the generator norm bound is negative or not
 /// finite (issue #44: a non-finite bound used to select a silently wrong schedule).
-fn phi_schedule(norm_g: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
+pub(crate) fn phi_schedule(norm_g: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
     for (value, what) in [
         (tau, "phi_action: tau must be finite and >= 0"),
         (
@@ -92,15 +93,6 @@ fn phi_schedule(norm_g: f64, tau: f64) -> Result<(u32, u32), SemiflowError> {
         }
     }
     select_s_m((tau * norm_g + 2.0) * PHI_NORM_TIGHTEN, 1.0)
-}
-
-/// `(s, m)` for `op` and `tau` (see [`phi_schedule`]).
-fn sweep_params<F: SemiflowFloat, Op: GeneratorAction<F>>(
-    op: &Op,
-    tau: F,
-) -> Result<(u32, u32), SemiflowError> {
-    let norm = op.norm_bound().to_f64().unwrap_or(f64::NAN);
-    phi_schedule(norm, tau.to_f64().unwrap_or(f64::NAN))
 }
 
 /// `‖v‖∞` as `f64`.
@@ -146,7 +138,7 @@ pub fn phi_action_batched<F: SemiflowFloat, Op: GeneratorAction<F>>(
     }
     let n = op.dim();
     let dim_aug = n + PHI_MAX; // always n+3; uniform across all k
-    let (s, m) = sweep_params(op, tau)?;
+    let plan = sweep_plan(op, tau)?;
     let (eta, inv_eta) = eta_scaling::<F>(sup_norm(v));
     let coupling = Coupling {
         cols: &[v],
@@ -164,8 +156,7 @@ pub fn phi_action_batched<F: SemiflowFloat, Op: GeneratorAction<F>>(
             op,
             &coupling,
             tau,
-            s,
-            m,
+            &plan,
             &mut y_aug,
             &mut w_aug,
             &mut av_buf,
@@ -209,7 +200,7 @@ pub fn phi_action<F: SemiflowFloat, Op: GeneratorAction<F>>(
     }
     let n = op.dim();
     let dim_aug = n + PHI_MAX;
-    let (s, m) = sweep_params(op, tau)?;
+    let plan = sweep_plan(op, tau)?;
     let (eta, inv_eta) = eta_scaling::<F>(sup_norm(v));
     let coupling = Coupling {
         cols: &[v],
@@ -225,8 +216,7 @@ pub fn phi_action<F: SemiflowFloat, Op: GeneratorAction<F>>(
         op,
         &coupling,
         tau,
-        s,
-        m,
+        &plan,
         &mut y_aug,
         &mut w_aug,
         &mut av_buf,
@@ -249,7 +239,7 @@ fn domain_err(what: &'static str, value: f64) -> SemiflowError {
 }
 
 /// Validate `phi_combination` inputs (early returns, no allocation).
-fn validate_combination<F: SemiflowFloat>(
+pub(crate) fn validate_combination<F: SemiflowFloat>(
     n: usize,
     tau: F,
     w: &[&[F]],
@@ -324,6 +314,25 @@ fn weighted_columns<'a, F: SemiflowFloat>(
     Ok((cols, gains, max_mag))
 }
 
+/// `(columns, η-scaled gains, 1/η)` of [`eta_scaled_columns`].
+pub(crate) type EtaColumns<'a, F> = ([&'a [F]; PHI_MAX], [F; PHI_MAX], F);
+
+/// [`weighted_columns`] with the gains multiplied by `η` (§62.4), and `1/η`.
+pub(crate) fn eta_scaled_columns<'a, F: SemiflowFloat>(
+    w: &[&'a [F]],
+    tau: F,
+) -> Result<EtaColumns<'a, F>, SemiflowError> {
+    let (cols, mut gains, max_mag) = weighted_columns(w, tau)?;
+    let (eta, inv_eta) = eta_scaling::<F>(max_mag);
+    for gain in &mut gains[..w.len() - 1] {
+        *gain *= eta;
+        if !gain.is_finite() {
+            return Err(domain_err("phi_combination: tau^k*eta overflow", f64::NAN));
+        }
+    }
+    Ok((cols, gains, inv_eta))
+}
+
 /// Compute `out ← Σ_{k=0}^{p} τ^k φ_k(τG) w_k`, `p = w.len() − 1 ≤ PHI_MAX` (§62.4).
 ///
 /// ONE augmented Horner sweep (Al-Mohy–Higham 2011, Thm 2.1, η-scaled): the cost
@@ -346,20 +355,13 @@ pub fn phi_combination<F: SemiflowFloat, Op: GeneratorAction<F>>(
     let n = op.dim();
     validate_combination(n, tau, w, out.len())?;
     let degree = w.len() - 1;
-    let (cols, mut gains, max_mag) = weighted_columns(w, tau)?;
-    let (eta, inv_eta) = eta_scaling::<F>(max_mag);
-    for gain in &mut gains[..degree] {
-        *gain *= eta;
-        if !gain.is_finite() {
-            return Err(domain_err("phi_combination: tau^k*eta overflow", f64::NAN));
-        }
-    }
+    let (cols, gains, inv_eta) = eta_scaled_columns(w, tau)?;
     let coupling = Coupling {
         cols: &cols[..degree],
         coef: &gains[..degree],
     };
 
-    let (s, m) = sweep_params(op, tau)?;
+    let plan = sweep_plan(op, tau)?;
     let mut y_aug = scratch.take_vec(n + degree);
     let mut w_aug = scratch.take_vec(n + degree);
     let mut av_buf = scratch.take_vec(n);
@@ -372,8 +374,7 @@ pub fn phi_combination<F: SemiflowFloat, Op: GeneratorAction<F>>(
         op,
         &coupling,
         tau,
-        s,
-        m,
+        &plan,
         &mut y_aug,
         &mut w_aug,
         &mut av_buf,

@@ -81,7 +81,8 @@ impl<F: SemiflowFloat> GeneralOperator<F> {
         // May be `∞` for finite entries (issue #44): legal with a mass, rejected by
         // every consumer that schedules from it (`select_s_m`, `CsrGenerator`).
         let norm_inf = row_sum_norm(n, row_ptr, vals);
-        let (shift, norm_shifted) = trace_shift(n, row_ptr, col_idx, vals, norm_inf);
+        let (shift, norm_shifted) =
+            crate::csr_shift::trace_shift(n, row_ptr, col_idx, vals, norm_inf);
         let (t_row_ptr, t_col_idx, t_vals) = transpose_csr(n, row_ptr, col_idx, vals);
         Ok(Self {
             n,
@@ -213,44 +214,6 @@ fn row_sum_norm<F: SemiflowFloat>(n: usize, row_ptr: &[usize], vals: &[F]) -> f6
         }
     }
     best
-}
-
-/// Trace shift `(μ, ‖A − μI‖_∞)`, `μ = tr(A)/n` (Al-Mohy & Higham 2011, §3.1):
-/// `e^{−τA} = e^{−τμ}·e^{−τ(A−μI)}`, and the Taylor cost scales with the norm of
-/// the shifted matrix — half of `‖A‖_∞` for a diffusion stencil. Kept only when
-/// it lowers the bound; otherwise `(0, ‖A‖_∞)` (and the kernel's bits are those
-/// of the unshifted one).
-#[allow(clippy::cast_precision_loss)] // n < 2^53
-fn trace_shift<F: SemiflowFloat>(
-    n: usize,
-    row_ptr: &[usize],
-    col_idx: &[u32],
-    vals: &[F],
-    norm_inf: f64,
-) -> (f64, f64) {
-    if n == 0 || !norm_inf.is_finite() {
-        return (0.0, norm_inf);
-    }
-    let to64 = |v: &F| v.to_f64().unwrap_or(f64::NAN);
-    let row = |i: usize| (row_ptr[i]..row_ptr[i + 1]).map(move |k| (col_idx[k] as usize, &vals[k]));
-    let diag = |i: usize| -> f64 { row(i).filter(|&(j, _)| j == i).map(|(_, v)| to64(v)).sum() };
-    let mu = (0..n).map(diag).sum::<f64>() / n as f64;
-    let mut norm = 0.0_f64;
-    for i in 0..n {
-        let off: f64 = row(i)
-            .filter(|&(j, _)| j != i)
-            .map(|(_, v)| libm::fabs(to64(v)))
-            .sum();
-        let r = off + libm::fabs(diag(i) - mu);
-        if r.is_nan() || r > norm {
-            norm = r; // NaN propagates and fails the comparison below
-        }
-    }
-    if mu.is_finite() && norm < norm_inf {
-        (mu, norm)
-    } else {
-        (0.0, norm_inf)
-    }
 }
 
 /// Build the transposed CSR by counting sort over columns.

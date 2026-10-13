@@ -307,6 +307,11 @@ impl DivFormFaces {
         self.a_pos.len()
     }
 
+    /// Face coefficients `(a₊, a₋)` and `dx²` (read by the φ diagonal shift, ADR-0210).
+    pub(crate) fn faces(&self) -> (&[f64], &[f64], f64) {
+        (&self.a_pos, &self.a_neg, self.dx2)
+    }
+
     /// `out ← A·f` (`n ≥ 3`, both slices of length `n`).
     pub(crate) fn apply(&self, f: &[f64], out: &mut [f64]) {
         let n = self.a_pos.len();

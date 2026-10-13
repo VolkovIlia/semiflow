@@ -195,6 +195,24 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 - Re-recorded once: `no_std` digests `graph_krylov_chebyshev`,
   `graph_frechet_large_t` (identical in `no_std`, `std-ref`, AVX2).
 
+#### Performance (new algorithms; output bits change, ADR-0210)
+
+- **φ-actions: diagonal shift of the augmented operator.** `e^{B̃_η} =
+  e^{μ}·e^{B̃_η − μI}` with `μ = τḡ`, `ḡ` the centre of the generator's Gershgorin
+  hull (the minimiser of `‖G − ḡI‖_∞`; the trace mean saved only 8 % under a lumped
+  mass of contrast 50, the midpoint 46 %). The φ sweeps run on the shifted
+  operator and rescale by `e^{μ/s}`, only when that lowers the generator
+  applications `s·m`: about half on diffusion generators (64 nodes: 720 → 390 at
+  `τ‖G‖ = 40`, 6 840 → 3 510 at 400; gate `G_PHI_SHIFT_COST`). Same session, back
+  to back: `phi_action` φ₁ N = 1000 300 → 145 ms, ETDRK4 Allen–Cahn N = 256
+  195 → 96 ms. New provided trait methods `GeneratorAction::diagonal_shift`
+  (default `None`: external generators keep their bits) and
+  `SymmetricLinearOp::csr_view`; new probe `phi_sweep_probe(op, τ)` (the schedule
+  actually used; `phi_cost_probe` stays the unshifted norm-only probe). Accuracy
+  `≤ 7.1e−15` against the dense augmented exponential (`G_PHI_SHIFT_DENSE`);
+  bitwise power-of-two homogeneity kept (`G_PHI_SHIFT_HOMOGENEITY`). Re-recorded
+  once: `no_std` digest `phi_combination`.
+
 ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
 φ-combination that closes the affine and ETD gaps. All additive except one
 behaviour change in `phi_action` (see Changed). No ABI change; FFI and WASM are
