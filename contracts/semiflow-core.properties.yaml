@@ -11811,3 +11811,43 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0213
+
+  - name: G_STEP_PLAN_BIT_EQUAL
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (0 ULP: 960 1-D configurations incl. ShiftChernoff1D; Strang 2-D/3-D serial and threaded; fallbacks; errors)"
+    rationale: |
+      ADR-0215: a τ-keyed step plan stores what DiffusionChernoff recomputes per step
+      (planned samples: table offset + interpolation weights; ζ scalars; τ²) by the
+      kernel's own expressions (likewise ShiftChernoff1D: τ·c(x) and three samples).
+      Planned vs forced-unplanned (NoPlan wrapper) results agree bitwise for
+      DiffusionChernoff const / fn-pointer / closure a and ShiftChernoff1D (drift,
+      reaction) × septic, octonic, Catmull–Rom,
+      Chebyshev M = 16, linear × all eight boundary policies × n ∈ {8, 37, 128} ×
+      τ ∈ {1e−4, 5} (samples past the ghost-table margin) through Evolver and
+      ChernoffSemigroup, and through Strang2D/Strang3D (serial sweeps and, with the
+      parallel feature, the threaded sweeps); a plan presented with another τ, grid
+      or engine falls back to apply_into; invalid a / τ fail in both paths.
+    gate: "planned == unplanned bitwise for every configuration; fallbacks bitwise equal; same error variants"
+    test_file: "tests/g_step_plan_bit_equal.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0215
+
+  - name: G_STEP_PLAN_ZERO_ALLOC
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (evolver 2 per call for n = 2 and 50; strang2d 0; semigroup 3)"
+    rationale: |
+      ADR-0215: plans live in caller-owned scratch buffers. A planned
+      Evolver::evolve_into allocates per call only (the two ping-pong states: same
+      count for 2 and 50 steps, ≤ 2 with a warm pool); a planned Strang2D step
+      allocates nothing in steady state; ChernoffSemigroup::evolve allocates ≤ 3 times
+      (two states + the plan, which replaces the per-step ghost table).
+    gate: "evolver count(n=2) == count(n=50) ≤ 2 AND strang2d steady state 0 AND semigroup ≤ 3"
+    test_file: "tests/g_step_plan_zero_alloc.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0215

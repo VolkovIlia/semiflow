@@ -37,6 +37,7 @@ use crate::{
     reaction_stiff::{ros2_flow, ReactionSolver, RosBuffers},
     scratch::ScratchPool,
     state::State,
+    step_plan::PencilPlan,
 };
 
 /// A state with node values and node coordinates (the reaction's view of it).
@@ -321,6 +322,8 @@ struct Workspace<F: SemiflowFloat, S> {
     k: Vec<F>,
     spare: S,
     ros: Option<RosBuffers<F>>,
+    /// One τ-keyed plan per species engine (ADR-0215).
+    plans: Vec<PencilPlan<F>>,
 }
 
 impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
@@ -342,6 +345,7 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
             k: scratch.take_vec(kn),
             spare: u.fields[0].clone(),
             ros,
+            plans: u.fields.iter().map(|_| PencilPlan::new()).collect(),
         }
     }
 
@@ -351,6 +355,9 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         }
         if let Some(r) = self.ros {
             r.release(scratch);
+        }
+        for p in self.plans {
+            p.release(scratch);
         }
     }
 
@@ -368,8 +375,9 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
             cd.to_modes(&self.flat, &mut self.acc, self.n);
             scatter(&self.acc, u, self.n);
         }
-        for (engine, field) in rd.engines.iter().zip(u.fields.iter_mut()) {
-            engine.apply_into(tau, field, &mut self.spare, scratch)?;
+        let pairs = rd.engines.iter().zip(u.fields.iter_mut());
+        for ((engine, field), plan) in pairs.zip(self.plans.iter_mut()) {
+            plan.apply(engine.as_ref(), tau, field, &mut self.spare, scratch)?;
             core::mem::swap(field, &mut self.spare);
         }
         if let Some(cd) = &rd.cross {

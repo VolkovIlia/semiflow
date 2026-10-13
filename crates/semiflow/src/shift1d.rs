@@ -265,7 +265,36 @@ impl ChernoffFunction<f64> for ShiftChernoff1D<f64> {
             })
         })
     }
+
+    /// τ-keyed plan (ADR-0215): `τ·c(x)` and three planned samples per node.
+    fn plan_len(&self, _tau: f64, proto: &GridFn1D<f64>) -> Option<(usize, usize)> {
+        plan::len(proto)
+    }
+
+    fn fill_plan(
+        &self,
+        tau: f64,
+        proto: &GridFn1D<f64>,
+        data: &mut [f64],
+    ) -> Result<(), SemiflowError> {
+        plan::fill(self, tau, proto, data)
+    }
+
+    fn apply_planned_into(
+        &self,
+        tau: f64,
+        data: &[f64],
+        work: &mut [f64],
+        src: &GridFn1D<f64>,
+        dst: &mut GridFn1D<f64>,
+        scratch: &mut crate::scratch::ScratchPool<f64>,
+    ) -> Result<(), SemiflowError> {
+        plan::apply(self, tau, data, work, src, dst, scratch)
+    }
 }
+
+#[path = "shift1d_plan.rs"]
+mod plan;
 
 // Phase 5a: additive impl — delegates to generic scalar apply_f path.
 impl ChernoffFunction<f32> for ShiftChernoff1D<f32> {

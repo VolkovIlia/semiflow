@@ -104,16 +104,16 @@ fn chernoff_semigroup_ping_pong_allocs() {
     let semi = ChernoffSemigroup::new(op, steps).unwrap();
     let f0 = GridFn1D::from_fn(grid, |x| (-x * x).exp());
 
-    // Measure allocations for a complete evolve call.
-    // Expected: exactly 2 allocations (buf_a clone + buf_b zeroed_like).
-    // No per-step allocations when apply_into is overridden and does not use scratch.
+    // Measure allocations for a complete evolve call: the two ping-pong states and
+    // the τ-keyed plan buffer (ADR-0215; it replaces the per-step ghost table and
+    // is dropped with the local pool, so the free list never grows).
     let info: AllocationInfo = allocation_counter::measure(|| {
         let _result = semi.evolve(t, &f0).unwrap();
     });
 
     assert!(
-        info.count_total <= 4,
-        "ChernoffSemigroup::evolve allocated {} time(s) (expected ≤ 4 for buffers + scratch init)",
+        info.count_total <= 3,
+        "ChernoffSemigroup::evolve allocated {} time(s) (expected ≤ 3: two states + plan)",
         info.count_total
     );
 }

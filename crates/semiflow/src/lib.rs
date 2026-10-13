@@ -201,6 +201,7 @@ pub mod simd;
 pub mod smolyak;
 pub mod spd_resolvent;
 pub mod state;
+pub(crate) mod step_plan;
 pub mod strang;
 pub mod strang2d;
 #[cfg(feature = "parallel")]

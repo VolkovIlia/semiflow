@@ -24,6 +24,7 @@ use crate::{
     grid_fn3d::GridFn3D,
     pencil,
     scratch::ScratchPool,
+    step_plan::PencilPlan,
 };
 
 // ---------------------------------------------------------------------------
@@ -174,13 +175,16 @@ fn apply_into_x_3d<C, F: SemiflowFloat>(
 where
     C: ChernoffFunction<F, S = GridFn1D<F>>,
 {
+    // ADR-0215: one τ-keyed plan for every pencil of the sweep.
+    let mut plan = PencilPlan::new();
     for k in 0..nz {
         for j in 0..ny {
             let src_p = pencil::pencil_x_3d(src, nx, ny, j, k);
             let dst_p = pencil::pencil_x_3d_mut(dst, nx, ny, j, k);
-            crate::grid_fn::apply_into_via_view(inner, tau, src_p, dst_p, gx, scratch)?;
+            plan.apply_slices(inner, tau, (src_p, dst_p), gx, scratch)?;
         }
     }
+    plan.release(scratch);
     Ok(())
 }
 
@@ -202,6 +206,7 @@ where
 {
     let mut src_col = scratch.take_vec(ny);
     let mut dst_col = scratch.take_vec(ny);
+    let mut plan = PencilPlan::new();
     for k in 0..nz {
         for i in 0..nx {
             pencil::gather_y_3d_into(src, nx, ny, i, k, &mut src_col);
@@ -213,12 +218,13 @@ where
                 values: core::mem::take(&mut dst_col),
                 grid: gy,
             };
-            inner.apply_into(tau, &src_gf, &mut dst_gf, scratch)?;
+            plan.apply(inner, tau, &src_gf, &mut dst_gf, scratch)?;
             pencil::scatter_y_3d_from(dst, nx, ny, i, k, &dst_gf.values);
             src_col = src_gf.values;
             dst_col = dst_gf.values;
         }
     }
+    plan.release(scratch);
     scratch.return_vec(src_col);
     scratch.return_vec(dst_col);
     Ok(())
@@ -242,6 +248,7 @@ where
 {
     let mut src_col = scratch.take_vec(nz);
     let mut dst_col = scratch.take_vec(nz);
+    let mut plan = PencilPlan::new();
     for j in 0..ny {
         for i in 0..nx {
             pencil::gather_z_3d_into(src, nx, ny, nz, i, j, &mut src_col);
@@ -253,12 +260,13 @@ where
                 values: core::mem::take(&mut dst_col),
                 grid: gz,
             };
-            inner.apply_into(tau, &src_gf, &mut dst_gf, scratch)?;
+            plan.apply(inner, tau, &src_gf, &mut dst_gf, scratch)?;
             pencil::scatter_z_3d_from(dst, nx, ny, nz, i, j, &dst_gf.values);
             src_col = src_gf.values;
             dst_col = dst_gf.values;
         }
     }
+    plan.release(scratch);
     scratch.return_vec(src_col);
     scratch.return_vec(dst_col);
     Ok(())

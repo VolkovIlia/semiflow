@@ -130,3 +130,21 @@ Python, same session (`atol = 1e−12`):
 
 - Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer
   Chebyshev, or the rational Krylov path (ADR-0206), for very stiff problems.
+
+## τ-keyed step plans (ADR-0215)
+
+`perf_suite heat` (release), two sessions each pairing a run without and with the
+plans; the host is shared and noisy (untouched rows moved by up to 2× between
+sessions):
+
+| workload | session A | session B |
+|---|---:|---:|
+| heat1d `ShiftChernoff1D` N = 1000, n = 100 | — | 11.0 → 3.5 ms |
+| heat1d `DiffusionChernoff` const-a | 18.9 → 5.0 ms | 17.8 → 5.6 ms |
+| heat1d fn-ptr `a ≡ ½` | 30.1 → 8.8 ms | 36.2 → 13.7 ms |
+| heat1d variable-`a` closure | 40.1 → 8.9 ms | 52.0 → 9.5 ms |
+| heat2d `Strang2D` 400², n = 10 | 1 799 → 596 ms | 1 937 → 910 ms |
+| heat3d `Strang3D` 64³, n = 10 | 5 550 → 2 534 ms | 6 104 → 3 822 ms |
+
+Results are bit-identical (`G_STEP_PLAN_BIT_EQUAL`, 0 ULP). Short `64³` pencils
+remain bound by the per-pencil ghost-table fill (`MARGIN = 24` cells each side).

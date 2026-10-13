@@ -61,8 +61,16 @@ Done:
   rejected) on every existing engine, 1-D/2-D/3-D and graphs; Python
   `diffusivity=[[…], …]`.
 
+- **τ-keyed step plans (ADR-0215):** `ChernoffFunction::plan_len` / `fill_plan` /
+  `apply_planned_into` (provided); `DiffusionChernoff` plans sample offsets,
+  interpolation weights and coefficient values once per `(τ, grid)`; `Evolver`,
+  `ChernoffSemigroup`, every Strang sweep (serial and threaded) and
+  `ReactionDiffusion` use them. Bit-identical; heat1d 2.6–5.5×, heat2d `400²`
+  2.1–3.0×, heat3d `64³` 1.6–2.2× (paired runs on a noisy shared host).
+
 Next:
-- τ-keyed step plans for the grid engines (≈2–3×, a trait hook, ADR-0215).
+- Step plans for the other grid engines (`ShiftChernoff1D`, `Diffusion4th/6th`,
+  drift–reaction), and a narrower ghost table for short pencils.
 - Periodic boundary: unify the coordinate wrap of `sample` (period `(n − 1)·dx`,
   as documented) with the engines' ghost-index wrap (period `n·dx`); bit-changing,
   needs its own ADR (found while gating ADR-0213).

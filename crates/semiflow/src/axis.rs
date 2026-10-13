@@ -21,6 +21,7 @@ use crate::{
     grid_fn2d::GridFn2D,
     pencil,
     scratch::ScratchPool,
+    step_plan::PencilPlan,
 };
 
 // ---------------------------------------------------------------------------
@@ -247,11 +248,14 @@ fn apply_into_x<C, F: SemiflowFloat>(
 where
     C: ChernoffFunction<F, S = GridFn1D<F>>,
 {
+    // ADR-0215: one τ-keyed plan for every row of the sweep.
+    let mut plan = PencilPlan::new();
     for j in 0..ny {
         let src_row = pencil::row_2d(src, nx, j);
         let dst_row = pencil::row_2d_mut(dst, nx, j);
-        crate::grid_fn::apply_into_via_view(inner, tau, src_row, dst_row, gx, scratch)?;
+        plan.apply_slices(inner, tau, (src_row, dst_row), gx, scratch)?;
     }
+    plan.release(scratch);
     Ok(())
 }
 
@@ -276,6 +280,7 @@ where
 {
     let mut src_col = scratch.take_vec(ny);
     let mut dst_col = scratch.take_vec(ny);
+    let mut plan = PencilPlan::new();
     for i in 0..nx {
         pencil::gather_y_2d_into(src, nx, ny, i, &mut src_col);
         let src_gf = GridFn1D {
@@ -286,11 +291,12 @@ where
             values: core::mem::take(&mut dst_col),
             grid: gy,
         };
-        inner.apply_into(tau, &src_gf, &mut dst_gf, scratch)?;
+        plan.apply(inner, tau, &src_gf, &mut dst_gf, scratch)?;
         pencil::scatter_y_2d_from(dst, nx, ny, i, &dst_gf.values);
         src_col = src_gf.values;
         dst_col = dst_gf.values;
     }
+    plan.release(scratch);
     scratch.return_vec(src_col);
     scratch.return_vec(dst_col);
     Ok(())

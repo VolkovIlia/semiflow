@@ -13908,3 +13908,9 @@ bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
 > NORMATIVE body (ADR-0213) lives in
 > [`contracts/semiflow-core.math-cross-diffusion.md`](semiflow-core.math-cross-diffusion.md);
 > every "§70.x" citation resolves there.
+
+## §71 — τ-keyed step plans (in its own file)
+
+> NORMATIVE body (ADR-0215) lives in
+> [`contracts/semiflow-core.math-step-plans.md`](semiflow-core.math-step-plans.md);
+> every "§71.x" citation resolves there.

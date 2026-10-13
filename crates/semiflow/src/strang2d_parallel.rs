@@ -27,6 +27,8 @@
 //! `contracts/semiflow-core.tensor.yaml` §3 `parallel_constants`.
 
 use alloc::{sync::Arc, vec::Vec};
+
+use crate::step_plan::{axis_plan, ThreadPencil};
 use core::cell::Cell;
 use std::sync::Mutex;
 
@@ -44,7 +46,7 @@ use std::sync::Mutex;
 #[doc(hidden)]
 pub use crate::parallel_pool::PARALLEL_2D_POOL_F64 as PARALLEL_2D_POOL;
 use crate::{
-    chernoff::{ApplyChernoffExt, ChernoffFunction},
+    chernoff::ChernoffFunction,
     error::SemiflowError,
     float::SemiflowFloat,
     grid::Grid1D,
@@ -159,12 +161,14 @@ where
     let ny = state.len() / nx;
     let error_slot: ErrorSlot = Arc::new(Mutex::new(None));
     let chunk_size = chunk_count(ny, n_threads);
+    let plan = axis_plan(op, tau, gx)?;
+    let plan = plan.as_ref();
 
     std::thread::scope(|s| {
         for row_chunk in state.chunks_mut(chunk_size * nx) {
             let rows = row_chunk.len() / nx;
             let err_arc = Arc::clone(&error_slot);
-            s.spawn(move || x_pass_chunk(row_chunk, gx, rows, op, tau, &err_arc));
+            s.spawn(move || x_pass_chunk(row_chunk, (gx, rows), op, tau, &err_arc, plan));
         }
     });
 
@@ -179,11 +183,11 @@ where
 /// thread per X-pass rather than one per row.
 fn x_pass_chunk<X, F>(
     row_chunk: &mut [F],
-    gx: Grid1D<F>,
-    rows: usize,
+    (gx, rows): (Grid1D<F>, usize),
     op: &X,
     tau: F,
     err: &ErrorSlot,
+    plan: Option<&(Vec<F>, usize)>,
 ) where
     F: SemiflowFloat + Send + Sync + ParallelPool2D,
     X: ChernoffFunction<F, S = GridFn1D<F>>,
@@ -192,6 +196,7 @@ fn x_pass_chunk<X, F>(
     // Borrow row buffer from thread-local pool (Wave 2, ADR-0042).
     // take_vec + return_vec avoids per-row allocation while pool is shared.
     let mut row_buf = F::with_pool_2d(|pool| pool.take_vec(nx));
+    let mut tp = ThreadPencil::new(plan);
     for r in 0..rows {
         let row_start = r * nx;
         row_buf.copy_from_slice(&row_chunk[row_start..row_start + nx]);
@@ -199,9 +204,9 @@ fn x_pass_chunk<X, F>(
             values: core::mem::take(&mut row_buf),
             grid: gx,
         };
-        match op.apply_chernoff(tau, &row_fn) {
+        match tp.apply(op, tau, &row_fn) {
             Ok(evolved) => {
-                row_chunk[row_start..row_start + nx].copy_from_slice(&evolved.values);
+                row_chunk[row_start..row_start + nx].copy_from_slice(evolved);
                 row_buf = row_fn.values;
             }
             Err(e) => {
@@ -227,13 +232,15 @@ fn x_pass_chunk<X, F>(
 /// Collects the parameters that are shared across all column-worker threads,
 /// reducing per-function argument counts (clippy `too_many_arguments`).
 #[derive(Clone, Copy)]
-struct YColCtx<F: SemiflowFloat> {
+struct YColCtx<'p, F: SemiflowFloat> {
     /// Width (number of columns) of the full 2-D state.
     nx: usize,
     /// Y-axis grid (gives `ny = gy.n`).
     gy: Grid1D<F>,
     /// Number of columns per thread chunk.
     col_chunk: usize,
+    /// The pass's shared τ-keyed plan (ADR-0215), if the engine has one.
+    plan: Option<&'p (Vec<F>, usize)>,
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +280,13 @@ where
     let nx = state.len() / ny;
     let col_chunk = chunk_count(nx, n_threads);
     let row_chunk = chunk_count(ny, n_threads);
-    let ctx = YColCtx { nx, gy, col_chunk };
+    let plan = axis_plan(op, tau, gy)?;
+    let ctx = YColCtx {
+        nx,
+        gy,
+        col_chunk,
+        plan: plan.as_ref(),
+    };
     // Reuse caller-provided scratch; resize only if capacity is insufficient.
     temp.resize(nx * ny, F::zero());
     let error_slot: ErrorSlot = Arc::new(Mutex::new(None));
@@ -297,7 +310,7 @@ where
 fn y_phase1_apply<Y, F>(
     state: &[F],
     temp: &mut [F],
-    ctx: YColCtx<F>,
+    ctx: YColCtx<'_, F>,
     op: &Y,
     tau: F,
     err: &ErrorSlot,
@@ -327,7 +340,7 @@ fn y_phase1_apply<Y, F>(
 #[allow(clippy::too_many_arguments)]
 fn y_apply_cols<Y, F>(
     state: &[F],
-    ctx: YColCtx<F>,
+    ctx: YColCtx<'_, F>,
     op: &Y,
     tau: F,
     col_start: usize,
@@ -341,6 +354,7 @@ fn y_apply_cols<Y, F>(
     let ny = ctx.gy.n;
     let nx = ctx.nx;
     let mut col_buf = F::with_pool_2d(|pool| pool.take_vec(ny));
+    let mut tp = ThreadPencil::new(ctx.plan);
     for c in 0..cols {
         let col_idx = col_start + c;
         if col_idx >= nx {
@@ -353,10 +367,10 @@ fn y_apply_cols<Y, F>(
             values: core::mem::take(&mut col_buf),
             grid: ctx.gy,
         };
-        match op.apply_chernoff(tau, &col_fn) {
+        match tp.apply(op, tau, &col_fn) {
             Ok(evolved) => {
                 let ts = c * ny;
-                temp_chunk[ts..ts + ny].copy_from_slice(&evolved.values);
+                temp_chunk[ts..ts + ny].copy_from_slice(evolved);
                 col_buf = col_fn.values;
             }
             Err(e) => {

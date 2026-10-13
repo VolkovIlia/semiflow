@@ -164,12 +164,27 @@ pub(crate) fn compute_chunk(
     let mut buf_b: GridFn1D<f64> = buf_a.clone();
     buf_b.zero_into();
     let mut scratch: ScratchPool<f64> = ScratchPool::new();
+    // ADR-0215: one τ-keyed plan for the chunk (bit-identical to apply_into).
+    let mut plan = match chernoff_func.plan_len(tau, &buf_a) {
+        Some((d, w)) => {
+            let mut data = vec![0.0; d];
+            chernoff_func.fill_plan(tau, &buf_a, &mut data)?;
+            Some((data, vec![0.0; w]))
+        }
+        None => None,
+    };
     let mut src_is_a = true;
     for _ in 0..k {
-        if src_is_a {
-            chernoff_func.apply_into(tau, &buf_a, &mut buf_b, &mut scratch)?;
+        let (src, dst) = if src_is_a {
+            (&buf_a, &mut buf_b)
         } else {
-            chernoff_func.apply_into(tau, &buf_b, &mut buf_a, &mut scratch)?;
+            (&buf_b, &mut buf_a)
+        };
+        match &mut plan {
+            Some((data, work)) => {
+                chernoff_func.apply_planned_into(tau, data, work, src, dst, &mut scratch)?;
+            }
+            None => chernoff_func.apply_into(tau, src, dst, &mut scratch)?,
         }
         src_is_a = !src_is_a;
     }

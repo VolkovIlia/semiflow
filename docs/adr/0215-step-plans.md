@@ -1,0 +1,99 @@
+# ADR-0215 — τ-keyed step plans for the grid engines
+
+- **Status**: Accepted
+- **Date**: 2026-10-13
+- **Supersedes / amends**: amends ADR-0204 (prepared sampling) — additive trait
+  hook; every result bit-identical.
+- **Contract**: math §71 (`contracts/semiflow-core.math-step-plans.md`); gates
+  `G_STEP_PLAN_BIT_EQUAL`, `G_STEP_PLAN_ZERO_ALLOC`.
+
+## Context
+
+After ADR-0204 one `DiffusionChernoff` step still recomputes, for every node and
+every step, what depends only on `(τ, grid, coefficients)`: the coefficient calls
+(constant `a`: 1; variable `a`: 7 `a′`, 2 `a`, 1 `a″` — each a Python callback in the
+bindings), two or three square roots, and for each of the 5 (constant `a`) or 10
+(γ-A baseline + ζ-A correction) samples the cell lookup (two divisions, a floor) and
+the Hermite weight polynomials (septic ≈ 70 flops, octonic ≈ 100). Fixed-τ loops
+apply the same engine with the same `τ` over and over: the `n` steps of `Evolver`
+and `ChernoffSemigroup`, and — inside one Strang step — every row of an axis sweep
+(`400` rows of a `400²` grid, `64²` pencils per axis of a `64³` grid).
+
+## Decision
+
+1. **Trait hook** (provided methods of `ChernoffFunction`, dyn-compatible,
+   semver-additive):
+   `plan_len(τ, proto) → Option<(data, work)>` (default `None`),
+   `fill_plan(τ, proto, data)`, `apply_planned_into(τ, data, work, src, dst, scratch)`
+   (default `apply_into`). The caller owns the buffers (scratch pool), so a planned
+   steady state allocates nothing; the plan's work area replaces the per-step
+   ghost-table buffer.
+2. **Plan contents** (`DiffusionChernoff<f64>`, all three storages, and
+   `ShiftChernoff1D<f64>`: `τ·c(x)` and its three samples per node): a header — tag,
+   `τ`, state length, the engine's address and the sampling grid's bit pattern
+   (bounds, `n`, boundary policy with payload, interpolant) — then per node the
+   planned samples `[table offset | −1, x, weights]` (`plan_sample`: the cell, the
+   ghost-table coverage and the interpolant's weights that
+   `PreparedGridFn::sample` computes; Catmull–Rom stores `s`, linear and
+   Chebyshev store only `x`) and, for variable `a`, the ζ scalars `2δ, δ², 2δ³,
+   a·a′, a·a″/2, a′·a″/4` and `τ²`, each by the kernel's own expression. A planned
+   step fills the ghost table into the work area and combines the stored weights
+   with it in the kernel's order: **bit-identical by construction**. A plan
+   presented with another `τ`, grid, length or engine is ignored (the engine runs
+   `apply_into`), so a plan can only make a step faster. Plans above `2²⁴` doubles
+   are not built. Building validates `τ` and `a` exactly like `apply_into`.
+3. **Consumers.** `Evolver::evolve_into`, `ChernoffSemigroup::evolve` and the
+   Richardson levels (one plan for all `n` steps), `AxisLift`/`AxisLift3D` sweeps
+   (one plan per sweep for all pencils), the threaded Strang 2-D/3-D sweeps (one
+   shared read-only plan, a work area per thread; the unplanned path is unchanged),
+   `ReactionDiffusion` (one plan per species engine per evolution) and the Python
+   chunked 1-D evolution.
+4. **Scratch pool: best fit.** `ScratchPool::take_vec` now hands out the SMALLEST
+   free buffer that fits (was: the first). With first fit a large plan buffer could
+   serve a small request, so the next large request allocated in every call; best
+   fit keeps a fixed request sequence allocation-free after one warm-up. Buffer
+   contents never depend on the choice (every taken buffer is zero-filled).
+
+## Consequences
+
+`perf_suite` (release; best of 5, 2-D/3-D best of 1), two sessions, each pairing a
+run without and with the plans. The host is shared and noisy (rows the plans do
+not touch moved by up to 2× between sessions), so ranges are reported:
+
+| workload | session A before → after | session B before → after | speed-up |
+|---|---:|---:|---:|
+| heat1d `ShiftChernoff1D`, N = 1000, n = 100 | — | 11.0 → 3.5 ms | 3.2× |
+| heat1d `DiffusionChernoff` const-a | 18.9 → 5.0 ms | 17.8 → 5.6 ms | 3.2–3.8× |
+| heat1d fn-ptr `a ≡ ½` | 30.1 → 8.8 ms | 36.2 → 13.7 ms | 2.6–3.4× |
+| heat1d variable-`a` closure | 40.1 → 8.9 ms | 52.0 → 9.5 ms | 4.5–5.5× |
+| heat2d `Strang2D` 400², n = 10 | 1 799 → 596 ms | 1 937 → 910 ms | 2.1–3.0× |
+| heat3d `Strang3D` 64³, n = 10 | 5 550 → 2 534 ms | 6 104 → 3 822 ms | 1.6–2.2× |
+
+Deterministic: the coefficient functions (Python callbacks in the bindings) are
+evaluated once per plan — once per `evolve`, per Strang sweep or per Python chunk —
+instead of once per step and pencil.
+
+## Honest limits
+
+- Producers: `DiffusionChernoff<f64>` and `ShiftChernoff1D<f64>`. Other engines
+  (`Diffusion4th/6th`, drift–reaction, `f32`/`Dual`) keep `plan_len = None`
+  (unchanged behaviour); wrappers that do not forward the hook run unplanned.
+- `ChernoffSemigroup::evolve` drops its plan with its local pool (≤ 3
+  allocations per call, was ≤ 4).
+- Short pencils (`64³`) are bound by the per-pencil ghost-table fill
+  (`MARGIN = 24` cells each side), which the plan does not remove.
+- The address check identifies the engine only while it is alive; a plan kept
+  past its engine's lifetime and presented to a new engine at the same address
+  is the caller's error (crate consumers build plans per call).
+
+## Gates
+
+- `G_STEP_PLAN_BIT_EQUAL` (`tests/g_step_plan_bit_equal.rs`): planned vs forced
+  unplanned (`NoPlan` wrapper), 0 ULP, three `DiffusionChernoff` storages and
+  `ShiftChernoff1D` (drift and reaction) × five interpolants × eight
+  boundary policies × `n ∈ {8, 37, 128}` × `τ ∈ {1e−4, 5}` through `Evolver` and
+  `ChernoffSemigroup`; `Strang2D`/`Strang3D` serial and threaded; the fallbacks
+  (other `τ`, grid, engine) and error equivalence.
+- `G_STEP_PLAN_ZERO_ALLOC`: a planned `Evolver::evolve_into` and a planned
+  `Strang2D` step allocate nothing in steady state; `ChernoffSemigroup::evolve`
+  ≤ 3 allocations per call.

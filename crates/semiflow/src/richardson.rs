@@ -184,10 +184,13 @@ where
         let tau = t / from_f64::<F>(n as f64);
         let mut other = src.clone();
         dst.copy_from(src);
+        // ADR-0215: one τ-keyed plan for the level's n steps (bit-identical).
+        let mut plan = crate::step_plan::PencilPlan::new();
         for _ in 0..n {
-            self.func.apply_into(tau, dst, &mut other, scratch)?;
+            plan.apply(&self.func, tau, dst, &mut other, scratch)?;
             core::mem::swap(dst, &mut other);
         }
+        plan.release(scratch);
         Ok(())
     }
 }

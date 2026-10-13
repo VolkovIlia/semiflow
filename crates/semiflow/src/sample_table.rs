@@ -207,6 +207,88 @@ impl Sample1D for PreparedGridFn<'_> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// τ-keyed sample plans (ADR-0215)
+// ---------------------------------------------------------------------------
+
+/// Doubles per planned sample on `grid` ([`plan_sample`]): `[offset | −1, x, w…]`
+/// with the interpolation weights of the grid's layout (Catmull–Rom: `s`).
+pub(crate) fn planned_stride(grid: &Grid1D) -> usize {
+    2 + match layout_of(grid) {
+        Layout::Cubic => 1,
+        Layout::Septic => 8,
+        Layout::Octonic => 10,
+        Layout::Direct | Layout::Chebyshev { .. } => 0,
+    }
+}
+
+/// Plan the sample at `x` on `grid` into `out` ([`planned_stride`] doubles): the
+/// table offset and the weights [`PreparedGridFn::sample`] computes for `x`, or
+/// offset `−1` when it takes the direct path (uncovered cell, untabled layout).
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss
+)]
+pub(crate) fn plan_sample(grid: &Grid1D, x: f64, out: &mut [f64]) {
+    let hi = grid.n as i64 - 1 + MARGIN;
+    let covered = |j0: i64, j1: i64| (j0 >= -MARGIN && j1 <= hi).then(|| (j0 + MARGIN) as f64);
+    out[0] = -1.0;
+    out[1] = x;
+    let layout = layout_of(grid);
+    if matches!(layout, Layout::Direct | Layout::Chebyshev { .. }) {
+        return;
+    }
+    let (idx, s) = cell_of(grid, x);
+    let (lo, hi_cell) = match layout {
+        Layout::Cubic => (idx - 1, idx + 2),
+        _ => (idx, idx + 1),
+    };
+    let Some(o) = covered(lo, hi_cell) else {
+        return;
+    };
+    out[0] = o;
+    match layout {
+        Layout::Cubic => out[2] = s,
+        Layout::Septic => out[2..10].copy_from_slice(&septic_weights(s)),
+        Layout::Octonic => out[2..12].copy_from_slice(&octonic_weights(s)),
+        Layout::Direct | Layout::Chebyshev { .. } => {}
+    }
+}
+
+impl PreparedGridFn<'_> {
+    /// The sample planned by [`plan_sample`] on this view's grid: bit-identical to
+    /// [`Sample1D::sample`] at the planned `x` (same weights, same combination).
+    #[inline]
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    pub(crate) fn sample_planned(&self, p: &[f64]) -> Result<f64, SemiflowError> {
+        if p[0] < 0.0 {
+            return self.sample(p[1]);
+        }
+        let o = p[0] as usize;
+        Ok(match self.layout {
+            Layout::Cubic => {
+                let t = &self.table[o..o + 4];
+                crate::grid_cubic::catmull_rom(t[0], t[1], t[2], t[3], p[2])
+            }
+            Layout::Septic => {
+                let (mut w, mut d) = ([0.0; 8], [0.0; 8]);
+                w.copy_from_slice(&p[2..10]);
+                d.copy_from_slice(&self.table[4 * o..4 * o + 8]);
+                septic_combine(&w, &d)
+            }
+            Layout::Octonic => {
+                let (mut w, mut d) = ([0.0; 10], [0.0; 10]);
+                w.copy_from_slice(&p[2..12]);
+                d.copy_from_slice(&self.table[5 * o..5 * o + 10]);
+                octonic_combine(&w, &d)
+            }
+            Layout::Direct | Layout::Chebyshev { .. } => self.sample(p[1])?,
+        })
+    }
+}
+
 /// What one ghost node of a table holds (`STRIDE` doubles).
 trait NodeEntry<const STRIDE: usize> {
     /// Stencil radius: nodes `j ± radius` are read.

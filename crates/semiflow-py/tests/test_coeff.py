@@ -127,6 +127,11 @@ def test_path2_faster_than_path1() -> None:
 
     Timing uses the minimum of 5 repetitions — the standard robust micro-timing
     practice (min ≈ least OS-jitter) — plus a warm-up iteration before timing begins.
+
+    Each repetition runs ``N_STEPS`` single-step ``evolve`` calls: since ADR-0215 a
+    multi-step ``evolve`` evaluates the coefficients once per τ-keyed plan, so only
+    per-call plans make Path 1 pay its callbacks on every step, as this comparison
+    of per-step coefficient evaluation requires.
     """
     xs, u0, a_arr, ap_arr, app_arr, norm = _make_grids()
 
@@ -151,7 +156,8 @@ def test_path2_faster_than_path1() -> None:
             a=_a, a_prime=_a_prime, a_double_prime=_a_double_prime,
             a_norm_bound=norm, u0=u0,
         )
-        h1.evolve(T, N_STEPS)
+        for _ in range(N_STEPS):
+            h1.evolve(T / N_STEPS, 1)
         t1_times.append(time.perf_counter() - t0)
     t1_elapsed = min(t1_times)
 
@@ -160,7 +166,8 @@ def test_path2_faster_than_path1() -> None:
     for _ in range(N_REPS):
         t0 = time.perf_counter()
         h2 = rp.Heat1D.with_a_array(XMIN, XMAX, N, a=a_arr, u0=u0)
-        h2.evolve(T, N_STEPS)
+        for _ in range(N_STEPS):
+            h2.evolve(T / N_STEPS, 1)
         t2_times.append(time.perf_counter() - t0)
     t2_elapsed = min(t2_times)
 

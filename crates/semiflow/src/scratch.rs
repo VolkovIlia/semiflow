@@ -103,8 +103,8 @@ impl<F: SemiflowFloat> ScratchPool<F> {
         if len > self.high_water_capacity {
             self.high_water_capacity = len;
         }
-        // Find first buffer with enough capacity (smallest-fits-first scan).
-        let pos = self.free.iter().position(|b| b.capacity() >= len);
+        // Smallest buffer with enough capacity (best fit, ADR-0215).
+        let pos = self.best_fit(len);
         let mut buf = match pos {
             Some(idx) => self.free.swap_remove(idx),
             None => Vec::with_capacity(len),
@@ -128,13 +128,27 @@ impl<F: SemiflowFloat> ScratchPool<F> {
         if len > self.high_water_capacity {
             self.high_water_capacity = len;
         }
-        let pos = self.free.iter().position(|b| b.capacity() >= len);
+        let pos = self.best_fit(len);
         let mut buf = match pos {
             Some(idx) => self.free.swap_remove(idx),
             None => Vec::with_capacity(len),
         };
         buf.resize(len, F::zero());
         buf
+    }
+
+    /// Index of the SMALLEST free buffer with capacity `>= len` (best fit), so a
+    /// large buffer (a step plan, a 2-D state) is not handed to a small request
+    /// while a later large request has to allocate: with a fixed request sequence
+    /// the steady state allocates nothing (ADR-0215). Contents never depend on the
+    /// choice (every taken buffer is zero-filled).
+    fn best_fit(&self, len: usize) -> Option<usize> {
+        self.free
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.capacity() >= len)
+            .min_by_key(|(_, b)| b.capacity())
+            .map(|(i, _)| i)
     }
 
     /// Return a previously taken `Vec` to the pool (capacity preserved).

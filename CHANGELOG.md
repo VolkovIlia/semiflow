@@ -240,6 +240,25 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `G_STIFF_KINETICS_PER_NODE`, `G_STIFF_KINETICS_FD_JAC`, `G_STIFF_ROBERTSON`. RK4 stays the default, bit-identical; `dense_exp` moves
   verbatim to `dense_la.rs`.
 
+#### Performance — τ-keyed step plans (ADR-0215)
+
+- **`ChernoffFunction` step plans** (`plan_len`, `fill_plan`, `apply_planned_into`;
+  provided methods, default: no plan). `DiffusionChernoff<f64>` (and
+  `ShiftChernoff1D<f64>`) plans what a step
+  recomputed although it depends only on `(τ, grid, coefficients)` — per node the
+  sample cells, ghost-table offsets and Hermite weights, the ζ coefficients; the
+  coefficient closures (Python callbacks) are called once per plan instead of once
+  per step. Planned steps are bit-identical (`G_STEP_PLAN_BIT_EQUAL`, 0 ULP) and
+  allocation-free in steady state (`G_STEP_PLAN_ZERO_ALLOC`); a plan presented with
+  another `τ`, grid or engine is ignored. Consumers: `Evolver`, `ChernoffSemigroup`
+  (≤ 3 allocations per call, was ≤ 4), the `AxisLift` sweeps of `Strang2D`/`Strang3D`
+  (one plan for all pencils; the threaded sweeps share it read-only) and
+  `ReactionDiffusion`, Richardson levels and the Python chunked 1-D evolution.
+  `ScratchPool::take_vec` now picks the smallest buffer that fits (best fit), so
+  plan buffers never displace smaller requests. Paired runs (noisy shared host):
+  heat1d `N = 1000` 2.6–5.5× (variable-`a` closure 52.0 → 9.5 ms), heat2d `400²`
+  2.1–3.0× (1.94 → 0.91 s), heat3d `64³` 1.6–2.2× (6.10 → 3.82 s).
+
 #### Added — cross-diffusion (ADR-0213)
 
 - **Cross-diffusion with a constant matrix for `ReactionDiffusion`.**

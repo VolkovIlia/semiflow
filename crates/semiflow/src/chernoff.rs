@@ -198,6 +198,51 @@ pub trait ChernoffFunction<F: SemiflowFloat = f64> {
                    (ADR-0114)",
         })
     }
+
+    /// Sizes `(data, work)` of a τ-keyed step plan for states shaped like `proto`
+    /// (ADR-0215), or `None` (default) when the engine has no plan.
+    ///
+    /// A plan holds what [`apply_into`](Self::apply_into) recomputes on every
+    /// step although it depends only on `(τ, grid, coefficients)` — sample
+    /// positions, interpolation weights, coefficient values — so that applying
+    /// one engine with one `τ` to many states (steps, pencils of a Strang sweep)
+    /// is cheaper. Planned results are BIT-IDENTICAL to `apply_into`.
+    #[allow(unused_variables)]
+    fn plan_len(&self, tau: F, proto: &Self::S) -> Option<(usize, usize)> {
+        None
+    }
+
+    /// Fill `data` (length `plan_len(..).0`) for `(τ, proto)`.
+    ///
+    /// # Errors
+    /// The errors [`apply_into`](Self::apply_into) raises for this `τ` and grid
+    /// (an invalid `τ` or coefficient); `UnsupportedOperation` by default.
+    #[allow(unused_variables)]
+    fn fill_plan(&self, tau: F, proto: &Self::S, data: &mut [F]) -> Result<(), SemiflowError> {
+        Err(SemiflowError::UnsupportedOperation {
+            what: "fill_plan: this ChernoffFunction has no step plan (plan_len is None)",
+        })
+    }
+
+    /// `dst := S(τ) src` with a plan `data` filled by THIS engine for `τ`, and a
+    /// work area of length `plan_len(..).1`. A plan that does not match `(τ, src)`
+    /// — another `τ`, grid or length — falls back to `apply_into`. Default:
+    /// `apply_into`.
+    ///
+    /// # Errors
+    /// As [`apply_into`](Self::apply_into).
+    #[allow(unused_variables, clippy::too_many_arguments)] // τ, plan, work, src, dst, pool
+    fn apply_planned_into(
+        &self,
+        tau: F,
+        data: &[F],
+        work: &mut [F],
+        src: &Self::S,
+        dst: &mut Self::S,
+        scratch: &mut ScratchPool<F>,
+    ) -> Result<(), SemiflowError> {
+        self.apply_into(tau, src, dst, scratch)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -335,14 +380,17 @@ where
         let mut buf_b: C::S = src.clone();
         buf_b.zero_into();
         let mut src_is_a = true;
+        // ADR-0215: one τ-keyed plan for all n steps (bit-identical).
+        let mut plan = crate::step_plan::PencilPlan::new();
         for _ in 0..self.n {
             if src_is_a {
-                self.func.apply_into(tau, &buf_a, &mut buf_b, scratch)?;
+                plan.apply(&self.func, tau, &buf_a, &mut buf_b, scratch)?;
             } else {
-                self.func.apply_into(tau, &buf_b, &mut buf_a, scratch)?;
+                plan.apply(&self.func, tau, &buf_b, &mut buf_a, scratch)?;
             }
             src_is_a = !src_is_a;
         }
+        plan.release(scratch);
         let result = if src_is_a { &buf_a } else { &buf_b };
         dst.copy_from(result);
         Ok(())
@@ -366,91 +414,9 @@ where
     }
 }
 
-// ---------------------------------------------------------------------------
-// ChernoffSemigroup backward-compat alias (v3.0 — thin wrapper over Evolver)
-// ---------------------------------------------------------------------------
-
-/// Chernoff executor with public `func` and `n` fields.
-///
-/// Two-parameter form `ChernoffSemigroup<C, S>` preserving the
-/// `pub func: C` field access pattern used throughout the binding crates.
-/// For the generic-over-F single-parameter form, see [`Evolver<C, F>`].
-pub struct ChernoffSemigroup<C, S>
-where
-    C: ChernoffFunction<f64, S = S>,
-    S: State<f64> + Clone,
-{
-    /// The Chernoff function (public field for direct access by binding crates).
-    pub func: C,
-    /// Number of iterations. Invariant: `n >= 1`.
-    pub n: usize,
-    _state: PhantomData<S>,
-}
-
-impl<C, S> ChernoffSemigroup<C, S>
-where
-    C: ChernoffFunction<f64, S = S>,
-    S: State<f64> + Clone,
-{
-    /// Construct with validation (v2.x API).
-    ///
-    /// Pre-warms parallel singletons (ADR-0041 AC-4).
-    ///
-    /// # Errors
-    /// - [`SemiflowError::DomainViolation`] if `n == 0`.
-    pub fn new(func: C, n: usize) -> Result<Self, SemiflowError> {
-        if n == 0 {
-            return Err(SemiflowError::DomainViolation {
-                what: "ChernoffSemigroup n must be >= 1",
-                value: 0.0,
-            });
-        }
-        #[cfg(feature = "parallel")]
-        {
-            let _ = crate::parallel1d::min_points_per_thread();
-            let _ = crate::parallel1d::available_parallelism_cached();
-        }
-        Ok(Self {
-            func,
-            n,
-            _state: PhantomData,
-        })
-    }
-
-    /// Compute `(S(t/n))^n f` — v2.x `evolve` API.
-    ///
-    /// Ping-pong zero-alloc iteration (ADR-0041 Wave 1).
-    ///
-    /// # Errors
-    /// - [`SemiflowError::DomainViolation`] if `t < 0` or non-finite.
-    /// - Errors from `apply_into` propagate unchanged.
-    pub fn evolve(&self, t: f64, f: &S) -> Result<S, SemiflowError> {
-        if !t.is_finite() || t < 0.0 {
-            return Err(SemiflowError::DomainViolation {
-                what: "t must be finite and >= 0",
-                value: t,
-            });
-        }
-        #[allow(clippy::cast_precision_loss)]
-        let tau = t / self.n as f64;
-        let mut buf_a: S = f.clone();
-        let mut buf_b: S = f.clone();
-        buf_b.zero_into();
-        let mut scratch: ScratchPool<f64> = ScratchPool::new();
-        let mut src_is_a = true;
-        for _ in 0..self.n {
-            if src_is_a {
-                self.func
-                    .apply_into(tau, &buf_a, &mut buf_b, &mut scratch)?;
-            } else {
-                self.func
-                    .apply_into(tau, &buf_b, &mut buf_a, &mut scratch)?;
-            }
-            src_is_a = !src_is_a;
-        }
-        Ok(if src_is_a { buf_a } else { buf_b })
-    }
-}
+#[path = "chernoff_semigroup.rs"]
+mod semigroup;
+pub use semigroup::ChernoffSemigroup;
 
 // ---------------------------------------------------------------------------
 // Private helpers
