@@ -52,6 +52,10 @@ pub(crate) fn midpoint_shift(
     rows: impl Iterator<Item = (f64, f64)> + Clone,
     norm_inf: f64,
 ) -> Option<(f64, f64)> {
+    // `f64::max`/`min` would skip a NaN row: reject it, as documented.
+    if rows.clone().any(|(d, r)| d.is_nan() || r.is_nan()) {
+        return None;
+    }
     let (hi, lo) = rows
         .clone()
         .fold((f64::NEG_INFINITY, f64::INFINITY), |(hi, lo), (d, r)| {

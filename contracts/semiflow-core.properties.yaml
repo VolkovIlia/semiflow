@@ -11530,9 +11530,13 @@ implementation_notes:
       around NegLaplacianGenerator, CsrGenerator (with and without a lumped mass of
       contrast 50) and DivFormGenerator on 64-node diffusion operators: one
       phi_combination (p = 3) applies the generator exactly s·m times of
-      phi_sweep_probe, and at τ‖G‖ ∈ {40, 400} that is ≤ 0.6× the unshifted s·m of
-      phi_cost_probe (measured 0.50–0.54).
-    gate: "calls == s·m(phi_sweep_probe) AND 10·calls ≤ 6·unshifted"
+      phi_sweep_probe, the schedule is pinned ((13, 30) at τ‖G‖ = 40, (117, 30) /
+      div-form (115, 30) at 400), and that is ≤ 0.6× the unshifted s·m of
+      phi_cost_probe (measured 0.50–0.54). Every reported (ḡ, ‖G − ḡI‖_∞) equals the
+      Gershgorin midpoint and norm of the generator's dense matrix (1e−12 relative);
+      an external diagonal_shift with a NaN, negative or infinite norm falls back to
+      the unshifted schedule.
+    gate: "calls == s·m(phi_sweep_probe) == pinned AND 10·calls ≤ 6·unshifted AND bound == dense"
     test_file: "tests/g_phi_shift.rs"
     feature_gate: none
     introduced_in: audit-2026-10
@@ -11549,7 +11553,9 @@ implementation_notes:
       lumped mass contrast 50, symmetric / general CSR / graph generators, τ‖G‖ ∈
       {2, 20, 200}: ≤ 1e−12·max(1, ‖want‖∞), the G_PHI_MASS_DENSE bar. The combination
       reference sums the dense φ_k (the dense augmented exponential has no η-scaling).
-    gate: "err ≤ 1e−12·max(1, ‖want‖∞)"
+      CsrGenerator::from_symmetric(op, None) and NegLaplacianGenerator agree bit for
+      bit on the shifted path (z = 20, 200).
+    gate: "err ≤ 1e−12·max(1, ‖want‖∞) AND csr ≡ neg_laplacian bitwise"
     test_file: "tests/g_phi_shift.rs"
     feature_gate: none
     introduced_in: audit-2026-10

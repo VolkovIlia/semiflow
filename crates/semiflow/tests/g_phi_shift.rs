@@ -3,12 +3,18 @@
 //! * `G_PHI_SHIFT_COST`: a counting wrapper (forwarding `diagonal_shift`) around
 //!   `NegLaplacianGenerator`, `CsrGenerator` (with and without a mass) and
 //!   `DivFormGenerator` on 64-node diffusion operators: one `phi_combination` (p = 3)
-//!   applies the generator exactly `s·m` times of `phi_sweep_probe`, and at
-//!   `τ‖G‖ ∈ {40, 400}` that is ≤ 0.6× the unshifted `s·m` of `phi_cost_probe`.
+//!   applies the generator exactly `s·m` times of `phi_sweep_probe`, the schedule is
+//!   pinned (`(13, 30)` at `τ‖G‖ = 40`, `(117, 30)` — div-form `(115, 30)` — at 400),
+//!   and that is ≤ 0.6× the unshifted `s·m` of `phi_cost_probe`. The reported
+//!   `(ḡ, ‖G − ḡI‖_∞)` of every built-in generator equals the Gershgorin midpoint and
+//!   norm of its dense matrix (to `1e−12` relative), and a NaN or negative reported
+//!   norm falls back to the unshifted schedule.
 //! * `G_PHI_SHIFT_DENSE`: on the shifted path (asserted active) `φ_k`, `k = 0..=3`,
 //!   and a full `phi_combination` against the dense augmented exponential, n = 10
 //!   SPD operator with mass contrast 50 (symmetric, general CSR, no mass), at
 //!   `τ‖G‖ ∈ {2, 20, 200}`: `≤ 1e−12·max(1, ‖want‖∞)` — the `G_PHI_MASS_DENSE` bar.
+//!   `CsrGenerator::from_symmetric(op, None)` and `NegLaplacianGenerator` agree bit
+//!   for bit on the shifted path (the `csr_view` route of ADR-0210).
 //! * `G_PHI_SHIFT_HOMOGENEITY`: the bitwise `φ(2⁴⁰v) = 2⁴⁰φ(v)` of
 //!   `G_PHI_COST_V_INVARIANT`, on the shifted path (which that gate never reaches).
 
@@ -19,7 +25,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use semiflow::{
     general_operator::GeneralOperator,
     generator_action::{CsrGenerator, DivFormGenerator, GeneratorAction, NegLaplacianGenerator},
-    phi_action::{phi_action, phi_combination, phi_cost_probe, PHI_MAX},
+    phi_action::{phi_action, phi_action_batched, phi_combination, phi_cost_probe, PHI_MAX},
     phi_sweep_probe,
     scratch::ScratchPool,
     Diffusion4thChernoff, Grid1D, SymmetricOperator,
@@ -94,8 +100,9 @@ fn symmetric(a: &[f64], n: usize) -> SymmetricOperator<f64> {
     SymmetricOperator::from_csr(n, &rp, &ci, &va, 1e-14).unwrap()
 }
 
-/// Generator applications of one `phi_combination` (p = 3) and the two probes.
-fn cost<G: GeneratorAction<f64>>(name: &str, gen: G, z: f64) {
+/// Generator applications of one `phi_combination` (p = 3) and the two probes;
+/// `expected` pins the shifted schedule.
+fn cost<G: GeneratorAction<f64>>(name: &str, gen: G, z: f64, expected: (u32, u32)) {
     let tau = z / gen.norm_bound();
     let n = gen.dim();
     let w: Vec<Vec<f64>> = (0..=PHI_MAX).map(|k| lcg_vec(7 + k as u64, n)).collect();
@@ -116,6 +123,7 @@ fn cost<G: GeneratorAction<f64>>(name: &str, gen: G, z: f64) {
         u64::from(s) * u64::from(m),
         "{name} z={z}: counter vs probe"
     );
+    assert_eq!((s, m), expected, "{name} z={z}: schedule");
     assert!(
         10 * calls <= 6 * unshifted,
         "{name} z={z}: {calls} > 0.6 x {unshifted}"
@@ -138,16 +146,98 @@ fn g_phi_shift_cost() {
     let (a, mass) = build_dense(n);
     let op = symmetric(&a, n);
     let grid = Grid1D::new(-3.0, 3.0, n).unwrap();
-    for z in [40.0, 400.0] {
-        cost("neg_laplacian", NegLaplacianGenerator::new(op.clone()), z);
-        cost("csr", CsrGenerator::from_symmetric(&op, None).unwrap(), z);
-        cost(
-            "csr+mass",
-            CsrGenerator::from_symmetric(&op, Some(&mass)).unwrap(),
-            z,
-        );
+    for (z, sym, div) in [(40.0, (13, 30), (13, 30)), (400.0, (117, 30), (115, 30))] {
+        let neg = NegLaplacianGenerator::new(op.clone());
+        bound_matches_dense("neg_laplacian", &neg);
+        cost("neg_laplacian", neg, z, sym);
+        let plain = CsrGenerator::from_symmetric(&op, None).unwrap();
+        bound_matches_dense("csr", &plain);
+        cost("csr", plain, z, sym);
+        let massed = CsrGenerator::from_symmetric(&op, Some(&mass)).unwrap();
+        bound_matches_dense("csr+mass", &massed);
+        cost("csr+mass", massed, z, sym);
         let d4 = Diffusion4thChernoff::new(a_var, a_var_p, a_var_pp, 0.7, grid);
-        cost("div_form", DivFormGenerator::new(d4), z);
+        let df = DivFormGenerator::new(d4);
+        bound_matches_dense("div_form", &df);
+        cost("div_form", df, z, div);
+    }
+    for bad in [f64::NAN, -1.0, f64::INFINITY] {
+        let gen = BadShift(bad);
+        let tau = 400.0 / gen.norm_bound();
+        assert_eq!(
+            phi_sweep_probe(&gen, tau),
+            phi_cost_probe(gen.norm_bound(), tau),
+            "norm {bad}: must fall back to the unshifted schedule"
+        );
+    }
+}
+
+/// The dense matrix of `gen` (columns `G·e_j`).
+fn dense_of<G: GeneratorAction<f64>>(gen: &G) -> Vec<f64> {
+    let n = gen.dim();
+    let mut g = vec![0.0; n * n];
+    let (mut e, mut col) = (vec![0.0; n], vec![0.0; n]);
+    for j in 0..n {
+        e[j] = 1.0;
+        gen.apply_generator(&e, &mut col);
+        for i in 0..n {
+            g[i * n + j] = col[i];
+        }
+        e[j] = 0.0;
+    }
+    g
+}
+
+/// The reported `(ḡ, ‖G − ḡI‖_∞)` is the Gershgorin midpoint and norm of `G`.
+fn bound_matches_dense<G: GeneratorAction<f64>>(name: &str, gen: &G) {
+    let n = gen.dim();
+    let g = dense_of(gen);
+    let row = |i: usize| {
+        let r: f64 = (0..n).filter(|&j| j != i).map(|j| g[i * n + j].abs()).sum();
+        (g[i * n + i], r)
+    };
+    let hi = (0..n)
+        .map(|i| row(i).0 + row(i).1)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let lo = (0..n)
+        .map(|i| row(i).0 - row(i).1)
+        .fold(f64::INFINITY, f64::min);
+    let mid = 0.5 * hi + 0.5 * lo;
+    let norm = (0..n)
+        .map(|i| (row(i).0 - mid).abs() + row(i).1)
+        .fold(0.0, f64::max);
+    let (gbar, ns) = gen
+        .diagonal_shift()
+        .expect("built-in generators report a shift");
+    let scale = hi.abs().max(lo.abs());
+    eprintln!("G_PHI_SHIFT_COST {name}: gbar {gbar:.6e} vs {mid:.6e}, norm {ns:.6e} vs {norm:.6e}");
+    assert!(
+        (gbar - mid).abs() <= 1e-12 * scale,
+        "{name}: centre {gbar} vs {mid}"
+    );
+    assert!(
+        (ns - norm).abs() <= 1e-12 * scale,
+        "{name}: norm {ns} vs {norm}"
+    );
+}
+
+/// A generator whose `diagonal_shift` reports an invalid norm.
+struct BadShift(f64);
+
+impl GeneratorAction<f64> for BadShift {
+    fn dim(&self) -> usize {
+        4
+    }
+    fn apply_generator(&self, src: &[f64], dst: &mut [f64]) {
+        for i in 0..4 {
+            dst[i] = -2.0 * src[i];
+        }
+    }
+    fn norm_bound(&self) -> f64 {
+        2.0
+    }
+    fn diagonal_shift(&self) -> Option<(f64, f64)> {
+        Some((-0.1, self.0))
     }
 }
 
@@ -225,7 +315,32 @@ fn g_phi_shift_dense() {
             &dense_g(&a, &ones, n),
             z,
         );
+        none_is_neg_laplacian(&op, z);
     }
+}
+
+/// `CsrGenerator::from_symmetric(op, None)` ≡ `NegLaplacianGenerator`, bit for bit,
+/// ON the shifted path (`G_PHI_MASS_DENSE` (3) runs where the shift is not cheaper).
+fn none_is_neg_laplacian(op: &SymmetricOperator<f64>, z: f64) {
+    let (csr, neg) = (
+        CsrGenerator::from_symmetric(op, None).unwrap(),
+        NegLaplacianGenerator::new(op.clone()),
+    );
+    let tau = z / csr.norm_bound();
+    let (s0, m0) = phi_cost_probe(csr.norm_bound(), tau);
+    let shifted = phi_sweep_probe(&neg, tau);
+    assert!(shifted.0 * shifted.1 < s0 * m0, "z={z}: shift not taken");
+    let n = op.n();
+    let v = lcg_vec(23, n);
+    let mut sc = ScratchPool::new();
+    let (mut a, mut b) = (vec![0.0; (PHI_MAX + 1) * n], vec![0.0; (PHI_MAX + 1) * n]);
+    phi_action_batched(&csr, PHI_MAX, tau, &v, &mut a, &mut sc).unwrap();
+    phi_action_batched(&neg, PHI_MAX, tau, &v, &mut b, &mut sc).unwrap();
+    let same = a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits());
+    assert!(
+        same,
+        "z={z}: CsrGenerator vs NegLaplacianGenerator bits differ"
+    );
 }
 
 #[test]

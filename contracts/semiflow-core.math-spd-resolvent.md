@@ -230,12 +230,15 @@ non-zero columns and every `τ ≥ 0`. (An unweighted `max_k ‖w_k‖_∞` woul
 The bound needs `2^e ≥ M`, i.e. `M ≤ 2^{1000}`; above the clamp, and in a float
 type where `2^{±e}` is not finite (`η = 1` fallback), the bound — and hence (i)
 below — is not guaranteed (accuracy is unaffected, only cost). `(s, m)` is selected
-from `PHI_NORM_TIGHTEN·(τ‖G‖ + 2)` (§58.2 constant kept). `w₀` never enters the
+from `PHI_NORM_TIGHTEN·(τ‖G‖ + 2)` (§58.2 constant kept), or from the shifted
+bound of §67 (ADR-0210) when the generator reports a diagonal shift and that
+schedule needs strictly fewer generator applications. `w₀` never enters the
 matrix. `phi_action(k)` and `phi_action_batched` are the special case
 `p = PHI_MAX`, one non-zero column `W = [v, 0, 0]` (weight 1, no `τ^k`), η from
 `M = ‖v‖_∞`, initial vector `e_k/η` in slot `n+k−1` (`k ≥ 1`) or `[v; 0]` (`k = 0`);
 the top block is then `φ_k(τG)v`. **Consequences:** (i) cost
-`(s, m) = phi_cost_probe(‖G‖, τ)` is independent of all input vectors;
+`(s, m) = phi_cost_probe(‖G‖, τ)` (or the shifted §67 schedule, `phi_sweep_probe`)
+is independent of all input vectors;
 (ii) powers of two are exact, so `φ(2^j v) = 2^j φ(v)` **bit for bit** within the
 clamp range. That is gate `G_PHI_COST_V_INVARIANT`. The pre-ADR-0202 bound
 `τ‖A‖ + ‖v‖_∞ + 1` made the substep count grow linearly in `‖v‖_∞`: measured

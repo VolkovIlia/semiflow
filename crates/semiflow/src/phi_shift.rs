@@ -87,15 +87,26 @@ pub(crate) fn sweep_plan<F: SemiflowFloat, Op: GeneratorAction<F>>(
     let Some((gbar, norm_shifted)) = op.diagonal_shift() else {
         return Ok(unshifted);
     };
-    let mu = tau * gbar;
-    let mu64 = mu.to_f64().unwrap_or(f64::NAN);
-    let bound = (tau64 * norm_shifted.to_f64().unwrap_or(f64::NAN)).max(libm::fabs(mu64)) + 2.0;
-    if mu64 == 0.0 || !mu64.is_finite() || !bound.is_finite() {
+    let mu64 = (tau * gbar).to_f64().unwrap_or(f64::NAN);
+    let ns64 = norm_shifted.to_f64().unwrap_or(f64::NAN);
+    // `f64::max` drops a NaN operand: a NaN, infinite or negative shifted norm (an
+    // external `diagonal_shift`) must disable the shift before the bound is formed.
+    if mu64 == 0.0 || !mu64.is_finite() || !(ns64.is_finite() && ns64 >= 0.0) {
+        return Ok(unshifted);
+    }
+    let bound = (tau64 * ns64).max(libm::fabs(mu64)) + 2.0;
+    if !bound.is_finite() {
         return Ok(unshifted);
     }
     match select_s_m(bound * PHI_NORM_TIGHTEN, 1.0) {
+        // `μ` as a plain constant: a `Dual` τ must not carry a tangent into the
+        // rescale `e^{μ/s}` that the Horner scalars `μ/(js)` do not see.
         Ok((s2, m2)) if u64::from(s2) * u64::from(m2) < u64::from(s) * u64::from(m) => {
-            Ok(SweepPlan { s: s2, m: m2, mu })
+            Ok(SweepPlan {
+                s: s2,
+                m: m2,
+                mu: from_f64(mu64),
+            })
         }
         _ => Ok(unshifted),
     }

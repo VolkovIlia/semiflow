@@ -62,17 +62,31 @@ offset from the origin, which a scalar shift removes for free.
 - Gershgorin bounds only; a generator whose hull is already centred (skew drift)
   gains nothing and keeps the unshifted path.
 - `e^{μ/s}` is applied per sweep; with `|μ|/s ≤ θ_m` it cannot overflow.
+- The shift's rounding enters coherently: the same rounded `μ/(js)` and `e^{μ/s}`
+  are used in every sweep, so the result carries a relative error of about
+  `0.1–0.25·ε_F·|μ|` — inside the Al-Mohy–Higham backward-error budget `u·‖B̃_η‖` of
+  the unshifted schedule, but measured 15–30× above the unshifted path's typical
+  error for `F = f32` at `τ‖G‖ ≥ 2·10³` (`f64`, same estimate: `≲ 2.5e−13` at
+  `τ‖G‖ = 10⁴`).
+- A `diagonal_shift` reporting a NaN, infinite or negative norm disables the shift
+  (unshifted schedule); `μ` is a plain constant, so a forward-mode `Dual` `τ` keeps
+  its tangent exact (`e^{μ}` and the shifted Horner terms see the same scalar).
 
 ## Gates
 
 - `G_PHI_SHIFT_COST` (`tests/g_phi_shift.rs`): exact counter around four generators
   (graph, CSR, CSR + mass, div-form; n = 64) at `τ‖G‖ ∈ {40, 400}`: calls `= s·m` of
-  `phi_sweep_probe` and `≤ 0.6×` the unshifted `s·m`.
+  `phi_sweep_probe`, the schedule pinned (`(13, 30)`; `(117, 30)`, div-form
+  `(115, 30)`), and `≤ 0.6×` the unshifted `s·m`; every reported `(ḡ, ‖G − ḡI‖_∞)`
+  equals the Gershgorin midpoint and norm of the dense matrix (`1e−12` relative); a
+  NaN / negative / infinite reported norm falls back to the unshifted schedule.
 - `G_PHI_SHIFT_DENSE`: shifted path asserted active, `φ_k` (`k ≤ 3`) and a full
   combination vs the dense augmented exponential, n = 10, mass contrast 50, symmetric,
   general and graph generators, `τ‖G‖ ∈ {2, 20, 200}`: `≤ 1e−12·max(1, ‖want‖∞)`
   (measured ≤ 7.1e−15). The combination reference sums the dense `φ_k`: the dense
   augmented exponential has no η-scaling, so `τᵏ ≈ 5e5` inside it cost it 4 digits.
+  `CsrGenerator::from_symmetric(op, None)` and `NegLaplacianGenerator` agree bit
+  for bit ON the shifted path (`G_PHI_MASS_DENSE` (3) runs where it is not taken).
 - `G_PHI_SHIFT_HOMOGENEITY`: `φ_k(2⁴⁰v) = 2⁴⁰φ_k(v)` and the same for a combination,
   bitwise, on the shifted path.
 - All existing φ gates pass unchanged (`G_PHI_MASS_DENSE` incl. its bitwise (3),

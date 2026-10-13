@@ -17,9 +17,9 @@
 //!
 //! **Cost is independent of the input vectors.**  The coupling block is
 //! normalised by a power of two `η = 2^{−⌈log₂‖v‖∞⌉}` (the companion block by
-//! `1/η`), so `‖B̃_η‖ ≤ τ‖G‖ + 2` regardless of `‖v‖`; `(s,m)` follows from
-//! [`phi_cost_probe`].  Powers of two are exact in IEEE arithmetic, hence
-//! `φ(2^j v) = 2^j φ(v)` bit for bit (gate `G_PHI_COST_V_INVARIANT`).
+//! `1/η`), so `‖B̃_η‖ ≤ τ‖G‖ + 2` regardless of `‖v‖` (or the shifted bound of
+//! ADR-0210, [`crate::phi_sweep_probe`]); `(s,m)` follows. Powers of two are exact,
+//! hence `φ(2^j v) = 2^j φ(v)` bit for bit (gate `G_PHI_COST_V_INVARIANT`).
 //!
 //! ## References
 //! - ADR-0189, ADR-0202; math.md §58, §62 (NORMATIVE).
@@ -55,7 +55,7 @@ pub const PHI_MAX: usize = 3;
 /// the [`phi_cost_probe`] doctest).
 pub(crate) const PHI_NORM_TIGHTEN: f64 = 2.0;
 
-/// `(s, m)` used by every φ entry point for a generator-norm bound `norm_g` and step `tau`.
+/// Unshifted `(s, m)` for `norm_g`, `tau`; the schedule actually used: [`crate::phi_sweep_probe`].
 ///
 /// The augmented norm is `τ‖G‖ + 2` (the η-scaled coupling block contributes at
 /// most 1, the nilpotent block at most 1), tightened by `PHI_NORM_TIGHTEN`.
@@ -337,7 +337,7 @@ pub(crate) fn eta_scaled_columns<'a, F: SemiflowFloat>(
 ///
 /// ONE augmented Horner sweep (Al-Mohy–Higham 2011, Thm 2.1, η-scaled): the cost
 /// equals a single [`phi_action`], not `p + 1` of them, and is independent of
-/// the magnitudes of the `w_k` (see [`phi_cost_probe`]).  Covers the affine
+/// the magnitudes of the `w_k` (see [`crate::phi_sweep_probe`]).  Covers the affine
 /// evolution `u' = Gu + s` (`w = [u₀, s]`) and every ETD / Krogstad /
 /// Cox–Matthews / exponential-Rosenbrock stage (§62.5).
 ///
