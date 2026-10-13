@@ -30,7 +30,8 @@ loop does.
 
 ## §65.3 — Gate and limits
 
-Gate `G_ND_SWEEP_BIT_EQUAL` (0 ULP against the pre-ADR-0214 loop for non-NaN outputs;
-NaN outputs coincide as a class). Limits:
+Gates `G_ND_SWEEP_BIT_EQUAL` (0 ULP against the pre-ADR-0214 loop for non-NaN outputs;
+NaN outputs coincide as a class) and `G_ND_SWEEP_ZERO_ALLOC` (after one warm-up call no
+allocation per `apply_into`, both paths). Limits:
 variable `b` or `L` (e.g. the nightly tanh-coupled `A` gates), non-primitive
 scalars (`Dual`), and scratch above `2²⁴` elements use the per-node loop.

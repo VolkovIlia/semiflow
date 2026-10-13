@@ -11379,7 +11379,7 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (≤ 1e−12; unfixed bindings miss by 0.74 in 2-D, 2.03 in 3-D)"
+    pass_status: "PASS (≤ 1e−12; unfixed bindings miss by 0.86 in 2-D, 2.22 in 3-D, max norm)"
     rationale: |
       ADR-0124 Amendment 1: the Python / C FFI / WASM MatrixDiffusion2D/3D bindings
       built every axis kernel with the full coupling C, so the Strang composition
@@ -11418,7 +11418,7 @@ implementation_notes:
       leaves the payload of NaN ⊕ NaN unspecified). End to end, the no_std digest
       smolyak_heat_d2 and the Python SmolyakD6V8 goldens are unchanged.
     gate: "to_bits equal (separable, per-node, pre-ADR-0214 loop) for non-NaN outputs; is_nan equal"
-    test_file: "src/grid_nd_sweep_tests.rs"
+    test_file: "src/grid_nd_sweep_tests.rs, src/grid_nd_sweep_engine_tests.rs"
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0214
@@ -11487,14 +11487,14 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (≤ 6.2e−14)"
+    pass_status: "PASS (≤ 7.9e−14; contrast cases M-err ≤ 3.3e−13)"
     rationale: |
       ADR-0206: lumped mass M = diag(m) ≠ I used directly (M-inner-product Lanczos,
       no congruence). n = 12, tridiagonal (excess LDLᵀ) and 4×3 grid (PCG + IC(0))
       operators, t ∈ {0.01, 0.3, 2, 40}, tol = 1e−12, against the dense congruence
       reference M^{−½} e^{−tÂ} M^{½} v (dense_csr_expmv_ref): ≤ 1e−10·‖v‖∞. Plus graded
       masses of contrast 1e4, 1e6, 1e8 on the PCG path at the default tol = 1e−10,
-      t ∈ {0.01, 1}: relative M-norm error ≤ tol (≤ 3.2e−13; with the unscaled PCG
+      t ∈ {0.01, 1}: relative M-norm error ≤ tol (≤ 3.3e−13; with the unscaled PCG
       inner tolerance contrast 1e8 missed tol by 12×).
     gate: "max |y − ref| ≤ 1e−10·‖v‖∞ AND contrast cases ‖y − ref‖_M ≤ tol·‖v‖_M"
     test_file: "tests/g_rational_krylov.rs"
@@ -11819,7 +11819,7 @@ implementation_notes:
     type: STRUCTURAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (0 ULP: 960 1-D configurations incl. ShiftChernoff1D; Strang 2-D/3-D serial 24²/8³ every policy, threaded 64²/32³ every policy × septic/Catmull–Rom/linear; fallbacks per field; first-error identity)"
+    pass_status: "PASS (0 ULP: 960 1-D configurations incl. ShiftChernoff1D; Strang 2-D/3-D serial 24²/8³ every policy, threaded 64²/32³ every policy × septic/Catmull–Rom/linear; Richardson levels and ReactionDiffusion ± cross-diffusion; threaded 1-D n = 8192; fallbacks per field; first-error identity)"
     rationale: |
       ADR-0215: a τ-keyed step plan stores what DiffusionChernoff recomputes per step
       (planned samples: table offset + interpolation weights; ζ scalars; τ²) by the
@@ -11832,8 +11832,13 @@ implementation_notes:
       ChernoffSemigroup, and through Strang2D/Strang3D (serial sweeps and, with the
       parallel feature, the threaded sweeps); a plan presented with another τ, grid
       or engine falls back to apply_into; invalid a / τ fail in both paths.
+      Consumers (g_step_plan_consumers.rs): Richardson levels (base n ∈ {1, 2},
+      levels 1–4) and ReactionDiffusion (with and without cross-diffusion, plain and
+      extrapolated) × reflect / periodic / Neumann × septic / Catmull–Rom; with the
+      parallel feature the threaded 1-D fill and apply (4 threads forced, n = 8192,
+      three policies, error variant included).
     gate: "planned == unplanned bitwise for every configuration; fallbacks bitwise equal; same error variants"
-    test_file: "tests/g_step_plan_bit_equal.rs"
+    test_file: "tests/g_step_plan_bit_equal.rs, tests/g_step_plan_consumers.rs"
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0215

@@ -128,3 +128,23 @@ def test_option_errors_and_callback_exceptions() -> None:
                                       reaction_solver="rosenbrock")
     with pytest.raises(ValueError, match="jacobian boom"):
         rd.evolve(1.0)
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_rosenbrock_with_cross_diffusion_in_2d_and_3d(dim: int) -> None:
+    # A uniform field: diffusion (here with a K×K matrix mixing a and b) is the
+    # identity up to rounding, so every node must follow Robertson's chemistry.
+    n = 5
+    shape = (n,) * dim
+    u0 = np.stack([np.ones(shape), np.zeros(shape), np.zeros(shape)])
+    cls = {2: semiflow.ReactionDiffusion2D, 3: semiflow.ReactionDiffusion3D}[dim]
+    rd = cls(*([0.0, 1.0, n] * dim), u0,
+             diffusivity=[[1.0, 0.5, 0.0], [0.2, 0.6, 0.0], [0.0, 0.0, 1.0]],
+             reaction=robertson, reaction_solver="rosenbrock", rtol=1e-5, atol=1e-12,
+             jacobian=robertson_jac)
+    rd.evolve(40.0, n_steps=1)
+    got = rd.values().reshape(3, -1)
+    assert got.shape == (3, n**dim)
+    rel = np.max(np.abs(got - ROBERTSON_T40[:, None]) / ROBERTSON_T40[:, None])
+    assert rel <= 1e-4, rel
+    assert np.max(np.abs(got.sum(axis=0) - 1.0)) <= 1e-12

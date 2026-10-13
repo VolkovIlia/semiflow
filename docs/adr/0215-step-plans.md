@@ -105,14 +105,18 @@ instead of once per step and pencil.
 
 ## Gates
 
-- `G_STEP_PLAN_BIT_EQUAL` (`tests/g_step_plan_bit_equal.rs`): planned vs forced
+- `G_STEP_PLAN_BIT_EQUAL` (`tests/g_step_plan_bit_equal.rs`,
+  `tests/g_step_plan_consumers.rs`): planned vs forced
   unplanned (`NoPlan` wrapper), 0 ULP, three `DiffusionChernoff` storages and
   `ShiftChernoff1D` (drift and reaction) × five interpolants × eight
   boundary policies × `n ∈ {8, 37, 128}` × `τ ∈ {1e−4, 5}` through `Evolver` and
   `ChernoffSemigroup`; `Strang2D`/`Strang3D` serial (`24²`/`8³`, every policy) and
   threaded (`64²`/`32³`, every policy × septic, Catmull–Rom, linear); fallbacks for
   another `τ`, another engine of the same kind and each sampling-grid field; the
-  error `apply_into` reports first (unsupported interpolant before an invalid `a`).
+  error `apply_into` reports first (unsupported interpolant before an invalid `a`);
+  Richardson levels (base `n ∈ {1, 2}`, levels 1–4) and `ReactionDiffusion` (with
+  and without cross-diffusion, plain and extrapolated); with `parallel`, the
+  threaded 1-D fill and apply (4 threads forced, `n = 8192`, incl. an error).
 - `G_STEP_PLAN_USED` (`tests/g_step_plan_used.rs`): the planned branch runs — a
   perturbed stored weight changes the planned result (every producer), and the
   coefficient calls of `Evolver`, `ChernoffSemigroup`, `ReactionDiffusion` and the

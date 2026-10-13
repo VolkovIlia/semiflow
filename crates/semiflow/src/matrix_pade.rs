@@ -1,4 +1,4 @@
-//! Padé[13/13] matrix exponential for M×M matrices (M ≥ 5).
+//! Padé[13/13] matrix exponential for M×M matrices (M ≥ 3; M ≤ 2 use the closed form).
 //!
 //! Algorithm: Higham 2005, *The Scaling and Squaring Method for the Matrix
 //! Exponential Revisited*, SIAM J. Matrix Anal. Appl. 26:4 pp. 1179–1193.

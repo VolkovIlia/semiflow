@@ -182,6 +182,12 @@ pub(crate) fn new_rational(
     settings: &RationalSettings,
 ) -> PyResult<PyRationalKrylov> {
     let menu = plan(settings)?;
+    if let Some(m) = mass.as_deref().filter(|m| m.len() != op.n()) {
+        return Err(new_pyerr(
+            "GridMismatch",
+            &format!("mass length {} != op.n() {}", m.len(), op.n()),
+        ));
+    }
     let op_c = Arc::clone(op);
     let built = py.detach(move || build(&op_c, mass.as_deref(), t, menu));
     Ok(PyRationalKrylov {

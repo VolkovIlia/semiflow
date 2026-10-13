@@ -109,7 +109,7 @@ set of stencil-level policies is:
 | `boundary=` / `BoundaryPolicy` | Semantics |
 |---------------------------------|-----------|
 | `"reflect"` / `Reflect` (default) | Mirror; zero-flux Neumann |
-| `"periodic"` / `Periodic` | Periodic wrap with period `(n−1)·dx` |
+| `"periodic"` / `Periodic` | Periodic wrap with period `n·dx` (node `n` is node `0`) |
 | `"zero"` / `ZeroExtend` | Ghost node = 0; Dirichlet zero |
 | `"linear"` / `LinearExtrapolate` | Affine continuation from outermost nodes |
 

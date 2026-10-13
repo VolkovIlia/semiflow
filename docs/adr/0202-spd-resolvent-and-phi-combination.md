@@ -1,6 +1,6 @@
 # ADR-0202 — SPD resolvent / steady solve, operator composition, and the φ-combination
 
-- **Status**: Proposed
+- **Status**: Accepted (implemented in Waves 1–3; gates PASS)
 - **Date**: 2026-10-06
 - **Supersedes / amends**: ADDITIVE. Amends ROADMAP "Out of scope: Fully-implicit
   schemes" (wording narrowed, see D6). Amends the `(s, m)` selection of

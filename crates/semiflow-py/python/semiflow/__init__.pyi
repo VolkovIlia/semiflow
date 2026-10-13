@@ -6210,7 +6210,8 @@ class Killing2nd1D:
 class MatrixDiffusion2D:
     """Coupled 2-component 2D diffusion via palindromic Strang (ADR-0124, math 33.2).
 
-    Solves d_t u = a*d^2 u + c*u (M=2) on [xmin,xmax]x[ymin,ymax].
+    Solves d_t u = a*Δu + C u, C = [[0, c], [c, 0]] (c = c_coupling, M=2) on
+    [xmin,xmax]x[ymin,ymax].
     Buffer: flat float64 length 2*nx*ny. Index (j*nx+i)*2+component.
     """
 
@@ -6246,6 +6247,7 @@ class MatrixDiffusion2D:
 class MatrixDiffusion3D:
     """Coupled 2-component 3D diffusion via palindromic 5-leg Strang (ADR-0124, math 33.3).
 
+    Solves d_t u = a*Δu + C u, C = [[0, c], [c, 0]] (c = c_coupling, M=2).
     Buffer: flat float64 length 2*nx*ny*nz. Index (k*nx*ny+j*nx+i)*2+component.
     """
 
@@ -6482,7 +6484,8 @@ class SymmetricOperator:
 
         Shift-and-invert Lanczos: the solve count is the a-priori dimension of
         ``tol`` (27 at ``1e-10``), independent of ``λ_max·t``. ``gamma`` defaults to
-        ``t/10``; ``solver`` / ``precond`` as :meth:`resolvent`.
+        ``t/10``; ``solver`` / ``precond`` as :meth:`resolvent`. ``mass`` of a
+        length other than ``n()`` raises ``SemiflowError(GridMismatch)``.
         """
         ...
 
@@ -6788,8 +6791,8 @@ class Etdrk4:
     @staticmethod
     def from_symmetric_op(
         op: SymmetricOperator,
-        nonlinearity: str = "allen_cahn",
-        h: float = 0.01,
+        nonlinearity: str,
+        h: float,
         phi: str = "taylor",
         tol: float = 1e-10,
     ) -> "Etdrk4":
@@ -6799,9 +6802,9 @@ class Etdrk4:
         ----------
         op : SymmetricOperator
         nonlinearity : str
-            ``"allen_cahn"`` (default) — ``N(u) = u − u³``.
+            ``"allen_cahn"`` — ``N(u) = u − u³`` (the only value).
         h : float
-            Time step.
+            Time step (finite, ``> 0``).
         phi : str
             φ evaluator: ``"taylor"`` (default) or ``"krylov"`` (adaptive Arnoldi,
             ADR-0211, for ``h‖L‖ ≫ 10²``).

@@ -78,7 +78,7 @@ Neumann path Laplacian, `tol = 1e−10`: resolvent solves vs Chebyshev mat-vecs
 
 The count is the a-priori dimension of `tol` (16 / 21 / 27 / 33 solves at
 `1e−6 / 1e−8 / 1e−10 / 1e−12`). Each solve on a tridiagonal pattern is one `O(N)`
-`LDLᵀ` sweep; a 40×40 grid Laplacian on the PCG path (IC(0)) takes 13 … 90 CG
+`LDLᵀ` sweep; a 40×40 grid Laplacian on the PCG path (IC(0)) takes 13 … 91 CG
 iterations per solve for `λ_max t = 1e2 … 1e8`.
 
 ## φ shift (ADR-0210)
@@ -128,7 +128,7 @@ Python, same session (`atol = 1e−12`):
 
 ## Known slow paths (not addressed here)
 
-- Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer
+- Lanczos stays linear in `λ_max·t` at fixed `m_max` (restarted Krylov); prefer
   Chebyshev, or the rational Krylov path (ADR-0206), for very stiff problems.
 
 ## τ-keyed step plans (ADR-0215)

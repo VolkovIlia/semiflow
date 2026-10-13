@@ -38,7 +38,8 @@ use crate::{
 
 /// Coupled 2-component 2D diffusion via palindromic Strang (ADR-0124, §33.2).
 ///
-/// Solves ``∂_t u = a·∂²u + c·u`` (M=2) on ``[xmin,xmax]×[ymin,ymax]``.
+/// Solves ``∂_t u = a·Δu + C·u``, ``C = [[0, c], [c, 0]]`` (``c = c_coupling``, M=2)
+/// on ``[xmin,xmax]×[ymin,ymax]``.
 /// Palindromic 3-leg Strang: ``Lx(τ/2) Ly(τ) Lx(τ/2)``; order 2.
 ///
 /// Buffer layout: flat float64 of length ``2*nx*ny``.
@@ -156,6 +157,8 @@ use semiflow::{
 };
 
 /// Coupled 2-component 3D diffusion via palindromic 5-leg Strang (ADR-0124, §33.3).
+///
+/// Solves ``∂_t u = a·Δu + C·u``, ``C = [[0, c], [c, 0]]`` (``c = c_coupling``, M=2).
 ///
 /// Buffer layout: flat float64 of length ``2*nx*ny*nz``.
 /// Index ``(k*nx*ny+j*nx+i)*2+c`` for z-index ``k``, y-index ``j``,

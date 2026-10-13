@@ -33,7 +33,7 @@ pub struct KrylovPhiOptions {
     pub tol: f64,
     /// Krylov dimension per substep (clamped to `[2, n + p]`). Default 30.
     pub m: usize,
-    /// Substep cap; exceeded → `ConvergenceFailed`. Default 100 000.
+    /// Substep cap (`≥ 1`); exceeded → `ConvergenceFailed`. Default 100 000.
     pub max_substeps: usize,
 }
 
@@ -90,10 +90,11 @@ pub struct KrylovPhiReport {
 ///
 /// # Errors
 /// The `DomainViolation`s of `phi_combination` (shapes, non-finite input, `τ < 0`,
-/// overflow of `τ^k‖w_k‖`); `DomainViolation` for `tol ∉ (0, 1)`; `Unsupported`
-/// for `F` other than `f32` / `f64` (forward-mode `Dual`);
-/// `ConvergenceFailed` when the substep cap or the rejection cap (10 per substep)
-/// is hit.
+/// overflow of `τ^k‖w_k‖`); `DomainViolation` for `tol ∉ (0, 1)` or
+/// `max_substeps == 0`; `Unsupported` for `F` other than `f32` / `f64` (forward-mode
+/// `Dual`); `ConvergenceFailed` when the substep cap or the rejection cap (10 per
+/// substep) is hit. A result beyond the range of `F` (growth of `e^{τG}`) is not an
+/// error: `out` holds the non-finite values, as with `phi_combination`.
 pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
     op: &Op,
     tau: F,
@@ -104,19 +105,7 @@ pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
 ) -> Result<KrylovPhiReport, SemiflowError> {
     let n = op.dim();
     validate_combination(n, tau, w, out.len())?;
-    // Arnoldi coefficients are f64 scalars: a forward-mode `Dual` (of f32 or f64)
-    // would silently lose its tangent.
-    if !crate::float::is_plain_ieee::<F>() {
-        return Err(SemiflowError::Unsupported {
-            feature: "phi_combination_krylov: forward-mode Dual (only f32 / f64)",
-        });
-    }
-    if !(opts.tol > 0.0 && opts.tol < 1.0) {
-        return Err(SemiflowError::DomainViolation {
-            what: "phi_combination_krylov: tol must be in (0, 1)",
-            value: opts.tol,
-        });
-    }
+    check_options::<F>(&opts)?;
     let degree = w.len() - 1;
     let (cols, gains, inv_eta) = eta_scaled_columns(w, tau)?;
     let coupling = Coupling {
@@ -143,10 +132,35 @@ pub fn phi_combination_krylov<F: SemiflowFloat, Op: GeneratorAction<F>>(
     result
 }
 
+/// The scalar type and option checks of [`phi_combination_krylov`].
+fn check_options<F: SemiflowFloat>(opts: &KrylovPhiOptions) -> Result<(), SemiflowError> {
+    // Arnoldi coefficients are f64 scalars: a forward-mode `Dual` (of f32 or f64)
+    // would silently lose its tangent.
+    if !crate::float::is_plain_ieee::<F>() {
+        return Err(SemiflowError::Unsupported {
+            feature: "phi_combination_krylov: forward-mode Dual (only f32 / f64)",
+        });
+    }
+    if !(opts.tol > 0.0 && opts.tol < 1.0) {
+        return Err(SemiflowError::DomainViolation {
+            what: "phi_combination_krylov: tol must be in (0, 1)",
+            value: opts.tol,
+        });
+    }
+    if opts.max_substeps == 0 {
+        return Err(SemiflowError::DomainViolation {
+            what: "phi_combination_krylov: max_substeps must be >= 1",
+            value: 0.0,
+        });
+    }
+    Ok(())
+}
+
 /// `out ← e^{−τA}v` for a general CSR operator `A` by adaptive Arnoldi
 /// (`G = −A`; non-symmetric `A` welcome). Far fewer applications than the Taylor
-/// `expmv` at large `τ‖A‖` (module docs; 2.3–12× faster in wall clock on a
-/// tridiagonal stencil at `τ‖A‖ = 4·10³ … 4·10⁵`).
+/// `expmv` at large `τ‖A‖` (module docs; 2.3–4.4× faster in wall clock with
+/// `m_max = 30`, up to 12× with 15, on a tridiagonal stencil at
+/// `τ‖A‖ = 4·10³ … 4·10⁵`).
 ///
 /// # Errors
 /// As [`phi_combination_krylov`]; `DomainViolation` for a non-finite norm bound.

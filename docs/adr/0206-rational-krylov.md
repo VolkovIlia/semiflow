@@ -5,7 +5,7 @@
 - **Supersedes / amends**: none (additive; the number was reserved in ADR-0205).
 - **Contract**: math §66 (`contracts/semiflow-core.math-rational-krylov.md`); gates
   `G_RATKRYLOV_NEUMANN_ORACLE`, `G_RATKRYLOV_SOLVE_COUNT`, `G_RATKRYLOV_MASS_DENSE`,
-  `G_RATKRYLOV_ISSUE16`; no_std scenario `ratkrylov_stiff`.
+  `G_RATKRYLOV_PCG_GRID`, `G_RATKRYLOV_ISSUE16`; no_std scenario `ratkrylov_stiff`.
 
 ## Context
 

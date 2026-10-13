@@ -39,7 +39,7 @@ All 1D/2D/3D kernels accept a keyword argument `boundary`:
 | Value | Semantics | Typical use |
 |-------|-----------|-------------|
 | `"reflect"` (default) | Mirror / zero-flux Neumann at grid boundaries | General PDEs; required by G1/G2 oracle tests |
-| `"periodic"` | Periodic wrap with period `(n-1)·dx` | Periodic domains |
+| `"periodic"` | Periodic wrap with period `n·dx` (node `n` is node `0`: sample `[a, b)` with `b = a + n·dx`) | Periodic domains |
 | `"zero"` | Extend with 0.0 outside domain | Solutions that vanish at the boundary (barriers, puts far OTM in log-space) |
 | `"linear"` | Linear extrapolation from the two outermost nodes | **Asymptotically-linear far-field** (European calls, linear ramps) |
 
@@ -457,8 +457,8 @@ Python boundary.
 
 | Class | Constructor | Key methods | Notes |
 |-------|-------------|-------------|-------|
-| `MatrixDiffusion2D` | `(xmin, xmax, nx, ymin, ymax, ny, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 2D diffusion `∂_t u = a∂²u + cu`; flat buffer length `2·nx·ny`; index `(j·nx+i)·2+component` (ADR-0124, §33.2) |
-| `MatrixDiffusion3D` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 3D; flat buffer length `2·nx·ny·nz`; index `(k·nx·ny+j·nx+i)·2+component` (ADR-0124, §33.3) |
+| `MatrixDiffusion2D` | `(xmin, xmax, nx, ymin, ymax, ny, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 2D diffusion `∂_t u = aΔu + Cu`, `C = [[0, c], [c, 0]]` (`c = c_coupling`); flat buffer length `2·nx·ny`; index `(j·nx+i)·2+component` (ADR-0124, §33.2) |
+| `MatrixDiffusion3D` | `(xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, a_diag=1.0, c_coupling=0.0)` | `.evolve(t, n_steps=100)`, `.values()`, `.order()` | 2-component coupled 3D diffusion `∂_t u = aΔu + Cu`, `C = [[0, c], [c, 0]]`; flat buffer length `2·nx·ny·nz`; index `(k·nx·ny+j·nx+i)·2+component` (ADR-0124, §33.3) |
 
 ### Wentzell dynamic boundary conditions
 
@@ -493,13 +493,13 @@ Python boundary.
 
 | Class | Constructor | Key methods | Notes |
 |-------|-------------|-------------|-------|
-| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100) -> NDArray` (`path`: `"chebyshev"`, `"lanczos"`, `"implicit"`, `"rational"`), `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent`, `.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64) -> RationalKrylov` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100) -> NDArray` (`path`: `"chebyshev"`, `"lanczos"`, `"implicit"`, `"rational"`), `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent`, `.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64, solver="auto", precond="ic0") -> RationalKrylov` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
 | `RationalKrylov` | `SymmetricOperator.rational_krylov(...)` | `.apply(v) -> (NDArray, dict)`, `.apply_batched(v_nc) -> NDArray`, `.t`, `.gamma`, `.n` | `e^{-t M⁻¹A}v` by shift-and-invert Lanczos on one factor of `M/γ + A`: the solve count is an a-priori bound independent of `λ_max·t` (27 solves at `tol = 1e-10`); tridiagonal M-matrices use a cancellation-free factor (no rounding floor up to `λ_max·t = 1e10` on the gate carriers), other patterns PCG (ADR-0206, §66) |
 | `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
-| `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, method="taylor", tol=1e-10, m=30) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv` (cost `Θ(t‖A‖_∞)` matvecs, §57, ADR-0195) or, with `method="krylov"`, adaptive Arnoldi (far fewer matvecs at large `t‖A‖`: 2.3–12× faster at `t‖A‖ = 4·10³ … 4·10⁵` on a stencil, ADR-0211). Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects |
+| `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, method="taylor", tol=1e-10, m=30) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv` (cost `Θ(t‖A‖_∞)` matvecs, §57, ADR-0195) or, with `method="krylov"`, adaptive Arnoldi (far fewer matvecs at large `t‖A‖`: 2.3–4.4× faster with the default `m=30`, up to 12× with `m=15`, at `t‖A‖ = 4·10³ … 4·10⁵` on a stencil, ADR-0211). Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects |
 | `SpdResolvent` | built by `SymmetricOperator.resolvent(...)` | `.solve(b) -> NDArray`, `.solve_batched(B) -> NDArray`, `.solve_info(b) -> (x, iterations, rel_residual)`, `.method`, `.n` | Factor-once / solve-many `x = (λM + A)⁻¹ b` of an SPD operator, `λ ≥ 0`, `M = diag(mass) > 0`. Tridiagonal: exact `O(n)` LDLᵀ; otherwise PCG with IC(0) or Jacobi. The GIL is released during the solve. PCG is `O(√κ·nnz)` per solve; no multigrid (§62, ADR-0202) |
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
-| `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01, phi="taylor", tol=1e-10)` (`phi="krylov"`: adaptive Arnoldi φ, ADR-0211) | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
+| `Etdrk4` | `.from_symmetric_op(op, nonlinearity, h, phi="taylor", tol=1e-10)` (`phi="krylov"`: adaptive Arnoldi φ, ADR-0211) | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
 **Example — stiff operator: the rational and implicit paths.** The polynomial
 Krylov paths need `O(√(λ_max·t))` mat-vecs; `path="rational"` (shift-and-invert
@@ -561,9 +561,11 @@ Indicative timings on i7-12700K (1000 nodes, 100 steps, `Heat1D`):
 | p99.9 latency (HFT loop, N=1536) | 45 ns/tick |
 | Memory footprint | 2.8 MB RSS |
 
-For large grids or many time steps, prefer `.with_a_array` over
-`.with_a_function`: the array path uses a pure-Rust `Arc<Vec<f64>>`
-Catmull-Rom interpolant and never re-acquires the GIL during `evolve`.
+`.with_a_array` uses a pure-Rust `Arc<Vec<f64>>` Catmull-Rom interpolant and
+never re-acquires the GIL during `evolve`. `.with_a_function` calls the Python
+callable once per node per τ-keyed step plan (ADR-0215) — once per `evolve` call
+of `n ≥ 2` steps, per chunk of `evolve_chunked`, per Richardson level — not once
+per step; prefer `.with_a_array` for many single-step calls.
 
 ## Type stubs
 

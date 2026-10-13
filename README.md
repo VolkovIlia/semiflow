@@ -289,8 +289,13 @@ diagonal class.
 | `ConservativeDiffusionChernoff`, `assemble_conservative_csr_1d`, `assemble_conservative_csr_nd` | Divergence-form `∂ₓ(k(x)∂ₓu)` with harmonic-mean faces (sharp material interfaces, optional contact resistance) |
 | `MultilayerStack`, `multilayer_evolve`, `MassWeightedConservativeChernoff` | Stiff multilayer conduction in one depth-flat Krylov action |
 | `SymmetricOperator`, `MassKOperator`, `EntrySensitivity`, `mass_lumped_evolve` | Externally assembled symmetric PSD sparse operators (FEM), the `(M, K)` problem without forming `M⁻¹K`, entry-wise gradients |
-| `general_operator::GeneralOperator` | Possibly non-symmetric CSR operators via Taylor `expmv` |
-| `phi_action`, `phi_action_batched`, `Etdrk4`, `Nonlinearity` | Semilinear `∂ₜu = Lu + N(u)` by exponential time differencing (order 4) |
+| `general_operator::GeneralOperator` | Possibly non-symmetric CSR operators via Taylor `expmv` or adaptive Arnoldi (`expmv_krylov`) |
+| `SpdResolvent`, `SpdSolver` | `(λM + A)⁻¹b`: exact O(N) tridiagonal `LDLᵀ`, PCG with IC(0) or Jacobi; factor once, solve many (steady states, implicit steps) |
+| `RationalKrylov`, `RationalKrylovChernoff`, `rational_krylov_expmv` | Shift-and-invert Krylov `e^{−tM⁻¹A}v` for very stiff SPD operators: solve count independent of `λ_max t` |
+| `phi_action`, `phi_action_batched`, `phi_combination`, `Etdrk4`, `Nonlinearity` | Semilinear `∂ₜu = Lu + N(u)` by exponential time differencing (order 4) |
+| `phi_combination_krylov`, `PhiSolver`, `KrylovPhiOptions` | Adaptive Arnoldi φ-actions for non-symmetric generators (`Etdrk4::with_phi_solver`): 33× fewer generator applications than Taylor at `τ‖G‖ = 4·10³` |
+| `ReactionDiffusion`, `Species`, `ReactionSolver`, `RosenbrockOptions` | Multi-species `∂ₜu = D Δu + f(t, x, u)` by Strang splitting on any grid engine; stiff kinetics by adaptive L-stable Rosenbrock (ROS2) |
+| `CrossDiffusion` | Constant `K×K` cross-diffusion matrix `D` by exact modal splitting (`D = PΛP⁻¹` verified; complex, negative or defective `D` rejected), with `ReactionDiffusion::with_cross_diffusion` |
 | `SubordinatedChernoff` | Bochner–Phillips subordination of any engine |
 | `HypoellipticChernoff` | Kolmogorov, Heisenberg and Engel (step-2/3 Carnot) operators |
 

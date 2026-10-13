@@ -109,6 +109,12 @@ fn zero_input_options_and_caps() {
         let opts = KrylovPhiOptions::default().with_tol(tol);
         assert!(expmv_krylov(&op, 1.0, &v, &mut out, opts, &mut scratch).is_err());
     }
+    let none = KrylovPhiOptions::default().with_max_substeps(0);
+    let r = expmv_krylov(&op, 1.0, &v, &mut out, none, &mut scratch);
+    assert!(
+        matches!(r, Err(SemiflowError::DomainViolation { .. })),
+        "{r:?}"
+    );
     let capped = KrylovPhiOptions::default().with_m(4).with_max_substeps(1);
     let r = expmv_krylov(&op, 5.0, &v, &mut out, capped, &mut scratch);
     assert!(

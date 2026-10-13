@@ -16,134 +16,19 @@
 //! presented with another `τ`, another engine of the same kind, or a sampling grid
 //! differing in one field is not used. Errors: the planned consumers report the
 //! error `apply_into` reports first (`G_STEP_PLAN_USED` shows the plans run).
+//! Richardson levels, `ReactionDiffusion` and the threaded 1-D fill are in
+//! `g_step_plan_consumers.rs`.
 
 #![allow(clippy::cast_precision_loss)]
 
+mod step_plan_common;
+
 use semiflow::{
-    BoundaryPolicy, ChernoffFunction, ChernoffSemigroup, DiffusionChernoff, Evolver, Grid1D,
-    Grid2D, Grid3D, GridFn1D, GridFn2D, GridFn3D, Growth, InterpKind, OobPolicy, ScratchPool,
-    SemiflowError, ShiftChernoff1D, Strang2D, Strang3D,
+    BoundaryPolicy, ChernoffFunction, ChernoffSemigroup, DiffusionChernoff, Grid1D, Grid2D, Grid3D,
+    GridFn1D, GridFn2D, GridFn3D, InterpKind, OobPolicy, ScratchPool, SemiflowError,
+    ShiftChernoff1D, Strang2D, Strang3D,
 };
-
-/// Forwards `apply_into` only: the unplanned reference path.
-#[derive(Clone)]
-struct NoPlan<C>(C);
-
-impl<C: ChernoffFunction<f64>> ChernoffFunction<f64> for NoPlan<C> {
-    type S = C::S;
-    fn apply_into(
-        &self,
-        tau: f64,
-        src: &C::S,
-        dst: &mut C::S,
-        scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), SemiflowError> {
-        self.0.apply_into(tau, src, dst, scratch)
-    }
-    fn order(&self) -> u32 {
-        self.0.order()
-    }
-    fn growth(&self) -> Growth<f64> {
-        self.0.growth()
-    }
-}
-
-fn a_half(_: f64) -> f64 {
-    0.5
-}
-fn zero(_: f64) -> f64 {
-    0.0
-}
-
-/// The three storage variants of `DiffusionChernoff` on `grid`.
-fn engines(grid: Grid1D<f64>) -> [(&'static str, DiffusionChernoff<f64>); 3] {
-    [
-        ("const", DiffusionChernoff::new_const_a(0.35, 0.35, grid)),
-        (
-            "fn-ptr",
-            DiffusionChernoff::new(a_half, zero, zero, 0.5, grid),
-        ),
-        (
-            "closure",
-            DiffusionChernoff::with_closure(
-                |x: f64| 0.5 + 0.2 * (0.5 * x).sin(),
-                |x: f64| 0.1 * (0.5 * x).cos(),
-                |x: f64| -0.05 * (0.5 * x).sin(),
-                0.7,
-                grid,
-            ),
-        ),
-    ]
-}
-
-fn drift(x: f64) -> f64 {
-    0.3 * x
-}
-fn sink(x: f64) -> f64 {
-    -0.2 - 0.1 * x * x
-}
-
-/// `ShiftChernoff1D` with `a ≡ ½`, drift `0.3x`, reaction `−0.2 − 0.1x²`.
-fn shift(grid: Grid1D<f64>) -> ShiftChernoff1D<f64> {
-    ShiftChernoff1D::new(a_half, drift, sink, 0.3, grid)
-}
-
-const POLICIES: [BoundaryPolicy<f64>; 8] = [
-    BoundaryPolicy::Reflect,
-    BoundaryPolicy::ZeroExtend,
-    BoundaryPolicy::Periodic,
-    BoundaryPolicy::LinearExtrapolate,
-    BoundaryPolicy::Dirichlet { value: 0.3 },
-    BoundaryPolicy::Neumann,
-    BoundaryPolicy::Robin {
-        alpha: 1.0,
-        beta: 2.0,
-    },
-    BoundaryPolicy::OddReflect,
-];
-
-fn interps() -> [InterpKind; 5] {
-    [
-        InterpKind::SepticHermite,
-        InterpKind::OctonicHermite,
-        InterpKind::CubicHermite,
-        InterpKind::ChebyshevSpectralWithBC {
-            m: 16,
-            oob_policy: OobPolicy::Inherit,
-        },
-        InterpKind::Linear,
-    ]
-}
-
-/// Bitwise equality of two results (values, or the same error variant).
-fn same(a: &Result<Vec<f64>, SemiflowError>, b: &Result<Vec<f64>, SemiflowError>) -> bool {
-    match (a, b) {
-        (Ok(x), Ok(y)) => {
-            x.len() == y.len() && x.iter().zip(y).all(|(p, q)| p.to_bits() == q.to_bits())
-        }
-        (Err(x), Err(y)) => core::mem::discriminant(x) == core::mem::discriminant(y),
-        _ => false,
-    }
-}
-
-fn bump(x: f64) -> f64 {
-    (-2.0 * x * x).exp() + 0.1 * x
-}
-
-/// `Evolver` (3 steps, caller pool used twice) and `ChernoffSemigroup` (2 steps).
-fn evolve_1d<C: ChernoffFunction<f64, S = GridFn1D<f64>>>(
-    e: C,
-    tau: f64,
-    u0: &GridFn1D<f64>,
-) -> Result<Vec<f64>, SemiflowError> {
-    let ev = Evolver::new(e, 3)?;
-    let (mut dst, mut pool) = (u0.clone(), ScratchPool::new());
-    ev.evolve_into(3.0 * tau, u0, &mut dst, &mut pool)?;
-    ev.evolve_into(3.0 * tau, &dst.clone(), &mut dst, &mut pool)?;
-    let semi = ChernoffSemigroup::new(ev.func, 2)?;
-    let out = semi.evolve(2.0 * tau, &dst)?;
-    Ok(out.values)
-}
+use step_plan_common::{bump, engines, evolve_1d, interps, same, shift, zero, NoPlan, POLICIES};
 
 #[test]
 fn g_step_plan_bit_equal_1d() {

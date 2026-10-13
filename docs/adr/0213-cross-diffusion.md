@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-10-13
 - **Supersedes / amends**: amends ADR-0208 (the diffusion half of
-  `ReactionDiffusion`); additive (the number was reserved in ADR-0205).
+  `ReactionDiffusion`); additive.
 - **Contract**: math §70 (`contracts/semiflow-core.math-cross-diffusion.md`); gates
   `G_CROSSDIFF_GRAPH_EXACT`, `G_CROSSDIFF_STRANG_ORDER`, `G_CROSSDIFF_FOURIER_GRID`,
   `G_CROSSDIFF_REJECT`.

@@ -367,6 +367,12 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
 
 ### Fixed
 
+- Roadmap follow-ups: `KrylovPhiOptions { max_substeps: 0 }` is a
+  `DomainViolation` (it failed as `ConvergenceFailed { max_iter: 0 }`);
+  `CrossDiffusion::<f32>` rejects a decomposition that overflows `f32` instead of
+  storing `inf`; Python `SymmetricOperator.rational_krylov(mass=…)` of the wrong
+  length raises `GridMismatch`; the Python stub of `Etdrk4.from_symmetric_op` no
+  longer advertises defaults for the required `nonlinearity` and `h`.
 - The IC(0) preconditioner that §59.2 declared normative but `pcg.rs` never
   shipped is now implemented (zero fill-in, Jacobi fallback reported by
   `SpdResolvent::method()`). `ImplicitEuler` is untouched and bit-identical.

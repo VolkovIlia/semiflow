@@ -103,6 +103,10 @@ fn f32_decomposition_is_the_rounded_f64_one() {
         assert_eq!(c32.modes(), rounded(c64.modes()).as_slice());
         assert_eq!(c32.inverse_modes(), rounded(c64.inverse_modes()).as_slice());
     }
+    // A decomposition that does not fit `f32` is rejected, not stored as `inf`.
+    assert!(CrossDiffusion::<f32>::new(&[1e39, 0.0, 0.0, 1.0]).is_err());
+    assert!(CrossDiffusion::<f32>::from_modes(&[1.0, 0.0, 0.0, 1.0], &[1.0, 1e39]).is_err());
+    assert!(CrossDiffusion::<f64>::new(&[1e39, 0.0, 0.0, 1.0]).is_ok());
 }
 
 fn reason(r: Result<CrossDiffusion<f64>, SemiflowError>) -> &'static str {

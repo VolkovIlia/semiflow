@@ -56,7 +56,8 @@ impl<F: SemiflowFloat> CrossDiffusion<F> {
     /// # Errors
     /// `DomainViolation` naming the reason: not a square of `1 ≤ K ≤ 16`; a
     /// non-finite entry; complex eigenvalues; a negative eigenvalue; a defective or
-    /// nearly defective `D` (eigenvector count, `cond₁(P)` or the reconstruction).
+    /// nearly defective `D` (eigenvector count, `cond₁(P)` or the reconstruction);
+    /// an entry of the decomposition beyond the range of `F`.
     pub fn new(d: &[f64]) -> Result<Self, SemiflowError> {
         let k = (1..=16)
             .find(|k| k * k == d.len())
@@ -80,7 +81,7 @@ impl<F: SemiflowFloat> CrossDiffusion<F> {
         }
         let p_inv = checked_inverse::<F>(k, &p)?;
         verify(k, (&p, &p_inv, &lambda), d, scale).map_err(|err| dropped.reason(sn, err))?;
-        Ok(Self::cast(k, &p, &p_inv, &lambda))
+        Self::cast(k, &p, &p_inv, &lambda)
     }
 
     /// From a user-supplied decomposition: `p` row-major `K×K` (columns are the
@@ -88,7 +89,8 @@ impl<F: SemiflowFloat> CrossDiffusion<F> {
     ///
     /// # Errors
     /// `DomainViolation`: shapes, a non-finite entry, a negative `λ`, a singular or
-    /// ill-conditioned `P` (`cond₁(P) > 1e8`, or `> 10⁻²/ε_F` for a coarser `F`).
+    /// ill-conditioned `P` (`cond₁(P) > 1e8`, or `> 10⁻²/ε_F` for a coarser `F`); an
+    /// entry beyond the range of `F`.
     pub fn from_modes(p: &[f64], lambda: &[f64]) -> Result<Self, SemiflowError> {
         let k = lambda.len();
         if k == 0 || k > 16 || p.len() != k * k {
@@ -107,18 +109,32 @@ impl<F: SemiflowFloat> CrossDiffusion<F> {
             ));
         }
         let p_inv = checked_inverse::<F>(k, p)?;
-        Ok(Self::cast(k, p, &p_inv, lambda))
+        Self::cast(k, p, &p_inv, lambda)
     }
 
     /// The verified `f64` decomposition, rounded to `F`.
-    fn cast(k: usize, p: &[f64], p_inv: &[f64], lambda: &[f64]) -> Self {
-        let to_f = |v: &[f64]| v.iter().map(|&x| from_f64::<F>(x)).collect();
-        Self {
+    ///
+    /// # Errors
+    /// `DomainViolation` when an entry overflows `F` (e.g. `λ > f32::MAX`).
+    fn cast(k: usize, p: &[f64], p_inv: &[f64], lambda: &[f64]) -> Result<Self, SemiflowError> {
+        let to_f = |v: &[f64]| -> Result<Vec<F>, SemiflowError> {
+            v.iter()
+                .map(|&x| {
+                    let y = from_f64::<F>(x);
+                    if y.is_finite() {
+                        Ok(y)
+                    } else {
+                        Err(domain("CrossDiffusion: entry overflows the float type", x))
+                    }
+                })
+                .collect()
+        };
+        Ok(Self {
             k,
-            p: to_f(p),
-            p_inv: to_f(p_inv),
-            lambda: to_f(lambda),
-        }
+            p: to_f(p)?,
+            p_inv: to_f(p_inv)?,
+            lambda: to_f(lambda)?,
+        })
     }
 
     /// Number of species `K`.
@@ -127,7 +143,8 @@ impl<F: SemiflowFloat> CrossDiffusion<F> {
         self.k
     }
 
-    /// The eigenvalues `λ_k ≥ 0` (mode `k` diffuses with `λ_k`), ascending.
+    /// The eigenvalues `λ_k ≥ 0` (mode `k` diffuses with `λ_k`): ascending from
+    /// [`Self::new`], in the caller's order from [`Self::from_modes`].
     #[must_use]
     pub fn eigenvalues(&self) -> &[F] {
         &self.lambda

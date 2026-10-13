@@ -84,9 +84,25 @@ def test_identity_and_errors() -> None:
         op.rational_krylov(1.0, solver="cholmod")
     with pytest.raises(sf.SemiflowError):
         op.rational_krylov(1.0).apply(np.ones(9))
+    with pytest.raises(sf.SemiflowError, match="GridMismatch"):
+        op.rational_krylov(1.0, mass=np.ones(9))
     with pytest.raises(sf.SemiflowError, match="'rational'"):
         op.evolve_batched(1.0, np.ones((10, 1)), path="nope")
     # A shift ratio the a-priori bound cannot resolve fails loudly, not silently.
     # (n = 100 > m_max = 64, so the iteration cannot end on the whole space.)
     with pytest.raises(sf.SemiflowError):
         neumann(100).rational_krylov(1.0, gamma=1e-7).apply(np.arange(100.0))
+
+
+@pytest.mark.parametrize(
+    ("solver", "precond"), [("tridiagonal", "ic0"), ("pcg", "ic0"), ("pcg", "jacobi")]
+)
+def test_solver_variants_match_reference(solver: str, precond: str) -> None:
+    op = neumann(60, 1e3)
+    mass = 1.0 + 0.5 * np.sin(np.arange(60.0))
+    v = np.cos(np.linspace(0.0, 3.0, 60))
+    rk = op.rational_krylov(0.7, mass=mass, solver=solver, precond=precond)
+    y, report = rk.apply(v)
+    ref = dense_expm(op, 0.7, v, mass)
+    assert np.max(np.abs(y - ref)) <= 1e-9 * np.max(np.abs(v))
+    assert report["solves"] <= 30

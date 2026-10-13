@@ -3,9 +3,10 @@
 - **Status**: Accepted
 - **Date**: 2026-10-13
 - **Supersedes / amends**: amends ADR-0208 (the reaction half-step of
-  `ReactionDiffusion`); additive (the number was reserved in ADR-0205).
+  `ReactionDiffusion`); additive.
 - **Contract**: math §69 (`contracts/semiflow-core.math-stiff-kinetics.md`); gates
-  `G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_FD_JAC`, `G_STIFF_ROBERTSON`.
+  `G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_PER_NODE`, `G_STIFF_KINETICS_FD_JAC`,
+  `G_STIFF_ROBERTSON`.
 
 ## Context
 

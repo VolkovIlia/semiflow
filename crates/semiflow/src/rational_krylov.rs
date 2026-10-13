@@ -100,7 +100,9 @@ pub struct RationalReport {
     /// Final Krylov dimension.
     pub krylov_dim: usize,
     /// `‖y_m − y_{m−1}‖_M/‖v‖_M` at the last step: an a-posteriori diagnostic (the
-    /// stop is the a-priori bound, module docs).
+    /// stop is the a-priori bound, module docs). After an early breakdown (an
+    /// invariant subspace, or the whole space: the projection is exact) it still
+    /// reports that last difference, which then overstates the error.
     pub est_error: f64,
     /// Total CG iterations of the inner solves (0 on the tridiagonal path).
     pub inner_iterations: usize,

@@ -160,7 +160,9 @@ impl<F: SemiflowFloat, const M: usize> State<F> for MatrixGridFn1D<F, M> {
 /// fills the M×M matrix in-place. Coefficients:
 /// - `a_ij`: diffusion tensor (symmetric, positive-definite per grid point).
 /// - `b_ij`: drift tensor (skew-symmetric per math §33.1; may be zero).
-/// - `c_ij`: reaction matrix (symmetric; growth bound via `c_norm_bound`).
+/// - `c_ij`: reaction matrix (symmetric; growth bound via `c_norm_bound`). As an
+///   axis kernel of `MatrixDiffusionChernoff2D/3D` pass `C/d` (`d` axes): each
+///   axis's reaction acts for τ per step (ADR-0124 Amendment 1).
 ///
 /// ## Growth bound
 ///
@@ -250,7 +252,7 @@ impl<F: SemiflowFloat, const M: usize> ChernoffFunction<F> for MatrixDiffusionCh
     ///
     /// # Errors
     /// - `DomainViolation` if `tau < 0` or non-finite.
-    /// - `Unsupported` if `(V−U)` is near-singular in the Padé solve (M≥5 path).
+    /// - `Unsupported` if `(V−U)` is near-singular in the Padé solve (M ≥ 3 path).
     fn apply_into(
         &self,
         tau: F,

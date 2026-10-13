@@ -228,6 +228,10 @@ impl<F: SemiflowFloat, const M: usize> State<F> for MatrixGridFn3D<F, M> {
 /// Palindromic Strang 2D composition: `Φ(τ) = Lx(τ/2) Ly(τ) Lx(τ/2)` (ADR-0124).
 ///
 /// Order 2 is sympy-verified (C1a+C2+C3 in PRE-FLIGHT); slope gate ≤ −0.80.
+///
+/// Each axis kernel's coupling acts for a total time τ per step, so the step
+/// integrates `Σ_axes C_axis`: for `∂ₜu = a∂²u + C·u` give each kernel `C/2`
+/// (ADR-0124 Amendment 1, `G_MATRIX_ND_COUPLING_EXACT`).
 pub struct MatrixDiffusionChernoff2D<F: SemiflowFloat = f64, const M: usize = 2> {
     /// X-axis kernel (applied at τ/2 twice).
     pub kernel_x: MatrixDiffusionChernoff<F, M>,
@@ -326,6 +330,9 @@ fn pass_2d_y<F: SemiflowFloat, const M: usize>(
 ///
 /// Order 2 follows inductively from C1a separability and palindromic BCH cancellation
 /// (Theorem 7', math §10.8). Slope gate: ≤ −0.80.
+///
+/// As in 2-D, each axis kernel's coupling acts for a total time τ per step: for
+/// `∂ₜu = a∂²u + C·u` give each kernel `C/3` (ADR-0124 Amendment 1).
 pub struct MatrixDiffusionChernoff3D<F: SemiflowFloat = f64, const M: usize = 2> {
     /// X-axis kernel (τ/2 twice, outermost).
     pub kernel_x: MatrixDiffusionChernoff<F, M>,

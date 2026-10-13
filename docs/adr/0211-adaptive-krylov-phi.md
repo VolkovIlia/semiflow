@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-10-13
-- **Supersedes / amends**: none (additive; the number was reserved in ADR-0205).
+- **Supersedes / amends**: none (additive).
 - **Contract**: math §68 (`contracts/semiflow-core.math-phi-krylov.md`); gates
   `G_PHI_KRYLOV_DENSE`, `G_PHI_KRYLOV_COST`, `G_PHI_KRYLOV_TOL`,
   `G_ETDRK4_KRYLOV_ORDER`.

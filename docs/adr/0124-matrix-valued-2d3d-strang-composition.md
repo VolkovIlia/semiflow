@@ -52,4 +52,4 @@ point of the block-CN diffusion step (up to Thomas rounding), so the result must
 `t = 0.5`, 2-D 9×7 and 3-D 7×6×5. FFI (`semiflow-ffi/tests/g_matrix_nd_coupling_exact_ffi.rs`),
 WASM (native unit test, run by `cargo test -p semiflow-wasm --features full --lib` in CI)
 and Python (`test_new_operators.py::test_matrix_nd_coupling_exact`). Without the fix the
-error is 0.74 (2-D) and 2.03 (3-D).
+max-norm error is 0.86 (2-D) and 2.22 (3-D).

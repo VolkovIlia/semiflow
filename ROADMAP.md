@@ -28,7 +28,7 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
-## Roadmap completion (ADR-0124 Amdt 1, ADRs 0206, 0210–0215) — IN PROGRESS (branch `claude/jolly-cori-x6wbmd`)
+## Roadmap completion (ADR-0124 Amdt 1, ADRs 0206, 0210–0215) — DONE (branch `claude/jolly-cori-x6wbmd`)
 
 Done:
 - **Bug:** the Python/FFI/WASM `MatrixDiffusion2D/3D` applied the coupling once
@@ -48,8 +48,9 @@ Done:
   (`phi_action` φ₁ 300 → 145 ms, ETDRK4 195 → 96 ms).
 
 - **Adaptive Krylov φ / exp actions (ADR-0211):** Expokit-style Arnoldi for any
-  generator: 33× fewer applications at `τ‖G‖ = 4·10³`, 2.3–12× faster at
-  `‖A‖t = 4·10³ … 4·10⁵`; `PhiSolver` for ETDRK4; Python `method="krylov"`.
+  generator: 33× fewer applications at `τ‖G‖ = 4·10³`, 2.3–4.4× faster at
+  `‖A‖t = 4·10³ … 4·10⁵` (`m = 30`; up to 12× with `m = 15`); `PhiSolver` for
+  ETDRK4; Python `method="krylov"`.
 
 - **Stiff kinetics (ADR-0212):** adaptive ROS2 reaction step for
   `ReactionDiffusion` (L-stable, analytic or finite-difference Jacobian): Robertson
@@ -69,7 +70,7 @@ Done:
   `ReactionDiffusion` use them. Bit-identical; heat1d 2.6–5.5×, heat2d `400²`
   2.1–3.0×, heat3d `64³` 1.6–2.2× (paired runs on a noisy shared host).
 
-Next:
+Follow-ups (not started):
 - Step plans for the other grid engines (`Diffusion4th/6th`, drift–reaction,
   `f32`/`Dual`), and a narrower ghost table for short pencils.
 - Periodic boundary: the `ChebyshevSpectralWithBC` out-of-domain path wraps with
@@ -79,7 +80,7 @@ Next:
 
 ---
 
-## ADR-0202 — SPD resolvent / steady solve, operator composition, φ-combination — PLANNED (math §62, `contracts/semiflow-core.math-spd-resolvent.md`)
+## ADR-0202 — SPD resolvent / steady solve, operator composition, φ-combination — DONE (Waves 1–3; math §62, `contracts/semiflow-core.math-spd-resolvent.md`)
 
 Triggered by an applied case study (steady 1-D heat with sink and source was O(N³)
 via the `τφ₁` limit: 187 s vs 1.1 s for scipy at N=641; `phi_action` cost grew
