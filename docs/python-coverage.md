@@ -1,6 +1,6 @@
 ---
-version: 1.9.0
-last_updated: 2026-10-05
+version: 1.10.0
+last_updated: 2026-10-13
 freshness_score: 1.0
 dependencies:
   - crates/semiflow/src/lib.rs
@@ -11,6 +11,7 @@ dependencies:
   - docs/adr/0035-v1_0_0-api-stability.md
   - docs/adr/0059-graph-bindings.md
   - docs/adr/0061-python-parity-expansion.md
+  - docs/adr/0124-matrix-valued-2d3d-strang-composition.md
   - docs/adr/0154-v9-third-scurve-gridless-umbrella.md
   - docs/adr/0156-reverse-mode-ad-chernoff-layer.md
   - docs/adr/0159-tensor-train-chernoff.md
@@ -24,6 +25,20 @@ dependencies:
   - docs/adr/0195-general-nonsymmetric-operator-action.md
   - docs/adr/0196-per-pencil-strang-composition.md
   - docs/adr/0197-shift1d-coefficient-field-gradients.md
+  - docs/adr/0202-spd-resolvent-and-phi-combination.md
+  - docs/adr/0203-frechet-graded-duhamel-quadrature.md
+  - docs/adr/0204-prepared-sampling-and-step-plans.md
+  - docs/adr/0205-krylov-expmv-cost-and-correctness.md
+  - docs/adr/0206-rational-krylov.md
+  - docs/adr/0207-richardson-extrapolation.md
+  - docs/adr/0208-semilinear-reaction-diffusion.md
+  - docs/adr/0209-python-315-and-batched-kinetics-callback.md
+  - docs/adr/0210-phi-trace-shift.md
+  - docs/adr/0211-adaptive-krylov-phi.md
+  - docs/adr/0212-stiff-kinetics-rosenbrock.md
+  - docs/adr/0213-cross-diffusion.md
+  - docs/adr/0214-separable-nd-shift-sampling.md
+  - docs/adr/0215-step-plans.md
 changelog:
   - 1.0.0: Initial coverage matrix for v2.3.0 Python parity expansion (feat/python-parity-v2.3)
   - 1.1.0: v6.2.2 ADR-0115 additions — GraphAdjoint, edge_weight_grad, dtype kwarg, Laplacian accessors, from_edges fix
@@ -39,6 +54,11 @@ changelog:
     #[wasm_bindgen] exports; TT / gridless / GraphTraj / StrangSplitGraph rows corrected
     (all bound); internal-scheme versions replaced by public 0.x releases
   - 1.9.0: 0.14.0-beta de-stale — version references updated; ReverseHeat1D import fix recorded
+  - 1.10.0: 0.15.0-beta — add section 10 (ADR-0202–0215: SpdResolvent, operator composition,
+    phi_combination, RationalKrylov / path="rational", Krylov φ, ReactionDiffusion1D/2D/3D,
+    Rosenbrock kinetics, cross-diffusion, richardson=) with its behaviour-change table
+    (MatrixDiffusion2D/3D coupling fix, ADR-0124 AM1); §8 signatures and path= table
+    re-derived from the stubs; Known Gaps renumbered to §11
 graph-unverified: false
 ---
 
@@ -48,7 +68,7 @@ This document tracks binding parity across the four public surfaces of the
 `semiflow` workspace: the Rust crate `semiflow`, the C ABI `semiflow-ffi`, the
 Python wheel `semiflow-pde` (import name `semiflow`, crate `semiflow-py`) and
 the npm package `@semiflow/wasm` (crate `semiflow-wasm`). It reflects
-**0.14.0-beta**. All four crates share one workspace version (ADR-0035).
+**0.15.0-beta**. All four crates share one workspace version (ADR-0035).
 
 The authoritative lists are generated artefacts, not this page: the C header
 [`crates/semiflow-ffi/include/semiflow.h`](../crates/semiflow-ffi/include/semiflow.h),
@@ -296,18 +316,19 @@ in all three bindings — see §1. Only the `s3-poc` evolvers remain Rust-only.
 ## 8. Generic Symmetric Operator (v0.11.0-beta, issue #15; `path="implicit"` issue #16)
 | Rust type / function | PyO3 surface | Status | Notes |
 |----------------------|-------------|--------|-------|
-| `SymmetricOperator::from_csr` | `SymmetricOperator.from_csr(indptr, indices, data, n)` | ✅ stable | accepts CSR arrays (int32 or int64 indices) |
-| `SymmetricOperator::evolve_batched` | `SymmetricOperator.evolve_batched(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | `path=` kwarg selects Krylov mode |
-| `mass_lumped_evolve` | `mass_lumped_evolve(K_csr, mass_diag, v, t, *, path="lanczos", n_steps=100)` | ✅ stable | lumped-mass `(M,K)` 3-liner |
-| `MassKOperator::evolve` | `MassKOperator.evolve(v, t, *, path="lanczos", n_steps=100)` | ✅ stable | consistent-mass `(M,K)` via Cholesky congruence |
-| `symmetric_op_expmv_frechet` | `symmetric_op_expmv_frechet(op, v, t, dj_du)` | ✅ stable | combined action + per-entry Fréchet gradient |
+| `SymmetricOperator::from_csr` | `SymmetricOperator.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | ✅ stable | `indptr` int64, `indices` int32, `data` float64 |
+| `SymmetricOperator::evolve_batched` | `SymmetricOperator.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100, cg_max_iter=None)` | ✅ stable | `path=` kwarg selects Krylov mode |
+| `mass_lumped_evolve` | `mass_lumped_evolve(k_op, m_diag, t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100)` | ✅ stable | lumped-mass `(M,K)` 3-liner |
+| `MassKOperator::evolve` | `MassKOperator.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100)` | ✅ stable | consistent-mass `(M,K)` via Cholesky congruence |
+| `symmetric_op_expmv_frechet` | `symmetric_op_expmv_frechet(op, u0, dj, *, t, entries, tol=1e-12)` | ✅ stable | per-entry Fréchet gradient `∂J/∂A_ij`; `tol` since 0.15.0-beta |
 | `EntrySensitivity` | returned by `symmetric_op_expmv_frechet`; not a separate Python class | ✅ stable | gradient returned directly |
 **`path=` values for `evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve`:**
 | `path=` | Method | When to use |
 |---------|--------|-------------|
-| `"lanczos"` (default) | Lanczos Krylov expmv | General-purpose; matvec count flat in `t` per sub-step |
-| `"chebyshev"` | Chebyshev polynomial expmv | O(1) working vectors; slightly cheaper per matvec than Lanczos for moderate stiffness |
+| `"chebyshev"` (default) | Chebyshev polynomial expmv, one expansion (ADR-0205) | O(1) working vectors; cost `∝ √(λ_max·t)` |
+| `"lanczos"` | Lanczos Krylov expmv, a-priori schedule (ADR-0205) | General-purpose; `m_max` defaults to 18 |
 | `"implicit"` | PCG backward-Euler `(I+Δt·A)^{−n_steps}` (ADR-0190, issue #16) | Stiff operators with `λ_max ≳ 10⁵` where the explicit paths time out |
+| `"rational"` | Shift-and-invert Lanczos on one factor of `M/γ + A` (ADR-0206); `evolve_batched` and `mass_lumped_evolve` only, not `MassKOperator.evolve` | Stiff operators: solve count independent of `λ_max·t`; `m_max` defaults to 64 |
 **`n_steps` parameter** (default 100, only used with `path="implicit"`): number of
 backward-Euler sub-steps. Accuracy is O(t/n_steps); increase to tighten tolerance.
 Cost per sub-step is proportional to `√κ` of the Jacobi-preconditioned system,
@@ -346,16 +367,71 @@ Behaviour changes on the existing Python surface, not additions:
 | `Heat2DVarA.order()`, `Heat3DVarA.order()` | 2 → **1**; the axis kernels freeze `a` at the node | ADR-0191 AM1 |
 | `ConservativeDiffusionChernoff` | accepts `k ≥ 0` (CEV / Feller / Wright–Fisher degenerate ends) | ADR-0192 |
 | `DiffusionExpmv1D`, graph Lanczos | corrected θ_m table changes the substep count | ADR-0198 |
-## 10. Known Gaps and Deferred Items
+
+---
+
+## 10. 0.15.0-beta surfaces (ADR-0202–0215)
+
+Python surface added in 0.15.0-beta. FFI and WASM gained nothing: `semiflow.h` is
+unchanged since 0.14.0-beta and no `#[wasm_bindgen]` export was added. Neither
+binding has a `SymmetricOperator` or `GeneralOperator` to extend (ADR-0202 D5), and
+ADR-0207/0208/0212/0213 define no C or JS surface.
+
+| Surface | Rust | Python | FFI | WASM | Authority |
+|---------|------|--------|-----|------|-----------|
+| SPD resolvent / steady solve `(λM + A)⁻¹b` | ✅ `SpdResolvent`, `SymmetricOperator::resolvent` | ✅ `SpdResolvent` (`solve`, `solve_batched`, `solve_info`, `method`, `n`) via `SymmetricOperator.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None)` | ❌ | ❌ | ADR-0202 |
+| Operator composition | ✅ `SymmetricOperator::with_diagonal`, `csr()`; `lumped_congruence` (already in Rust) | ✅ `SymmetricOperator.with_diagonal`, `.to_csr`, `.lumped_congruence` | ❌ | ❌ | ADR-0202 |
+| φ-combination `Σ τᵏφₖ(τG)wₖ`, `p ≤ 3` | ✅ `phi_combination` | ✅ `phi_combination(op, tau, w, mass=None, method="taylor", tol=1e-10, m=30)` | ❌ | ❌ | ADR-0202 |
+| φ with diagonal mass / non-symmetric `A` (`G = −M⁻¹A`) | ✅ `CsrGenerator` | ✅ no class: `mass=` on `phi_action`, `phi_action_batched`, `phi_combination`; all three accept a `GeneralOperator` | ❌ | ❌ | ADR-0202 |
+| Rational (shift-and-invert) Krylov `e^{−tM⁻¹A}v` | ✅ `RationalKrylov`, `rational_krylov_expmv`, `RationalKrylovChernoff` | ✅ `RationalKrylov` (`apply`, `apply_batched`, `t`, `gamma`, `n`) via `SymmetricOperator.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64, solver="auto", precond="ic0")`; `path="rational"` on `evolve_batched` / `mass_lumped_evolve` (§8) | ❌ | ❌ | ADR-0206 |
+| Adaptive Arnoldi φ / `exp` actions | ✅ `phi_combination_krylov`, `expmv_krylov`, `PhiSolver`, `Etdrk4::with_phi_solver` | ✅ `phi_combination(method="krylov")`, `GeneralOperator.evolve_batched(method="krylov", tol=1e-10, m=30)`, `Etdrk4.from_symmetric_op(phi="krylov", tol=1e-10)`; not on `phi_action` / `phi_action_batched` | ❌ | ❌ | ADR-0211 |
+| Reaction–diffusion systems | ✅ `ReactionDiffusion` + `Species`, `Kinetics` (catalogue `FisherKpp` … `FnReaction`); any engine, graphs included | ✅ `ReactionDiffusion1D/2D/3D` — grids only, constant `D_k` (`DiffusionChernoff`, Strang across axes); kinetics by name (`params=`) or a vectorised callable `f(t, x, u)`; no `Species` / `Kinetics` class | ❌ | ❌ | ADR-0208, ADR-0209 |
+| Stiff kinetics (adaptive ROS2) | ✅ `ReactionSolver::Rosenbrock(RosenbrockOptions)`, `Kinetics::jacobian_batch` | ✅ `ReactionDiffusion*(reaction_solver="rosenbrock", rtol=1e-6, atol=1e-9, jacobian=None)` | ❌ | ❌ | ADR-0212 |
+| Constant-matrix cross-diffusion | ✅ `CrossDiffusion`, `ReactionDiffusion::with_cross_diffusion` | ✅ `ReactionDiffusion*(diffusivity=[[…], …])` (`K×K`) | ❌ | ❌ | ADR-0213 |
+| Richardson extrapolation | ✅ `Evolver::evolve_extrapolated_into`, `extrapolate_into` (`StepIntegrator`), `richardson_weights` | ✅ `Heat1D.evolve(richardson=L)` (f64 only), `ReactionDiffusion*.evolve(richardson=L)`, `richardson_weights(order, levels)`; `1 ≤ L ≤ 6`; no other kernel | ❌ | ❌ | ADR-0207 |
+| Fréchet propagator tolerance | ✅ `SymmetricOperator::krylov(path, tol)` | ✅ `symmetric_op_expmv_frechet(..., tol=1e-12)` (§8) | ❌ | ❌ | ADR-0203 |
+| Prepared sampling, separable N-D shift sampling, τ-keyed step plans (`ChernoffFunction::plan_len` / `fill_plan` / `apply_planned_into`) | ✅ | n/a | n/a | n/a | ADR-0204, ADR-0214, ADR-0215 |
+| `GeneratorAction::diagonal_shift`, `SymmetricLinearOp::csr_view` / `diagonal_into`, `GeneratorSensitivity::accumulate_bilinear`, `phi_sweep_probe`, `graph_expmv_frechet_plan` / `FrechetPlan`, `GraphKrylovChernoff::{lambda_max_bound, tol, path}`, `GeneralOperator::taylor_norm_bound` | ✅ | ❌ | ❌ | ❌ | ADR-0203, ADR-0205, ADR-0210 |
+
+**Notes**
+
+- Prepared sampling, separable N-D sampling and step plans are internal and
+  bit-identical; no binding surface is needed. Plans exist for
+  `DiffusionChernoff<f64>` and `ShiftChernoff1D<f64>` and are picked up by
+  `Evolver`, `ChernoffSemigroup`, the `Strang2D/3D` sweeps and
+  `ReactionDiffusion`, so every binding over those engines gets them unchanged
+  (Python additionally plans each `Heat1D.evolve_chunked` chunk).
+- The last row lists provided trait methods for Rust implementors and diagnostic
+  probes; no binding exposes them.
+- `m_max` of `evolve_batched` / `mass_lumped_evolve` now defaults to `None`
+  (18 for Lanczos, 64 for rational); `MassKOperator.evolve` keeps `m_max=18`.
+- Python 3.15 (ADR-0209): PyO3 0.29, one abi3 wheel for CPython 3.10–3.15.
+
+Behaviour changes on the existing Python surface, not additions:
+
+| Surface | Change | Authority |
+|---------|--------|-----------|
+| `MatrixDiffusion2D`, `MatrixDiffusion3D` (also FFI `smf_matrix2d/3d_*`, WASM) | `c_coupling ≠ 0` results change (they were wrong): the coupling was applied once per axis, `e^{2tC}` in 2-D and `e^{3tC}` in 3-D instead of `e^{tC}`; each axis now carries `c/d`. `c_coupling = 0` is bit-identical | ADR-0124 AM1 |
+| `phi_action`, `phi_action_batched` | cost no longer depends on `‖v‖` (`(s, m)` from `τ‖G‖` only); results move by at most the truncation tolerance, unchanged at unit norm | ADR-0202 |
+| `phi_action`, `phi_action_batched`, `phi_combination`, `Etdrk4` | φ sweeps run on the Gershgorin-midpoint-shifted augmented operator when that needs fewer generator applications; output bits change | ADR-0210 |
+| `SymmetricOperator.evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve` (`"chebyshev"`, `"lanczos"`), `GraphKrylov`, `GeneralOperator.evolve_batched` (Taylor), `Etdrk4` | one-expansion Chebyshev, a-priori Lanczos schedule, Taylor trace shift, four φ sweeps per ETDRK4 step instead of nine: output bits change, within tolerance and more accurate. A Lanczos `m_max` that cannot reach `tol` (`m_max = 1`) raises | ADR-0205 |
+| `MassKOperator.evolve` | rigorous `λ_max(M⁻¹K)` bound; the Chebyshev path diverged on P1 consistent mass (relative error `1.7e11` at `n = 12`) | ADR-0205 |
+| `graph_expmv_frechet`, `symmetric_op_expmv_frechet` | graded Duhamel quadrature: error independent of `λ_max·t` (was `7e-4` at 53, `O(1e-2)` beyond ~100); results change numerically, not bit-identically; signature unchanged | ADR-0203 |
+| `GraphKrylov`, `SymmetricOperator.evolve_batched`, `GeneralOperator.evolve_batched`, `phi_*` without `mass`, `Graph.from_edges` | an operator whose norm bound overflows (finite entries, e.g. all `1e308`) raises `SemiflowError` instead of running a silently wrong schedule (issue #44) | ADR-0205 |
+
+---
+
+## 11. Known Gaps and Deferred Items
 
 The following items are not exposed through the named bindings as of
-0.14.0-beta:
+0.15.0-beta:
 
 | Item | Missing from | Reason for gap |
 |------|--------------|----------------|
 | `S3*` evolvers (`s3-poc` feature) | FFI, PyO3, WASM | Research-track surface; binding design deferred (ADR-0169) |
 | `ReverseChernoff` | FFI | Bound as `ReverseHeat1D` in PyO3 and WASM only |
 | Symmetric-operator / `(M, K)` / general-operator / Krylov / φ-function / ETD surface (§8, §9) | FFI, WASM | PyO3-only (ADR-0186 and the 0.13.0-beta campaign ADRs) |
+| SPD resolvent / rational Krylov / φ-combination / Krylov φ / reaction–diffusion / Rosenbrock kinetics / cross-diffusion / Richardson surface (§10) | FFI, WASM | PyO3-only: no `SymmetricOperator` / `GeneralOperator` to extend (ADR-0202 D5); ADR-0207/0208/0212/0213 define no C or JS surface |
 | `boundary=` selection | FFI, WASM | Neither surface exposes boundary selection for any kernel (ADR-0191 AMENDMENT 2) |
 | `f32` paths | FFI, WASM | Out of scope (ADR-0115) |
 | Heavy-grid engines in the npm package | WASM (npm) | The published package is the lite build; build with `--features full` |
