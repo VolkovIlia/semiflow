@@ -34,7 +34,7 @@ use crate::float::SemiflowFloat;
 ///
 /// - `Reflect` — mirror `x` at boundaries (default). Required for G1/G2 oracles.
 /// - `ZeroExtend` — return scalar zero for `x` outside `[xmin, xmax]`.
-/// - `Periodic` — wrap `x` with period `(n-1)·dx`.
+/// - `Periodic` — wrap the node index modulo `n` (period `n·dx`: node `n` is node `0`).
 /// - `LinearExtrapolate` — affine continuation from boundary nodes.
 ///
 /// ## v2.6 variants (ADR-0068, math.md §3.5.bis)
@@ -52,7 +52,10 @@ pub enum BoundaryPolicy<F: SemiflowFloat = f64> {
     Reflect,
     /// Return scalar zero for `x` outside `[xmin, xmax]`.
     ZeroExtend,
-    /// Wrap `x` with period `(n − 1)·dx` (standard periodic boundary).
+    /// Periodic: ghost node indices wrap modulo `n`, so the period is `n·dx` and the
+    /// last node is NOT identified with the first (a function of period `L` is
+    /// sampled on `[xmin, xmin + L − dx]`). The Chebyshev out-of-domain path
+    /// (`OobPolicy::Inherit`) wraps coordinates with `xmax − xmin` instead.
     Periodic,
     /// Linear (affine) extrapolation from the two outermost boundary nodes.
     ///

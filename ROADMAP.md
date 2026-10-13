@@ -71,9 +71,10 @@ Done:
 Next:
 - Step plans for the other grid engines (`ShiftChernoff1D`, `Diffusion4th/6th`,
   drift–reaction), and a narrower ghost table for short pencils.
-- Periodic boundary: unify the coordinate wrap of `sample` (period `(n − 1)·dx`,
-  as documented) with the engines' ghost-index wrap (period `n·dx`); bit-changing,
-  needs its own ADR (found while gating ADR-0213).
+- Periodic boundary: the `ChebyshevSpectralWithBC` out-of-domain path wraps with
+  `xmax − xmin` while every other sampler and engine uses period `n·dx` (doc now
+  corrected); aligning it is bit-changing and needs its own ADR (found while gating
+  ADR-0213).
 
 ---
 

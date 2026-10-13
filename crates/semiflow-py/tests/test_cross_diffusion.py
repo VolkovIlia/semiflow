@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from scipy.linalg import expm  # pyright: ignore[reportMissingImports]
 
 import semiflow  # pyright: ignore[reportMissingImports]
 
@@ -29,14 +28,15 @@ def test_fourier_mode_matches_closed_form_and_modal_reference() -> None:
     s = np.sin(2 * np.pi * x)
     c = np.array([1.0, 0.3])
     got = run_1d(D, np.outer(c, s))
-    exact = np.outer(expm(-0.02 * (2 * np.pi) ** 2 * np.array(D)) @ c, s)
-    assert np.max(np.abs(got - exact)) <= 1e-4
-    # The same engines mode by mode, mixed with numpy's eigenvectors: identical
-    # up to rounding (the mixing commutes with the linear scalar engines).
     lam, p = np.linalg.eig(np.array(D))
     assert np.all(np.isreal(lam))
     lam, p = np.real(lam), np.real(p)
     m = np.linalg.solve(p, c)
+    # e^{-t k^2 D} c through D = P diag(lam) P^-1 (no SciPy in the wheel tests).
+    exact = np.outer(p @ (np.exp(-0.02 * (2 * np.pi) ** 2 * lam) * m), s)
+    assert np.max(np.abs(got - exact)) <= 1e-4
+    # The same engines mode by mode, mixed with numpy's eigenvectors: identical
+    # up to rounding (the mixing commutes with the linear scalar engines).
     modes = [run_1d([float(lk)], s[None, :])[0] for lk in lam]
     ref = sum(np.outer(p[:, k] * m[k], modes[k]) for k in range(2))
     assert np.max(np.abs(got - ref)) <= 1e-13
@@ -69,6 +69,7 @@ def test_cross_diffusion_with_reaction_in_2d_and_richardson() -> None:
         ([[1.0, -2.0], [2.0, 1.0]], "complex"),
         ([[1.0, 2.0], [2.0, 1.0]], "negative"),
         ([[1.0, 1.0], [0.0, 1.0]], "defective"),
+        ([[1.0, 1.0], [0.0, 1.0 + 1e-9]], "ill-conditioned"),
         ([[1.0, 0.5, 0.0], [0.2, 0.6, 0.0], [0.0, 0.0, 1.0]], "K×K"),
         ([[1.0, 0.5], [0.2]], "K×K"),
     ],

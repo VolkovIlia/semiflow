@@ -15,14 +15,20 @@ A Chernoff step replaces `e^{τλ_k L}` by a mode engine `C_k(τ)`; the step err
 
 ## §70.2 — Decomposition (NORMATIVE)
 
-`D` (`K×K`, `1 ≤ K ≤ 16`, finite): eigenvalues by Hessenberg reduction with
-stabilised elimination and Francis double-shift QR (≤ 60 iterations per eigenvalue,
-else `DomainViolation`). With `s = ‖D‖_max`: `|Im λ| > 1e−6·s` → complex (rejected);
-`λ < −1e−6·s` → negative (rejected); `λ ← max(λ, 0)`, sorted ascending. Clusters:
-consecutive `λ` within `1e−6·s`; per cluster the null space of `D − λ̄I` (complete
-pivoting, pivots `≤ 1e−6·s` count as zero) must have the cluster's size, else
-defective. Accept only if `cond₁(P) ≤ 1e8` and `‖PΛP⁻¹ − D‖_max ≤ 1e−10·s`.
-`D = 0`: `P = I`, `Λ = 0`.
+`D` (`K×K`, `1 ≤ K ≤ 16`, finite), `s = ‖D‖_max = m·2^e`: the iteration runs on
+`2^{−e}D` (exact). Eigenvalues by Hessenberg reduction with stabilised elimination
+and Francis double-shift QR (≤ 60 iterations per eigenvalue; a non-finite value or
+no convergence → `DomainViolation`). `|Im λ| > 1e−6·s` → complex; `λ < −1e−6·s` →
+negative; else `λ ← max(Re λ, 0)`, sorted ascending (a later reconstruction failure
+caused by a dropped `Im λ` or clamped `λ` is reported as complex / negative).
+Eigenvectors: for widths `w ∈ (1e−6, 1e−9, 1e−12, 1e−14, 0)·s` in turn, consecutive
+`λ` within `w` of the cluster's first form a cluster of size `m`; its basis is the
+null space of `D − λ̄I` after exactly `K − m` complete-pivoting elimination steps
+(an exactly zero pivot earlier → defective); if `m > 1` and
+`max_j ‖Dv_j − λ_j v_j‖_∞ > 1e−10·s/K`, the cluster is refined at the next width.
+Accept only if, in `f64`, `cond₁(P) ≤ min(1e8, 1e−2/ε_F)` and
+`‖PΛP⁻¹ − D‖_max ≤ 1e−10·s`; `F` stores the decomposition rounded. `D = 0`:
+`P = I`, `Λ = 0`.
 
 ## §70.3 — Step
 

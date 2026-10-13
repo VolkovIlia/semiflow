@@ -11782,7 +11782,7 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (error = modal bound to rounding; bound ≤ 2.6e−5; slopes 1.99–2.02)"
+    pass_status: "PASS (error ≤ modal bound: equal to ~1e−11 relative for the 2×2 matrices, 0.96–0.98 of it for the non-normal 3×3; bound ≤ 2.61e−5; slopes 1.99–2.02)"
     rationale: |
       ADR-0213: periodic sin(2πx)·c (1-D, 64 nodes) and sin(2πx)sin(2πy)·c (2-D, 32²)
       with DiffusionChernoff mode engines (septic; Strang across axes) against the
@@ -11800,14 +11800,17 @@ implementation_notes:
     type: STRUCTURAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS"
+    pass_status: "PASS (every reason asserted; mutants without the cond₁ check or the xmin/xmax comparison fail)"
     rationale: |
-      ADR-0213: complex, negative, defective and nearly defective D are rejected with
-      the reason (DomainViolation); non-zero Dirichlet values, species on different
-      grids or boundary policies, and a species-count mismatch are rejected at run
-      time; zero-Dirichlet species are accepted.
-    gate: "every invalid input → DomainViolation; valid homogeneous inputs → Ok"
-    test_file: "tests/g_cross_diffusion.rs"
+      ADR-0213: every rejection asserts its reason string — complex, negative (also
+      inside the clamp tolerance), defective ("does not reproduce D"), nearly defective
+      (cond₁(P) = 2e10: "ill-conditioned"), from_modes singular / ill-conditioned P,
+      a non-square D; at run time a non-zero Dirichlet value and species that differ in
+      exactly one of boundary policy, xmin, xmax or interpolant (1-D), in one axis
+      (2-D) or in the graph (two Arcs), and a species-count mismatch; identical and
+      zero-Dirichlet fields run.
+    gate: "every invalid input → DomainViolation with the expected reason; valid homogeneous inputs → Ok"
+    test_file: "tests/g_cross_diffusion_reject.rs"
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0213

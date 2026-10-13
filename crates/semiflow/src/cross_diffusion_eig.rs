@@ -266,13 +266,16 @@ fn reflect(
     }
 }
 
-/// Basis of the null space of the row-major `n×n` matrix `a` (pivots `≤ tol` count
-/// as zero), by Gaussian elimination with complete pivoting; unit 2-norm columns.
-pub(super) fn null_space(a: &[f64], n: usize, tol: f64) -> Vec<Vec<f64>> {
+/// Basis of the `nullity`-dimensional (approximate) null space of the row-major
+/// `n×n` matrix `a`: exactly `n − nullity` steps of Gaussian elimination with
+/// complete pivoting (an exactly zero or NaN pivot stops earlier and yields more
+/// vectors — the caller then reports a defective cluster); the trailing columns
+/// give unit 2-norm null vectors by back-substitution.
+pub(super) fn null_space(a: &[f64], n: usize, nullity: usize) -> Vec<Vec<f64>> {
     let mut u = a.to_vec();
     let mut cols: Vec<usize> = (0..n).collect();
     let mut rank = 0;
-    while rank < n {
+    while rank < n - nullity.min(n) {
         let (mut bi, mut bj, mut best) = (rank, rank, 0.0_f64);
         for i in rank..n {
             for j in rank..n {
@@ -281,8 +284,8 @@ pub(super) fn null_space(a: &[f64], n: usize, tol: f64) -> Vec<Vec<f64>> {
                 }
             }
         }
-        #[allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN pivot ends the elimination
-        if !(best > tol) {
+        #[allow(clippy::neg_cmp_op_on_partial_ord)] // a zero or NaN pivot ends it
+        if !(best > 0.0) {
             break;
         }
         for c in 0..n {
@@ -300,6 +303,11 @@ pub(super) fn null_space(a: &[f64], n: usize, tol: f64) -> Vec<Vec<f64>> {
         }
         rank += 1;
     }
+    back_substitute(&u, n, rank, &cols)
+}
+
+/// The `n − rank` null vectors of the eliminated `u` (unit 2-norm, original order).
+fn back_substitute(u: &[f64], n: usize, rank: usize, cols: &[usize]) -> Vec<Vec<f64>> {
     (rank..n)
         .map(|free| {
             let mut x = vec![0.0; n];

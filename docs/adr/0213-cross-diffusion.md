@@ -7,6 +7,9 @@
 - **Contract**: math §70 (`contracts/semiflow-core.math-cross-diffusion.md`); gates
   `G_CROSSDIFF_GRAPH_EXACT`, `G_CROSSDIFF_STRANG_ORDER`, `G_CROSSDIFF_FOURIER_GRID`,
   `G_CROSSDIFF_REJECT`.
+- **Amendment 1 (review)**: fixed-rank null spaces with adaptive clustering,
+  power-of-two normalisation, `f64` verification for every `F`, reasons asserted
+  by the gates (Decision 2, Gates).
 
 ## Context
 
@@ -27,18 +30,28 @@ interpolation.
    mode `k`'s engine (`≈ e^{τλ_k L}`, built by the caller; the identity for
    `λ_k = 0`) and mixes back `u = Pm`; the reaction still acts on the physical
    species, so the Strang splitting (and Richardson extrapolation) of ADR-0208 is
-   unchanged. Every existing engine (1-D/2-D/3-D, all interpolants and boundary
-   policies, Strang/ADI compositions, graph Laplacians) is reused as is.
+   unchanged. Every existing engine (1-D/2-D/3-D, all interpolants, every
+   homogeneous linear boundary policy — all except `Dirichlet { value ≠ 0 }`, see
+   4 — Strang/ADI compositions, graph Laplacians) is reused as is.
 2. **`CrossDiffusion<F>`** (`src/cross_diffusion.rs`). `new(d: &[f64])` (row-major
    `K×K`, `1 ≤ K ≤ 16`; `D` is `f64` data for every scalar type — a constant of the
-   step, no tangent to drop): Hessenberg reduction and Francis double-shift QR
-   (`elmhes`/`hqr`, Wilkinson & Reinsch) for the eigenvalues, eigenvectors as null
-   spaces of `D − λ̄I` by complete-pivoting elimination per eigenvalue cluster
-   (relative width `1e−6`), whose dimension must equal the multiplicity. The result
-   is VERIFIED before use: `cond₁(P) ≤ 10⁸` and `‖PΛP⁻¹ − D‖_max ≤ 10⁻¹⁰‖D‖_max`.
-   Complex eigenvalues (`|Im| > 1e−6‖D‖`), negative ones (backward diffusion,
-   ill-posed) and defective or nearly defective `D` are a `DomainViolation` naming
-   the reason. `from_modes(p, λ)` takes a user decomposition (conditioning checked);
+   step, no tangent to drop). The iteration runs on the exactly normalised
+   `2^{−e}D` (`‖D‖_max = m·2^e`, `frexp`/`scalbn`), so it is scale-invariant over
+   the whole `f64` range: Hessenberg reduction and Francis double-shift QR
+   (`elmhes`/`hqr`, Wilkinson & Reinsch) for the eigenvalues; a non-finite one is
+   reported as non-convergence. `|Im λ| > 1e−6·s` is rejected as complex,
+   `λ < −1e−6·s` as negative; smaller ones are dropped/clamped, and a
+   reconstruction failure they cause is reported as complex/negative.
+   Eigenvectors: consecutive eigenvalues within `w·s` form a cluster of size `m`
+   whose basis is the `m`-dimensional null space of `D − λ̄I` — exactly `K − m`
+   steps of complete-pivoting elimination (no pivot threshold); a cluster whose
+   basis is not an eigenbasis to `1e−10·s/K` is split at the next width
+   `w ∈ {1e−6, 1e−9, 1e−12, 1e−14, 0}`. The `f64` decomposition is VERIFIED before
+   it is rounded to `F`: `cond₁(P) ≤ min(10⁸, 10⁻²/ε_F)` and
+   `‖PΛP⁻¹ − D‖_max ≤ 10⁻¹⁰·‖D‖_max`; a defective `D` (a Jordan block keeps a
+   non-eigen basis and fails the reconstruction) or a nearly defective one
+   (`cond₁(P)` too large) is a `DomainViolation` naming the reason.
+   `from_modes(p, λ)` takes a user decomposition (conditioning checked);
    `eigenvalues()`, `modes()`, `inverse_modes()`.
 3. **`ReactionDiffusion::with_cross_diffusion(cd) → Result`** (additive; `K` must
    match). The engines become the mode engines (`engines[k]` for
@@ -59,8 +72,9 @@ interpolation.
 ## Consequences
 
 - The modal step is exact in `D`: the cross-diffusion error IS the scalar engines'
-  error on the modes, bounded by `max_i Σ_k |P_ik||(P⁻¹c)_k|·err_k` (gated, tight to
-  rounding). Cost per step: `K` scalar engine applications plus two `K×K` mixings per
+  error on the modes, bounded by `max_i Σ_k |P_ik||(P⁻¹c)_k|·err_k` (gated; attained
+  to rounding when the worst row's terms share a sign, as for the `2×2` gate
+  matrices; 2–4 % below it for the non-normal `3×3`, whose terms have mixed signs). Cost per step: `K` scalar engine applications plus two `K×K` mixings per
   node (`O(K²N)`).
 - Default behaviour (no cross-diffusion) is bit-identical: the gather/scatter of the
   reaction step is the same code moved into two helpers.
@@ -92,16 +106,24 @@ interpolation.
   engine's own error (`+1e−14`), bound `≤ 1e−4`, slopes `∈ [1.9, 2.1]` over 20, 40,
   80 steps (measured 1.99–2.02). Mixing with `P` in place of `P⁻¹` fails all three
   accuracy gates.
-- `G_CROSSDIFF_REJECT`: complex, negative, defective and nearly defective `D`
-  rejected with the reason; non-zero Dirichlet values, species on different grids or
-  policies, and a species-count mismatch rejected at run time.
+- `G_CROSSDIFF_REJECT` (`tests/g_cross_diffusion_reject.rs`): every rejection
+  asserts its reason — complex, negative (also within the clamp tolerance),
+  defective (`does not reproduce D`), nearly defective (`cond₁(P) = 2e10`:
+  `ill-conditioned`), `from_modes` singular / ill-conditioned; at run time a non-zero
+  Dirichlet value and species that differ in exactly ONE of policy, `xmin`, `xmax`,
+  interpolant (1-D), one axis (2-D) or the graph, and a species-count mismatch.
+  Unit tests: well-conditioned non-normal and close-spectrum `D` accepted, `c·D`
+  for `c ∈ [1e−300, 1e300]`, `f32` = rounded `f64` decomposition.
 
-## Found while gating (not changed here)
+## Found while gating
 
-`BoundaryPolicy::Periodic` documents a period of `(n − 1)·dx`, and the coordinate
-wrap of `sample` follows it, but the ghost-node index wrap of the engines uses
-`n` nodes (period `n·dx`): a function of period `xmax − xmin` sampled on all `n`
-nodes diffuses with an `O(dx)` error (`2.2e−2` at `n = 65` for `sin(2πx)`), while
-period `n·dx` grids are accurate (`4.7e−6`). The gates use the engines' convention
-(`[0, 1 − 1/n]`). Unifying the two conventions changes bits of periodic engines and
-needs its own ADR (ROADMAP).
+`BoundaryPolicy::Periodic` was documented as wrapping `x` with period `(n − 1)·dx`.
+The code does not: `GridFn1D::sample` (Hermite and linear interpolants) wraps the
+node index modulo `n` (`bc_index`), so the period is `n·dx` (node `n` is node `0`),
+and the grid engines share that convention; only the `ChebyshevSpectralWithBC`
+out-of-domain path (`wrap_periodic`) wraps with `xmax − xmin`. A function of period
+`xmax − xmin` sampled on all `n` nodes therefore duplicates the seam node and
+diffuses with an `O(dx)` error (`2.2e−2` at `n = 65` for `sin(2πx)`), while
+period-`n·dx` grids are accurate (`4.7e−6`). The doc comment is corrected here; the
+gates use the code's convention (`[0, 1 − 1/n]`). Whether the Chebyshev path should
+follow `n·dx` is bit-changing and left to its own ADR (ROADMAP).

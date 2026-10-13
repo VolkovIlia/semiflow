@@ -267,10 +267,14 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   verifies it (`cond₁(P) ≤ 1e8`, reconstruction `≤ 1e−10‖D‖`); complex, negative and
   (nearly) defective `D` are rejected with the reason. `with_cross_diffusion(cd)`
   mixes the species into modes around each diffusion step, so every existing engine
-  (1-D/2-D/3-D, all interpolants and boundary policies, graphs) diffuses the modes
-  exactly in `D`. `NodalField::mixes_with` (provided, default `false`) admits only
+  (1-D/2-D/3-D, all interpolants, every boundary policy except a non-zero
+  `Dirichlet` value, graphs) diffuses the modes exactly in `D`. The eigen-solver is
+  scale-invariant (exact power-of-two normalisation), uses fixed-rank null spaces
+  with adaptive clustering (well-conditioned non-normal and close-spectrum `D` are
+  accepted) and verifies in `f64` for every scalar type. `NodalField::mixes_with` (provided, default `false`) admits only
   fields on the same nodes with one homogeneous linear boundary. Python:
-  `ReactionDiffusion*(…, diffusivity=[[…], …])`. Gates `G_CROSSDIFF_GRAPH_EXACT`
+  `ReactionDiffusion*(…, diffusivity=[[…], …])`. `BoundaryPolicy::Periodic` doc
+  corrected (period `n·dx`). Gates `G_CROSSDIFF_GRAPH_EXACT`
   (`≤ 2e−15`), `G_CROSSDIFF_STRANG_ORDER`, `G_CROSSDIFF_FOURIER_GRID`,
   `G_CROSSDIFF_REJECT`.
 
