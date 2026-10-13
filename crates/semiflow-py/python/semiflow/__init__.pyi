@@ -196,8 +196,10 @@ class Heat1D:
         **GIL-zero-cost advantage**: unlike ``with_a_function``, the coefficient
         closures produced here are pure-Rust backed by ``Arc<Vec<f64>>``.
         They do not re-acquire the GIL during ``evolve``, so the three-phase
-        GIL-release pattern (ADR-0031) is fully effective.  For large grids or
-        many time steps this can be 10× faster than the callback path.
+        GIL-release pattern (ADR-0031) is fully effective. The difference is in
+        coefficient evaluation, which runs once per step plan (ADR-0215): it
+        matters for single-step or chunked workloads and large grids, much less
+        for one long multi-step ``evolve``.
 
         Parameters
         ----------

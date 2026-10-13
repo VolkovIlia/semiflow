@@ -213,7 +213,7 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
         let half = tau * from_f64::<F>(0.5);
-        self.run(u, scratch, |ws, u, scratch| {
+        self.run(u, 1, scratch, |ws, u, scratch| {
             ws.react(self, t, half, u)?;
             ws.diffuse(self, tau, u, scratch)?;
             ws.react(self, t + half, half, u)
@@ -241,7 +241,7 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         let tau = t / from_f64::<F>(n as f64);
         let half = tau * from_f64::<F>(0.5);
         let mut u = src.clone();
-        self.run(&mut u, scratch, |ws, u, scratch| {
+        self.run(&mut u, n, scratch, |ws, u, scratch| {
             ws.react(self, t0, half, u)?;
             for j in 0..n {
                 ws.diffuse(self, tau, u, scratch)?;
@@ -256,10 +256,12 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         Ok(())
     }
 
-    /// Validate shapes, build the workspace, run `body`, return the buffers.
+    /// Validate shapes, build the workspace (step plans when the engines are
+    /// applied `uses ≥ 2` times), run `body`, return the buffers.
     fn run(
         &self,
         u: &mut Species<S>,
+        uses: usize,
         scratch: &mut ScratchPool<F>,
         body: impl FnOnce(
             &mut Workspace<F, S>,
@@ -277,7 +279,7 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         if let ReactionSolver::Rosenbrock(opts) = &self.solver {
             opts.validate()?;
         }
-        let mut ws = Workspace::new(u, n, &self.solver, scratch);
+        let mut ws = Workspace::new(u, n, &self.solver, uses, scratch);
         let result = body(&mut ws, u, scratch);
         ws.release(scratch);
         result
@@ -331,6 +333,7 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         u: &Species<S>,
         n: usize,
         solver: &ReactionSolver,
+        uses: usize,
         scratch: &mut ScratchPool<F>,
     ) -> Self {
         let kn = u.fields.len() * n;
@@ -345,7 +348,11 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
             k: scratch.take_vec(kn),
             spare: u.fields[0].clone(),
             ros,
-            plans: u.fields.iter().map(|_| PencilPlan::new()).collect(),
+            plans: u
+                .fields
+                .iter()
+                .map(|_| PencilPlan::with_uses(uses))
+                .collect(),
         }
     }
 

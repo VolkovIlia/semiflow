@@ -53,8 +53,9 @@ fn apply_into(
 
 - Grow-only: pool never shrinks `high_water_capacity` during use.
 - No zero-fill on borrow: caller is responsible for overwriting all returned slots.
-- Smallest-fits-first selection: borrow scans `free` for the first `Vec` with
-  `capacity >= len`; on miss, allocates fresh.
+- Best-fit selection (ADR-0215): `borrow_vec`/`take_vec` take the free `Vec` with
+  the smallest `capacity >= len`; on miss, allocate fresh. (`take_graph_buf`
+  remains first fit.)
 - No shrink on Drop: `ScratchVec::drop` calls `buf.clear()` (sets len=0) then
   pushes buf back; capacity is preserved.
 - `Send + !Sync`: `ScratchPool` is `Send` (can move across threads), not `Sync`

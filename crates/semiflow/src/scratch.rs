@@ -3,7 +3,8 @@
 //! ## Design
 //!
 //! [`ScratchPool<F>`] owns a free-list of `Vec<F>` buffers. When [`ScratchPool::borrow_vec`]
-//! is called it pops the first buffer with sufficient capacity (or allocates a fresh one),
+//! is called it takes the smallest free buffer with sufficient capacity (best fit,
+//! ADR-0215; or allocates a fresh one),
 //! fills it to `len` with `F::zero()`, and returns a RAII handle [`ScratchVec<'_, F>`].
 //!
 //! On [`Drop`], `ScratchVec` calls `buf.clear()` (sets `len = 0`, keeps `capacity`) then
@@ -92,8 +93,8 @@ impl<F: SemiflowFloat> ScratchPool<F> {
 
     /// Borrow a `Vec<F>` of length `len`, filled with `F::zero()`.
     ///
-    /// Selects the first free buffer with sufficient capacity; allocates a new
-    /// one if none fit. The returned [`ScratchVec`] is tied to this pool's
+    /// Selects the smallest free buffer with sufficient capacity (best fit,
+    /// ADR-0215); allocates a new one if none fit. The returned [`ScratchVec`] is tied to this pool's
     /// lifetime — the borrow checker prevents two live handles on the same pool.
     ///
     /// # Panics
@@ -119,7 +120,8 @@ impl<F: SemiflowFloat> ScratchPool<F> {
     /// Unlike [`Self::borrow_vec`], the returned `Vec` is fully owned by the caller.
     /// The caller MUST return it via [`Self::return_vec`] to reclaim capacity.
     /// Use this when multiple buffers must be live simultaneously (e.g. the
-    /// K=4 g-grid chain in `TruncatedExp` `apply_into`).
+    /// K=4 g-grid chain in `TruncatedExp` `apply_into`). Selection is best fit
+    /// (the smallest free buffer with sufficient capacity, ADR-0215).
     ///
     /// # Panics
     ///

@@ -260,3 +260,59 @@ impl<F: SemiflowFloat> Clone for Storage3<F> {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Identity of the stored coefficients (τ-keyed step plans, ADR-0215)
+// ---------------------------------------------------------------------------
+
+use crate::step_plan::ptr_bits;
+
+impl Storage<f64> {
+    /// `[variant, w0, w1, w2]`: the fn-pointer or closure addresses (bit patterns)
+    /// or the constant `a` — a plan built from other coefficients is not reused.
+    pub(crate) fn fingerprint(&self) -> [f64; 4] {
+        match self {
+            Self::FnPtr {
+                a,
+                a_prime,
+                a_double_prime,
+            } => [
+                1.0,
+                ptr_bits(*a as *const ()),
+                ptr_bits(*a_prime as *const ()),
+                ptr_bits(*a_double_prime as *const ()),
+            ],
+            Self::Closure {
+                a,
+                a_prime,
+                a_double_prime,
+            } => [
+                2.0,
+                ptr_bits(Arc::as_ptr(a)),
+                ptr_bits(Arc::as_ptr(a_prime)),
+                ptr_bits(Arc::as_ptr(a_double_prime)),
+            ],
+            Self::ConstA { a_value } => [3.0, *a_value, 0.0, 0.0],
+        }
+    }
+}
+
+impl Storage3<f64> {
+    /// `[variant, w0, w1, w2]` as [`Storage::fingerprint`].
+    pub(crate) fn fingerprint(&self) -> [f64; 4] {
+        match self {
+            Self::FnPtr { f0, f1, f2 } => [
+                1.0,
+                ptr_bits(*f0 as *const ()),
+                ptr_bits(*f1 as *const ()),
+                ptr_bits(*f2 as *const ()),
+            ],
+            Self::Closure { f0, f1, f2 } => [
+                2.0,
+                ptr_bits(Arc::as_ptr(f0)),
+                ptr_bits(Arc::as_ptr(f1)),
+                ptr_bits(Arc::as_ptr(f2)),
+            ],
+        }
+    }
+}

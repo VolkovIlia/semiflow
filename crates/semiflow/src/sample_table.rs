@@ -257,6 +257,19 @@ pub(crate) fn plan_sample(grid: &Grid1D, x: f64, out: &mut [f64]) {
     }
 }
 
+/// The error [`PreparedGridFn::sample`] raises on `grid`, if any: only the
+/// untabled direct layouts can fail (linear without the `linear-interp` feature,
+/// an unsupported Chebyshev `M`), independently of `x` and the values.
+///
+/// # Errors
+/// That error.
+pub(crate) fn sample_probe(values: &[f64], grid: &Grid1D, x: f64) -> Result<(), SemiflowError> {
+    if matches!(layout_of(grid), Layout::Direct) {
+        grid.interp(values, x)?;
+    }
+    Ok(())
+}
+
 impl PreparedGridFn<'_> {
     /// The sample planned by [`plan_sample`] on this view's grid: bit-identical to
     /// [`Sample1D::sample`] at the planned `x` (same weights, same combination).

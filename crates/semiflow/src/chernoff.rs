@@ -207,6 +207,14 @@ pub trait ChernoffFunction<F: SemiflowFloat = f64> {
     /// positions, interpolation weights, coefficient values — so that applying
     /// one engine with one `τ` to many states (steps, pencils of a Strang sweep)
     /// is cheaper. Planned results are BIT-IDENTICAL to `apply_into`.
+    ///
+    /// A plan belongs to the engine VALUE it was filled from. The library's
+    /// producers record the engine's address, its own grid and the identity of its
+    /// coefficients (fn-pointer or closure addresses, the constant `a`), so a
+    /// changed public field or a reassigned engine is detected (the plan is then
+    /// not used). Discard plans whose engine was dropped or moved: a different
+    /// engine with identical coefficients at the same address cannot be told
+    /// apart — it computes the same step.
     #[allow(unused_variables)]
     fn plan_len(&self, tau: F, proto: &Self::S) -> Option<(usize, usize)> {
         None
@@ -225,9 +233,9 @@ pub trait ChernoffFunction<F: SemiflowFloat = f64> {
     }
 
     /// `dst := S(τ) src` with a plan `data` filled by THIS engine for `τ`, and a
-    /// work area of length `plan_len(..).1`. A plan that does not match `(τ, src)`
-    /// — another `τ`, grid or length — falls back to `apply_into`. Default:
-    /// `apply_into`.
+    /// work area of length `plan_len(..).1`. A plan that does not match — another
+    /// `τ`, sampling grid, length or engine state, or a truncated buffer — falls
+    /// back to `apply_into`. Default: `apply_into`.
     ///
     /// # Errors
     /// As [`apply_into`](Self::apply_into).
@@ -381,7 +389,7 @@ where
         buf_b.zero_into();
         let mut src_is_a = true;
         // ADR-0215: one τ-keyed plan for all n steps (bit-identical).
-        let mut plan = crate::step_plan::PencilPlan::new();
+        let mut plan = crate::step_plan::PencilPlan::with_uses(self.n);
         for _ in 0..self.n {
             if src_is_a {
                 plan.apply(&self.func, tau, &buf_a, &mut buf_b, scratch)?;

@@ -7,6 +7,10 @@
 //! node kernels in `diffusion_helpers.rs` evaluate, and combined in the same
 //! order, so a planned step is bit-identical to `apply_into` (`G_STEP_PLAN_BIT_EQUAL`).
 //! The coefficient closures are called once per plan instead of once per step.
+//!
+//! Layout: header (engine, τ, length, sampling grid), `[stride, τ²]`, the engine's
+//! own grid and coefficient identity (a plan built before a field was changed is
+//! not reused), then the nodes.
 
 use super::{validate_a_x_f64, validate_tau_f64, DiffusionChernoff, W0, W1, W2};
 use crate::{
@@ -14,15 +18,18 @@ use crate::{
     error::SemiflowError,
     grid::Grid1D,
     grid_fn::GridFn1D,
-    sample_table::{plan_sample, planned_stride, PreparedGridFn},
+    parallel1d::parallel_nodes_into,
+    sample_table::{plan_sample, planned_stride, sample_probe, PreparedGridFn},
     scratch::ScratchPool,
-    step_plan::{header, header_matches, HEADER},
+    step_plan::{grid_words, header, header_matches, words_match, HEADER},
 };
 
-/// Largest plan accepted (doubles): beyond, `plan_len` is `None` (today's path).
-const PLAN_MAX: usize = 1 << 24;
-/// `[stride, τ²]` after the header.
-const META: usize = HEADER + 2;
+/// Largest plan accepted (doubles, 32 MiB): beyond, `plan_len` is `None`.
+const PLAN_MAX: usize = 1 << 22;
+/// Engine words after `[stride, τ²]`: its grid (3) and coefficient identity (4).
+const ENGINE: usize = 7;
+/// Start of the node data.
+const META: usize = HEADER + 2 + ENGINE;
 /// Per-node scalars of the variable-`a` plan: `2δ, δ², 2δ³, a·a′, a·a″/2, a′·a″/4`.
 const VAR_SCALARS: usize = 6;
 
@@ -35,18 +42,33 @@ fn shape(dc: &DiffusionChernoff<f64>) -> (f64, usize, usize) {
     }
 }
 
+/// The engine state a plan depends on besides the header.
+fn engine_words(dc: &DiffusionChernoff<f64>) -> [f64; ENGINE] {
+    let [g0, g1, g2] = grid_words(&dc.grid);
+    let [s0, s1, s2, s3] = dc.storage.fingerprint();
+    [g0, g1, g2, s0, s1, s2, s3]
+}
+
+/// Plan length for `n` nodes on `grid` (`None` on overflow or above `PLAN_MAX`).
+fn data_len(dc: &DiffusionChernoff<f64>, n: usize, grid: &Grid1D) -> Option<usize> {
+    let (_, scalars, samples) = shape(dc);
+    let per_node = scalars + samples * planned_stride(grid);
+    let data = n.checked_mul(per_node)?.checked_add(META)?;
+    (data <= PLAN_MAX).then_some(data)
+}
+
 /// `(data, work)` for states shaped like `proto`.
 pub(super) fn len(dc: &DiffusionChernoff<f64>, proto: &GridFn1D<f64>) -> Option<(usize, usize)> {
-    let (_, scalars, samples) = shape(dc);
-    let per_node = scalars + samples * planned_stride(&proto.grid);
-    let data = META + proto.values.len() * per_node;
-    (data <= PLAN_MAX).then(|| (data, PreparedGridFn::work_len(&proto.grid)))
+    let data = data_len(dc, proto.values.len(), &proto.grid)?;
+    Some((data, PreparedGridFn::work_len(&proto.grid)))
 }
 
 /// Fill the plan for `(τ, proto)`.
 ///
 /// # Errors
-/// `tau` invalid or `a(x_pre)` invalid at some node — as `apply_into`.
+/// The first error `apply_into` raises in node order — `tau` invalid, `a(x_pre)`
+/// invalid at a node, an unsupported interpolant — or a `data` length other than
+/// `plan_len`.
 #[allow(clippy::cast_precision_loss)] // stride ≤ 12
 pub(super) fn fill(
     dc: &DiffusionChernoff<f64>,
@@ -55,22 +77,32 @@ pub(super) fn fill(
     data: &mut [f64],
 ) -> Result<(), SemiflowError> {
     validate_tau_f64(tau)?;
+    if data_len(dc, proto.values.len(), &proto.grid) != Some(data.len()) {
+        return Err(SemiflowError::DomainViolation {
+            what: "DiffusionChernoff::fill_plan: data length differs from plan_len",
+            value: data.len() as f64,
+        });
+    }
     let (tag, scalars, samples) = shape(dc);
     let grid = proto.grid;
     let stride = planned_stride(&grid);
     data[..HEADER].copy_from_slice(&header(dc, tag, tau, proto.values.len(), &grid));
     data[HEADER] = stride as f64;
     data[HEADER + 1] = tau * tau;
-    let per_node = scalars + samples * stride;
-    for (i, node) in data[META..].chunks_exact_mut(per_node).enumerate() {
+    data[HEADER + 2..META].copy_from_slice(&engine_words(dc));
+    parallel_nodes_into(&mut data[META..], scalars + samples * stride, |i, node| {
         let x = dc.grid.x_at(i);
         if dc.is_const_a() {
             fill_const(dc, tau, x, &grid, node)?;
         } else {
             fill_variable(dc, tau, x, &grid, node)?;
         }
-    }
-    Ok(())
+        // apply_into samples right after node 0's coefficient check.
+        if i == 0 {
+            sample_probe(&proto.values, &grid, x)?;
+        }
+        Ok(())
+    })
 }
 
 /// The five positions of `gamma_a_const_f64`.
@@ -146,16 +178,30 @@ fn fill_variable(
     Ok(())
 }
 
-/// One planned step; a plan that does not match `(engine, τ, src)` falls back
-/// to `apply_into`.
+/// `true` when `data` is this engine's current plan for `(τ, src)` and `work`
+/// holds the ghost table.
+#[allow(clippy::cast_precision_loss)] // stride ≤ 12
+fn usable(
+    dc: &DiffusionChernoff<f64>,
+    tau: f64,
+    data: &[f64],
+    work: &[f64],
+    src: &GridFn1D<f64>,
+) -> bool {
+    let (tag, n) = (shape(dc).0, src.values.len());
+    header_matches(data, &header(dc, tag, tau, n, &src.grid))
+        && data_len(dc, n, &src.grid) == Some(data.len())
+        && data[HEADER].to_bits() == (planned_stride(&src.grid) as f64).to_bits()
+        && words_match(data, HEADER + 2, &engine_words(dc))
+        && work.len() >= PreparedGridFn::work_len(&src.grid)
+}
+
+/// One planned step; a plan that is not this engine's current plan for
+/// `(τ, src)` falls back to `apply_into`.
 ///
 /// # Errors
 /// As `apply_into`.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::too_many_arguments
-)] // stride ≤ 12; the hook's arguments
+#[allow(clippy::too_many_arguments)] // the hook's arguments
 pub(super) fn apply(
     dc: &DiffusionChernoff<f64>,
     tau: f64,
@@ -165,17 +211,14 @@ pub(super) fn apply(
     dst: &mut GridFn1D<f64>,
     scratch: &mut ScratchPool<f64>,
 ) -> Result<(), SemiflowError> {
-    let (tag, scalars, samples) = shape(dc);
-    let n = src.values.len();
-    let table_len = PreparedGridFn::work_len(&src.grid);
-    let want = header(dc, tag, tau, n, &src.grid);
-    if !header_matches(data, &want) || work.len() < table_len {
+    if !usable(dc, tau, data, work, src) {
         return dc.apply_into(tau, src, dst, scratch);
     }
-    let (stride, tt) = (data[HEADER] as usize, data[HEADER + 1]);
+    let (_, scalars, samples) = shape(dc);
+    let (stride, tt) = (planned_stride(&src.grid), data[HEADER + 1]);
     let per_node = scalars + samples * stride;
-    dst.values.resize(n, 0.0);
-    let table = &mut work[..table_len];
+    dst.values.resize(src.values.len(), 0.0);
+    let table = &mut work[..PreparedGridFn::work_len(&src.grid)];
     PreparedGridFn::fill(&src.values, &src.grid, table);
     let f = PreparedGridFn::view(&src.values, src.grid, table);
     let nodes = &data[META..];
@@ -217,3 +260,7 @@ fn variable_node(
     let f3 = (f_pos2 - 2.0 * f_pos1 + 2.0 * f_neg1 - f_neg2) / sc[2];
     Ok(baseline + tt * (sc[3] * f3 + sc[4] * f2 + sc[5] * f1))
 }
+
+#[cfg(test)]
+#[path = "diffusion_plan_tests.rs"]
+mod tests;

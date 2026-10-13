@@ -300,9 +300,12 @@ impl Heat1D {
     ///
     /// **Performance note (ADR-0031 / ADR-0034)**: each evaluation of `a`,
     /// `a_prime`, or `a_double_prime` re-acquires the GIL (~2-5 µs on `CPython`
-    /// 3.11). This **defeats** the GIL-release optimisation of `evolve` (ADR-0031).
-    /// For a 1024-node grid with 100 Chernoff steps the callback overhead is
-    /// ~2.5M × 2-5 µs ≈ 5-12 s, versus ~50 ms for the unit-`a` path.
+    /// 3.11). Since ADR-0215 the coefficients are evaluated once per τ-keyed step
+    /// plan — once per `evolve` call of `n ≥ 2` steps, per Richardson level and per
+    /// `evolve_chunked` chunk — about 10 calls per node, not per step: for a
+    /// 1024-node grid ≈ 10k callbacks ≈ 20-50 ms per `evolve` call whatever its
+    /// step count. Single-step calls, and grids whose plan exceeds 2²² doubles,
+    /// pay the callbacks on every step.
     /// If throughput matters, consider:
     ///   * Pre-sampled array approach: `Heat1D.with_a_array(a_values, ...)` [v0.13.0+]
     ///   * Zero-overhead C path: `Heat1D.with_a_cfunction(ctypes.CFUNCTYPE(...))` [v0.13.0+]
@@ -381,8 +384,9 @@ impl Heat1D {
     /// closures produced here are pure-Rust closures backed by `Arc<Vec<f64>>`
     /// data.  They do **not** re-acquire the GIL during `evolve`, so the
     /// three-phase GIL-release pattern of `evolve` (ADR-0031) is fully
-    /// effective.  For large grids or many time steps, this can be 10× faster
-    /// than the Python-callable path.
+    /// effective. The difference is in coefficient evaluation, which runs once per
+    /// step plan (ADR-0215): it matters for single-step or chunked workloads and
+    /// for large grids, much less for one long multi-step `evolve`.
     ///
     /// Parameters
     /// ----------

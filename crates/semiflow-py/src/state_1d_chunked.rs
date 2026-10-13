@@ -164,8 +164,13 @@ pub(crate) fn compute_chunk(
     let mut buf_b: GridFn1D<f64> = buf_a.clone();
     buf_b.zero_into();
     let mut scratch: ScratchPool<f64> = ScratchPool::new();
-    // ADR-0215: one τ-keyed plan for the chunk (bit-identical to apply_into).
-    let mut plan = match chernoff_func.plan_len(tau, &buf_a) {
+    // ADR-0215: one τ-keyed plan for a chunk of k ≥ 2 steps (bit-identical).
+    let plan_len = if k >= 2 {
+        chernoff_func.plan_len(tau, &buf_a)
+    } else {
+        None
+    };
+    let mut plan = match plan_len {
         Some((d, w)) => {
             let mut data = vec![0.0; d];
             chernoff_func.fill_plan(tau, &buf_a, &mut data)?;

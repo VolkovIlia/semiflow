@@ -57,8 +57,26 @@ fn interp_code(k: InterpKind) -> [f64; 2] {
     }
 }
 
+/// A pointer as an `f64` BIT PATTERN (lossless on every target, including
+/// top-byte-tagged pointers; plan words are compared by bits and only copied).
+pub(crate) fn ptr_bits<T: ?Sized>(p: *const T) -> f64 {
+    f64::from_bits(p.cast::<u8>() as usize as u64)
+}
+
+/// `[xmin, xmax, n]` of an engine's own grid (node positions `x_at(i)`).
+#[allow(clippy::cast_precision_loss)] // n below 2^53
+pub(crate) fn grid_words(g: &Grid1D) -> [f64; 3] {
+    [g.xmin, g.xmax, g.n as f64]
+}
+
+/// `true` when `data[at..at + want.len()]` holds exactly `want` (bit patterns).
+pub(crate) fn words_match(data: &[f64], at: usize, want: &[f64]) -> bool {
+    data.get(at..at + want.len())
+        .is_some_and(|d| d.iter().zip(want).all(|(a, b)| a.to_bits() == b.to_bits()))
+}
+
 /// The header of a plan by `engine` for `τ` and states of length `n` on `grid`.
-#[allow(clippy::cast_precision_loss)] // addresses and lengths below 2^53
+#[allow(clippy::cast_precision_loss)] // lengths below 2^53
 pub(crate) fn header<E: ?Sized>(
     engine: &E,
     tag: f64,
@@ -66,7 +84,7 @@ pub(crate) fn header<E: ?Sized>(
     n: usize,
     grid: &Grid1D,
 ) -> [f64; HEADER] {
-    let addr = core::ptr::from_ref(engine).cast::<u8>() as usize as f64;
+    let addr = ptr_bits(core::ptr::from_ref(engine));
     let [bt, ba, bb] = boundary_code(grid.boundary);
     let [it, im] = interp_code(grid.interp);
     [
@@ -94,9 +112,11 @@ pub(crate) fn header_matches(data: &[f64], want: &[f64; HEADER]) -> bool {
             .all(|(a, b)| a.to_bits() == b.to_bits())
 }
 
-/// Applies one engine with one `τ` to a sequence of states (steps, pencils),
-/// building the engine's plan on the first state (buffers from the scratch pool:
-/// zero allocations in steady state). Without a plan it is plain `apply_into`.
+/// Applies one engine with one `τ` to a sequence of `uses` states (steps,
+/// pencils), building the engine's plan on the first state when `uses ≥ 2` (a
+/// single application gains nothing from a plan); buffers come from the scratch
+/// pool, so a steady state allocates nothing. Without a plan it is plain
+/// `apply_into`.
 pub(crate) struct PencilPlan<F> {
     buf: Vec<F>,
     split: usize,
@@ -111,11 +131,11 @@ enum Built {
 }
 
 impl<F: SemiflowFloat> PencilPlan<F> {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn with_uses(uses: usize) -> Self {
         Self {
             buf: Vec::new(),
             split: 0,
-            state: Built::Not,
+            state: if uses >= 2 { Built::Not } else { Built::Absent },
         }
     }
 

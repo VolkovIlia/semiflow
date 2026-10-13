@@ -249,7 +249,7 @@ where
     C: ChernoffFunction<F, S = GridFn1D<F>>,
 {
     // ADR-0215: one τ-keyed plan for every row of the sweep.
-    let mut plan = PencilPlan::new();
+    let mut plan = PencilPlan::with_uses(ny);
     for j in 0..ny {
         let src_row = pencil::row_2d(src, nx, j);
         let dst_row = pencil::row_2d_mut(dst, nx, j);
@@ -280,7 +280,7 @@ where
 {
     let mut src_col = scratch.take_vec(ny);
     let mut dst_col = scratch.take_vec(ny);
-    let mut plan = PencilPlan::new();
+    let mut plan = PencilPlan::with_uses(nx);
     for i in 0..nx {
         pencil::gather_y_2d_into(src, nx, ny, i, &mut src_col);
         let src_gf = GridFn1D {

@@ -11819,7 +11819,7 @@ implementation_notes:
     type: STRUCTURAL
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (0 ULP: 960 1-D configurations incl. ShiftChernoff1D; Strang 2-D/3-D serial and threaded; fallbacks; errors)"
+    pass_status: "PASS (0 ULP: 960 1-D configurations incl. ShiftChernoff1D; Strang 2-D/3-D serial 24²/8³ every policy, threaded 64²/32³ every policy × septic/Catmull–Rom/linear; fallbacks per field; first-error identity)"
     rationale: |
       ADR-0215: a τ-keyed step plan stores what DiffusionChernoff recomputes per step
       (planned samples: table offset + interpolation weights; ζ scalars; τ²) by the
@@ -11834,6 +11834,25 @@ implementation_notes:
       or engine falls back to apply_into; invalid a / τ fail in both paths.
     gate: "planned == unplanned bitwise for every configuration; fallbacks bitwise equal; same error variants"
     test_file: "tests/g_step_plan_bit_equal.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0215
+
+  - name: G_STEP_PLAN_USED
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (perturbed weight changes every producer's result; a-calls evolver 148/148, rd 74/74, Strang x/z sweeps independent of pencil count; plans disabled → fails)"
+    rationale: |
+      ADR-0215: G_STEP_PLAN_BIT_EQUAL compares against apply_into, which is also every
+      plan's fallback, so it cannot see a plan that is never used. Here a perturbed
+      stored weight must change the planned result (DiffusionChernoff const /
+      fn-pointer / closure, ShiftChernoff1D), and the coefficient function's call count
+      must not grow with the step count (Evolver, ChernoffSemigroup, ReactionDiffusion)
+      or with the number of pencils of a Strang2D / Strang3D sweep (serial 16²/8³ and
+      64²/32³, threaded with the parallel feature).
+    gate: "perturbed plan ≠ apply_into for every producer AND a-call counts independent of steps and pencils"
+    test_file: "tests/g_step_plan_used.rs"
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0215

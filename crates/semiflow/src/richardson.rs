@@ -185,7 +185,7 @@ where
         let mut other = src.clone();
         dst.copy_from(src);
         // ADR-0215: one τ-keyed plan for the level's n steps (bit-identical).
-        let mut plan = crate::step_plan::PencilPlan::new();
+        let mut plan = crate::step_plan::PencilPlan::with_uses(n);
         for _ in 0..n {
             plan.apply(&self.func, tau, dst, &mut other, scratch)?;
             core::mem::swap(dst, &mut other);

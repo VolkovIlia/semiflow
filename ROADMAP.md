@@ -62,15 +62,16 @@ Done:
   `diffusivity=[[…], …]`.
 
 - **τ-keyed step plans (ADR-0215):** `ChernoffFunction::plan_len` / `fill_plan` /
-  `apply_planned_into` (provided); `DiffusionChernoff` plans sample offsets,
+  `apply_planned_into` (provided); `DiffusionChernoff` and `ShiftChernoff1D`
+  (`f64`) plan sample offsets,
   interpolation weights and coefficient values once per `(τ, grid)`; `Evolver`,
   `ChernoffSemigroup`, every Strang sweep (serial and threaded) and
   `ReactionDiffusion` use them. Bit-identical; heat1d 2.6–5.5×, heat2d `400²`
   2.1–3.0×, heat3d `64³` 1.6–2.2× (paired runs on a noisy shared host).
 
 Next:
-- Step plans for the other grid engines (`ShiftChernoff1D`, `Diffusion4th/6th`,
-  drift–reaction), and a narrower ghost table for short pencils.
+- Step plans for the other grid engines (`Diffusion4th/6th`, drift–reaction,
+  `f32`/`Dual`), and a narrower ghost table for short pencils.
 - Periodic boundary: the `ChebyshevSpectralWithBC` out-of-domain path wraps with
   `xmax − xmin` while every other sampler and engine uses period `n·dx` (doc now
   corrected); aligning it is bit-changing and needs its own ADR (found while gating

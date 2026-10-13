@@ -227,6 +227,47 @@ where
     }
 }
 
+/// `fill(i, &mut out[i·per..(i + 1)·per])` for every node `i` (each node's block
+/// is written by one call on one thread: bit-identical to the serial loop).
+/// Serial — and stopping at the first error, in node order — unless the
+/// `parallel` feature is on and there are `≥ 2·min_points_per_thread()` nodes.
+pub(crate) fn parallel_nodes_into<E>(
+    out: &mut [f64],
+    per: usize,
+    fill: E,
+) -> Result<(), SemiflowError>
+where
+    E: Fn(usize, &mut [f64]) -> Result<(), SemiflowError> + Sync,
+{
+    #[cfg(feature = "parallel")]
+    {
+        let n = out.len() / per.max(1);
+        let n_threads = resolve_threads_1d(n);
+        if n_threads > 1 && per > 0 {
+            let chunk_nodes = n.div_ceil(n_threads);
+            let error: std::sync::Mutex<Option<SemiflowError>> = std::sync::Mutex::new(None);
+            let (fill_ref, error_ref) = (&fill, &error);
+            std::thread::scope(|s| {
+                for (k, chunk) in out.chunks_mut(chunk_nodes * per).enumerate() {
+                    s.spawn(move || {
+                        for (j, node) in chunk.chunks_exact_mut(per).enumerate() {
+                            if let Err(e) = fill_ref(k * chunk_nodes + j, node) {
+                                error_ref.lock().unwrap().get_or_insert(e);
+                                return;
+                            }
+                        }
+                    });
+                }
+            });
+            return error.into_inner().unwrap().map_or(Ok(()), Err);
+        }
+    }
+    for (i, node) in out.chunks_exact_mut(per.max(1)).enumerate() {
+        fill(i, node)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_precision_loss)]
 mod tests {

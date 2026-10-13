@@ -80,7 +80,7 @@ where
         let mut src_is_a = true;
         // ADR-0215: one τ-keyed plan for all n steps (bit-identical). Dropped with
         // the local pool, not returned to it.
-        let mut plan = crate::step_plan::PencilPlan::new();
+        let mut plan = crate::step_plan::PencilPlan::with_uses(self.n);
         for _ in 0..self.n {
             if src_is_a {
                 plan.apply(&self.func, tau, &buf_a, &mut buf_b, &mut scratch)?;
