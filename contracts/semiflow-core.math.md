@@ -13896,3 +13896,9 @@ bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
 > NORMATIVE body (ADR-0211) lives in
 > [`contracts/semiflow-core.math-phi-krylov.md`](semiflow-core.math-phi-krylov.md);
 > every "§68.x" citation resolves there.
+
+## §69 — Stiff kinetics: adaptive ROS2 reaction step (in its own file)
+
+> NORMATIVE body (ADR-0212) lives in
+> [`contracts/semiflow-core.math-stiff-kinetics.md`](semiflow-core.math-stiff-kinetics.md);
+> every "§69.x" citation resolves there.

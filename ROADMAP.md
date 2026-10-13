@@ -51,8 +51,12 @@ Done:
   generator, `√(τ‖G‖)` growth: 33× fewer applications at `τ‖G‖ = 4·10³`,
   92 s → 3.7 s at `4·10⁵`; `PhiSolver` for ETDRK4; Python `method="krylov"`.
 
+- **Stiff kinetics (ADR-0212):** adaptive ROS2 reaction step for
+  `ReactionDiffusion` (L-stable, analytic or finite-difference Jacobian): Robertson
+  9.4 s (smallest stable RK4) → 80 ms at `rtol = 1e−3`; Python
+  `reaction_solver="rosenbrock"`.
+
 Next:
-- Stiff kinetics: adaptive Rosenbrock reaction step (ADR-0212).
 - Cross-diffusion with a constant diagonalisable matrix (ADR-0213).
 - τ-keyed step plans for the grid engines (≈2–3×, a trait hook, ADR-0215).
 

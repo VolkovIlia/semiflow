@@ -15,6 +15,7 @@
 use alloc::{vec, vec::Vec};
 
 use crate::{
+    dense_la::dense_exp,
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
 };
@@ -39,6 +40,21 @@ pub trait Kinetics<F: SemiflowFloat>: Send + Sync {
         u: &[F],
         du: &mut [F],
     ) -> Result<(), SemiflowError>;
+
+    /// Jacobian `jac[(k·K + l)·N + i] = ∂f_k/∂u_l (t, x_i, u_i)` for every node,
+    /// if known (`jac` holds `K²·n` values). Used by the stiff Rosenbrock reaction
+    /// solver (ADR-0212). `None` (the default): the solver forms a forward-difference
+    /// Jacobian from `K` extra [`Kinetics::eval_batch`] calls.
+    fn jacobian_batch(
+        &self,
+        _t: F,
+        _n: usize,
+        _x: &[F],
+        _u: &[F],
+        _jac: &mut [F],
+    ) -> Option<Result<(), SemiflowError>> {
+        None
+    }
 
     /// Exact flow `u ← Φ_h(u)` of `u′ = f(t, x, u)` over `[t, t + h]`, if known.
     ///
@@ -164,6 +180,17 @@ impl<F: SemiflowFloat> Kinetics<F> for Nagumo<F> {
         }
         Ok(())
     }
+    fn jacobian_batch(
+        &self,
+        _t: F,
+        n: usize,
+        _x: &[F],
+        u: &[F],
+        jac: &mut [F],
+    ) -> Option<Result<(), SemiflowError>> {
+        crate::reaction_jacobians::nagumo(self.a, n, u, jac);
+        Some(Ok(()))
+    }
 }
 
 /// Gray–Scott `u′ = −uv² + f(1 − u)`, `v′ = uv² − (f + k)v`.
@@ -195,6 +222,17 @@ impl<F: SemiflowFloat> Kinetics<F> for GrayScott<F> {
             du_v[i] = uv2 - (self.feed + self.kill) * vv[i];
         }
         Ok(())
+    }
+    fn jacobian_batch(
+        &self,
+        _t: F,
+        n: usize,
+        _x: &[F],
+        u: &[F],
+        jac: &mut [F],
+    ) -> Option<Result<(), SemiflowError>> {
+        crate::reaction_jacobians::gray_scott(self.feed, self.kill, n, u, jac);
+        Some(Ok(()))
     }
 }
 
@@ -232,6 +270,17 @@ impl<F: SemiflowFloat> Kinetics<F> for FitzHughNagumo<F> {
         }
         Ok(())
     }
+    fn jacobian_batch(
+        &self,
+        _t: F,
+        n: usize,
+        _x: &[F],
+        u: &[F],
+        jac: &mut [F],
+    ) -> Option<Result<(), SemiflowError>> {
+        crate::reaction_jacobians::fitzhugh_nagumo(self.eps, self.b, n, u, jac);
+        Some(Ok(()))
+    }
 }
 
 /// Brusselator `u′ = a − (b + 1)u + u²v`, `v′ = bu − u²v`.
@@ -263,6 +312,17 @@ impl<F: SemiflowFloat> Kinetics<F> for Brusselator<F> {
             du_v[i] = self.b * uu[i] - u2v;
         }
         Ok(())
+    }
+    fn jacobian_batch(
+        &self,
+        _t: F,
+        n: usize,
+        _x: &[F],
+        u: &[F],
+        jac: &mut [F],
+    ) -> Option<Result<(), SemiflowError>> {
+        crate::reaction_jacobians::brusselator(self.b, n, u, jac);
+        Some(Ok(()))
     }
 }
 
@@ -344,57 +404,6 @@ impl<F: SemiflowFloat> Kinetics<F> for LinearReaction<F> {
         }
         Some(Ok(()))
     }
-}
-
-/// `e^{hC}` for a small dense row-major `K×K` matrix.
-fn dense_exp<F: SemiflowFloat>(k: usize, c: &[F], h: F) -> Vec<F> {
-    let norm = (0..k)
-        .map(|col| (0..k).fold(F::zero(), |acc, row| acc + (c[row * k + col] * h).abs()))
-        .fold(F::zero(), |a, b| if b > a { b } else { a });
-    let mut squarings = 0_u32;
-    let mut scale = F::one();
-    while norm * scale > from_f64::<F>(0.5) && squarings < 1100 {
-        scale *= from_f64::<F>(0.5);
-        squarings += 1;
-    }
-    let a: Vec<F> = c.iter().map(|&v| v * h * scale).collect();
-    let mut result = identity(k);
-    let mut term = identity(k);
-    for d in 1..=18_u32 {
-        term = matmul(k, &term, &a);
-        let inv = F::one() / from_f64::<F>(f64::from(d));
-        for v in &mut term {
-            *v *= inv;
-        }
-        for (r, &t) in result.iter_mut().zip(&term) {
-            *r += t;
-        }
-    }
-    for _ in 0..squarings {
-        result = matmul(k, &result, &result);
-    }
-    result
-}
-
-fn identity<F: SemiflowFloat>(k: usize) -> Vec<F> {
-    let mut m = vec![F::zero(); k * k];
-    for i in 0..k {
-        m[i * k + i] = F::one();
-    }
-    m
-}
-
-fn matmul<F: SemiflowFloat>(k: usize, a: &[F], b: &[F]) -> Vec<F> {
-    let mut out = vec![F::zero(); k * k];
-    for r in 0..k {
-        for m in 0..k {
-            let arm = a[r * k + m];
-            for c in 0..k {
-                out[r * k + c] += arm * b[m * k + c];
-            }
-        }
-    }
-    out
 }
 
 /// Any pointwise reaction `f(t, x, u, du)` from a closure (`x`: the node's

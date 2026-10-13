@@ -4,7 +4,10 @@
 //! species diffuses with its own constant `D_k` (`DiffusionChernoff`, Strang
 //! across axes), the reaction is a built-in model or any vectorised callable.
 //! Strang splitting (order 2); `richardson=L` extrapolates in the step count
-//! (order `1 + L`). The GIL is released for the whole evolution.
+//! (order `1 + L`). `reaction_solver="rosenbrock"` integrates stiff kinetics with
+//! adaptive ROS2 (`rtol`, `atol`; `jacobian(t, x, u) -> (K, K, N)` for a callable
+//! reaction, finite differences otherwise; ADR-0212). The GIL is released for the
+//! whole evolution.
 
 // Binding layer: PyO3 wrapper patterns.
 #![allow(
@@ -19,8 +22,8 @@ use numpy::{ndarray::ArrayD, ToPyArray};
 use pyo3::{prelude::*, types::PyDict};
 use semiflow::{
     extrapolate_into, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn1D,
-    GridFn2D, GridFn3D, Growth, Kinetics, NodalField, ReactionDiffusion, ScratchPool,
-    SemiflowError as CoreError, Species, SpeciesEngine, State, Strang2D, Strang3D,
+    GridFn2D, GridFn3D, Growth, Kinetics, NodalField, ReactionDiffusion, ReactionSolver,
+    ScratchPool, SemiflowError as CoreError, Species, SpeciesEngine, State, Strang2D, Strang3D,
 };
 
 use crate::{
@@ -28,7 +31,9 @@ use crate::{
     error::{from_core, new_pyerr},
     panic::catch_panic_py,
     rd_kinetics_py::{ArcKinetics, PyKinetics},
-    rd_setup_py::{build_geometry, extract_fields, parse_reaction, Geometry},
+    rd_setup_py::{
+        build_geometry, extract_fields, parse_reaction, parse_solver, Geometry, StiffOptions,
+    },
 };
 
 /// Kinetics, diffusivities and clock shared by the three classes.
@@ -37,6 +42,7 @@ struct RdCore {
     kinetics: Arc<dyn Kinetics<f64>>,
     py_kinetics: Option<Arc<PyKinetics>>,
     substeps: u32,
+    solver: ReactionSolver,
     t: f64,
 }
 
@@ -58,8 +64,8 @@ fn new_state(
     reaction: &Bound<'_, PyAny>,
     params: Option<&Bound<'_, PyDict>>,
     boundary: &str,
-    substeps: u32,
-    t0: f64,
+    (substeps, t0): (u32, f64),
+    stiff: &StiffOptions<'_, '_>,
 ) -> PyResult<RdState> {
     let geom = build_geometry(axes, parse_boundary(boundary)?)?;
     let values = extract_fields(py, u0, &geom.field_shape())?;
@@ -76,12 +82,15 @@ fn new_state(
             "t0 must be finite and substeps >= 1",
         ));
     }
-    let (kinetics, py_kinetics) = parse_reaction(reaction, params, k, axes.len())?;
+    let solver = parse_solver(stiff)?;
+    let (kinetics, py_kinetics) =
+        parse_reaction(reaction, params, stiff.jacobian, (k, axes.len()))?;
     let core = RdCore {
         diff: diffusivity,
         kinetics,
         py_kinetics,
         substeps,
+        solver,
         t: t0,
     };
     Ok(RdState { core, geom, values })
@@ -95,7 +104,9 @@ fn run<S: NodalField<f64> + Clone + Send>(
     (t, n, levels): (f64, usize, usize),
 ) -> Result<Vec<S>, CoreError> {
     let kin = Box::new(ArcKinetics(Arc::clone(&core.kinetics)));
-    let rd = ReactionDiffusion::new(engines, kin)?.with_reaction_substeps(core.substeps);
+    let rd = ReactionDiffusion::new(engines, kin)?
+        .with_reaction_substeps(core.substeps)
+        .with_reaction_solver(core.solver);
     let src = Species::new(fields);
     let mut dst = src.clone();
     let mut scratch = ScratchPool::new();
@@ -312,7 +323,7 @@ rd_class!(
     "1-D system `∂ₜu_k = D_k ∂ₓₓu_k + f_k(t, x, u)`; `u0` of shape `(K, n)`.",
     {
         #[new]
-        #[pyo3(signature = (xmin, xmax, n, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0))]
+        #[pyo3(signature = (xmin, xmax, n, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0, reaction_solver = "rk4", rtol = 1e-6, atol = 1e-9, jacobian = None))]
         #[allow(clippy::too_many_arguments)]
         fn new(
             py: Python<'_>,
@@ -326,7 +337,17 @@ rd_class!(
             boundary: &str,
             substeps: u32,
             t0: f64,
+            reaction_solver: &str,
+            rtol: f64,
+            atol: f64,
+            jacobian: Option<&Bound<'_, PyAny>>,
         ) -> PyResult<Self> {
+            let stiff = StiffOptions {
+                solver: reaction_solver,
+                rtol,
+                atol,
+                jacobian,
+            };
             let axes = [(xmin, xmax, n)];
             catch_panic_py!(new_state(
                 py,
@@ -336,8 +357,8 @@ rd_class!(
                 reaction,
                 params,
                 boundary,
-                substeps,
-                t0
+                (substeps, t0),
+                &stiff
             )
             .map(|state| Self { state }))
         }
@@ -350,7 +371,7 @@ rd_class!(
     "2-D system on `[xmin, xmax]×[ymin, ymax]`; `u0` of shape `(K, ny, nx)`.",
     {
         #[new]
-        #[pyo3(signature = (xmin, xmax, nx, ymin, ymax, ny, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0))]
+        #[pyo3(signature = (xmin, xmax, nx, ymin, ymax, ny, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0, reaction_solver = "rk4", rtol = 1e-6, atol = 1e-9, jacobian = None))]
         #[allow(clippy::too_many_arguments)]
         fn new(
             py: Python<'_>,
@@ -367,7 +388,17 @@ rd_class!(
             boundary: &str,
             substeps: u32,
             t0: f64,
+            reaction_solver: &str,
+            rtol: f64,
+            atol: f64,
+            jacobian: Option<&Bound<'_, PyAny>>,
         ) -> PyResult<Self> {
+            let stiff = StiffOptions {
+                solver: reaction_solver,
+                rtol,
+                atol,
+                jacobian,
+            };
             let axes = [(xmin, xmax, nx), (ymin, ymax, ny)];
             catch_panic_py!(new_state(
                 py,
@@ -377,8 +408,8 @@ rd_class!(
                 reaction,
                 params,
                 boundary,
-                substeps,
-                t0
+                (substeps, t0),
+                &stiff
             )
             .map(|state| Self { state }))
         }
@@ -391,7 +422,7 @@ rd_class!(
     "3-D system on a box; `u0` of shape `(K, nz, ny, nx)`.",
     {
         #[new]
-        #[pyo3(signature = (xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0))]
+        #[pyo3(signature = (xmin, xmax, nx, ymin, ymax, ny, zmin, zmax, nz, u0, *, diffusivity, reaction, params = None, boundary = "reflect", substeps = 1, t0 = 0.0, reaction_solver = "rk4", rtol = 1e-6, atol = 1e-9, jacobian = None))]
         #[allow(clippy::too_many_arguments)]
         fn new(
             py: Python<'_>,
@@ -411,7 +442,17 @@ rd_class!(
             boundary: &str,
             substeps: u32,
             t0: f64,
+            reaction_solver: &str,
+            rtol: f64,
+            atol: f64,
+            jacobian: Option<&Bound<'_, PyAny>>,
         ) -> PyResult<Self> {
+            let stiff = StiffOptions {
+                solver: reaction_solver,
+                rtol,
+                atol,
+                jacobian,
+            };
             let axes = [(xmin, xmax, nx), (ymin, ymax, ny), (zmin, zmax, nz)];
             catch_panic_py!(new_state(
                 py,
@@ -421,8 +462,8 @@ rd_class!(
                 reaction,
                 params,
                 boundary,
-                substeps,
-                t0
+                (substeps, t0),
+                &stiff
             )
             .map(|state| Self { state }))
         }

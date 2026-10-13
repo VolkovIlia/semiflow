@@ -56,6 +56,10 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `mass_lumped_evolve(..., path="rational")`. `m_max` of `evolve_batched` /
   `mass_lumped_evolve` now defaults to `None` (18 for Lanczos, 64 for rational).
 
+- `ReactionDiffusion1D/2D/3D(..., reaction_solver="rk4" | "rosenbrock", rtol=1e-6,
+  atol=1e-9, jacobian=None)`; `jacobian(t, x, u) -> (K, K, N)` for a callable
+  reaction (ADR-0212).
+
 - `phi_combination(..., method="krylov", tol=1e-10, m=30)`,
   `GeneralOperator.evolve_batched(..., method="krylov", tol=1e-10, m=30)` and
   `Etdrk4.from_symmetric_op(..., phi="krylov", tol=1e-10)` (ADR-0211).
@@ -219,6 +223,19 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `≤ 7.1e−15` against the dense augmented exponential (`G_PHI_SHIFT_DENSE`);
   bitwise power-of-two homogeneity kept (`G_PHI_SHIFT_HOMOGENEITY`). Re-recorded
   once: `no_std` digest `phi_combination`.
+
+#### Added — stiff kinetics (ADR-0212)
+
+- **Adaptive Rosenbrock (ROS2) reaction step for `ReactionDiffusion`.**
+  `with_reaction_solver(ReactionSolver::Rosenbrock(RosenbrockOptions))`: L-stable,
+  order 2 for any Jacobian (a W-method), per-node `K×K` `LU`, adaptive step with an
+  embedded error estimate (mixed `rtol`/`atol`), one batched kinetics call per stage.
+  `Kinetics::jacobian_batch` (provided; analytic for the catalogue models, forward
+  differences otherwise). Robertson (200 nodes, `T = 40`): RK4 needs ≥ 40 000
+  substeps per half-step to stay finite (9.4 s); ROS2 reaches `6e−4` in 80 ms and
+  `6e−6` in 0.54 s. Gates `G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_FD_JAC`,
+  `G_STIFF_ROBERTSON`. RK4 stays the default, bit-identical; `dense_exp` moves
+  verbatim to `dense_la.rs`.
 
 #### Added — adaptive Krylov φ / exponential actions (ADR-0211)
 

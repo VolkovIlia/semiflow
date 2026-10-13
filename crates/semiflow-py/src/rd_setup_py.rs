@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use numpy::{PyReadonlyArrayDyn, PyUntypedArrayMethods};
 use pyo3::{prelude::*, types::PyDict};
-use semiflow::{BoundaryPolicy, Grid1D, Grid2D, Grid3D, Kinetics};
+use semiflow::{
+    BoundaryPolicy, Grid1D, Grid2D, Grid3D, Kinetics, ReactionSolver, RosenbrockOptions,
+};
 
 use crate::{
     error::{from_core, new_pyerr},
@@ -83,14 +85,45 @@ pub(crate) fn extract_fields(
 /// Kinetics as a trait object, plus the Python callable's handle when there is one.
 pub(crate) type ParsedKinetics = (Arc<dyn Kinetics<f64>>, Option<Arc<PyKinetics>>);
 
-/// Kinetics from `reaction` (name or callable) for `k` species in `dim` dimensions.
+/// `reaction_solver=`, `rtol=`, `atol=`, `jacobian=` of the Python classes (ADR-0212).
+pub(crate) struct StiffOptions<'a, 'py> {
+    pub(crate) solver: &'a str,
+    pub(crate) rtol: f64,
+    pub(crate) atol: f64,
+    pub(crate) jacobian: Option<&'a Bound<'py, PyAny>>,
+}
+
+/// `"rk4"` (default, fixed substeps) or `"rosenbrock"` (adaptive ROS2, `rtol`/`atol`).
+pub(crate) fn parse_solver(o: &StiffOptions<'_, '_>) -> PyResult<ReactionSolver> {
+    match o.solver {
+        "rk4" => Ok(ReactionSolver::Rk4),
+        "rosenbrock" => Ok(ReactionSolver::Rosenbrock(
+            RosenbrockOptions::default()
+                .with_rtol(o.rtol)
+                .with_atol(o.atol),
+        )),
+        other => Err(new_pyerr(
+            "OutOfDomain",
+            &format!("reaction_solver must be 'rk4' or 'rosenbrock', got '{other}'"),
+        )),
+    }
+}
+
+/// Kinetics from `reaction` (name or callable) for `k` species in `dim` dimensions;
+/// `jacobian` (callables only) feeds the Rosenbrock solver.
 pub(crate) fn parse_reaction(
     reaction: &Bound<'_, PyAny>,
     params: Option<&Bound<'_, PyDict>>,
-    k: usize,
-    dim: usize,
+    jacobian: Option<&Bound<'_, PyAny>>,
+    (k, dim): (usize, usize),
 ) -> PyResult<ParsedKinetics> {
     if let Ok(name) = reaction.extract::<String>() {
+        if jacobian.is_some() {
+            return Err(new_pyerr(
+                "OutOfDomain",
+                "jacobian= applies to callable reactions (built-in models have analytic Jacobians)",
+            ));
+        }
         let kin = builtin_kinetics(&name, params)?;
         if kin.species() != k {
             return Err(new_pyerr(
@@ -114,7 +147,13 @@ pub(crate) fn parse_reaction(
             "params= applies to built-in reactions only",
         ));
     }
-    let pk = Arc::new(PyKinetics::new(k, dim, reaction.clone().unbind()));
+    if jacobian.is_some_and(|j| !j.is_callable()) {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "jacobian must be a callable jacobian(t, x, u) -> (K, K, N)",
+        ));
+    }
+    let jac = jacobian.map(|j| j.clone().unbind());
+    let pk = Arc::new(PyKinetics::new(k, dim, reaction.clone().unbind(), jac));
     let kin: Arc<dyn Kinetics<f64>> = pk.clone();
     Ok((kin, Some(pk)))
 }

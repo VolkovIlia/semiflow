@@ -279,6 +279,19 @@ def kinetics(t, xs, u):
 rd2 = semiflow.ReactionDiffusion1D(-10, 10, 401, np.full((2, 401), 0.5),
                                    diffusivity=[1.0, 0.1], reaction=kinetics)
 rd2.evolve(5.0, n_steps=50, richardson=2)
+
+# Stiff chemistry (Robertson): adaptive L-stable Rosenbrock reaction steps.
+def robertson(t, xs, u):
+    a, b, c = u
+    return np.stack([-0.04 * a + 1e4 * b * c,
+                     0.04 * a - 1e4 * b * c - 3e7 * b * b, 3e7 * b * b])
+
+u0 = np.stack([np.ones(8), np.zeros(8), np.zeros(8)])
+rd3 = semiflow.ReactionDiffusion1D(0, 1, 8, u0, diffusivity=[0.0, 0.0, 0.0],
+                                   reaction=robertson, reaction_solver="rosenbrock",
+                                   rtol=1e-5, atol=1e-12)
+rd3.evolve(40.0, n_steps=1)   # RK4 needs >= 40 000 substeps here to stay finite
+assert abs(rd3.values()[0, 0] - 0.7158270687) < 1e-4
 ```
 
 ---
@@ -309,7 +322,7 @@ Classes are grouped by kernel family. All stateful classes expose at least
 
 | Class | Kernel | Order | Notes |
 |-------|--------|-------|-------|
-| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)` |
+| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)`; `reaction_solver="rosenbrock"` (`rtol`, `atol`, `jacobian=`) for stiff kinetics (ADR-0212) |
 | `ReactionDiffusion2D` | … + `Strang2D` | 2 | `u0` `(K, ny, nx)` |
 | `ReactionDiffusion3D` | … + `Strang3D` | 2 | `u0` `(K, nz, ny, nx)` |
 

@@ -44,6 +44,7 @@ pub mod conservative;
 pub mod conservative_assemble;
 pub mod controller;
 pub(crate) mod csr_shift;
+pub(crate) mod dense_la;
 pub mod diffusion;
 pub mod diffusion4;
 pub mod diffusion4_zeta4;
@@ -165,6 +166,8 @@ pub mod quantum_schrodinger;
 pub mod rational_krylov;
 pub mod reaction;
 pub mod reaction_diffusion;
+pub(crate) mod reaction_jacobians;
+pub mod reaction_stiff;
 pub mod reflection;
 pub mod reflection_regions;
 pub mod resolvent;
@@ -362,6 +365,7 @@ pub use crate::{
         LinearReaction, Nagumo,
     },
     reaction_diffusion::{NodalField, ReactionDiffusion, Species, SpeciesEngine},
+    reaction_stiff::{ReactionSolver, RosenbrockOptions},
     reflection::{HalfSpaceRegion, ReflectedHeatChernoff, ReflectingRegion},
     resolvent::{
         LaplaceChernoffResolvent, LaplaceChernoffResolventResidual, LaplaceQuadrature, Sampleable,

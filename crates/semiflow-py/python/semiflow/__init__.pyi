@@ -6966,6 +6966,11 @@ Kinetics = Callable[[float, NDArray[np.float64], NDArray[np.float64]], NDArray[n
 coordinates, x fastest), ``u`` and ``du`` have shape ``(K, N)``. Called once per
 Runge–Kutta stage with all ``N`` nodes."""
 
+KineticsJacobian = Callable[[float, NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
+"""Vectorised Jacobian ``jacobian(t, x, u) -> J`` of a callable reaction, ``J`` of shape
+``(K, K, N)`` with ``J[k, l, i] = ∂f_k/∂u_l`` at node ``i`` (``reaction_solver="rosenbrock"``
+only; without it the solver uses forward differences, ``K`` extra calls)."""
+
 
 class _ReactionDiffusion:
     """Shared methods of :class:`ReactionDiffusion1D`/``2D``/``3D``.
@@ -6975,7 +6980,9 @@ class _ReactionDiffusion:
     (``DiffusionChernoff``, Strang across axes; ``D_k = 0`` leaves the species
     exactly in place), the reaction ``f`` is a
     built-in model (exact flow where available) or a vectorised callable
-    (classical RK4 with ``substeps`` per reaction step). The GIL is released
+    (classical RK4 with ``substeps`` per reaction step, or with
+    ``reaction_solver="rosenbrock"`` the adaptive L-stable ROS2 step for stiff
+    kinetics, tolerances ``rtol``/``atol``, ADR-0212). The GIL is released
     during :meth:`evolve`; a callable re-acquires it once per RK stage, and an
     exception it raises propagates unchanged (the state is then not updated).
     """
@@ -7024,6 +7031,10 @@ class ReactionDiffusion1D(_ReactionDiffusion):
         boundary: str = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
+        reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
+        rtol: float = 1e-6,
+        atol: float = 1e-9,
+        jacobian: KineticsJacobian | None = None,
     ) -> None: ...
 
 
@@ -7047,6 +7058,10 @@ class ReactionDiffusion2D(_ReactionDiffusion):
         boundary: str = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
+        reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
+        rtol: float = 1e-6,
+        atol: float = 1e-9,
+        jacobian: KineticsJacobian | None = None,
     ) -> None: ...
 
 
@@ -7073,6 +7088,10 @@ class ReactionDiffusion3D(_ReactionDiffusion):
         boundary: str = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
+        reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
+        rtol: float = 1e-6,
+        atol: float = 1e-9,
+        jacobian: KineticsJacobian | None = None,
     ) -> None: ...
 
 

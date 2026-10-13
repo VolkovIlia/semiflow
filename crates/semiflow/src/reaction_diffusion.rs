@@ -13,8 +13,9 @@
 //! U(t + τ) = R(t + τ/2, τ/2) ∘ L(τ) ∘ R(t, τ/2) U(t),
 //! ```
 //!
-//! `R` the pointwise reaction flow (exact when the reaction provides it,
-//! classical RK4 with `r` substeps otherwise), `L` the per-species Chernoff step.
+//! `R` the pointwise reaction flow (exact when the reaction provides it, otherwise
+//! classical RK4 with `r` substeps or, for stiff kinetics, adaptive ROS2 —
+//! [`ReactionSolver`], ADR-0212), `L` the per-species Chernoff step.
 //! [`ReactionDiffusion::evolve_into`] merges the adjacent half reaction steps
 //! (`R(τ/2)LR(τ)L…LR(τ/2)`). Order: `min(2, min_k order(C_k))`; Richardson
 //! extrapolation (`crate::richardson`) raises it.
@@ -30,6 +31,7 @@ use crate::{
     grid_fn2d::GridFn2D,
     grid_fn3d::GridFn3D,
     reaction::Kinetics,
+    reaction_stiff::{ros2_flow, ReactionSolver, RosBuffers},
     scratch::ScratchPool,
     state::State,
 };
@@ -166,6 +168,7 @@ pub struct ReactionDiffusion<'a, F: SemiflowFloat, S: NodalField<F>> {
     engines: Vec<SpeciesEngine<'a, F, S>>,
     reaction: Box<dyn Kinetics<F> + 'a>,
     substeps: u32,
+    solver: ReactionSolver,
 }
 
 impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S> {
@@ -189,11 +192,21 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
             engines,
             reaction,
             substeps: 1,
+            solver: ReactionSolver::Rk4,
         })
     }
 
-    /// RK4 substeps per reaction half-step (stiff reactions; default 1, min 1).
-    /// Ignored when the reaction has an exact flow.
+    /// Reaction integrator when the kinetics has no exact flow (default
+    /// [`ReactionSolver::Rk4`]); [`ReactionSolver::Rosenbrock`] for stiff kinetics
+    /// (adaptive, L-stable; options validated at the first step).
+    #[must_use]
+    pub fn with_reaction_solver(mut self, solver: ReactionSolver) -> Self {
+        self.solver = solver;
+        self
+    }
+
+    /// RK4 substeps per reaction half-step (default 1, min 1). Ignored when the
+    /// reaction has an exact flow or the solver is [`ReactionSolver::Rosenbrock`].
     #[must_use]
     pub fn with_reaction_substeps(mut self, substeps: u32) -> Self {
         self.substeps = substeps.max(1);
@@ -279,7 +292,10 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         ) -> Result<(), SemiflowError>,
     ) -> Result<(), SemiflowError> {
         let n = check_shapes(self.species(), u)?;
-        let mut ws = Workspace::new(u, n, scratch);
+        if let ReactionSolver::Rosenbrock(opts) = &self.solver {
+            opts.validate()?;
+        }
+        let mut ws = Workspace::new(u, n, &self.solver, scratch);
         let result = body(&mut ws, u, scratch);
         ws.release(scratch);
         result
@@ -323,11 +339,19 @@ struct Workspace<F: SemiflowFloat, S> {
     stage: Vec<F>,
     k: Vec<F>,
     spare: S,
+    ros: Option<RosBuffers<F>>,
 }
 
 impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
-    fn new(u: &Species<S>, n: usize, scratch: &mut ScratchPool<F>) -> Self {
+    fn new(
+        u: &Species<S>,
+        n: usize,
+        solver: &ReactionSolver,
+        scratch: &mut ScratchPool<F>,
+    ) -> Self {
         let kn = u.fields.len() * n;
+        let ros = matches!(solver, ReactionSolver::Rosenbrock(_))
+            .then(|| RosBuffers::new(u.fields.len(), n, scratch));
         Self {
             n,
             x: u.fields[0].node_coordinates(),
@@ -336,12 +360,16 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
             stage: scratch.take_vec(kn),
             k: scratch.take_vec(kn),
             spare: u.fields[0].clone(),
+            ros,
         }
     }
 
     fn release(self, scratch: &mut ScratchPool<F>) {
         for b in [self.flat, self.acc, self.stage, self.k] {
             scratch.return_vec(b);
+        }
+        if let Some(r) = self.ros {
+            r.release(scratch);
         }
     }
 
@@ -374,6 +402,9 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         }
         if let Some(r) = rd.reaction.exact_flow(t, h, n, &self.x, &mut self.flat) {
             r?;
+        } else if let (ReactionSolver::Rosenbrock(opts), Some(buf)) = (&rd.solver, &mut self.ros) {
+            let kin = rd.reaction.as_ref();
+            ros2_flow(kin, opts, t, h, n, &self.x, &mut self.flat, buf)?;
         } else {
             let sub = h / from_f64::<F>(f64::from(rd.substeps));
             for j in 0..rd.substeps {
@@ -386,7 +417,7 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         }
         if let Some(bad) = self.flat.iter().find(|v| !v.is_finite()) {
             return Err(SemiflowError::DomainViolation {
-                what: "ReactionDiffusion: non-finite reaction result (stiff? raise with_reaction_substeps)",
+                what: "ReactionDiffusion: non-finite reaction result (stiff? use the Rosenbrock reaction solver or more substeps)",
                 value: bad.to_f64().unwrap_or(f64::NAN),
             });
         }

@@ -43,6 +43,16 @@ impl Kinetics<f64> for ArcKinetics {
     ) -> Result<(), CoreError> {
         self.0.eval_batch(t, n, x, u, du)
     }
+    fn jacobian_batch(
+        &self,
+        t: f64,
+        n: usize,
+        x: &[f64],
+        u: &[f64],
+        jac: &mut [f64],
+    ) -> Option<Result<(), CoreError>> {
+        self.0.jacobian_batch(t, n, x, u, jac)
+    }
     fn exact_flow(
         &self,
         t: f64,
@@ -55,22 +65,33 @@ impl Kinetics<f64> for ArcKinetics {
     }
 }
 
-/// A vectorised Python reaction `f(t, x, u) -> du`.
+/// A vectorised Python reaction `f(t, x, u) -> du`, optionally with its Jacobian
+/// `jacobian(t, x, u) -> (K, K, N)` for the Rosenbrock solver (ADR-0212).
 pub(crate) struct PyKinetics {
     k: usize,
     dim: usize,
     func: Py<PyAny>,
+    jac: Option<Py<PyAny>>,
     error: Mutex<Option<PyErr>>,
 }
 
 impl PyKinetics {
-    pub(crate) fn new(k: usize, dim: usize, func: Py<PyAny>) -> Self {
+    pub(crate) fn new(k: usize, dim: usize, func: Py<PyAny>, jac: Option<Py<PyAny>>) -> Self {
         Self {
             k,
             dim,
             func,
+            jac,
             error: Mutex::new(None),
         }
+    }
+
+    /// Keep `e` for re-raising and map it to the core error.
+    fn fail(&self, e: PyErr, what: &'static str, t: f64) -> CoreError {
+        if let Ok(mut slot) = self.error.lock() {
+            *slot = Some(e);
+        }
+        CoreError::DomainViolation { what, value: t }
     }
 
     /// The Python exception raised by the last failed callback, if any.
@@ -78,10 +99,13 @@ impl PyKinetics {
         self.error.lock().ok().and_then(|mut e| e.take())
     }
 
+    /// `out ← func(t, x, u)` flattened (C order), `rows·n` values expected.
     #[allow(clippy::too_many_arguments, clippy::many_single_char_names)] // Kinetics::eval_batch + py
     fn call(
         &self,
         py: Python<'_>,
+        func: &Py<PyAny>,
+        rows: usize,
         t: f64,
         n: usize,
         x: &[f64],
@@ -93,23 +117,20 @@ impl PyKinetics {
                 .map_err(|_| new_pyerr("GridMismatch", "internal reshape failure"))
         };
         let (xa, ua) = (shape(self.dim, x)?, shape(self.k, u)?);
-        let out = self
-            .func
-            .call1(py, (t, xa.to_pyarray(py), ua.to_pyarray(py)))?;
+        let out = func.call1(py, (t, xa.to_pyarray(py), ua.to_pyarray(py)))?;
         let np = py.import("numpy")?;
         let kwargs = PyDict::new(py);
         kwargs.set_item("dtype", "float64")?;
         let arr = np.call_method("ascontiguousarray", (out,), Some(&kwargs))?;
         let ro: PyReadonlyArrayDyn<'_, f64> = arr.extract()?;
         let flat = ro.as_slice()?;
-        if flat.len() != self.k * n {
+        if flat.len() != rows * n {
+            let shape = if rows == self.k { "K·N" } else { "K·K·N" };
             return Err(new_pyerr(
                 "GridMismatch",
                 &format!(
-                    "reaction returned {} values, expected K·N = {}·{}",
-                    flat.len(),
-                    self.k,
-                    n
+                    "callback returned {} values, expected {shape} = {rows}·{n}",
+                    flat.len()
                 ),
             ));
         }
@@ -131,15 +152,34 @@ impl Kinetics<f64> for PyKinetics {
         u: &[f64],
         du: &mut [f64],
     ) -> Result<(), CoreError> {
-        Python::attach(|py| self.call(py, t, n, x, u, du)).map_err(|e| {
-            if let Ok(mut slot) = self.error.lock() {
-                *slot = Some(e);
-            }
-            CoreError::DomainViolation {
-                what: "ReactionDiffusion: the Python reaction callback raised",
-                value: t,
-            }
+        Python::attach(|py| self.call(py, &self.func, self.k, t, n, x, u, du)).map_err(|e| {
+            self.fail(
+                e,
+                "ReactionDiffusion: the Python reaction callback raised",
+                t,
+            )
         })
+    }
+    /// The Python `jacobian(t, x, u) -> (K, K, N)`, when given.
+    fn jacobian_batch(
+        &self,
+        t: f64,
+        n: usize,
+        x: &[f64],
+        u: &[f64],
+        jac: &mut [f64],
+    ) -> Option<Result<(), CoreError>> {
+        let f = self.jac.as_ref()?;
+        let rows = self.k * self.k;
+        Some(
+            Python::attach(|py| self.call(py, f, rows, t, n, x, u, jac)).map_err(|e| {
+                self.fail(
+                    e,
+                    "ReactionDiffusion: the Python jacobian callback raised",
+                    t,
+                )
+            }),
+        )
     }
 }
 

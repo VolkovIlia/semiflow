@@ -11657,3 +11657,56 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0206
+
+  - name: G_STIFF_KINETICS_LINEAR
+    type: CONVERGENCE_ORDER
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (RK4 → 1.7e202; ROS2 slopes 1.87, 1.93; adaptive 0.92·rtol)"
+    rationale: |
+      ADR-0212: u′ = Cu with C = [[a, b], [b, a]], eigenvalues −1e6 (along (1, 1)) and
+      −1 (along (1, −1)), on a 4-node field with identity diffusion, T = 1. RK4 with
+      one substep per half-step (hλ = −1e4) must blow up (error > 1e6), so the gate is
+      not vacuous; single ROS2 steps (rtol 0.5, atol 1e3: every step accepted whole)
+      converge with order 2 (slopes ∈ [1.8, 2.2] over n = 20, 40, 80) with the stiff
+      mode damped; adaptive ROS2 at rtol ∈ {1e−4, 1e−6, 1e−8} meets ≤ 10·rtol
+      (relative sup norm) against the exact e^{TC}u₀.
+    gate: "rk4 err > 1e6 AND slopes ∈ [1.8, 2.2] AND adaptive err ≤ 10·rtol"
+    test_file: "tests/g_stiff_kinetics.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0212
+
+  - name: G_STIFF_KINETICS_FD_JAC
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (catalogue Jacobians ≤ 2.8e−10 from central differences)"
+    rationale: |
+      ADR-0212: every analytic catalogue Jacobian (Nagumo, Gray–Scott,
+      FitzHugh–Nagumo, Brusselator) equals central differences of its eval_batch to
+      ≤ 1e−7 relative at 64 random states; the stiff linear system without an
+      analytic Jacobian (forward differences) agrees with the analytic run to
+      ≤ 10·rtol at rtol = 1e−8. (Robertson with forward differences: G_STIFF_ROBERTSON.)
+    gate: "catalogue ≤ 1e−7 AND fd vs analytic ≤ 1e−7"
+    test_file: "tests/g_stiff_kinetics.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0212
+
+  - name: G_STIFF_ROBERTSON
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (rel 6.0e−4 / 6.2e−6 / 5.8e−8; mass ≤ 4.8e−15)"
+    rationale: |
+      ADR-0212: Robertson's chemistry (k₁ = 0.04, k₂ = 3e7, k₃ = 1e4) on a uniform
+      4-node field, T = 40, with analytic and forward-difference Jacobians, against
+      SciPy 1.18.1 Radau (rtol 1e−13, atol 1e−20; agrees with the Hairer–Wanner
+      reference to 1e−13): per-species relative error ≤ 10·rtol for
+      rtol ∈ {1e−3, 1e−5, 1e−7}, |Σyₖ − 1| ≤ 1e−12, min yₖ ≥ −1e−12.
+    gate: "rel ≤ 10·rtol AND |Σy − 1| ≤ 1e−12 AND min y ≥ −1e−12"
+    test_file: "tests/g_stiff_kinetics.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0212
