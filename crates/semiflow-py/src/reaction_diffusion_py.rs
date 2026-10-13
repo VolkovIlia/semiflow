@@ -219,10 +219,12 @@ impl RdState {
 
 /// Generate a Python class over [`RdState`]: the given constructor plus the
 /// shared methods (one `#[pymethods]` block per class).
+// The class attribute (`pyclass` with its Python name) is written at each call site, where
+// `xtask doc-check` (README ↔ registered classes) can see the literal name.
 macro_rules! rd_class {
-    ($name:ident, $py:literal, $doc:literal, { $($ctor:tt)* }) => {
+    (#[$class:meta] $name:ident, $doc:literal, { $($ctor:tt)* }) => {
         #[doc = $doc]
-        #[pyclass(name = $py)]
+        #[$class]
         pub struct $name {
             state: RdState,
         }
@@ -264,8 +266,8 @@ macro_rules! rd_class {
 }
 
 rd_class!(
+    #[pyclass(name = "ReactionDiffusion1D")]
     ReactionDiffusion1D,
-    "ReactionDiffusion1D",
     "1-D system `∂ₜu_k = D_k ∂ₓₓu_k + f_k(t, x, u)`; `u0` of shape `(K, n)`.",
     {
         #[new]
@@ -312,8 +314,8 @@ rd_class!(
 );
 
 rd_class!(
+    #[pyclass(name = "ReactionDiffusion2D")]
     ReactionDiffusion2D,
-    "ReactionDiffusion2D",
     "2-D system on `[xmin, xmax]×[ymin, ymax]`; `u0` of shape `(K, ny, nx)`.",
     {
         #[new]
@@ -363,8 +365,8 @@ rd_class!(
 );
 
 rd_class!(
+    #[pyclass(name = "ReactionDiffusion3D")]
     ReactionDiffusion3D,
-    "ReactionDiffusion3D",
     "3-D system on a box; `u0` of shape `(K, nz, ny, nx)`.",
     {
         #[new]
