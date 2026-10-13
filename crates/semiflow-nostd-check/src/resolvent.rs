@@ -1,4 +1,5 @@
-//! ADR-0202 scenarios: SPD resolvent (tridiagonal `LDLᵀ`, PCG with IC(0)) and `phi_combination`.
+//! ADR-0202 scenarios: SPD resolvent (tridiagonal `LDLᵀ`, PCG with IC(0)) and `phi_combination`;
+//! ADR-0206: the rational Krylov action.
 //!
 //! The resolvent scenarios use manufactured solutions: pick `x★`, form
 //! `b = (λM + A)x★` with a plain CSR matvec, solve, compare with `x★`. The
@@ -10,7 +11,8 @@ use alloc::vec::Vec;
 
 use semiflow::{
     generator_action::{CsrGenerator, GeneratorAction},
-    phi_combination, Precond, ResolventMethod, ScratchPool, SpdSolver, SymmetricOperator,
+    phi_combination, rational_krylov_expmv, Precond, RationalOptions, ResolventMethod, ScratchPool,
+    SpdSolver, SymmetricOperator,
 };
 
 use crate::{check, m, sup_diff, Digest, Failure, ScenarioResult};
@@ -288,4 +290,69 @@ fn csr_generator_output(w: &[&[f64]]) -> Result<Vec<f64>, Failure> {
     let mut out = alloc::vec![0.0; PHI_N];
     phi_combination(&gen, PHI_TAU, w, &mut out, &mut ScratchPool::new())?;
     Ok(out)
+}
+
+/// `n = 64` Neumann path Laplacian ×1e4 (singular, stiff), `λ_max·t = 1e3` (the
+/// slowest non-constant mode keeps `e^{−λ₁t} ≈ 0.55`, so slow dynamics are
+/// checked, not only the null mode), by the rational Krylov path (cancellation-free
+/// tridiagonal factor) against the closed-form cosine eigenbasis
+/// `λ_j = s(2 − 2cos(jπ/n))`, `φ_j(i) = cos((2i + 1)jπ/(2n))`, to the gate's
+/// `(tol + 1e−11)·‖v‖∞`.
+///
+/// Gate analogue: `G_RATKRYLOV_NEUMANN_ORACLE` (ADR-0206). Output and solve count digested.
+#[allow(clippy::many_single_char_names)] // t, v, y, i, j: the math notation
+pub(crate) fn ratkrylov_stiff() -> ScenarioResult {
+    const N: usize = 64;
+    const SCALE: f64 = 1e4;
+    let (mut row_ptr, mut cols, mut vals) = (alloc::vec![0_usize], Vec::new(), Vec::new());
+    for i in 0..64_u32 {
+        let deg = f64::from(u8::from(i > 0) + u8::from(i < 63));
+        let mut row = alloc::vec![(i, deg * SCALE)];
+        if i > 0 {
+            row.insert(0, (i - 1, -SCALE));
+        }
+        if i < 63 {
+            row.push((i + 1, -SCALE));
+        }
+        for (j, v) in row {
+            cols.push(j);
+            vals.push(v);
+        }
+        row_ptr.push(cols.len());
+    }
+    let op = SymmetricOperator::from_csr(N, &row_ptr, &cols, &vals, 1e-10)?;
+    let t = 1e3 / (4.0 * SCALE);
+    let v = manufactured(N);
+    let mut y = alloc::vec![0.0; N];
+    let opts = RationalOptions::default().with_tol(1e-10);
+    let rep = rational_krylov_expmv(&op, None, t, &v, &mut y, opts, &mut ScratchPool::new())?;
+    let exact = neumann_cosine_exact(&v, SCALE, t);
+    let mut digest = Digest::new();
+    digest.extend(&y);
+    digest.push(f64::from(u32::try_from(rep.solves).unwrap_or(0)));
+    let v_inf = v.iter().fold(0.0_f64, |a, x| a.max(x.abs()));
+    check(
+        sup_diff(&y, &exact),
+        (1e-10 + 1e-11) * v_inf,
+        digest.finish(),
+    )
+}
+
+/// `e^{−tL}v` for the `n`-node Neumann path Laplacian ×`scale` by its cosine eigenbasis.
+fn neumann_cosine_exact(v: &[f64], scale: f64, t: f64) -> Vec<f64> {
+    let n = v.len();
+    let nf = f64::from(u32::try_from(n).unwrap_or(0));
+    let pi = core::f64::consts::PI;
+    let idx = |k: usize| f64::from(u32::try_from(k).unwrap_or(0));
+    let phi = |i: usize, j: usize| m::cos((2.0 * idx(i) + 1.0) * idx(j) * pi / (2.0 * nf));
+    let mut exact = alloc::vec![0.0; n];
+    for j in 0..n {
+        let lam = scale * (2.0 - 2.0 * m::cos(idx(j) * pi / nf));
+        let norm = if j == 0 { nf } else { nf / 2.0 };
+        let coef = (0..n).map(|i| v[i] * phi(i, j)).sum::<f64>() * m::exp(-t * lam) / norm;
+        for (i, e) in exact.iter_mut().enumerate() {
+            *e += coef * phi(i, j);
+        }
+    }
+    exact
 }

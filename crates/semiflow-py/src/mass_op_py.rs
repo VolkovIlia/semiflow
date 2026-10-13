@@ -33,6 +33,7 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_py::{gather_nc_to_cn, scatter_cn_to_nc, validate_batched_shape, validate_t_final},
     panic::catch_panic_py,
+    rational_krylov_py::{rational_batched, rational_settings},
     symmetric_op_py::{krylov_path, no_edge_graph, PySymmetricOperator},
 };
 
@@ -57,16 +58,17 @@ use crate::{
 /// v_nc : ndarray[float64, shape (N, C)]
 ///     Input vectors; ``N == k_op.n()``.
 /// path : str
-///     ``"chebyshev"`` (default) or ``"lanczos"``.
+///     ``"chebyshev"`` (default), ``"lanczos"``, ``"implicit"`` or ``"rational"``
+///     (ADR-0206: works with ``M`` directly, no congruence).
 /// tol : float
 ///     Krylov accuracy (default ``1e-10``).
-/// m_max : int
-///     Max Krylov dimension (Lanczos only; default ``18``).
+/// m_max : int or None
+///     Max Krylov dimension (Lanczos default ``18``, rational default ``64``).
 ///
 /// Returns ndarray[float64, shape (N, C)].
 #[pyfunction]
 #[pyo3(name = "mass_lumped_evolve",
-       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize))]
+       signature = (k_op, m_diag, t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = None, n_steps = 100_usize))]
 pub fn mass_lumped_evolve_py<'py>(
     py: Python<'py>,
     k_op: &PySymmetricOperator,
@@ -75,12 +77,17 @@ pub fn mass_lumped_evolve_py<'py>(
     v_nc: PyReadonlyArray2<'py, f64>,
     path: &str,
     tol: f64,
-    m_max: u32,
+    m_max: Option<u32>,
     n_steps: usize,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     catch_panic_py!({
         validate_t_final(t)?;
-        let kpath = krylov_path(path, m_max, n_steps, None)?;
+        if path == "rational" {
+            let masses = extract_masses(&m_diag, k_op.op.n())?;
+            let s = rational_settings(tol, None, m_max);
+            return rational_batched(py, &k_op.op, Some(masses), t, &v_nc, &s);
+        }
+        let kpath = krylov_path(path, m_max.unwrap_or(18), n_steps, None)?;
         let n = k_op.op.n();
         let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
         let masses = extract_masses(&m_diag, n)?;

@@ -134,6 +134,11 @@ fn phi_combination() {
 }
 
 #[test]
+fn ratkrylov_stiff() {
+    run("ratkrylov_stiff");
+}
+
+#[test]
 fn run_all_passes_and_names_are_unique() {
     let mut seen = std::vec::Vec::new();
     let summary = run_all(|s, r| {

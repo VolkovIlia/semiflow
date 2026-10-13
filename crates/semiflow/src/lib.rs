@@ -158,6 +158,7 @@ pub(crate) mod pow2;
 pub mod quantum_graph;
 pub(crate) mod quantum_graph_data; // internal helpers; no public re-export
 pub mod quantum_schrodinger;
+pub mod rational_krylov;
 pub mod reaction;
 pub mod reaction_diffusion;
 pub mod reflection;
@@ -344,6 +345,10 @@ pub use crate::{
     point_eval::{sample_gridfn2d, PointEval},
     quantum_graph::{KirchhoffVertex, QuantumGraph, QuantumGraphHeatChernoff, QuantumGraphSignal},
     quantum_schrodinger::{QuantumGraphComplexSignal, QuantumSchrödingerChernoff},
+    rational_krylov::{
+        rational_krylov_expmv, RationalKrylov, RationalKrylovChernoff, RationalOptions,
+        RationalReport,
+    },
     reaction::{
         AllenCahnReaction, Brusselator, FisherKpp, FitzHughNagumo, FnReaction, GrayScott, Kinetics,
         LinearReaction, Nagumo,

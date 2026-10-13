@@ -209,6 +209,10 @@ static SCENARIOS: &[Scenario] = &[
         name: "phi_combination",
         run: resolvent::phi_combination_p3,
     },
+    Scenario {
+        name: "ratkrylov_stiff",
+        run: resolvent::ratkrylov_stiff,
+    },
 ];
 
 /// All scenarios, in run order.

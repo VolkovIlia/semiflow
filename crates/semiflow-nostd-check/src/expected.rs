@@ -31,6 +31,7 @@ static EXPECTED: &[(&str, u64)] = &[
     ("spdr_tridiag", 0xa216_35ae_041b_f865),
     ("spdr_pcg_ic0", 0x6f8f_19a8_3b27_ccaa),
     ("phi_combination", 0xb4f0_594e_c035_7da5),
+    ("ratkrylov_stiff", 0xb009_fc03_da3f_1741),
 ];
 
 /// Committed digest for `name`, if any.

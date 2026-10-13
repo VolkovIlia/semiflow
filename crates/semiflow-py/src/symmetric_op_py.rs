@@ -40,6 +40,9 @@ use crate::{
     error::{from_core, new_pyerr},
     graph_py::{gather_nc_to_cn, scatter_cn_to_nc, validate_batched_shape, validate_t_final},
     panic::catch_panic_py,
+    rational_krylov_py::{
+        new_rational, rational_batched, rational_settings, PyRationalKrylov, RationalSettings,
+    },
     spd_resolvent_py::{build_resolvent, contiguous_vec, parse_solver, PySpdResolvent},
 };
 
@@ -113,11 +116,13 @@ impl PySymmetricOperator {
     /// v_nc : ndarray[float64, shape (N, C)]
     ///     Input vectors.
     /// path : str
-    ///     ``"chebyshev"`` (default), ``"lanczos"``, or ``"implicit"`` (§59).
+    ///     ``"chebyshev"`` (default), ``"lanczos"``, ``"implicit"`` (§59) or
+    ///     ``"rational"`` (shift-and-invert Krylov, ADR-0206: solves independent of
+    ///     ``λ_max·t``; see :meth:`rational_krylov`).
     /// tol : float
     ///     Krylov accuracy (default ``1e-10``).
-    /// m_max : int
-    ///     Max Krylov dimension (Lanczos only; default ``18``).
+    /// m_max : int or None
+    ///     Max Krylov dimension (Lanczos default ``18``, rational default ``64``).
     /// n_steps : int
     ///     Backward-Euler sub-steps (implicit path only; default ``100``).
     /// cg_max_iter : int or None
@@ -127,7 +132,7 @@ impl PySymmetricOperator {
     ///     is loose and fewer iterations are known to suffice.
     ///
     /// Returns ndarray[float64, shape (N, C)].
-    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = 18_u32, n_steps = 100_usize, cg_max_iter = None))]
+    #[pyo3(signature = (t, v_nc, path = "chebyshev", tol = 1e-10_f64, m_max = None, n_steps = 100_usize, cg_max_iter = None))]
     fn evolve_batched<'py>(
         &self,
         py: Python<'py>,
@@ -135,13 +140,17 @@ impl PySymmetricOperator {
         v_nc: PyReadonlyArray2<'py, f64>,
         path: &str,
         tol: f64,
-        m_max: u32,
+        m_max: Option<u32>,
         n_steps: usize,
         cg_max_iter: Option<usize>,
     ) -> PyResult<Bound<'py, PyArray2<f64>>> {
         catch_panic_py!({
             validate_t_final(t)?;
-            let kpath = krylov_path(path, m_max, n_steps, cg_max_iter)?;
+            if path == "rational" {
+                let s = rational_settings(tol, None, m_max);
+                return rational_batched(py, &self.op, None, t, &v_nc, &s);
+            }
+            let kpath = krylov_path(path, m_max.unwrap_or(18), n_steps, cg_max_iter)?;
             let n = self.op.n();
             let [n_nodes, n_cols] = validate_batched_shape(v_nc.shape(), n)?;
             let src_cn = gather_nc_to_cn(&v_nc.as_array(), n_nodes, n_cols);
@@ -155,6 +164,35 @@ impl PySymmetricOperator {
             });
             let dst_cn = result.map_err(|e| from_core(&e))?;
             Ok(scatter_cn_to_nc(&dst_cn, n_nodes, n_cols, py))
+        })
+    }
+
+    /// :class:`RationalKrylov` for ``e^{-t M^{-1} A}``, factor of ``M/γ + A`` built once
+    /// (ADR-0206). ``mass``: positive diagonal ``M`` (default ``I``); ``gamma``
+    /// default ``t/10``; ``solver`` / ``precond`` as :meth:`resolvent`.
+    #[pyo3(signature = (t, mass = None, tol = 1e-10_f64, gamma = None, m_max = 64_usize, solver = "auto", precond = "ic0"))]
+    fn rational_krylov(
+        &self,
+        py: Python<'_>,
+        t: f64,
+        mass: Option<PyReadonlyArray1<'_, f64>>,
+        tol: f64,
+        gamma: Option<f64>,
+        m_max: usize,
+        solver: &str,
+        precond: &str,
+    ) -> PyResult<PyRationalKrylov> {
+        catch_panic_py!({
+            validate_t_final(t)?;
+            let mass = mass.map(|m| contiguous_vec(&m, "mass")).transpose()?;
+            let s = RationalSettings {
+                tol,
+                gamma,
+                m_max,
+                solver: solver.into(),
+                precond: precond.into(),
+            };
+            new_rational(py, &self.op, t, mass, &s)
         })
     }
 

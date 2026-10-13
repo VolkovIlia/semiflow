@@ -126,6 +126,7 @@ mod obstacle_gamma_py;
 mod obstacle_py;
 mod panic;
 mod phi_etdrk4_py;
+mod rational_krylov_py;
 mod rd_kinetics_py;
 mod rd_setup_py;
 mod reaction_diffusion_py;
@@ -262,6 +263,7 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     symmetric_op_py::register(py, m)?;
     // ADR-0202: SPD resolvent / steady solve
     spd_resolvent_py::register(py, m)?;
+    rational_krylov_py::register(py, m)?;
     // Issue #24: non-symmetric CSR operator action
     general_op_py::register(py, m)?;
     // Issue #25: coefficient-field gradients

@@ -15,6 +15,18 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 
 #### Added — semilinear systems and extrapolation
 
+- **Rational (shift-and-invert) Krylov action for stiff SPD operators (ADR-0206,
+  math §66).** `RationalKrylov` / `rational_krylov_expmv` compute `e^{−tM⁻¹A}v` by
+  Lanczos on `(M/γ + A)⁻¹M` with one factor of `M/γ + A` reused by every step and
+  vector: a cancellation-free `O(N)` `LDLᵀ` on tridiagonal M-matrices (no rounding
+  floor: `9e−16` at `λ_max t = 1e10`), `SpdResolvent` (`LDLᵀ` / PCG) otherwise. The
+  solve count is an a-priori Chebyshev bound — 27 at `tol = 1e−10`, independent of
+  `λ_max t` and `n` — where Chebyshev needs up to 471 877 mat-vecs at `1e10`; it
+  cannot stop before a small slow component enters the Krylov space. Lumped masses
+  are used directly. `RationalKrylovChernoff` plugs it into `evolve_batched`. Gates
+  `G_RATKRYLOV_NEUMANN_ORACLE`, `G_RATKRYLOV_SOLVE_COUNT`, `G_RATKRYLOV_MASS_DENSE`,
+  `G_RATKRYLOV_ISSUE16`; no_std scenario `ratkrylov_stiff`.
+
 - **Reaction–diffusion systems on every engine (ADR-0208, math §64.1).**
   `ReactionDiffusion` evolves `∂ₜu_k = L_k u_k + f_k(t, x, u)`, `K` species,
   each diffusing with its own engine (any `ChernoffFunction` on a `GridFn1D`,
@@ -34,6 +46,12 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   Gates `G_RICHARDSON_*`.
 
 #### Python
+
+- `SymmetricOperator.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64,
+  solver="auto", precond="ic0") -> RationalKrylov` (`apply`, `apply_batched`, `t`,
+  `gamma`, `n`); `evolve_batched(..., path="rational")` and
+  `mass_lumped_evolve(..., path="rational")`. `m_max` of `evolve_batched` /
+  `mass_lumped_evolve` now defaults to `None` (18 for Lanczos, 64 for rational).
 
 - **Python 3.15** (ADR-0209): `requires-python = ">=3.10,<3.16"`, classifiers
   3.14/3.15, CI `py-smoke` on 3.10/3.13/3.15; PyO3 and rust-numpy 0.28 → 0.29.

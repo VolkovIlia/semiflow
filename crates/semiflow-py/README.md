@@ -554,15 +554,18 @@ Python boundary.
 
 | Class | Constructor | Key methods | Notes |
 |-------|-------------|-------------|-------|
-| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100) -> NDArray` (`path`: `"chebyshev"`, `"lanczos"`, `"implicit"`, `"rational"`), `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent`, `.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64) -> RationalKrylov` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
+| `RationalKrylov` | `SymmetricOperator.rational_krylov(...)` | `.apply(v) -> (NDArray, dict)`, `.apply_batched(v_nc) -> NDArray`, `.t`, `.gamma`, `.n` | `e^{-t M⁻¹A}v` by shift-and-invert Lanczos on one factor of `M/γ + A`: the solve count is an a-priori bound independent of `λ_max·t` (27 solves at `tol = 1e-10`); tridiagonal M-matrices use a cancellation-free factor (no rounding floor up to `λ_max·t = 1e10` on the gate carriers), other patterns PCG (ADR-0206, §66) |
 | `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
 | `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, n_steps) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv`. Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects. Cost is `Θ(t‖A‖_∞)` matvecs — linear in the horizon, NOT depth-flat like Lanczos (§57, ADR-0195) |
 | `SpdResolvent` | built by `SymmetricOperator.resolvent(...)` | `.solve(b) -> NDArray`, `.solve_batched(B) -> NDArray`, `.solve_info(b) -> (x, iterations, rel_residual)`, `.method`, `.n` | Factor-once / solve-many `x = (λM + A)⁻¹ b` of an SPD operator, `λ ≥ 0`, `M = diag(mass) > 0`. Tridiagonal: exact `O(n)` LDLᵀ; otherwise PCG with IC(0) or Jacobi. The GIL is released during the solve. PCG is `O(√κ·nnz)` per solve; no multigrid (§62, ADR-0202) |
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
 | `Etdrk4` | `.from_symmetric_op(op, nonlinearity="allen_cahn", h=0.01)` | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
-**Example — stiff operator with the implicit path.** The explicit Krylov
-paths sub-step `O(λ_max·t)` times; `path="implicit"` (Jacobi-preconditioned
+**Example — stiff operator: the rational and implicit paths.** The polynomial
+Krylov paths need `O(√(λ_max·t))` mat-vecs; `path="rational"` (shift-and-invert
+Lanczos, ADR-0206) reaches `tol` in a fixed number of `O(N)` tridiagonal solves
+(27 at `tol = 1e-10`) whatever the stiffness. `path="implicit"` (Jacobi-preconditioned
 backward-Euler PCG, accuracy `O(t/n_steps)`, about `√κ` CG iterations per
 sub-step with `κ ≈ 1 + (t/n_steps)·λ_max`) handles stiffness such as
 `λ_max ≈ 4·10⁷` for smooth data. Rough data (e.g. white noise) at this
@@ -591,9 +594,13 @@ u = op.evolve_batched(1.0, v0, path="implicit", n_steps=100)
 
 # Everything but the constant (null-space) mode has decayed: u -> mean(v0).
 assert np.max(np.abs(u - v0.mean())) < 1e-6
+
+# The rational path: 27 tridiagonal solves, error below 1e-10.
+u = op.evolve_batched(1.0, v0, path="rational")
+assert np.max(np.abs(u - v0.mean())) < 1e-10
 ```
 
-`mass_lumped_evolve` and `MassKOperator.evolve` accept the same `path=` keyword.
+`mass_lumped_evolve` accepts the same `path=` keyword (`"rational"` uses `M` directly); `MassKOperator.evolve` the polynomial and implicit ones.
 
 ### Free functions
 
@@ -631,7 +638,7 @@ to `extraPaths` so local development also resolves the stubs correctly
 | Language | Package | Notes |
 |----------|---------|-------|
 | Rust | [`semiflow`](https://crates.io/crates/semiflow) ([docs.rs](https://docs.rs/semiflow)) | The full engine catalogue; `no_std + alloc` |
-| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 86 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
+| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 87 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
 | JavaScript / WASM | [`@semiflow/wasm`](https://www.npmjs.com/package/@semiflow/wasm) | Lite build on npm; the heavy-grid engines need a `--features full` build; see the [npm page](https://www.npmjs.com/package/@semiflow/wasm) |
 | C / C++ | `semiflow-ffi` | `extern "C"` ABI with `catch_unwind` on every entry point; header `semiflow.h` |
 

@@ -38,9 +38,12 @@ Done:
   passes with prefix sharing replace the `4^D` recursion per sample,
   bit-identically (`G_ND_SWEEP_BIT_EQUAL`): `SmolyakD6V8.apply` ≈ 50 s → 0.09 s.
 
+- **Rational (shift-and-invert) Krylov (ADR-0206):** `e^{−tM⁻¹A}v` in 27 solves
+  (a-priori bound at `tol = 1e−10`) of one cancellation-free factor for any
+  `λ_max t` (Chebyshev: up to 471 877 mat-vecs at `1e10`); Python `rational_krylov`,
+  `path="rational"`.
+
 Next:
-- Rational (shift-invert) Krylov through `SpdResolvent` for very stiff SPD
-  problems: cost independent of `λ_max` (ADR-0206).
 - Shift for the augmented φ operator (≈2× on diffusion generators, ADR-0210).
 - Non-symmetric adaptive Arnoldi (phipm/KIOPS) for φ/exp actions (ADR-0211).
 - Stiff kinetics: adaptive Rosenbrock reaction step (ADR-0212).

@@ -63,7 +63,25 @@ sharing instead of a `4^D` recursion per sample, bit-identically:
 step; `test_smolyak_v8.py` ≈ 8 min → 1.1 s with unchanged goldens. Variable
 coefficients keep the per-node loop (parallel for `f64`).
 
+## Rational Krylov (ADR-0206)
+
+Neumann path Laplacian, `tol = 1e−10`: resolvent solves vs Chebyshev mat-vecs
+(deterministic counts from `G_RATKRYLOV_SOLVE_COUNT`):
+
+| `λ_max t` | n = 400 solves (err/‖v‖∞) | n = 4000 solves (err/‖v‖∞) | Chebyshev degree |
+|---:|---:|---:|---:|
+| 1e2 | 27 (1.7e−13) | — | 49 |
+| 1e4 | 27 (8.2e−14) | — | 472 |
+| 1e6 | 27 (3.3e−16) | 27 (3.4e−12) | 4 719 |
+| 1e8 | 27 (2.2e−16) | 27 (1.4e−15) | 47 188 |
+| 1e10 | 27 (9.4e−16) | — | 471 877 |
+
+The count is the a-priori dimension of `tol` (16 / 21 / 27 / 33 solves at
+`1e−6 / 1e−8 / 1e−10 / 1e−12`). Each solve on a tridiagonal pattern is one `O(N)`
+`LDLᵀ` sweep; a 40×40 grid Laplacian on the PCG path (IC(0)) takes 13 … 90 CG
+iterations per solve for `λ_max t = 1e2 … 1e8`.
+
 ## Known slow paths (not addressed here)
 
 - Lanczos stays linear in `λt` at fixed `m_max` (restarted Krylov); prefer
-  Chebyshev, or the planned rational Krylov path, for very stiff problems.
+  Chebyshev, or the rational Krylov path (ADR-0206), for very stiff problems.

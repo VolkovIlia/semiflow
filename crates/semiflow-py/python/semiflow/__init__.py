@@ -131,6 +131,8 @@ from .semiflow import (  # pyright: ignore[reportMissingImports]
     # ADR-0202 — SPD resolvent / steady solve + φ-combination
     SpdResolvent,
     phi_combination,
+    # ADR-0206 — rational (shift-and-invert) Krylov
+    RationalKrylov,
     # reverse-mode AD (ADR-0156) — registered natively but was never re-exported
     ReverseHeat1D,
     # ADR-0208/0209 — semilinear reaction-diffusion systems + Richardson
@@ -269,6 +271,7 @@ __all__ = [
     # ADR-0202
     "SpdResolvent",
     "phi_combination",
+    "RationalKrylov",
     "ReverseHeat1D",
     # ADR-0208/0209
     "ReactionDiffusion1D",

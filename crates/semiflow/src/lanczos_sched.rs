@@ -160,6 +160,18 @@ pub(crate) fn lanczos_schedule(
 /// report it as `ConvergenceFailed`).
 #[allow(clippy::many_single_char_names)] // d, e, z, w, h, m: standard tql2 notation
 pub(crate) fn tridiag_exp_e1(alpha: &[f64], beta: &[f64], h: f64) -> Option<Vec<f64>> {
+    tridiag_fn_e1(alpha, beta, |theta| libm::exp(-h * theta))
+}
+
+/// `f(T)·e₁` for the symmetric tridiagonal `T` of [`tridiag_exp_e1`] and any scalar
+/// `f` applied to its eigenvalues (the rational Krylov path uses
+/// `f(θ) = e^{t/γ − t/θ}`, ADR-0206). Same QL code, same summation order.
+#[allow(clippy::many_single_char_names)] // d, e, z, w, m: standard tql2 notation
+pub(crate) fn tridiag_fn_e1(
+    alpha: &[f64],
+    beta: &[f64],
+    f: impl Fn(f64) -> f64,
+) -> Option<Vec<f64>> {
     let m = alpha.len();
     let mut d = alpha.to_vec();
     let mut e = vec![0.0; m];
@@ -169,8 +181,8 @@ pub(crate) fn tridiag_exp_e1(alpha: &[f64], beta: &[f64], h: f64) -> Option<Vec<
         z[i * m + i] = 1.0;
     }
     tql2(&mut d, &mut e, &mut z)?;
-    // y = Z · diag(e^{−hθ}) · Zᵀ e₁ ;  (Zᵀ e₁)_i = Z[0][i]
-    let w: Vec<f64> = (0..m).map(|i| libm::exp(-h * d[i]) * z[i]).collect();
+    // y = Z · diag(f(θ)) · Zᵀ e₁ ;  (Zᵀ e₁)_i = Z[0][i]
+    let w: Vec<f64> = (0..m).map(|i| f(d[i]) * z[i]).collect();
     Some(
         (0..m)
             .map(|j| (0..m).map(|i| z[j * m + i] * w[i]).sum())

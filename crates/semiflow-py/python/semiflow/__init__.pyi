@@ -6427,13 +6427,19 @@ class SymmetricOperator:
         v_nc: NDArray[np.float64],
         path: str = "chebyshev",
         tol: float = 1e-10,
-        m_max: int = 18,
+        m_max: int | None = None,
         n_steps: int = 100,
+        cg_max_iter: int | None = None,
     ) -> NDArray[np.float64]:
         """Apply ``e^{-t A}`` to batched input ``v_nc`` (shape ``[N, C]``).
 
         Parameters
         ----------
+        path : str, optional
+            ``"chebyshev"`` (default), ``"lanczos"``, ``"implicit"`` or ``"rational"``
+            (shift-and-invert Krylov, ADR-0206; see :meth:`rational_krylov`).
+        m_max : int or None, optional
+            Max Krylov dimension (Lanczos default 18, rational default 64).
         n_steps : int, optional
             Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
@@ -6458,6 +6464,24 @@ class SymmetricOperator:
 
     def lumped_congruence(self, masses: NDArray[np.float64]) -> "SymmetricOperator":
         """``M^{-1/2} A M^{-1/2}`` for ``M = diag(masses)`` (§55.3)."""
+        ...
+
+    def rational_krylov(
+        self,
+        t: float,
+        mass: NDArray[np.float64] | None = None,
+        tol: float = 1e-10,
+        gamma: float | None = None,
+        m_max: int = 64,
+        solver: str = "auto",
+        precond: str = "ic0",
+    ) -> "RationalKrylov":
+        """Factor ``M/γ + A`` once for ``e^{-t M^{-1} A}`` actions (ADR-0206).
+
+        Shift-and-invert Lanczos: the solve count is the a-priori dimension of
+        ``tol`` (27 at ``1e-10``), independent of ``λ_max·t``. ``gamma`` defaults to
+        ``t/10``; ``solver`` / ``precond`` as :meth:`resolvent`.
+        """
         ...
 
     def resolvent(
@@ -6610,10 +6634,12 @@ def mass_lumped_evolve(
     v_nc: NDArray[np.float64],
     path: str = "chebyshev",
     tol: float = 1e-10,
-    m_max: int = 18,
+    m_max: int | None = None,
     n_steps: int = 100,
 ) -> NDArray[np.float64]:
     """Evolve ``e^{-t M⁻¹ K} V`` for diagonal mass matrix ``M = diag(m_diag)`` (§55.3).
+
+    ``path="rational"`` (ADR-0206) uses ``M`` directly (no congruence).
 
     Parameters
     ----------
@@ -6676,6 +6702,33 @@ def phi_combination(
     Returns ndarray of shape ``(n,)``.
     """
     ...
+
+
+@final
+class RationalKrylov:
+    """``e^{-t M^{-1} A}`` by shift-and-invert Lanczos, one factor (ADR-0206).
+
+    Build with :meth:`SymmetricOperator.rational_krylov`.
+    """
+
+    def apply(
+        self, v: NDArray[np.float64]
+    ) -> tuple[NDArray[np.float64], dict[str, float | int]]:
+        """``(y, report)``; ``report`` has ``solves``, ``krylov_dim``, ``est_error``,
+        ``inner_iterations``. Raises ``SemiflowError(kind="ConvergenceFailed")`` if
+        the a-priori Krylov dimension for ``tol`` exceeds ``m_max``."""
+        ...
+
+    def apply_batched(self, v_nc: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Apply to every column of ``v_nc`` (shape ``(N, C)``)."""
+        ...
+
+    @property
+    def t(self) -> float: ...
+    @property
+    def gamma(self) -> float: ...
+    @property
+    def n(self) -> int: ...
 
 
 @final

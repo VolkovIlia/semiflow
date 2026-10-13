@@ -11442,3 +11442,73 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0214
+
+  - name: G_RATKRYLOV_NEUMANN_ORACLE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (max err 3.4e−12·‖v‖∞; 9.4e−16 at λ_max t = 1e10; slow component kept to 1.1e−15)"
+    rationale: |
+      ADR-0206: shift-and-invert Lanczos on Z = (M/γ + A)⁻¹M, γ = t/10, one factor
+      (cancellation-free LDLᵀ on tridiagonal M-matrices, §66.3), a-priori stopping
+      dimension (§66.2). Neumann path Laplacian against its closed-form cosine
+      eigenbasis (the oracle of G_CHEB_STIFF_ORACLE), n = 400 at λ_max t ∈ {1e2, 1e4,
+      1e6, 1e8, 1e10} and n = 4000 at {1e6, 1e8} with the slow modes alive at ≥ 100×
+      the allowance: ‖y − exact‖∞ ≤ (tol + 1e−11)·‖v‖∞, tol = 1e−10, at every
+      stiffness (the textbook LDLᵀ misses this by 4.9e−9 at 1e10). Plus the
+      adversarial start vector cos(0.97πi) + 1e−6 at λ_max t ∈ {1e4, 1e6}, where an
+      a-posteriori stop loses the 1e−6 constant after 4 solves: same allowance.
+    gate: "err ≤ (1e−10 + 1e−11)·‖v‖∞ at every point and for the adversarial vector"
+    test_file: "tests/g_rational_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0206
+
+  - name: G_RATKRYLOV_SOLVE_COUNT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (27 solves everywhere; Chebyshev 4 719 … 471 877 mat-vecs)"
+    rationale: |
+      ADR-0206: the number of resolvent solves is the a-priori dimension m_min(tol,
+      t/γ) (27 at tol = 1e−10, γ = t/10), independent of λ_max t and n. At every
+      oracle point above: at most 30 solves (deterministic count), and at
+      λ_max t ≥ 1e6 the Chebyshev degree for the same tol
+      (graph_expmv_matvec_count) is ≥ 100× the solve count.
+    gate: "solves ≤ 30 AND chebyshev_degree ≥ 100·solves for λ_max t ≥ 1e6"
+    test_file: "tests/g_rational_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0206
+
+  - name: G_RATKRYLOV_MASS_DENSE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 6.2e−14)"
+    rationale: |
+      ADR-0206: lumped mass M = diag(m) ≠ I used directly (M-inner-product Lanczos,
+      no congruence). n = 12, tridiagonal (excess LDLᵀ) and 4×3 grid (PCG + IC(0))
+      operators, t ∈ {0.01, 0.3, 2, 40}, tol = 1e−12, against the dense congruence
+      reference M^{−½} e^{−tÂ} M^{½} v (dense_csr_expmv_ref): ≤ 1e−10·‖v‖∞.
+    gate: "max |y − ref| ≤ 1e−10·‖v‖∞"
+    test_file: "tests/g_rational_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0206
+
+  - name: G_RATKRYLOV_ISSUE16
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (3.3e−14·‖v‖∞ in 27 solves)"
+    rationale: |
+      ADR-0206: the operator of G_SYMOP_IMPLICIT_STIFF (singular Neumann Laplacian
+      ×1e7, n = 400) at t = 0.7 (1/γ not a power of two) with v = i/n (constant
+      component 0.50125): every non-constant mode underflows, the exact result is
+      mean(v)·1, to ≤ 1e−12·‖v‖∞.
+    gate: "max |y − mean(v)| ≤ 1e−12·‖v‖∞"
+    test_file: "tests/g_rational_krylov.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0206
