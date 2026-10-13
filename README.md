@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837851.svg)](https://doi.org/10.5281/zenodo.20837851)
 
-> **Status: beta (0.14.0-beta).** The API is stabilising toward 1.0; minor
+> **Status: beta (0.15.0-beta).** The API is stabilising toward 1.0; minor
 > versions may still make breaking changes. Bug reports and feedback are welcome.
 
 **SemiFlow solves evolution equations `∂ₜu = Lu` (heat, diffusion,
@@ -54,7 +54,7 @@ not allocate.
 
 ```toml
 [dependencies]
-semiflow = "0.14.0-beta"
+semiflow = "0.15.0-beta"
 ```
 
 MSRV: **Rust 1.81**. The default build is `#![no_std]` + `alloc` with
@@ -92,7 +92,7 @@ the runnable [examples](crates/semiflow/examples/README.md)
 
 ```toml
 [dependencies]
-semiflow = "0.14.0-beta"   # no_std + alloc, SIMD kernels
+semiflow = "0.15.0-beta"   # no_std + alloc, SIMD kernels
 ```
 
 The crate is `#![no_std]` by default and needs only `alloc`; the `std`
@@ -327,7 +327,7 @@ cargo run -p semiflow --example heat_2d_demo
 | Language | Package | Notes |
 |----------|---------|-------|
 | Rust | [`semiflow`](https://crates.io/crates/semiflow) ([docs.rs](https://docs.rs/semiflow)) | The full engine catalogue; `no_std + alloc` |
-| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 87 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
+| Python | [`semiflow-pde`](https://pypi.org/project/semiflow-pde/) | 90 classes and the functions `version()`, `heisenberg_heat_kernel()`, `sample_gridfn2d()`, `edge_weight_grad()`, `edge_weight_grad_batched()`, `graph_expmv_frechet()`, `symmetric_op_expmv_frechet()`, `assemble_conservative_csr_1d()`, `mass_lumped_evolve()`, `phi_action()`, `phi_action_batched()`, `phi_combination()`, `shift1d_coeff_grad()`, `richardson_weights()`; NumPy in/out; complete `.pyi` stubs; see the [PyPI page](https://pypi.org/project/semiflow-pde/) |
 | JavaScript / WASM | [`@semiflow/wasm`](https://www.npmjs.com/package/@semiflow/wasm) | Lite build on npm; the heavy-grid engines need a `--features full` build; see the [npm page](https://www.npmjs.com/package/@semiflow/wasm) |
 | C / C++ | `semiflow-ffi` | `extern "C"` ABI with `catch_unwind` on every entry point; header `semiflow.h` |
 
@@ -384,7 +384,7 @@ If you use SemiFlow in academic work, cite both the software and the theorem.
   author  = {Volkov, Ilia},
   title   = {{SemiFlow}: {Chernoff} Approximation of Operator Semigroups},
   year    = {2026},
-  version = {0.14.0-beta},
+  version = {0.15.0-beta},
   doi     = {10.5281/zenodo.20837851},
   url     = {https://doi.org/10.5281/zenodo.20837851}
 }

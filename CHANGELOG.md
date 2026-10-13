@@ -6,6 +6,41 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0-beta] — 2026-10-13
+
+Performance overhaul, new solvers for stiff and semilinear problems, and a
+correctness audit. Highlights:
+
+- **Faster, bit-identical grid engines.** Prepared sampling (ADR-0204) and
+  τ-keyed step plans (ADR-0215): heat 1-D 2.6–5.5×, `Strang2D` `400²` 2.1–3.0×,
+  `Strang3D` `64³` 1.6–2.2× over the prepared-sampling build, itself 2.2–3.2× over
+  0.14.0-beta; separable N-D sampling (ADR-0214): `SmolyakD6V8.apply` ≈ 50 s →
+  0.09 s. Proven bit-identical by 0-ULP gates and the unchanged `no_std` digests.
+- **New algorithms for stiff operators.** One-expansion Chebyshev and a-priori
+  Lanczos schedules (ADR-0205; issue #16 operator 559× faster and accurate),
+  rational shift-and-invert Krylov (ADR-0206: solve count independent of
+  `λ_max·t`), adaptive Arnoldi φ / `exp` actions for non-symmetric generators
+  (ADR-0211), a diagonal shift of the augmented φ operator (ADR-0210), an `O(N)`
+  SPD resolvent and φ-combination (ADR-0202), and a Fréchet quadrature accurate
+  at any `λ_max·t` (ADR-0203).
+- **Semilinear systems.** `ReactionDiffusion` on every engine (ADR-0208), adaptive
+  Rosenbrock (ROS2) kinetics for stiff chemistry (ADR-0212), constant-matrix
+  cross-diffusion by exact modal splitting (ADR-0213) and Richardson extrapolation
+  for any engine (ADR-0207); Python `ReactionDiffusion1D/2D/3D`.
+- **Python 3.15** (ADR-0209): PyO3 0.29, one abi3 wheel for CPython 3.10–3.15.
+- **Fixes** (see Fixed): `MatrixDiffusion2D/3D` (Python, C FFI, WASM) applied the
+  coupling once per axis; `MatrixDiffusionChernoff` exponentiated the wrong
+  matrices; issue #44 (a non-finite norm bound is now an error); `MassKOperator`
+  `λ_max`; the Lanczos `m_max` cap; the `DriftReactionChernoff` adjoint.
+
+**Compatibility.** The Rust API is additive over 0.14.0-beta (`cargo
+semver-checks`, minor); MSRV 1.81 and the `no_std` default build are unchanged.
+No C ABI change (the `smf_matrix2d/3d_*` results change for `c ≠ 0`: they were
+wrong). Output bits change only where stated (ADR-0203, ADR-0205, ADR-0210 and
+the fixes); the `no_std` digests `graph_krylov_chebyshev`,
+`graph_frechet_large_t` and `phi_combination` were re-recorded once, every other
+digest is unchanged. No gate threshold was loosened.
+
 ### Performance overhaul and correctness audit (2026-10)
 
 The library was slow for algorithmic reasons, not for lack of micro-tuning.
@@ -296,6 +331,8 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   (`G_ETDRK4_KRYLOV_ORDER`). Gates `G_PHI_KRYLOV_DENSE`, `G_PHI_KRYLOV_TOL`. Honest
   limit: on cheap stencils below `τ‖G‖ ≈ 10³` the Taylor path is competitive and
   stays the default; `est_error` is an estimate.
+
+### SPD resolvent, operator composition, φ-combination (ADR-0202, ADR-0203)
 
 ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
 φ-combination that closes the affine and ETD gaps. All additive except one
