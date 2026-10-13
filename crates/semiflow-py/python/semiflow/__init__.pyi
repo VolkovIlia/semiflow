@@ -6982,7 +6982,11 @@ class _ReactionDiffusion:
     built-in model (exact flow where available) or a vectorised callable
     (classical RK4 with ``substeps`` per reaction step, or with
     ``reaction_solver="rosenbrock"`` the adaptive L-stable ROS2 step for stiff
-    kinetics, tolerances ``rtol``/``atol``, ADR-0212). The GIL is released
+    kinetics, tolerances ``rtol``/``atol``, ADR-0212). A ``K×K`` ``diffusivity``
+    matrix ``D`` selects cross-diffusion ``∂ₜu = DΔu + f`` (ADR-0213): ``D`` must be
+    diagonalisable with real eigenvalues ``≥ 0`` (verified; complex, negative or
+    (nearly) defective ``D`` raise ``OutOfDomain``), and each diffusion step mixes
+    the species into the modes of ``D`` and back. The GIL is released
     during :meth:`evolve`; a callable re-acquires it once per RK stage, and an
     exception it raises propagates unchanged (the state is then not updated).
     """
@@ -7025,7 +7029,7 @@ class ReactionDiffusion1D(_ReactionDiffusion):
         n: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Sequence[float],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
         boundary: str = "reflect",
@@ -7052,7 +7056,7 @@ class ReactionDiffusion2D(_ReactionDiffusion):
         ny: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Sequence[float],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
         boundary: str = "reflect",
@@ -7082,7 +7086,7 @@ class ReactionDiffusion3D(_ReactionDiffusion):
         nz: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Sequence[float],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
         boundary: str = "reflect",

@@ -240,6 +240,21 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `G_STIFF_KINETICS_PER_NODE`, `G_STIFF_KINETICS_FD_JAC`, `G_STIFF_ROBERTSON`. RK4 stays the default, bit-identical; `dense_exp` moves
   verbatim to `dense_la.rs`.
 
+#### Added — cross-diffusion (ADR-0213)
+
+- **Cross-diffusion with a constant matrix for `ReactionDiffusion`.**
+  `CrossDiffusion::new(D)` decomposes a `K×K` matrix (`K ≤ 16`) into
+  `D = PΛP⁻¹` (Hessenberg + Francis QR, eigenvectors per eigenvalue cluster) and
+  verifies it (`cond₁(P) ≤ 1e8`, reconstruction `≤ 1e−10‖D‖`); complex, negative and
+  (nearly) defective `D` are rejected with the reason. `with_cross_diffusion(cd)`
+  mixes the species into modes around each diffusion step, so every existing engine
+  (1-D/2-D/3-D, all interpolants and boundary policies, graphs) diffuses the modes
+  exactly in `D`. `NodalField::mixes_with` (provided, default `false`) admits only
+  fields on the same nodes with one homogeneous linear boundary. Python:
+  `ReactionDiffusion*(…, diffusivity=[[…], …])`. Gates `G_CROSSDIFF_GRAPH_EXACT`
+  (`≤ 2e−15`), `G_CROSSDIFF_STRANG_ORDER`, `G_CROSSDIFF_FOURIER_GRID`,
+  `G_CROSSDIFF_REJECT`.
+
 #### Added — adaptive Krylov φ / exponential actions (ADR-0211)
 
 - **`phi_combination_krylov`, `expmv_krylov`, `PhiSolver`.** Expokit-style adaptive

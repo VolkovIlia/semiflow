@@ -3,7 +3,9 @@
 //! `∂ₜu_k = D_k Δu_k + f_k(t, x, u)` for `K` species on a 1-D/2-D/3-D grid: each
 //! species diffuses with its own constant `D_k` (`DiffusionChernoff`, Strang
 //! across axes), the reaction is a built-in model or any vectorised callable.
-//! Strang splitting (order 2); `richardson=L` extrapolates in the step count
+//! A `K×K` `diffusivity` matrix selects cross-diffusion `∂ₜu = DΔu + f` (ADR-0213:
+//! modal decomposition `D = PΛP⁻¹`, verified; complex, negative or defective `D`
+//! rejected). Strang splitting (order 2); `richardson=L` extrapolates in the step count
 //! (order `1 + L`). `reaction_solver="rosenbrock"` integrates stiff kinetics with
 //! adaptive ROS2 (`rtol`, `atol`; `jacobian(t, x, u) -> (K, K, N)` for a callable
 //! reaction, finite differences otherwise; ADR-0212). The GIL is released for the
@@ -16,29 +18,34 @@
     clippy::needless_pass_by_value
 )]
 
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use numpy::{ndarray::ArrayD, ToPyArray};
 use pyo3::{prelude::*, types::PyDict};
 use semiflow::{
-    extrapolate_into, ChernoffFunction, DiffusionChernoff, Grid1D, Grid2D, Grid3D, GridFn1D,
-    GridFn2D, GridFn3D, Growth, Kinetics, NodalField, ReactionDiffusion, ReactionSolver,
-    ScratchPool, SemiflowError as CoreError, Species, SpeciesEngine, State, Strang2D, Strang3D,
+    extrapolate_into, CrossDiffusion, GridFn1D, GridFn2D, GridFn3D, Kinetics, NodalField,
+    ReactionDiffusion, ReactionSolver, ScratchPool, SemiflowError as CoreError, Species,
+    SpeciesEngine,
 };
 
 use crate::{
     boundary::parse_boundary,
     error::{from_core, new_pyerr},
     panic::catch_panic_py,
+    rd_engines_py::{engine_1d, engine_2d, engine_3d},
     rd_kinetics_py::{ArcKinetics, PyKinetics},
     rd_setup_py::{
-        build_geometry, extract_fields, parse_reaction, parse_solver, Geometry, StiffOptions,
+        build_geometry, extract_fields, parse_diffusivity, parse_reaction, parse_solver, Geometry,
+        StiffOptions,
     },
 };
 
 /// Kinetics, diffusivities and clock shared by the three classes.
 struct RdCore {
+    /// Engine coefficients: `D_k`, or the eigenvalues of a cross-diffusion `D`.
     diff: Vec<f64>,
+    /// The decomposition of a `K×K` diffusivity matrix (ADR-0213).
+    cross: Option<CrossDiffusion<f64>>,
     kinetics: Arc<dyn Kinetics<f64>>,
     py_kinetics: Option<Arc<PyKinetics>>,
     substeps: u32,
@@ -60,7 +67,7 @@ fn new_state(
     py: Python<'_>,
     axes: &[(f64, f64, usize)],
     u0: &Bound<'_, PyAny>,
-    diffusivity: Vec<f64>,
+    diffusivity: &Bound<'_, PyAny>,
     reaction: &Bound<'_, PyAny>,
     params: Option<&Bound<'_, PyDict>>,
     boundary: &str,
@@ -70,12 +77,7 @@ fn new_state(
     let geom = build_geometry(axes, parse_boundary(boundary)?)?;
     let values = extract_fields(py, u0, &geom.field_shape())?;
     let k = values.len();
-    if diffusivity.len() != k || diffusivity.iter().any(|d| !d.is_finite() || *d < 0.0) {
-        return Err(new_pyerr(
-            "OutOfDomain",
-            &format!("diffusivity must hold K = {k} finite values >= 0, got {diffusivity:?}"),
-        ));
-    }
+    let (diff, cross) = parse_diffusivity(diffusivity, k)?;
     if !t0.is_finite() || substeps == 0 {
         return Err(new_pyerr(
             "OutOfDomain",
@@ -86,7 +88,8 @@ fn new_state(
     let (kinetics, py_kinetics) =
         parse_reaction(reaction, params, stiff.jacobian, (k, axes.len()))?;
     let core = RdCore {
-        diff: diffusivity,
+        diff,
+        cross,
         kinetics,
         py_kinetics,
         substeps,
@@ -104,9 +107,12 @@ fn run<S: NodalField<f64> + Clone + Send>(
     (t, n, levels): (f64, usize, usize),
 ) -> Result<Vec<S>, CoreError> {
     let kin = Box::new(ArcKinetics(Arc::clone(&core.kinetics)));
-    let rd = ReactionDiffusion::new(engines, kin)?
+    let mut rd = ReactionDiffusion::new(engines, kin)?
         .with_reaction_substeps(core.substeps)
         .with_reaction_solver(core.solver);
+    if let Some(cd) = &core.cross {
+        rd = rd.with_cross_diffusion(cd.clone())?;
+    }
     let src = Species::new(fields);
     let mut dst = src.clone();
     let mut scratch = ScratchPool::new();
@@ -130,66 +136,6 @@ fn solve<S: NodalField<f64> + Clone + Send>(
     let engines = core.diff.iter().map(|&d| engine(d)).collect();
     let fields = vals.into_iter().map(field).collect();
     run(core, engines, fields, job).map(|v| v.into_iter().map(flat).collect())
-}
-
-/// Diffusion engine along one axis (`D > 0`).
-fn axis_engine(d: f64, g: Grid1D<f64>) -> DiffusionChernoff<f64> {
-    DiffusionChernoff::new_const_a(d, d, g)
-}
-
-/// The exact `D = 0` "diffusion": the identity (bit-exact, no sampling).
-struct Frozen<S>(PhantomData<fn() -> S>);
-
-impl<S: State<f64>> ChernoffFunction<f64> for Frozen<S> {
-    type S = S;
-    fn apply_into(
-        &self,
-        _tau: f64,
-        src: &S,
-        dst: &mut S,
-        _scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), CoreError> {
-        dst.copy_from(src);
-        Ok(())
-    }
-    fn order(&self) -> u32 {
-        u32::MAX
-    }
-    fn growth(&self) -> Growth<f64> {
-        Growth::contraction()
-    }
-}
-
-/// `Frozen` for `D = 0`, else `build()`.
-fn engine_or_frozen<S: State<f64> + 'static>(
-    d: f64,
-    build: impl FnOnce() -> SpeciesEngine<'static, f64, S>,
-) -> SpeciesEngine<'static, f64, S> {
-    if d == 0.0 {
-        Box::new(Frozen::<S>(PhantomData))
-    } else {
-        build()
-    }
-}
-
-/// `D_k ∂ₓₓ` engine of a 1-D species.
-fn engine_1d(d: f64, g: Grid1D<f64>) -> SpeciesEngine<'static, f64, GridFn1D<f64>> {
-    engine_or_frozen(d, || Box::new(axis_engine(d, g)))
-}
-
-/// `D_k Δ` engine of a 2-D species (Strang across the axes).
-fn engine_2d(d: f64, g: Grid2D<f64>) -> SpeciesEngine<'static, f64, GridFn2D<f64>> {
-    engine_or_frozen(d, || {
-        Box::new(Strang2D::new(axis_engine(d, g.x), axis_engine(d, g.y)))
-    })
-}
-
-/// `D_k Δ` engine of a 3-D species (Strang across the axes).
-fn engine_3d(diff: f64, grid: Grid3D<f64>) -> SpeciesEngine<'static, f64, GridFn3D<f64>> {
-    let axis = |g: Grid1D<f64>| axis_engine(diff, g);
-    engine_or_frozen(diff, || {
-        Box::new(Strang3D::new(axis(grid.x), axis(grid.y), axis(grid.z)))
-    })
 }
 
 /// The pure-Rust part of `evolve` (runs GIL-free).
@@ -331,7 +277,7 @@ rd_class!(
             xmax: f64,
             n: usize,
             u0: &Bound<'_, PyAny>,
-            diffusivity: Vec<f64>,
+            diffusivity: &Bound<'_, PyAny>,
             reaction: &Bound<'_, PyAny>,
             params: Option<&Bound<'_, PyDict>>,
             boundary: &str,
@@ -382,7 +328,7 @@ rd_class!(
             ymax: f64,
             ny: usize,
             u0: &Bound<'_, PyAny>,
-            diffusivity: Vec<f64>,
+            diffusivity: &Bound<'_, PyAny>,
             reaction: &Bound<'_, PyAny>,
             params: Option<&Bound<'_, PyDict>>,
             boundary: &str,
@@ -436,7 +382,7 @@ rd_class!(
             zmax: f64,
             nz: usize,
             u0: &Bound<'_, PyAny>,
-            diffusivity: Vec<f64>,
+            diffusivity: &Bound<'_, PyAny>,
             reaction: &Bound<'_, PyAny>,
             params: Option<&Bound<'_, PyDict>>,
             boundary: &str,

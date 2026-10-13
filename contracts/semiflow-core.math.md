@@ -13902,3 +13902,9 @@ bound `ε_Q = 1.1e−14` uniform in `λ_max·t` (§63.4).
 > NORMATIVE body (ADR-0212) lives in
 > [`contracts/semiflow-core.math-stiff-kinetics.md`](semiflow-core.math-stiff-kinetics.md);
 > every "§69.x" citation resolves there.
+
+## §70 — Cross-diffusion with a constant matrix (in its own file)
+
+> NORMATIVE body (ADR-0213) lives in
+> [`contracts/semiflow-core.math-cross-diffusion.md`](semiflow-core.math-cross-diffusion.md);
+> every "§70.x" citation resolves there.

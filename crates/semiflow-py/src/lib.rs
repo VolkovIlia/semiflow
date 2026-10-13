@@ -128,6 +128,7 @@ mod panic;
 mod phi_etdrk4_py;
 mod phi_krylov_py;
 mod rational_krylov_py;
+mod rd_engines_py;
 mod rd_kinetics_py;
 mod rd_setup_py;
 mod reaction_diffusion_py;

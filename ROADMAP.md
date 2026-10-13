@@ -56,9 +56,16 @@ Done:
   4.3 s (smallest accurate RK4, 25 000 substeps) → 68 ms at `rtol = 1e−3`; Python
   `reaction_solver="rosenbrock"`.
 
+- **Cross-diffusion (ADR-0213):** `∂ₜu = DΔu + f` with a constant `K×K` matrix by
+  exact modal splitting (`D = PΛP⁻¹`, verified; complex, negative or defective `D`
+  rejected) on every existing engine, 1-D/2-D/3-D and graphs; Python
+  `diffusivity=[[…], …]`.
+
 Next:
-- Cross-diffusion with a constant diagonalisable matrix (ADR-0213).
 - τ-keyed step plans for the grid engines (≈2–3×, a trait hook, ADR-0215).
+- Periodic boundary: unify the coordinate wrap of `sample` (period `(n − 1)·dx`,
+  as documented) with the engines' ghost-index wrap (period `n·dx`); bit-changing,
+  needs its own ADR (found while gating ADR-0213).
 
 ---
 

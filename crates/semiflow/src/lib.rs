@@ -43,6 +43,7 @@ pub(crate) mod complex_libm;
 pub mod conservative;
 pub mod conservative_assemble;
 pub mod controller;
+pub mod cross_diffusion;
 pub(crate) mod csr_shift;
 pub(crate) mod dense_la;
 pub mod diffusion;
@@ -273,6 +274,7 @@ pub use crate::{
     conservative::{steady_state_dirichlet_1d, ConservativeDiffusionChernoff},
     conservative_assemble::{assemble_conservative_csr_1d, assemble_conservative_csr_nd},
     controller::{ClassicalPI, H211bFilter, StepController},
+    cross_diffusion::CrossDiffusion,
     diffusion::DiffusionChernoff,
     diffusion4::Diffusion4thChernoff,
     diffusion4_zeta4::Diffusion4thZeta4Chernoff,

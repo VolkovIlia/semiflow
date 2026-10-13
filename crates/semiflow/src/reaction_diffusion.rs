@@ -19,17 +19,20 @@
 //! [`ReactionDiffusion::evolve_into`] merges the adjacent half reaction steps
 //! (`R(τ/2)LR(τ)L…LR(τ/2)`). Order: `min(2, min_k order(C_k))`; Richardson
 //! extrapolation (`crate::richardson`) raises it.
+//!
+//! **Cross-diffusion** (ADR-0213): with [`ReactionDiffusion::with_cross_diffusion`]
+//! the diffusion is `DΔ` for a constant `K×K` matrix `D = PΛP⁻¹`
+//! ([`CrossDiffusion`]); the engines then diffuse the MODES (`engines[k] ≈
+//! e^{τλ_k L}`), and each diffusion step mixes the species into modes `P⁻¹u` and
+//! back.
 
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     chernoff::ChernoffFunction,
+    cross_diffusion::CrossDiffusion,
     error::SemiflowError,
     float::{from_f64, SemiflowFloat},
-    graph_signal::GraphSignal,
-    grid_fn::GridFn1D,
-    grid_fn2d::GridFn2D,
-    grid_fn3d::GridFn3D,
     reaction::Kinetics,
     reaction_stiff::{ros2_flow, ReactionSolver, RosBuffers},
     scratch::ScratchPool,
@@ -44,68 +47,19 @@ pub trait NodalField<F: SemiflowFloat>: State<F> {
     fn node_values_mut(&mut self) -> &mut [F];
     /// Node coordinates, axis-major (`x[d·N + i]`); empty on a graph.
     fn node_coordinates(&self) -> Vec<F>;
-}
-
-impl<F: SemiflowFloat> NodalField<F> for GridFn1D<F> {
-    fn node_values(&self) -> &[F] {
-        &self.values
-    }
-    fn node_values_mut(&mut self) -> &mut [F] {
-        &mut self.values
-    }
-    fn node_coordinates(&self) -> Vec<F> {
-        (0..self.values.len()).map(|i| self.grid.x_at(i)).collect()
+    /// `true` when a pointwise linear combination of this field's and `other`'s
+    /// node values, carried on this field, evolves under any linear engine as the
+    /// same combination of their evolutions: the same nodes and interpolant and
+    /// the same homogeneous linear boundary policy (cross-diffusion, ADR-0213).
+    /// Default `false`: fields that cannot be verified are rejected.
+    fn mixes_with(&self, other: &Self) -> bool {
+        let _ = other;
+        false
     }
 }
 
-impl<F: SemiflowFloat> NodalField<F> for GridFn2D<F> {
-    fn node_values(&self) -> &[F] {
-        &self.values
-    }
-    fn node_values_mut(&mut self) -> &mut [F] {
-        &mut self.values
-    }
-    /// Row-major, `x` fastest: node `iy·nx + ix`.
-    fn node_coordinates(&self) -> Vec<F> {
-        let (gx, gy) = (self.grid.x, self.grid.y);
-        let (xs, ys): (Vec<F>, Vec<F>) = (0..gy.n)
-            .flat_map(|iy| (0..gx.n).map(move |ix| (gx.x_at(ix), gy.x_at(iy))))
-            .unzip();
-        [xs, ys].concat()
-    }
-}
-
-impl<F: SemiflowFloat> NodalField<F> for GridFn3D<F> {
-    fn node_values(&self) -> &[F] {
-        &self.values
-    }
-    fn node_values_mut(&mut self) -> &mut [F] {
-        &mut self.values
-    }
-    /// `x` fastest, then `y`, then `z`: node `(iz·ny + iy)·nx + ix`.
-    fn node_coordinates(&self) -> Vec<F> {
-        let (gx, gy, gz) = (self.grid.x, self.grid.y, self.grid.z);
-        let n = gx.n * gy.n * gz.n;
-        let mut out = Vec::with_capacity(3 * n);
-        let node = |i: usize| (i % gx.n, (i / gx.n) % gy.n, i / (gx.n * gy.n));
-        out.extend((0..n).map(|i| gx.x_at(node(i).0)));
-        out.extend((0..n).map(|i| gy.x_at(node(i).1)));
-        out.extend((0..n).map(|i| gz.x_at(node(i).2)));
-        out
-    }
-}
-
-impl<F: SemiflowFloat> NodalField<F> for GraphSignal<F> {
-    fn node_values(&self) -> &[F] {
-        &self.values
-    }
-    fn node_values_mut(&mut self) -> &mut [F] {
-        &mut self.values
-    }
-    fn node_coordinates(&self) -> Vec<F> {
-        Vec::new()
-    }
-}
+#[path = "reaction_diffusion_fields.rs"]
+mod fields;
 
 /// `K` fields, one per species, on the same nodes.
 #[derive(Clone, Debug, PartialEq)]
@@ -169,6 +123,7 @@ pub struct ReactionDiffusion<'a, F: SemiflowFloat, S: NodalField<F>> {
     reaction: Box<dyn Kinetics<F> + 'a>,
     substeps: u32,
     solver: ReactionSolver,
+    cross: Option<CrossDiffusion<F>>,
 }
 
 impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S> {
@@ -193,7 +148,27 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
             reaction,
             substeps: 1,
             solver: ReactionSolver::Rk4,
+            cross: None,
         })
+    }
+
+    /// Cross-diffusion `DΔ` with the decomposition `cd` of `D` (ADR-0213): the
+    /// engines must be the MODE engines, `engines[k] ≈ e^{τλ_k L}` with
+    /// `λ_k = cd.eigenvalues()[k]` (an identity engine for `λ_k = 0`). Every species
+    /// field must [`NodalField::mixes_with`] the others (checked at each run).
+    ///
+    /// # Errors
+    /// `DomainViolation` if `cd` has a different species count.
+    pub fn with_cross_diffusion(mut self, cd: CrossDiffusion<F>) -> Result<Self, SemiflowError> {
+        if cd.species() != self.species() {
+            #[allow(clippy::cast_precision_loss)]
+            return Err(SemiflowError::DomainViolation {
+                what: "ReactionDiffusion::with_cross_diffusion: D must be K×K for K species",
+                value: cd.species() as f64,
+            });
+        }
+        self.cross = Some(cd);
+        Ok(self)
     }
 
     /// Reaction integrator when the kinetics has no exact flow (default
@@ -292,6 +267,12 @@ impl<'a, F: SemiflowFloat, S: NodalField<F> + Clone> ReactionDiffusion<'a, F, S>
         ) -> Result<(), SemiflowError>,
     ) -> Result<(), SemiflowError> {
         let n = check_shapes(self.species(), u)?;
+        if self.cross.is_some() && u.fields.iter().any(|f| !u.fields[0].mixes_with(f)) {
+            return Err(SemiflowError::DomainViolation {
+                what: "ReactionDiffusion: cross-diffusion needs every species on the same nodes with one homogeneous linear boundary (no non-zero Dirichlet value)",
+                value: 0.0,
+            });
+        }
         if let ReactionSolver::Rosenbrock(opts) = &self.solver {
             opts.validate()?;
         }
@@ -373,7 +354,8 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         }
     }
 
-    /// `u_k ← C_k(τ) u_k` for every species.
+    /// `u_k ← C_k(τ) u_k` for every species; with cross-diffusion the species are
+    /// mixed to modes `P⁻¹u` before and back `Pm` after.
     fn diffuse(
         &mut self,
         rd: &ReactionDiffusion<'_, F, S>,
@@ -381,9 +363,19 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         u: &mut Species<S>,
         scratch: &mut ScratchPool<F>,
     ) -> Result<(), SemiflowError> {
+        if let Some(cd) = &rd.cross {
+            gather(&mut self.flat, u, self.n);
+            cd.to_modes(&self.flat, &mut self.acc, self.n);
+            scatter(&self.acc, u, self.n);
+        }
         for (engine, field) in rd.engines.iter().zip(u.fields.iter_mut()) {
             engine.apply_into(tau, field, &mut self.spare, scratch)?;
             core::mem::swap(field, &mut self.spare);
+        }
+        if let Some(cd) = &rd.cross {
+            gather(&mut self.flat, u, self.n);
+            cd.to_species(&self.flat, &mut self.acc, self.n);
+            scatter(&self.acc, u, self.n);
         }
         Ok(())
     }
@@ -397,9 +389,7 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
         u: &mut Species<S>,
     ) -> Result<(), SemiflowError> {
         let n = self.n;
-        for (k, field) in u.fields.iter().enumerate() {
-            self.flat[k * n..(k + 1) * n].copy_from_slice(field.node_values());
-        }
+        gather(&mut self.flat, u, n);
         if let Some(r) = rd.reaction.exact_flow(t, h, n, &self.x, &mut self.flat) {
             r?;
         } else if let (ReactionSolver::Rosenbrock(opts), Some(buf)) = (&rd.solver, &mut self.ros) {
@@ -421,11 +411,7 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
                 value: bad.to_f64().unwrap_or(f64::NAN),
             });
         }
-        for (k, field) in u.fields.iter_mut().enumerate() {
-            field
-                .node_values_mut()
-                .copy_from_slice(&self.flat[k * n..(k + 1) * n]);
-        }
+        scatter(&self.flat, u, n);
         Ok(())
     }
 
@@ -453,6 +439,22 @@ impl<F: SemiflowFloat, S: NodalField<F> + Clone> Workspace<F, S> {
             *u += sixth * a;
         }
         Ok(())
+    }
+}
+
+/// Species values into the flat species-major buffer (`flat[k·n + i]`).
+fn gather<F: SemiflowFloat, S: NodalField<F>>(flat: &mut [F], u: &Species<S>, n: usize) {
+    for (k, field) in u.fields.iter().enumerate() {
+        flat[k * n..(k + 1) * n].copy_from_slice(field.node_values());
+    }
+}
+
+/// The flat species-major buffer back into the species fields.
+fn scatter<F: SemiflowFloat, S: NodalField<F>>(flat: &[F], u: &mut Species<S>, n: usize) {
+    for (k, field) in u.fields.iter_mut().enumerate() {
+        field
+            .node_values_mut()
+            .copy_from_slice(&flat[k * n..(k + 1) * n]);
     }
 }
 

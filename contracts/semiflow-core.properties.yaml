@@ -11744,3 +11744,70 @@ implementation_notes:
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0212
+
+  - name: G_CROSSDIFF_GRAPH_EXACT
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (≤ 2.0e−15 relative)"
+    rationale: |
+      ADR-0213: cross-diffusion on a 48-node ring graph, discrete Fourier mode
+      sin(2π·3j/48)·c, exact Chebyshev graph engines (tol 1e−15) per mode, for
+      D ∈ {non-symmetric 2×2, singular 2×2 (a non-diffusing species driven by the
+      other's Laplacian), non-normal upper-triangular 3×3}: the modal step is exact in
+      D, so the result equals e^{−TμD}c (μ the ring eigenvalue) to rounding.
+    gate: "relative error ≤ 1e−12 for every D"
+    test_file: "tests/g_cross_diffusion.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0213
+
+  - name: G_CROSSDIFF_STRANG_ORDER
+    type: CONVERGENCE_ORDER
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (slopes 2.00–2.06)"
+    rationale: |
+      ADR-0213: the ring setup with a linear reaction u′ = Cu that does not commute
+      with D: Strang splitting converges with order 2 to e^{T(−μD + C)}c (slopes over
+      n = 40, 80, 160). A reaction applied to the modes instead of the physical
+      species converges to a different limit and fails (verified by mutation).
+    gate: "slopes ∈ [1.9, 2.1] for every D"
+    test_file: "tests/g_cross_diffusion.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0213
+
+  - name: G_CROSSDIFF_FOURIER_GRID
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (error = modal bound to rounding; bound ≤ 2.6e−5; slopes 1.99–2.02)"
+    rationale: |
+      ADR-0213: periodic sin(2πx)·c (1-D, 64 nodes) and sin(2πx)sin(2πy)·c (2-D, 32²)
+      with DiffusionChernoff mode engines (septic; Strang across axes) against the
+      closed form e^{−Tk²D}c: the sup error stays within the modal bound
+      max_i Σ_k |P_ik||(P⁻¹c)_k|·err_k built from each scalar mode engine's own error
+      (+1e−14 rounding), the bound is informative (≤ 1e−4), and the error converges
+      with order 2 over 20, 40, 80 steps. Mixing with P in place of P⁻¹ fails.
+    gate: "err ≤ bound + 1e−14 AND bound ≤ 1e−4 AND slopes ∈ [1.9, 2.1]"
+    test_file: "tests/g_cross_diffusion.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0213
+
+  - name: G_CROSSDIFF_REJECT
+    type: STRUCTURAL
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS"
+    rationale: |
+      ADR-0213: complex, negative, defective and nearly defective D are rejected with
+      the reason (DomainViolation); non-zero Dirichlet values, species on different
+      grids or boundary policies, and a species-count mismatch are rejected at run
+      time; zero-Dirichlet species are accepted.
+    gate: "every invalid input → DomainViolation; valid homogeneous inputs → Ok"
+    test_file: "tests/g_cross_diffusion.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0213

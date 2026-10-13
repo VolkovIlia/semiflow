@@ -211,6 +211,13 @@ rd3 = semiflow.ReactionDiffusion1D(0, 1, 8, u0, diffusivity=[0.0, 0.0, 0.0],
                                    rtol=1e-5, atol=1e-12)
 rd3.evolve(40.0, n_steps=1)   # RK4 needs ~25 000 substeps per half-step here (NaN at <= 21 000)
 assert abs(rd3.values()[0, 0] - 0.7158270687) < 1e-4
+
+# Cross-diffusion: a K×K diffusivity matrix D (diagonalisable, real eigenvalues
+# >= 0, verified); each diffusion step diffuses the modes of D exactly.
+rd4 = semiflow.ReactionDiffusion1D(0, 1, 64, np.full((2, 64), 0.5),
+                                   diffusivity=[[1e-2, 5e-3], [0.0, 2e-3]],
+                                   reaction="gray_scott", params={"feed": 0.04, "kill": 0.06})
+rd4.evolve(1.0, n_steps=20)
 ```
 
 ---
@@ -241,7 +248,7 @@ Classes are grouped by kernel family. All stateful classes expose at least
 
 | Class | Kernel | Order | Notes |
 |-------|--------|-------|-------|
-| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)`; `reaction_solver="rosenbrock"` (`rtol`, `atol`, `jacobian=`) for stiff kinetics (ADR-0212) |
+| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)`; `reaction_solver="rosenbrock"` (`rtol`, `atol`, `jacobian=`) for stiff kinetics (ADR-0212); `K×K` `diffusivity` matrix for cross-diffusion (ADR-0213) |
 | `ReactionDiffusion2D` | … + `Strang2D` | 2 | `u0` `(K, ny, nx)` |
 | `ReactionDiffusion3D` | … + `Strang3D` | 2 | `u0` `(K, nz, ny, nx)` |
 

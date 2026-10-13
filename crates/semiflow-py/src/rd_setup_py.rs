@@ -9,7 +9,8 @@ use std::sync::Arc;
 use numpy::{PyReadonlyArrayDyn, PyUntypedArrayMethods};
 use pyo3::{prelude::*, types::PyDict};
 use semiflow::{
-    BoundaryPolicy, Grid1D, Grid2D, Grid3D, Kinetics, ReactionSolver, RosenbrockOptions,
+    BoundaryPolicy, CrossDiffusion, Grid1D, Grid2D, Grid3D, Kinetics, ReactionSolver,
+    RosenbrockOptions,
 };
 
 use crate::{
@@ -80,6 +81,38 @@ pub(crate) fn extract_fields(
     }
     let n: usize = shape.iter().product();
     Ok(flat.chunks_exact(n).map(<[f64]>::to_vec).collect())
+}
+
+/// `diffusivity=`: `K` values `D_k ≥ 0`, or a `K×K` matrix (cross-diffusion,
+/// ADR-0213). Returns the engine coefficients — the `D_k`, or the eigenvalues of the
+/// matrix — and the matrix's verified decomposition.
+pub(crate) fn parse_diffusivity(
+    d: &Bound<'_, PyAny>,
+    k: usize,
+) -> PyResult<(Vec<f64>, Option<CrossDiffusion<f64>>)> {
+    if let Ok(v) = d.extract::<Vec<f64>>() {
+        if v.len() != k || v.iter().any(|d| !d.is_finite() || *d < 0.0) {
+            return Err(new_pyerr(
+                "OutOfDomain",
+                &format!("diffusivity must hold K = {k} finite values >= 0, got {v:?}"),
+            ));
+        }
+        return Ok((v, None));
+    }
+    let rows: Vec<Vec<f64>> = d.extract().map_err(|_| {
+        new_pyerr(
+            "OutOfDomain",
+            "diffusivity must be K values or a K×K matrix of floats",
+        )
+    })?;
+    if rows.len() != k || rows.iter().any(|r| r.len() != k) {
+        return Err(new_pyerr(
+            "OutOfDomain",
+            &format!("a diffusivity matrix must be K×K with K = {k} species"),
+        ));
+    }
+    let cd = CrossDiffusion::<f64>::new(&rows.concat()).map_err(|e| from_core(&e))?;
+    Ok((cd.eigenvalues().to_vec(), Some(cd)))
 }
 
 /// Kinetics as a trait object, plus the Python callable's handle when there is one.

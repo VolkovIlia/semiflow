@@ -8,6 +8,9 @@ use crate::{
     grid::Grid1D,
     grid2d::Grid2D,
     grid3d::Grid3D,
+    grid_fn::GridFn1D,
+    grid_fn2d::GridFn2D,
+    grid_fn3d::GridFn3D,
     reaction::{FnReaction, GrayScott, Nagumo},
 };
 
