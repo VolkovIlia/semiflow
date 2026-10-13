@@ -278,11 +278,11 @@ fn register_v6_v8(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 // Module-level functions
 // ---------------------------------------------------------------------------
 
-/// Return the `semiflow-py` crate version string (e.g. ``"0.10.0"``).
+/// Return the `semiflow-py` crate version string (e.g. ``"0.15.0-beta"``).
 ///
-/// Matches the Cargo package version baked in at compile time.
-/// Identical to calling ``importlib.metadata.version("semiflow-pde")`` but
-/// available without the import overhead.
+/// Matches the Cargo package version baked in at compile time. This is the Cargo
+/// form; ``importlib.metadata.version("semiflow-pde")`` reports the PEP 440 form
+/// (``"0.15.0b0"``).
 #[pyfunction]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

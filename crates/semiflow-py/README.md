@@ -106,11 +106,11 @@ The `.kind` attribute (a string) identifies the error category:
 |--------|-------------|
 | `GridMismatch` | Invalid geometry, mismatched array lengths |
 | `NanInf` | Input array contains NaN or Inf |
-| `OutOfDomain` | Parameter out of valid range (e.g. `t < 0`, `n < 4`) |
-| `BoundaryFailure` | Unrecognised boundary policy string |
+| `OutOfDomain` | Parameter out of valid range (e.g. `t < 0`, `n < 4`), or an unrecognised value for most string keywords (e.g. `boundary=`, `dtype=`, `kernel=`, `method=`, `phi=`, `solver=`, `precond=`, `reaction_solver=`, `nonlinearity=`) |
+| `BoundaryFailure` | Reserved: grid under-resolved for the Chernoff shift (core `GridUnderresolved`); not raised by the current API |
 | `CflViolated` | CFL-like stability constraint exceeded |
-| `ConvergenceFailed` | Magnus / adaptive integration convergence check failed |
-| `Unsupported` | Unrecognised string selector (e.g. `subordinator=`) |
+| `ConvergenceFailed` | Magnus / adaptive integration check failed, or an iteration cap was hit (PCG in `SpdResolvent` and `path="implicit"`, Arnoldi substeps of `method="krylov"` / `phi="krylov"`, `RationalKrylov` / `path="rational"` needing more than `m_max`, Rosenbrock steps of `reaction_solver="rosenbrock"`) |
+| `Unsupported` | Unrecognised `path=`, `subordinator=`, `manifold=` or reaction-model name, or a combination that is not implemented (e.g. `solver="tridiagonal"` on a non-tridiagonal operator, `path="implicit"` on `GraphKrylov`) |
 | `Panic` | Unrecoverable internal Rust panic (should never occur) |
 
 ## Boundary policies
@@ -259,12 +259,13 @@ import numpy as np
 import semiflow
 
 n = 128
-x, y = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+# periodic: node n is node 0, so the unit torus is sampled on [0, 1)
+x, y = np.meshgrid(np.linspace(0, 1, n, endpoint=False), np.linspace(0, 1, n, endpoint=False))
 bump = np.exp(-((x - 0.5)**2 + (y - 0.5)**2) / 0.005)
 u0 = np.stack([1.0 - 0.5 * bump, 0.25 * bump])          # shape (K=2, ny, nx)
 
 rd = semiflow.ReactionDiffusion2D(
-    0.0, 1.0, n, 0.0, 1.0, n, u0,
+    0.0, 1.0 - 1.0 / n, n, 0.0, 1.0 - 1.0 / n, n, u0,
     diffusivity=[2e-5, 1e-5], reaction="gray_scott",
     params={"feed": 0.037, "kill": 0.06}, boundary="periodic",
 )
@@ -313,7 +314,7 @@ Classes are grouped by kernel family. All stateful classes expose at least
 
 | Class | Kernel | Order | Notes |
 |-------|--------|-------|-------|
-| `Heat1D` | `DiffusionChernoff` | 2 | Unit or variable-`a`; `.with_a_array` / `.with_a_function` factories |
+| `Heat1D` | `DiffusionChernoff` | 2 (`1 + richardson`) | Unit or variable-`a`; `.with_a_array` / `.with_a_function` factories; `.evolve(t, n_steps, richardson=L)` Richardson extrapolation (`1 ≤ L ≤ 6`, f64 only, ADR-0207) |
 | `Heat1D4th` | `Diffusion4thChernoff` | 4 | 4th-order temporal; `.with_a_array` |
 | `Heat1D6th` | `Diffusion6thChernoff` | 6 | 6th-order temporal; `.with_a_array` |
 | `Heat1DZeta4` | `Diffusion4thZeta4Chernoff` | 4 | ζ⁴ kernel; `.with_quintic_sampling()` opt-in |
@@ -329,7 +330,7 @@ Classes are grouped by kernel family. All stateful classes expose at least
 
 | Class | Kernel | Order | Notes |
 |-------|--------|-------|-------|
-| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)`; `reaction_solver="rosenbrock"` (`rtol`, `atol`, `jacobian=`) for stiff kinetics (ADR-0212); `K×K` `diffusivity` matrix for cross-diffusion (ADR-0213) |
+| `ReactionDiffusion1D` | `ReactionDiffusion` + `DiffusionChernoff` | 2 (`1 + richardson`) | `K` species, `u0` `(K, n)`; built-in kinetics or callable `f(t, x, u)`; `reaction_solver="rosenbrock"` (`rtol`, `atol`, `jacobian=`) for stiff kinetics (ADR-0212); `K×K` (`K ≤ 16`) `diffusivity` matrix for cross-diffusion (ADR-0213) |
 | `ReactionDiffusion2D` | … + `Strang2D` | 2 | `u0` `(K, ny, nx)` |
 | `ReactionDiffusion3D` | … + `Strang3D` | 2 | `u0` `(K, nz, ny, nx)` |
 
@@ -574,11 +575,11 @@ Python boundary.
 
 | Class | Constructor | Key methods | Notes |
 |-------|-------------|-------------|-------|
-| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100) -> NDArray` (`path`: `"chebyshev"`, `"lanczos"`, `"implicit"`, `"rational"`), `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent`, `.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64, solver="auto", precond="ic0") -> RationalKrylov` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
+| `SymmetricOperator` | `.from_csr(indptr, indices, data, n, sym_tol=1e-10)` | `.evolve_batched(t, v_nc, path="chebyshev", tol=1e-10, m_max=None, n_steps=100, cg_max_iter=None) -> NDArray` (`path`: `"chebyshev"`, `"lanczos"`, `"implicit"`, `"rational"`), `.n()`, `.lambda_max_bound()`, `.with_diagonal(c)`, `.to_csr()`, `.lumped_congruence(masses)`, `.resolvent(lam=0.0, mass=None, solver="auto", precond="ic0", tol=1e-12, max_iter=None) -> SpdResolvent`, `.rational_krylov(t, mass=None, tol=1e-10, gamma=None, m_max=64, solver="auto", precond="ic0") -> RationalKrylov` | Externally-assembled symmetric PSD sparse operator from CSR arrays; feeds Krylov expmv and Fréchet VJP (`symmetric_op_expmv_frechet`) (§55); `with_diagonal` adds a local reaction `A + diag(c)`, `to_csr` round-trips with `from_csr`, `resolvent` factors `(λM + A)` for steady solves (§62) |
 | `RationalKrylov` | `SymmetricOperator.rational_krylov(...)` | `.apply(v) -> (NDArray, dict)`, `.apply_batched(v_nc) -> NDArray`, `.t`, `.gamma`, `.n` | `e^{-t M⁻¹A}v` by shift-and-invert Lanczos on one factor of `M/γ + A`: the solve count is an a-priori bound independent of `λ_max·t` (27 solves at `tol = 1e-10`); tridiagonal M-matrices use a cancellation-free factor (no rounding floor up to `λ_max·t = 1e10` on the gate carriers), other patterns PCG (ADR-0206, §66) |
 | `ConservativeDiffusionChernoff` | `.from_k_array(n, x_lo, x_hi, k_nodes, r_contact=None, boundary="neumann")` | `.to_symmetric_operator() -> SymmetricOperator`, `.n()`, `.dx()` | Order-2 FV divergence-form `∂_x(k(x)∂_x u)` with harmonic-mean face conductivities; bridge to `SymmetricOperator` Krylov path (§56) |
 | `GeneralOperator` | `.from_csr(n, indptr, indices, data)` | `.evolve_batched(t, v_nc, method="taylor", tol=1e-10, m=30) -> NDArray`, `.apply_transpose(v) -> NDArray`, `.n()`, `.norm_inf_bound()` | Externally-assembled **possibly non-symmetric** CSR operator; `e^{-tA}v` via the symmetry-agnostic Al-Mohy–Higham Taylor `expmv` (cost `Θ(t‖A‖_∞)` matvecs, §57, ADR-0195) or, with `method="krylov"`, adaptive Arnoldi (far fewer matvecs at large `t‖A‖`: 2.3–4.4× faster with the default `m=30`, up to 12× with `m=15`, at `t‖A‖ = 4·10³ … 4·10⁵` on a stencil, ADR-0211). Drifted Fokker–Planck and inventory-ladder generators, which `SymmetricOperator` rejects |
-| `SpdResolvent` | built by `SymmetricOperator.resolvent(...)` | `.solve(b) -> NDArray`, `.solve_batched(B) -> NDArray`, `.solve_info(b) -> (x, iterations, rel_residual)`, `.method`, `.n` | Factor-once / solve-many `x = (λM + A)⁻¹ b` of an SPD operator, `λ ≥ 0`, `M = diag(mass) > 0`. Tridiagonal: exact `O(n)` LDLᵀ; otherwise PCG with IC(0) or Jacobi. The GIL is released during the solve. PCG is `O(√κ·nnz)` per solve; no multigrid (§62, ADR-0202) |
+| `SpdResolvent` | built by `SymmetricOperator.resolvent(...)` | `.solve(b) -> NDArray`, `.solve_batched(b) -> NDArray` (`b` of shape `(n, nc)`), `.solve_info(b) -> (x, iterations, rel_residual)`, `.method`, `.n` | Factor-once / solve-many `x = (λM + A)⁻¹ b` of an SPD operator, `λ ≥ 0`, `M = diag(mass) > 0`. Tridiagonal: exact `O(n)` LDLᵀ; otherwise PCG with IC(0) or Jacobi. The GIL is released during the solve. PCG is `O(√κ·nnz)` per solve; no multigrid (§62, ADR-0202) |
 | `MassKOperator` | `.from_k_and_mass(k_op, m_dense)` | `.evolve(t, v, path="chebyshev", tol=1e-10, m_max=18, n_steps=100) -> NDArray`, `.n()` | Consistent-mass operator `Â = R⁻ᵀ K R⁻¹` where `M = RᵀR`; applies `e^{-t M⁻¹ K}` via Krylov (§55.4) |
 | `Etdrk4` | `.from_symmetric_op(op, nonlinearity, h, phi="taylor", tol=1e-10)` (`phi="krylov"`: adaptive Arnoldi φ, ADR-0211) | `.step(u) -> NDArray`, `.integrate(u0, n_steps) -> NDArray` | Cox-Matthews ETDRK4 for `u' = -Au + N(u)`; `"allen_cahn"` nonlinearity `N(u) = u − u³`; arbitrary Python callbacks NOT supported (ADR-0189, §58.3) |
 
@@ -644,9 +645,11 @@ Indicative timings on i7-12700K (1000 nodes, 100 steps, `Heat1D`):
 
 `.with_a_array` uses a pure-Rust `Arc<Vec<f64>>` Catmull-Rom interpolant and
 never re-acquires the GIL during `evolve`. `.with_a_function` calls the Python
-callable once per node per τ-keyed step plan (ADR-0215) — once per `evolve` call
-of `n ≥ 2` steps, per chunk of `evolve_chunked`, per Richardson level — not once
-per step; prefer `.with_a_array` for many single-step calls.
+callables about 10 times per node (`a` twice, `a_prime` 7×, `a_double_prime`
+once) per τ-keyed step plan (ADR-0215). There is one plan per `evolve` call of
+`n ≥ 2` steps, per chunk of `evolve_chunked` (of ≥ 2 steps) and per Richardson
+level, not one per step. Single-step calls, and grids whose plan exceeds 2²²
+doubles, pay the callbacks on every step; prefer `.with_a_array` for those.
 
 ## Type stubs
 

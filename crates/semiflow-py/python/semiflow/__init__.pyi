@@ -72,13 +72,14 @@ class Heat1D:
         n_steps : int, optional
             Number of Chernoff steps (default 100).  Must be >= 1.
         richardson : int, optional
-            Richardson levels ``L`` (default 1, f64 only): combines runs with
-            ``n, 2n, …, Ln`` steps (ADR-0207), order ``L + 1`` for smooth data.
+            Richardson levels ``L`` (``1 ≤ L ≤ 6``, default 1, f64 only): combines
+            runs with ``n, 2n, …, Ln`` steps (ADR-0207), order ``L + 1`` for smooth data.
 
         Raises
         ------
         SemiflowError
-            kind='OutOfDomain' if t < 0, t is non-finite, or n_steps == 0.
+            kind='OutOfDomain' if t < 0, t is non-finite, n_steps == 0,
+            richardson == 0 or > 6, or richardson != 1 with dtype='f32'.
         """
         ...
 
@@ -1163,7 +1164,11 @@ class SemiflowError(Exception):
 
 
 def version() -> str:
-    """Return the semiflow-py crate version string (e.g. '0.10.0')."""
+    """Return the semiflow-py crate version string (e.g. '0.15.0-beta').
+
+    The Cargo form; ``importlib.metadata.version("semiflow-pde")`` reports the
+    PEP 440 form (``'0.15.0b0'``).
+    """
     ...
 
 
@@ -6648,6 +6653,12 @@ def mass_lumped_evolve(
 
     Parameters
     ----------
+    path : str, optional
+        ``"chebyshev"`` (default), ``"lanczos"``, ``"implicit"`` or ``"rational"``
+        (ADR-0206: works with ``M`` directly, no congruence); an unknown name raises
+        ``SemiflowError(kind="Unsupported")``.
+    m_max : int or None, optional
+        Max Krylov dimension (Lanczos default 18, rational default 64).
     n_steps : int, optional
         Backward-Euler sub-steps (``path="implicit"`` only; default 100).
 
@@ -6728,8 +6739,9 @@ class RationalKrylov:
         self, v: NDArray[np.float64]
     ) -> tuple[NDArray[np.float64], dict[str, float | int]]:
         """``(y, report)``; ``report`` has ``solves``, ``krylov_dim``, ``est_error``,
-        ``inner_iterations``. Raises ``SemiflowError(kind="ConvergenceFailed")`` if
-        the a-priori Krylov dimension for ``tol`` exceeds ``m_max``."""
+        ``inner_iterations``. Raises ``SemiflowError``: ``GridMismatch`` if ``v`` has
+        the wrong length or is non-contiguous; ``ConvergenceFailed`` if the a-priori
+        Krylov dimension for ``tol`` exceeds ``m_max``."""
         ...
 
     def apply_batched(self, v_nc: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -6763,7 +6775,11 @@ class SpdResolvent:
         ...
 
     def solve(self, b: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Solve ``(λM + A) x = b``; ``b`` and result have shape ``(n,)``."""
+        """Solve ``(λM + A) x = b``; ``b`` and result have shape ``(n,)``.
+
+        Raises ``SemiflowError``: ``GridMismatch`` (wrong length / non-contiguous),
+        ``NanInf`` (non-finite ``b``), ``ConvergenceFailed`` (PCG cap or breakdown).
+        """
         ...
 
     def solve_batched(self, b: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -6851,7 +6867,8 @@ class GeneralOperator:
     - Cost is ``Theta(t * ||A||_inf)`` matvecs on the default Taylor path —
       **linear in the depth, not flat**. ``evolve_batched(method="krylov")``
       (adaptive Arnoldi, ADR-0211) needs far fewer matvecs at large
-      ``t * ||A||`` (2.3-12x faster at 4e3 ... 4e5 on a stencil).
+      ``t * ||A||`` (2.3-4.4x faster with the default ``m=30``, up to 12x with
+      ``m=15``, at 4e3 ... 4e5 on a stencil).
     - Only the **backward** error is certified. For a severely non-normal ``A``
       the forward error can exceed the backward radius by ``kappa(V)``, which is
       not estimated.
@@ -6888,6 +6905,10 @@ class GeneralOperator:
 
         ``method="taylor"`` (default) or ``"krylov"`` (adaptive Arnoldi, ADR-0211:
         ``tol`` relative to ``‖v‖₂``, Krylov dimension ``m``).
+
+        Raises ``SemiflowError``: ``kind='GridMismatch'`` if ``v_nc.shape[0] != n``;
+        ``kind='OutOfDomain'`` if ``t`` is negative or non-finite or ``method`` is
+        unknown; ``kind='ConvergenceFailed'`` if the Krylov substep cap is hit.
         """
         ...
 
@@ -6988,7 +7009,7 @@ class _ReactionDiffusion:
     (classical RK4 with ``substeps`` per reaction step, or with
     ``reaction_solver="rosenbrock"`` the adaptive L-stable ROS2 step for stiff
     kinetics, tolerances ``rtol``/``atol``, ADR-0212). A ``K×K`` ``diffusivity``
-    matrix ``D`` selects cross-diffusion ``∂ₜu = DΔu + f`` (ADR-0213): ``D`` must be
+    matrix ``D`` (``K ≤ 16``) selects cross-diffusion ``∂ₜu = DΔu + f`` (ADR-0213): ``D`` must be
     diagonalisable with real eigenvalues ``≥ 0`` (verified; complex, negative or
     (nearly) defective ``D`` raise ``OutOfDomain``), and each diffusion step mixes
     the species into the modes of ``D`` and back. The GIL is released
@@ -7034,10 +7055,10 @@ class ReactionDiffusion1D(_ReactionDiffusion):
         n: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]], NDArray[np.float64]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
-        boundary: str = "reflect",
+        boundary: BoundaryLiteral = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
         reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
@@ -7061,10 +7082,10 @@ class ReactionDiffusion2D(_ReactionDiffusion):
         ny: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]], NDArray[np.float64]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
-        boundary: str = "reflect",
+        boundary: BoundaryLiteral = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
         reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
@@ -7091,10 +7112,10 @@ class ReactionDiffusion3D(_ReactionDiffusion):
         nz: int,
         u0: NDArray[np.float64],
         *,
-        diffusivity: Union[Sequence[float], Sequence[Sequence[float]]],
+        diffusivity: Union[Sequence[float], Sequence[Sequence[float]], NDArray[np.float64]],
         reaction: Union[ReactionName, Kinetics],
         params: dict[str, Any] | None = None,
-        boundary: str = "reflect",
+        boundary: BoundaryLiteral = "reflect",
         substeps: int = 1,
         t0: float = 0.0,
         reaction_solver: Literal["rk4", "rosenbrock"] = "rk4",
@@ -7106,5 +7127,9 @@ class ReactionDiffusion3D(_ReactionDiffusion):
 
 def richardson_weights(order: int, levels: int) -> list[float]:
     """Weights ``w_j`` for step counts ``(j+1)·n``, ``j < levels``, that cancel the
-    error terms ``n^{-order}``, …, ``n^{-(order+levels-2)}`` (ADR-0207)."""
+    error terms ``n^{-order}``, …, ``n^{-(order+levels-2)}`` (ADR-0207).
+
+    Raises ``SemiflowError(kind="OutOfDomain")`` unless ``1 <= order < 2**32 - 1``
+    and ``1 <= levels <= 6``.
+    """
     ...

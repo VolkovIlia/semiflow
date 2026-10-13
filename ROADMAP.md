@@ -12,7 +12,7 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
-## Performance overhaul + semilinear systems (ADRs 0204–0209) — DONE (branch `claude/jolly-cori-x6wbmd`)
+## Performance overhaul + semilinear systems (ADRs 0204–0209) — DONE (0.15.0-beta)
 
 - Correctness audit: issue #44, matrix exponentials (`M ≤ 4`), `MassKOperator`
   bound, Lanczos cap, drift-reaction adjoint, Jacobi diagonal (ADR-0205).
@@ -28,7 +28,7 @@ Math fidelity is tracked per-release in `docs/audit-findings-v{N}.md`.
 
 ---
 
-## Roadmap completion (ADR-0124 Amdt 1, ADRs 0206, 0210–0215) — DONE (branch `claude/jolly-cori-x6wbmd`)
+## Roadmap completion (ADR-0124 Amdt 1, ADRs 0206, 0210–0215) — DONE (0.15.0-beta)
 
 Done:
 - **Bug:** the Python/FFI/WASM `MatrixDiffusion2D/3D` applied the coupling once
@@ -132,7 +132,7 @@ check (`scripts/check_gate_coverage.py`) that fails CI if the enumeration drifts
 again — it already had, four binaries' worth, within a day of being written (nightly + every
 `v*` tag, `-- --include-ignored`), `--all-features` on the `ci.yml` clippy job,
 and the 346-diagnostic lint backlog that second change exposed. Details in
-`docs/release-process.md` §3b and the `[Unreleased]` CHANGELOG section.
+`docs/release-process.md` §3b and the `[0.14.0-beta]` CHANGELOG section.
 
 First finding from actually running them: `G_SMOLYAK_D5` exceeds 40 min on a
 12-core host against a documented "~10-30 s", and `G_SMOLYAK_D6` hits the same
@@ -221,7 +221,7 @@ via the existing symmetry-agnostic `expmv` Taylor engine rather than new Arnoldi
 
 ---
 
-## Issue #16 — Implicit / shift-invert stiff mode for `SymmetricOperator` (ADR-0190, math §59) — IN PROGRESS (branch `feat/issue-16-implicit-symmetric-operator`)
+## Issue #16 — Implicit / shift-invert stiff mode for `SymmetricOperator` (ADR-0190, math §59) — DONE (`path="implicit"` in 0.12.0-beta; IC(0) and rational shift-and-invert Krylov, ADR-0202/0206, in 0.15.0-beta)
 
 Single-issue additive feature. No breaking changes to any existing kernel, gate,
 or PyO3 surface.
@@ -242,9 +242,13 @@ New `KrylovPath::ImplicitEuler { n_steps }` enum arm in `graph_krylov.rs`; all
 Gates: `G_SYMOP_IMPLICIT_DENSE` ≤ 1e-9; `G_SYMOP_IMPLICIT_STIFF` ≤ 1e-9;
 `G_SYMOP_IMPLICIT_PCG_SPD` structural.
 Honest limits: accuracy is O(Δt) = O(t/n_steps); cost governed by `√κ`
-(Jacobi) — NOT strictly `λ_max`-independent. IC(0) (zero-fill incomplete Cholesky,
-keeps `S` sparsity, near-constant cost for well-structured FEM) is §59.6
-deferred work. SDIRK2 (order-2 L-stable) reusing the same `P` is a further deferral.
+(Jacobi) — NOT strictly `λ_max`-independent. The `ImplicitEuler` path keeps Jacobi
+and stays bit-identical. IC(0) (zero-fill incomplete Cholesky) shipped in
+0.15.0-beta in the `SpdResolvent` PCG path (ADR-0202), which rational
+shift-and-invert Krylov (ADR-0206, `path="rational"`) uses for non-tridiagonal
+operators: its number of solves does not depend on `λ_max·t` (27 at
+`tol = 1e−10`), but each PCG solve still costs `O(√κ·nnz)` (no multigrid).
+SDIRK2 (order-2 L-stable) reusing the same `P` remains deferred.
 
 ---
 

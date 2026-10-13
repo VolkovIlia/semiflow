@@ -19,8 +19,8 @@ packages (they share one version number).
 
 | Version  | Status      |
 |----------|-------------|
-| 0.13.x   | Supported   |
-| < 0.13   | Unsupported — upgrade to the latest 0.13.x |
+| 0.15.x   | Supported   |
+| < 0.15   | Unsupported — upgrade to the latest 0.15.x |
 
 ## Reporting a Vulnerability
 

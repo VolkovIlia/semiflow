@@ -13,8 +13,8 @@ correctness audit. Highlights:
 
 - **Faster, bit-identical grid engines.** Prepared sampling (ADR-0204) and
   τ-keyed step plans (ADR-0215): heat 1-D 2.6–5.5×, `Strang2D` `400²` 2.1–3.0×,
-  `Strang3D` `64³` 1.6–2.2× over the prepared-sampling build, itself 2.2–3.2× over
-  0.14.0-beta; separable N-D sampling (ADR-0214): `SmolyakD6V8.apply` ≈ 50 s →
+  `Strang3D` `64³` 1.6–2.2× over the prepared-sampling build, itself 2.2–3.2×
+  (39× for `Diffusion4th` with Chebyshev sampling) over 0.14.0-beta; separable N-D sampling (ADR-0214): `SmolyakD6V8.apply` ≈ 50 s →
   0.09 s. Proven bit-identical by 0-ULP gates and the unchanged `no_std` digests.
 - **New algorithms for stiff operators.** One-expansion Chebyshev and a-priori
   Lanczos schedules (ADR-0205; issue #16 operator 559× faster and accurate),
@@ -26,29 +26,38 @@ correctness audit. Highlights:
 - **Semilinear systems.** `ReactionDiffusion` on every engine (ADR-0208), adaptive
   Rosenbrock (ROS2) kinetics for stiff chemistry (ADR-0212), constant-matrix
   cross-diffusion by exact modal splitting (ADR-0213) and Richardson extrapolation
-  for any engine (ADR-0207); Python `ReactionDiffusion1D/2D/3D`.
+  for any fixed-order engine (ADR-0207); Python `ReactionDiffusion1D/2D/3D`.
 - **Python 3.15** (ADR-0209): PyO3 0.29, one abi3 wheel for CPython 3.10–3.15.
 - **Fixes** (see Fixed): `MatrixDiffusion2D/3D` (Python, C FFI, WASM) applied the
   coupling once per axis; `MatrixDiffusionChernoff` exponentiated the wrong
   matrices; issue #44 (a non-finite norm bound is now an error); `MassKOperator`
-  `λ_max`; the Lanczos `m_max` cap; the `DriftReactionChernoff` adjoint.
+  `λ_max`; the Lanczos `m_max` cap; the `DriftReactionChernoff` adjoint; the
+  documented `BoundaryPolicy::Periodic` period.
 
 **Compatibility.** The Rust API is additive over 0.14.0-beta (`cargo
 semver-checks`, minor); MSRV 1.81 and the `no_std` default build are unchanged.
 No C ABI change (the `smf_matrix2d/3d_*` results change for `c ≠ 0`: they were
-wrong). Output bits change only where stated (ADR-0203, ADR-0205, ADR-0210 and
-the fixes); the `no_std` digests `graph_krylov_chebyshev`,
-`graph_frechet_large_t` and `phi_combination` were re-recorded once, every other
-digest is unchanged. No gate threshold was loosened.
+wrong). Output bits change only where stated (ADR-0202 `phi_action` for inputs
+away from unit norm, ADR-0203, ADR-0205, ADR-0210 and the fixes). Against
+0.14.0-beta only the `no_std` digest `graph_krylov_chebyshev` changed (ADR-0205);
+five scenarios are new, with committed digests: `graph_frechet_large_t`
+(ADR-0203), `spdr_tridiag`, `spdr_pcg_ic0`, `phi_combination` (ADR-0202) and
+`ratkrylov_stiff` (ADR-0206). Every other digest is unchanged. No gate threshold
+was loosened, except in one redefined gate: `G_TPS_STIFF_STEPCOUNT` (ADR-0205) now
+counts total mat-vecs `Y = s·m`, as ADR-0188 defined; its economy clause is
+tightened `X/Y ≥ 100 → 300`, and its `Y ≤ 2√X` clause (3412), which no polynomial
+method can meet at `tol = 1e−12`, is replaced by the larger derived Bennett bound
+(9309).
 
 ### Performance overhaul and correctness audit (2026-10)
 
 The library was slow for algorithmic reasons, not for lack of micro-tuning.
 This section records the fixes and speedups in order; every existing gate
-threshold is unchanged or tightened, and every speedup that is claimed
+threshold is unchanged or tightened, except the redefined `G_TPS_STIFF_STEPCOUNT`
+(see Performance (new algorithms)), and every speedup that is claimed
 bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 
-#### Added — semilinear systems and extrapolation
+#### Added — rational Krylov (ADR-0206)
 
 - **Rational (shift-and-invert) Krylov action for stiff SPD operators (ADR-0206,
   math §66).** `RationalKrylov` / `rational_krylov_expmv` compute `e^{−tM⁻¹A}v` by
@@ -64,6 +73,10 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `RationalKrylovChernoff` plugs it into `evolve_batched`. Gates
   `G_RATKRYLOV_NEUMANN_ORACLE`, `G_RATKRYLOV_SOLVE_COUNT`, `G_RATKRYLOV_MASS_DENSE`,
   `G_RATKRYLOV_ISSUE16`, `G_RATKRYLOV_PCG_GRID`; no_std scenario `ratkrylov_stiff`.
+  Options `RationalOptions` {`tol`, `gamma`, `m_max`, `solver`}, report
+  `RationalReport` {`solves`, `krylov_dim`, `est_error`, `inner_iterations`}.
+
+#### Added — semilinear systems and extrapolation
 
 - **Reaction–diffusion systems on every engine (ADR-0208, math §64.1).**
   `ReactionDiffusion` evolves `∂ₜu_k = L_k u_k + f_k(t, x, u)`, `K` species,
@@ -77,7 +90,7 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `FnReaction`; `Species<S>`, `NodalField`. Gates `G_SEMILIN_*` (exact
   fronts of Fisher–KPP and Nagumo, MMS, commuting linear system, Gray–Scott
   2-D).
-- **Richardson extrapolation for any engine (ADR-0207, math §64.2).**
+- **Richardson extrapolation for any fixed-order engine (ADR-0207, math §64.2).**
   `Evolver::evolve_extrapolated_into(t, levels, …)`, `extrapolate_into` for any
   `StepIntegrator` (`Evolver`, `ReactionDiffusion`), `richardson_weights`.
   Order `p` → `p + levels − 1`; `ShiftChernoff1D` at 96 steps: 3.3e-4 → 7.2e-8.
@@ -90,6 +103,7 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `gamma`, `n`); `evolve_batched(..., path="rational")` and
   `mass_lumped_evolve(..., path="rational")`. `m_max` of `evolve_batched` /
   `mass_lumped_evolve` now defaults to `None` (18 for Lanczos, 64 for rational).
+  A `mass` of the wrong length raises `GridMismatch`.
 
 - `ReactionDiffusion1D/2D/3D(..., reaction_solver="rk4" | "rosenbrock", rtol=1e-6,
   atol=1e-9, jacobian=None)`; `jacobian(t, x, u) -> (K, K, N)` for a callable
@@ -117,10 +131,10 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 - Chebyshev, Lanczos and general Taylor actions (and everything built on them:
   `GraphKrylovChernoff`, Fréchet gradients, `CsrExpmvChernoff`, ETDRK4) return
   different bits — within their tolerance, and more accurately — see ADR-0205.
-- `KrylovPath::Lanczos { m_max }` with an `m_max` that cannot reach `tol` at
-  any substep count (`m_max = 1`) returns `DomainViolation` instead of an
-  under-resolved result.
-- `FrechetPlan` (unreleased) gains `chain_weight` and is `#[non_exhaustive]`.
+- `KrylovPath::Lanczos { m_max }` whose a-priori schedule would need more than
+  10¹⁵ substeps returns `DomainViolation` instead of an under-resolved result:
+  `m_max = 1` (or 0) once `λτ` exceeds about `tol`, and `m_max = 2` once
+  `λτ ≳ √(8·10¹⁵·tol)` (≈ 900 at `tol = 1e-10`).
 
 #### Fixed
 
@@ -130,6 +144,15 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
 - Stale docs: `MatrixDiffusionChernoff` claimed closed-form exponentials for M ≤ 4 (closed
   form is M ≤ 2; M ≥ 3 uses Padé[13/13]); `PHI_NORM_TIGHTEN` quoted a pre-ADR-0198
   schedule (now pinned by a `phi_cost_probe` doctest: `τ‖G‖ = 2` → `(s, m) = (3, 30)`).
+- **`BoundaryPolicy::Periodic` (Python `boundary="periodic"`) was documented with
+  period `(n − 1)·dx`; every grid sampler and engine uses period `n·dx` (node `n`
+  is node `0`).** Sample a function of period `L` on `[xmin, xmin + L − dx]`. A
+  grid whose last node repeats the first diffuses with an `O(dx)` error (`2.2e−2`
+  at `n = 65` for `sin(2πx)`, ADR-0213). Docs only; no bits change. Exception: the
+  `ChebyshevSpectralWithBC` out-of-domain path wraps with `xmax − xmin`; aligning
+  it changes bits and needs its own ADR (ROADMAP).
+- The Python stub of `Etdrk4.from_symmetric_op` no longer advertises defaults for
+  the required `nonlinearity` and `h` (the binding never had them).
 
 - **Issue #44 — a non-finite operator norm bound is an error, never a silent
   schedule.** Finite entries can overflow the Gershgorin / row-sum bound (2×2
@@ -195,7 +218,7 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   the same functions in the same order. The ζ-corrections of
   `Diffusion4th`/`6th` sample their shared stencil points once instead of three
   times, and hoist the per-node `libm::pow` calls. Bit-identical (gate
-  `G_PLAN_BIT_EQUAL`, all `no_std` digests unchanged). Measured (this
+  `G_PLAN_BIT_EQUAL`, every `no_std` grid-engine digest unchanged). Measured (this
   container, best of 5): `ShiftChernoff1D` 17.9 → 6.3 ms, `DiffusionChernoff`
   const-a 29.2 → 9.4 ms, variable-a 73.2 → 27.9 ms, `Diffusion6th` 21.9 → 6.8 ms,
   `Diffusion4th` + Chebyshev sampling 104 → 2.7 ms, `Strang2D` 400² 3.30 → 1.14 s,
@@ -217,8 +240,9 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   the Taylor radii `θ_m` (`λh ≤ 1.09` at `m = 18`) plus a dense Padé-13 per
   substep; now the Hochbruck–Lubich and Chebyshev-interpolation (`4xᵐ/m!`)
   bounds and an `O(m²)` tridiagonal eigen-solve. 3.8–5.1× faster (gate
-  `G_LANCZOS_HL_COST`); `m_max` is no longer tied to 18; an unschedulable
-  `m_max` (1) is an error.
+  `G_LANCZOS_HL_COST`); `m_max` is no longer tied to 18; an `m_max` whose
+  schedule needs more than 10¹⁵ substeps (`m_max = 1`; `m_max = 2` above
+  `λτ ≈ 900` at `tol = 1e-10`) is an error.
 - **ETDRK4: four φ sweeps per step instead of nine.** Each stage is one
   `phi_combination` (`Σ τᵏφₖ(τL)wₖ`) sweep. Exactly `3·C(h/2) + C(h)`
   generator applications per step, 2.25–2.6× fewer (gate `G_ETDRK4_SWEEPS`);
@@ -229,17 +253,19 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   accessor `GeneralOperator::taylor_norm_bound`. `CsrExpmvChernoff::apply_into`
   no longer allocates (scratch pool).
 - **Fréchet gradients** inherit the Chebyshev speedup in every propagator call.
-  `FrechetPlan` gains `chain_weight` and the §63.7.a bound uses it (rounding
+  The §63.7.a bound uses `FrechetPlan::chain_weight` (rounding
   `Σ(zᵢ/2 + mᵢ)` along a chain, Skellam variance identity) instead of
   `N_chain·m_max²`; the bound is 1.03–25× TIGHTER at every gate point
-  (Amendment 4). The SpMV bound `B(ρ̄t)` is re-derived (`√(6L·N·ρ̄t) + N·2L/3`,
-  never above the old one, asserted).
+  (math §63.7.a Amendment 4; ADR-0205 Decision 6). The SpMV bound `B(ρ̄t)` is
+  re-derived (`√(6ℓ·N·ρ̄t) + N·2ℓ/3`, `ℓ = ln(8/tol)`, never above the
+  Amendment-1 substep bound, asserted).
 - `G_TPS_STIFF_STEPCOUNT` now counts what ADR-0188 defined (total mat-vecs,
   not the per-substep degree; the old kernel had `X/Y = 3.96` under that
   definition): `X/Y ≥ 300` (was 100), `Y ≤` the Bennett bound (was `2√X`,
   below the minimax degree at `tol = 1e-12`). Measured 7.35e5 → 8829 mat-vecs.
-- Re-recorded once: `no_std` digests `graph_krylov_chebyshev`,
-  `graph_frechet_large_t` (identical in `no_std`, `std-ref`, AVX2).
+- Re-recorded once: `no_std` digest `graph_krylov_chebyshev` (identical in
+  `no_std`, `std-ref`, AVX2); `graph_frechet_large_t`, new in this release, is
+  recorded after this change.
 
 #### Performance (new algorithms; output bits change, ADR-0210)
 
@@ -256,8 +282,8 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `SymmetricLinearOp::csr_view`; new probe `phi_sweep_probe(op, τ)` (the schedule
   actually used; `phi_cost_probe` stays the unshifted norm-only probe). Accuracy
   `≤ 7.1e−15` against the dense augmented exponential (`G_PHI_SHIFT_DENSE`);
-  bitwise power-of-two homogeneity kept (`G_PHI_SHIFT_HOMOGENEITY`). Re-recorded
-  once: `no_std` digest `phi_combination`.
+  bitwise power-of-two homogeneity kept (`G_PHI_SHIFT_HOMOGENEITY`). The
+  `phi_combination` digest, new in this release, is recorded with the shift.
 
 #### Added — stiff kinetics (ADR-0212)
 
@@ -310,14 +336,18 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   with adaptive clustering (well-conditioned non-normal and close-spectrum `D` are
   accepted) and verifies in `f64` for every scalar type. `NodalField::mixes_with` (provided, default `false`) admits only
   fields on the same nodes with one homogeneous linear boundary. Python:
-  `ReactionDiffusion*(…, diffusivity=[[…], …])`. `BoundaryPolicy::Periodic` doc
-  corrected (period `n·dx`). Gates `G_CROSSDIFF_GRAPH_EXACT`
+  `ReactionDiffusion*(…, diffusivity=[[…], …])`. Also
+  `CrossDiffusion::from_modes(p, λ)` (`λ ≥ 0`, `cond₁(P) ≤ 1e8` checked),
+  `species()`, `eigenvalues()`, `modes()`, `inverse_modes()`;
+  `CrossDiffusion::<f32>` rejects a decomposition that overflows `f32`. Gates
+  `G_CROSSDIFF_GRAPH_EXACT`
   (`≤ 2e−15`), `G_CROSSDIFF_STRANG_ORDER`, `G_CROSSDIFF_FOURIER_GRID`,
   `G_CROSSDIFF_REJECT`.
 
 #### Added — adaptive Krylov φ / exponential actions (ADR-0211)
 
-- **`phi_combination_krylov`, `expmv_krylov`, `PhiSolver`.** Expokit-style adaptive
+- **`phi_combination_krylov`, `expmv_krylov`, `PhiSolver`, `KrylovPhiOptions`,
+  `KrylovPhiReport`.** Expokit-style adaptive
   Arnoldi (Sidje 1998) on the η-scaled augmented φ operator: `Σ τᵏφ_k(τG)w_k` for
   any `GeneratorAction` (non-symmetric welcome) and `e^{−τA}v` for a
   `GeneralOperator`, with far fewer generator applications than the Taylor path at
@@ -330,7 +360,10 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   `Etdrk4::with_phi_solver(PhiSolver::Krylov(..))` keeps order 4
   (`G_ETDRK4_KRYLOV_ORDER`). Gates `G_PHI_KRYLOV_DENSE`, `G_PHI_KRYLOV_TOL`. Honest
   limit: on cheap stencils below `τ‖G‖ ≈ 10³` the Taylor path is competitive and
-  stays the default; `est_error` is an estimate.
+  stays the default; `est_error` is an estimate. `PhiSolver::Krylov(KrylovPhiOptions)`
+  (`tol = 1e−10`, `m = 30`, `max_substeps = 100 000`); `KrylovPhiOptions {
+  max_substeps: 0 }` is a `DomainViolation`. `KrylovPhiReport` {`matvecs`,
+  `substeps`, `rejected`, `est_error`}.
 
 ### SPD resolvent, operator composition, φ-combination (ADR-0202, ADR-0203)
 
@@ -339,7 +372,7 @@ ADR-0202: an `O(N)` SPD resolvent / steady solve, operator composition, and a
 behaviour change in `phi_action` (see Changed). No ABI change; FFI and WASM are
 unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
 
-### Added
+#### Added
 
 - **`SpdResolvent` (Rust, Python).** `SymmetricOperator::resolvent(λ, mass,
   solver, tol)` factors `λ·M + A` once for repeated solves, `λ ≥ 0`, `M =
@@ -348,7 +381,9 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
   with IC(0) (reported fallback to Jacobi). `SolveReport` carries the iteration
   count and the true relative residual. Singular (`λ = 0` with a constant null
   vector), `n = 0`, overflow and stagnating systems return errors, not `Ok`. PCG
-  has no multigrid: cost is `O(√κ·nnz)` per solve.
+  has no multigrid: cost is `O(√κ·nnz)` per solve. `SpdSolver` {`Auto`,
+  `Tridiagonal`, `Pcg`}, `Precond` {`Ic0`, `Jacobi`}, `ResolventMethod`
+  {`Tridiagonal`, `PcgIc0`, `PcgJacobi`} (as returned by `SpdResolvent::method()`).
 - **Operator composition.** `SymmetricOperator::with_diagonal(c)` (`A + diag(c)`,
   `c ≥ 0`, inserts missing diagonal entries), `csr()` / `to_csr()` (round-trips
   with `from_csr`), and Python `lumped_congruence`.
@@ -377,7 +412,8 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
   old per-parameter loop, so external implementors keep working) with `O(nnz)`
   overrides for `EdgeWeightSensitivity`, `EntrySensitivity` and
   `NodeTimescaleSensitivity`.
-- `graph_expmv_frechet_plan` / `FrechetPlan`: pure predictor of node count,
+- `graph_expmv_frechet_plan` / `FrechetPlan` (`#[non_exhaustive]`; `chain_weight`
+  for the §63.7.a bound): pure predictor of node count,
   chain length, maximum degree and SpMV bound of one Fréchet channel (the
   accuracy gates derive their thresholds from it).
 - `GraphKrylovChernoff::{lambda_max_bound, tol, path}` accessors.
@@ -389,7 +425,7 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
   driven by exact eigen propagators, `ρ̄t`-floor-free bound) (RELEASE_BLOCKING) and `G_FRECHET_COST_LOG_NODES`
   (ADVISORY); evidence kit `scripts/frechet_large_t_kit.py`.
 
-### Changed
+#### Changed
 
 - **`phi_action` / `phi_action_batched` cost no longer depends on `‖v‖`.** The
   Taylor truncation `(s, m)` was chosen from `τ‖G‖ + ‖v‖∞ + 1`, so the substep
@@ -402,14 +438,8 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
 - `SemiflowError::ConvergenceFailed` is now returned in production (PCG iteration
   cap and gross-residual guard); its rustdoc no longer says it is reserved.
 
-### Fixed
+#### Fixed
 
-- Roadmap follow-ups: `KrylovPhiOptions { max_substeps: 0 }` is a
-  `DomainViolation` (it failed as `ConvergenceFailed { max_iter: 0 }`);
-  `CrossDiffusion::<f32>` rejects a decomposition that overflows `f32` instead of
-  storing `inf`; Python `SymmetricOperator.rational_krylov(mass=…)` of the wrong
-  length raises `GridMismatch`; the Python stub of `Etdrk4.from_symmetric_op` no
-  longer advertises defaults for the required `nonlinearity` and `h`.
 - The IC(0) preconditioner that §59.2 declared normative but `pcg.rs` never
   shipped is now implemented (zero fill-in, Jacobi fallback reported by
   `SpdResolvent::method()`). `ImplicitEuler` is untouched and bit-identical.
@@ -435,9 +465,9 @@ unchanged (neither binding has `SymmetricOperator` or `GeneralOperator`).
   bit-identically; `graph_expmv_frechet`'s signature is unchanged and
   `G_GRAPH_FRECHET_FD`, `G_SYMOP_ENTRY_FRECHET` and `T_ADJOINT_STATE_SENSITIVITY`
   keep their thresholds. Cost: `2 + 32(K+1)` propagator calls per channel (was
-  16) and `SpMV`s `≤ B(ρ̄t) = m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))`, which tends to
-  `6×` one action as `ρ̄t → ∞` (measured `5.4–25×` one action for
-  `ρ̄t = 1e6…1e3`; the old rule was `≈ 8×`). Operators must be PSD (§63.1.d;
+  16) and `SpMV`s `≤ B(ρ̄t) = √(6ℓ·N·ρ̄t) + N·2ℓ/3` (`N = 2 + 32(K+1)` calls,
+  `ℓ = ln(8/tol)`; §63.6.c Amendment 4, ADR-0205), so the cost per channel grows
+  like `√(ρ̄t·log ρ̄t)`. Operators must be PSD (§63.1.d;
   `SymmetricOperator::from_csr` does not check it).
 - The all-parameter contraction is `O(nnz)` per node (it was `O(n·n_params)`):
   an all-edges gradient now costs the same propagator actions as a single edge.

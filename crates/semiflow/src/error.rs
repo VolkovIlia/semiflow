@@ -12,7 +12,7 @@
 //! | [`SemiflowError::GridUnderresolved`] | use `suggested_n` nodes |
 //! | [`SemiflowError::CflViolated`] | use `tau_safe = 0.45 * dx² / a_norm_bound` |
 //! | [`SemiflowError::AdaptiveStepRejected`] | loosen `tol_rel`/`tol_abs`, coarsen grid |
-//! | [`SemiflowError::ConvergenceFailed`] | reserved; not returned in v0.11.0 |
+//! | [`SemiflowError::ConvergenceFailed`] | raise the cap that was hit (PCG `max_iter`, `RationalOptions::m_max`, `KrylovPhiOptions::max_substeps`, `RosenbrockOptions::max_steps`), loosen `tol`, or for PCG use a stronger `Precond` / the direct `LDLᵀ` path |
 //! | [`SemiflowError::Unsupported`] | enable the named feature flag |
 
 use core::fmt;
@@ -52,8 +52,10 @@ pub enum SemiflowError {
 
     /// Iterative solver did not converge within the iteration cap.
     ///
-    /// Returned by the PCG-based solvers (`ImplicitEuler` Krylov path and the
-    /// `SpdResolvent` PCG path) when the residual target is not met in the cap.
+    /// Returned when an iterative method hits its cap: the PCG solvers
+    /// (`ImplicitEuler` Krylov path, `SpdResolvent` PCG path, including its
+    /// gross-residual guard), rational Krylov (`m_max`), Krylov φ / `expmv`
+    /// (substep or rejection cap) and ROS2 kinetics (`max_steps`).
     ConvergenceFailed {
         /// Final residual when the solver gave up. `ImplicitEuler`: absolute recursive CG
         /// residual norm. `SpdResolvent`: relative true residual `‖b − Sx‖₂/‖b‖₂`.

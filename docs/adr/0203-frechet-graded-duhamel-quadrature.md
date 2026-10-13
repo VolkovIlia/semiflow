@@ -1,10 +1,10 @@
 # ADR-0203 — Fréchet gradient at large `λ_max·t`: two-sided graded Duhamel quadrature
 
-- **Status**: Proposed
+- **Status**: Accepted (implemented, PR #45; ships in 0.15.0-beta)
 - **Date**: 2026-10-06
 - **Amends**: ADR-0185 (A2 `graph_expmv_frechet`, §54.5), ADR-0186 (§55.5 entry
-  sensitivities, same code path). Independent of ADR-0202 (PR #43); numbering
-  skips 0202 only because that number is taken on the unmerged branch.
+  sensitivities, same code path). Independent of ADR-0202 (PR #43, developed in
+  parallel and merged first).
 - **Contract**: new `contracts/semiflow-core.math-frechet-large-t.md` (§63; pointer
   stub and a §54.5 note in `semiflow-core.math.md`). 5 RELEASE_BLOCKING + 1
   ADVISORY gates in `semiflow-core.properties.yaml`. Additive API only.

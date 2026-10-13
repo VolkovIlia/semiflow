@@ -368,9 +368,9 @@ where
 /// graded Gauss-Legendre mesh of §63.3, with quadrature error independent of `λ_max·t` (the
 /// pre-ADR-0203 single 8-point panel lost all digits beyond `λ_max·t ≈ 30`).
 /// Exact for ALL graph topologies, including non-commuting directions.
-/// Cost: `2 + 32(K+1)` propagator calls and `≤ m_Z·(3ρ̄t/Z_SAFE + 2 + 32(K+1))`
-/// `SpMV`s (§63.6.c; `→ 6×` one action as `ρ̄t → ∞`), plus `O(nnz)` per
-/// contraction; independent of `n_params` for the in-tree sensitivities.
+/// Cost: `2 + 32(K+1)` propagator calls and `≤ √(6ℓ·N·ρ̄t) + N·2ℓ/3` `SpMV`s
+/// (§63.6.c Amendment 4; `N` the call count, `ℓ = ln(8/tol)`; grows like
+/// `√(ρ̄t·log ρ̄t)`), plus `O(nnz)` per contraction; independent of `n_params` for the in-tree sensitivities.
 /// The f64 conditioning floor `≈ (r+n)·u·ρ̄t` of any `SpMV`-based method remains.
 /// `L` must be PSD (§63.1.d).
 /// With the `ImplicitEuler` path the result is the gradient of the backward-Euler

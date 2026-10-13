@@ -142,7 +142,7 @@ impl PySpdResolvent {
         Ok(x.as_slice().to_pyarray(py))
     }
 
-    /// Solve for ``nc`` right-hand sides at once. ``B`` is ``(n, nc)``; result too.
+    /// Solve for ``nc`` right-hand sides at once. ``b`` is ``(n, nc)``; result too.
     fn solve_batched<'py>(
         &self,
         py: Python<'py>,

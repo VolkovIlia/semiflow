@@ -1,6 +1,6 @@
 ---
-version: 1.5.0
-last_updated: 2026-09-28
+version: 1.5.1
+last_updated: 2026-10-13
 freshness_score: 1.0
 dependencies:
   - docs/adr/0028-ffi-pyo3-wasm-v0_10.md
@@ -27,6 +27,7 @@ changelog:
   - 1.3.0: Add v9.1.0 ADDITIVE surface (CoupledTtChernoff; ADR-0162)
   - 1.4.0: Add v9.2.0 ADDITIVE surface (six S3* types behind s3-poc; AxisCoef, CpTerm, CpCoef, CoefRole, Reaction promoted; ADR-0169; schema 4.14.0/4.15.0)
   - 1.5.0: 0.13.1-beta de-stale — current pre-1.0 status note; real package names and distribution channels; header is semiflow.h; internal pre-release version numbers labelled as such
+  - 1.5.1: current status note 0.13.x → 0.15.x (0.15.0-beta)
 ---
 
 # API Stability Policy
@@ -36,7 +37,7 @@ changelog:
 C ABI, `semiflow-pde` Python wheel (crate `semiflow-py`), `@semiflow/wasm` npm
 package (crate `semiflow-wasm`).
 
-> **Current status: 0.13.x beta.** SemiFlow is published as `0.x` betas (first
+> **Current status: 0.15.x beta.** SemiFlow is published as `0.x` betas (first
 > public release 0.9.0-beta). Until 1.0.0, a MINOR bump (0.x → 0.x+1) may carry
 > breaking changes, which are listed under `### Changed` / `### Removed` in
 > [`CHANGELOG.md`](../CHANGELOG.md); PATCH releases stay compatible. The

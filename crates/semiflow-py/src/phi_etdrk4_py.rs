@@ -252,8 +252,8 @@ pub fn phi_action_batched_py<'py>(
 ///     Diagonal mass ``M > 0`` (default identity).
 /// method : str
 ///     ``"taylor"`` (default: augmented Taylor sweep, ``Θ(τ‖G‖)`` generator
-///     applications) or ``"krylov"`` (adaptive Arnoldi, ADR-0211: about
-///     far fewer applications at large ``τ‖G‖``).
+///     applications) or ``"krylov"`` (adaptive Arnoldi, ADR-0211: far fewer
+///     applications at large ``τ‖G‖``).
 /// tol : float
 ///     Krylov accuracy relative to the augmented start vector (``"krylov"`` only).
 /// m : int

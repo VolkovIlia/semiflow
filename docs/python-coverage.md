@@ -372,8 +372,9 @@ Behaviour changes on the existing Python surface, not additions:
 
 ## 10. 0.15.0-beta surfaces (ADR-0202–0215)
 
-Python surface added in 0.15.0-beta. FFI and WASM gained nothing: `semiflow.h` is
-unchanged since 0.14.0-beta and no `#[wasm_bindgen]` export was added. Neither
+Python surface added in 0.15.0-beta. FFI and WASM gained nothing: `semiflow.h`
+declares nothing new since 0.14.0-beta (only a doc example changed) and no
+`#[wasm_bindgen]` export was added. Neither
 binding has a `SymmetricOperator` or `GeneralOperator` to extend (ADR-0202 D5), and
 ADR-0207/0208/0212/0213 define no C or JS surface.
 
@@ -414,7 +415,7 @@ Behaviour changes on the existing Python surface, not additions:
 | `MatrixDiffusion2D`, `MatrixDiffusion3D` (also FFI `smf_matrix2d/3d_*`, WASM) | `c_coupling ≠ 0` results change (they were wrong): the coupling was applied once per axis, `e^{2tC}` in 2-D and `e^{3tC}` in 3-D instead of `e^{tC}`; each axis now carries `c/d`. `c_coupling = 0` is bit-identical | ADR-0124 AM1 |
 | `phi_action`, `phi_action_batched` | cost no longer depends on `‖v‖` (`(s, m)` from `τ‖G‖` only); results move by at most the truncation tolerance, unchanged at unit norm | ADR-0202 |
 | `phi_action`, `phi_action_batched`, `phi_combination`, `Etdrk4` | φ sweeps run on the Gershgorin-midpoint-shifted augmented operator when that needs fewer generator applications; output bits change | ADR-0210 |
-| `SymmetricOperator.evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve` (`"chebyshev"`, `"lanczos"`), `GraphKrylov`, `GeneralOperator.evolve_batched` (Taylor), `Etdrk4` | one-expansion Chebyshev, a-priori Lanczos schedule, Taylor trace shift, four φ sweeps per ETDRK4 step instead of nine: output bits change, within tolerance and more accurate. A Lanczos `m_max` that cannot reach `tol` (`m_max = 1`) raises | ADR-0205 |
+| `SymmetricOperator.evolve_batched`, `mass_lumped_evolve`, `MassKOperator.evolve` (`"chebyshev"`, `"lanczos"`), `GraphKrylov`, `GeneralOperator.evolve_batched` (Taylor), `Etdrk4` | one-expansion Chebyshev, a-priori Lanczos schedule, Taylor trace shift, four φ sweeps per ETDRK4 step instead of nine: output bits change, within tolerance and more accurate. A Lanczos `m_max` whose schedule needs more than 10¹⁵ substeps (`m_max = 1`; `m_max = 2` above `λτ ≈ 900` at `tol = 1e-10`) raises | ADR-0205 |
 | `MassKOperator.evolve` | rigorous `λ_max(M⁻¹K)` bound; the Chebyshev path diverged on P1 consistent mass (relative error `1.7e11` at `n = 12`) | ADR-0205 |
 | `graph_expmv_frechet`, `symmetric_op_expmv_frechet` | graded Duhamel quadrature: error independent of `λ_max·t` (was `7e-4` at 53, `O(1e-2)` beyond ~100); results change numerically, not bit-identically; signature unchanged | ADR-0203 |
 | `GraphKrylov`, `SymmetricOperator.evolve_batched`, `GeneralOperator.evolve_batched`, `phi_*` without `mass`, `Graph.from_edges` | an operator whose norm bound overflows (finite entries, e.g. all `1e308`) raises `SemiflowError` instead of running a silently wrong schedule (issue #44) | ADR-0205 |
