@@ -11669,17 +11669,41 @@ implementation_notes:
     type: CONVERGENCE_ORDER
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (RK4 → 1.7e202; ROS2 slopes 1.87, 1.93; adaptive 0.92·rtol)"
+    pass_status: "PASS (RK4 → 1.7e202; ROS2 slopes 1.87, 1.93; adaptive 0.92·rtol; stiff mode 7.3e−12; forced slopes 2.11, 2.06, adaptive ≤ 0.15·rtol)"
     rationale: |
       ADR-0212: u′ = Cu with C = [[a, b], [b, a]], eigenvalues −1e6 (along (1, 1)) and
       −1 (along (1, −1)), on a 4-node field with identity diffusion, T = 1. RK4 with
-      one substep per half-step (hλ = −1e4) must blow up (error > 1e6), so the gate is
-      not vacuous; single ROS2 steps (rtol 0.5, atol 1e3: every step accepted whole)
-      converge with order 2 (slopes ∈ [1.8, 2.2] over n = 20, 40, 80) with the stiff
-      mode damped; adaptive ROS2 at rtol ∈ {1e−4, 1e−6, 1e−8} meets ≤ 10·rtol
-      (relative sup norm) against the exact e^{TC}u₀.
-    gate: "rk4 err > 1e6 AND slopes ∈ [1.8, 2.2] AND adaptive err ≤ 10·rtol"
+      one substep per reaction step, n = 10 (hλ = −5e4 on the end half-steps, −1e5 on
+      the 9 merged steps) must blow up (error > 1e6), so the gate is not vacuous;
+      single ROS2 steps (rtol 0.5, atol 1e3: every step accepted whole) converge with
+      order 2 (slopes ∈ [1.8, 2.2] over n = 20, 40, 80); the pure stiff mode (1, 1)
+      after two whole steps at z = −5e5 is ≤ 1e−9 (L-stability, R(∞) = 0: a
+      non-L-stable γ leaves ≈ R(∞)²); adaptive ROS2 at rtol ∈ {1e−4, 1e−6, 1e−8}
+      meets ≤ 10·rtol (relative sup norm) against the exact e^{TC}u₀. The same system
+      NON-AUTONOMOUS (forcing ±cos t on the slow mode; ∂f/∂t omitted, the W-method
+      claim): fixed-step slopes ∈ [1.8, 2.2] over n = 80, 160, 320 and adaptive
+      ≤ 10·rtol (a wrong stage-2 time gives slope ≈ 1 and ≥ 59·rtol).
+    gate: "rk4 err > 1e6 AND slopes ∈ [1.8, 2.2] AND stiff mode ≤ 1e−9 AND adaptive err ≤ 10·rtol (autonomous and slow-mode forced)"
     test_file: "tests/g_stiff_kinetics.rs"
+    feature_gate: none
+    introduced_in: audit-2026-10
+    authority: ADR-0212
+
+  - name: G_STIFF_KINETICS_PER_NODE
+    type: ORACLE_ACCURACY
+    severity: RELEASE_BLOCKING
+    blocks_release: true
+    pass_status: "PASS (worst node 0.83·rtol, analytic and FD, rtol 1e−4 / 1e−6 / 1e−8)"
+    rationale: |
+      ADR-0212: u′ = C(x)u with node-dependent C_i = R_i·diag(λ_i, −1)·R_iᵀ,
+      λ_i = −10^{6x_i} (−1 … −1e6 over the 4 nodes), R_i the rotation by
+      θ_i = 0.2 + 1.2x_i (partial pivoting swaps rows at two of the nodes), from
+      non-uniform data, T = 1: adaptive ROS2 with the analytic and the forward-difference
+      Jacobian meets ≤ 10·rtol at EVERY node against the exact per-node solution. Using
+      node 0's J / LU / pivots for every node fails it; the uniform fields of the other
+      gates cannot see per-node indexing.
+    gate: "max over nodes of the relative error ≤ 10·rtol (rtol ∈ {1e−4, 1e−6, 1e−8}, analytic and FD)"
+    test_file: "tests/g_stiff_kinetics_nodes.rs"
     feature_gate: none
     introduced_in: audit-2026-10
     authority: ADR-0212
@@ -11688,14 +11712,17 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (catalogue Jacobians ≤ 2.8e−10 from central differences)"
+    pass_status: "PASS (catalogue Jacobians ≤ 2.8e−10 from central differences; fd vs analytic 2.3e−16)"
     rationale: |
       ADR-0212: every analytic catalogue Jacobian (Nagumo, Gray–Scott,
       FitzHugh–Nagumo, Brusselator) equals central differences of its eval_batch to
-      ≤ 1e−7 relative at 64 random states; the stiff linear system without an
-      analytic Jacobian (forward differences) agrees with the analytic run to
-      ≤ 10·rtol at rtol = 1e−8. (Robertson with forward differences: G_STIFF_ROBERTSON.)
-    gate: "catalogue ≤ 1e−7 AND fd vs analytic ≤ 1e−7"
+      ≤ 1e−7 relative at 64 random states; a NON-symmetric stiff linear system
+      (C = [[−1e6, 0], [999 999, −1]]) run with forward differences agrees with the
+      analytic-Jacobian run to ≤ 1e−12 at rtol 1e−6 (a transposed difference layout or
+      a J off by 10 % fails it). The per-node difference layout is unit-tested against
+      Brusselator's Jacobian (reaction_stiff_tests.rs). (Robertson with forward
+      differences: G_STIFF_ROBERTSON.)
+    gate: "catalogue ≤ 1e−7 AND fd vs analytic (non-symmetric C, rtol 1e−6) ≤ 1e−12"
     test_file: "tests/g_stiff_kinetics.rs"
     feature_gate: none
     introduced_in: audit-2026-10
@@ -11705,13 +11732,13 @@ implementation_notes:
     type: ORACLE_ACCURACY
     severity: RELEASE_BLOCKING
     blocks_release: true
-    pass_status: "PASS (rel 6.0e−4 / 6.2e−6 / 5.8e−8; mass ≤ 4.8e−15)"
+    pass_status: "PASS (rel analytic 6.0e−4 / 6.2e−6 / 5.8e−8 / 6.3e−9, FD 6.1e−4 / 5.9e−6 / 7.1e−8 / 8.6e−9; mass ≤ 8.7e−15)"
     rationale: |
       ADR-0212: Robertson's chemistry (k₁ = 0.04, k₂ = 3e7, k₃ = 1e4) on a uniform
       4-node field, T = 40, with analytic and forward-difference Jacobians, against
       SciPy 1.18.1 Radau (rtol 1e−13, atol 1e−20; agrees with the Hairer–Wanner
       reference to 1e−13): per-species relative error ≤ 10·rtol for
-      rtol ∈ {1e−3, 1e−5, 1e−7}, |Σyₖ − 1| ≤ 1e−12, min yₖ ≥ −1e−12.
+      rtol ∈ {1e−3, 1e−5, 1e−7, 1e−8}, |Σyₖ − 1| ≤ 1e−12, min yₖ ≥ −1e−12.
     gate: "rel ≤ 10·rtol AND |Σy − 1| ≤ 1e−12 AND min y ≥ −1e−12"
     test_file: "tests/g_stiff_kinetics.rs"
     feature_gate: none

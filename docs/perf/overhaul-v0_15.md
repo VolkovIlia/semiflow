@@ -115,14 +115,16 @@ dominates a substep on cheap stencils; `m ≈ 15` trades applications for wall c
 
 ## Stiff kinetics (ADR-0212)
 
-Robertson's chemistry on 200 nodes (no diffusion), `T = 40`, Python, same session:
+Robertson's chemistry on 200 nodes (no diffusion), `T = 40`, one Strang step,
+Python, same session (`atol = 1e−12`):
 
 | integrator | wall clock | max relative error |
 |---|---:|---:|
-| RK4, 40 000 substeps per half-step (20 000: NaN) | 9.4 s | 2.9e−12 |
-| ROS2, `rtol = 1e−3` (analytic / FD Jacobian) | 80 / 112 ms | 6.0e−4 |
-| ROS2, `rtol = 1e−5` | 0.54 / 0.78 s | 6.2e−6 |
-| ROS2, `rtol = 1e−7` | 2.6 / 3.7 s | 5.8e−8 |
+| RK4, 40 000 substeps per half-step | 7.2 s | 2.9e−12 |
+| RK4, 25 000 substeps (smallest accurate; 22 000–24 000: 0.2–0.26, ≤ 21 000: NaN) | 4.3 s | 1.5e−10 |
+| ROS2, `rtol = 1e−3` (analytic / FD Jacobian) | 68 / 114 ms | 6.0e−4 / 6.1e−4 |
+| ROS2, `rtol = 1e−5` | 0.32 / 0.65 s | 6.2e−6 / 5.9e−6 |
+| ROS2, `rtol = 1e−7` | 2.4 / 3.3 s | 5.8e−8 / 7.1e−8 |
 
 ## Known slow paths (not addressed here)
 

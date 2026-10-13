@@ -2,59 +2,48 @@
 //!
 //! * `G_STIFF_KINETICS_LINEAR`: `u′ = Cu`, `C` symmetric `2×2` with eigenvalues
 //!   `−10⁶` (along `(1, 1)`) and `−1` (along `(1, −1)`), on a field whose diffusion is
-//!   the identity, over `T = 1`. RK4 with one substep per half step (`hλ = −10⁴`)
-//!   must blow up (error `> 10⁶×` the solution) — the gate is not vacuous; ROS2 single steps
+//!   the identity, over `T = 1`. RK4 with one substep per reaction step (`n = 10`:
+//!   `hλ = −5·10⁴` on the two end half-steps, `−10⁵` on the merged steps) must blow
+//!   up (error `> 10⁶×` the solution) — the gate is not vacuous; ROS2 single steps
 //!   (tolerances so loose that every step is accepted whole) converge to the exact
-//!   `e^{TC}u₀` with order 2 (slope `∈ [1.8, 2.2]` over `n = 20, 40, 80`), the stiff
-//!   mode damped (L-stable), and adaptive ROS2 meets `rtol ∈ {1e−4, 1e−6, 1e−8}`
-//!   to `≤ 10·rtol` (relative, sup norm).
+//!   `e^{TC}u₀` with order 2 (slope `∈ [1.8, 2.2]` over `n = 20, 40, 80`); the pure
+//!   stiff mode `(1, 1)` after two whole steps at `hλ = −5·10⁵` is `≤ 1e−9`
+//!   (L-stability, `R(∞) = 0`: a non-L-stable `γ` leaves `≈ R(∞)²`); adaptive ROS2
+//!   meets `rtol ∈ {1e−4, 1e−6, 1e−8}` to `≤ 10·rtol` (relative, sup norm). The same
+//!   system NON-AUTONOMOUS (forcing `±cos t` on the slow mode, `∂f/∂t` omitted from
+//!   the method): fixed steps converge with order 2 (`n = 80, 160, 320`) and the
+//!   adaptive runs meet `≤ 10·rtol` — a wrong stage time drops to order 1.
 //! * `G_STIFF_KINETICS_FD_JAC`: every catalogue analytic Jacobian (Nagumo,
 //!   Gray–Scott, FitzHugh–Nagumo, Brusselator) equals central differences of its
-//!   `eval_batch` to `≤ 1e−7` relative at 64 random states; the linear system without
-//!   an analytic Jacobian (forward differences) agrees with the analytic run to
-//!   `≤ 10·rtol` relative at `rtol = 1e−8`; Robertson with forward differences meets
-//!   the `G_STIFF_ROBERTSON` accuracy (checked there).
+//!   `eval_batch` to `≤ 1e−7` relative at 64 random states; a NON-SYMMETRIC stiff
+//!   linear system run with forward differences agrees with the analytic-Jacobian
+//!   run to `≤ 1e−12` (a transposed or mis-scaled difference Jacobian fails it); the
+//!   forward-difference layout per node is checked directly in the unit tests.
 //! * `G_STIFF_ROBERTSON`: Robertson's chemistry (`k₁ = 0.04`, `k₂ = 3·10⁷`,
 //!   `k₃ = 10⁴`) on a uniform 4-node field, `T = 40`, against SciPy Radau
 //!   (`rtol = 1e−13`, `atol = 1e−20`, SciPy 1.18.1; agrees with the Hairer–Wanner
 //!   reference to `1e−13`): per-species relative error `≤ 10·rtol` for
-//!   `rtol ∈ {1e−3, 1e−5, 1e−7}`, `|Σyₖ − 1| ≤ 1e−12`, `min yₖ ≥ −1e−12`.
+//!   `rtol ∈ {1e−3, 1e−5, 1e−7, 1e−8}`, analytic and forward-difference Jacobians,
+//!   `|Σyₖ − 1| ≤ 1e−12`, `min yₖ ≥ −1e−12`.
+//!
+//! The per-node gate (node-dependent stiffness and pivoting) is
+//! `tests/g_stiff_kinetics_nodes.rs`.
 
 #![allow(clippy::cast_precision_loss, clippy::many_single_char_names)]
 
+mod stiff_common;
+
 use semiflow::{
-    Brusselator, ChernoffFunction, FitzHughNagumo, GrayScott, Grid1D, GridFn1D, Growth, Kinetics,
-    Nagumo, ReactionDiffusion, ReactionSolver, RosenbrockOptions, ScratchPool, SemiflowError,
-    Species, SpeciesEngine,
+    Brusselator, FitzHughNagumo, GrayScott, Kinetics, Nagumo, ReactionSolver, SemiflowError,
 };
+use stiff_common::{evolve, rel_sup, ros};
 
-/// The identity "diffusion" (the gates isolate the reaction flow).
-struct Identity;
-
-impl ChernoffFunction<f64> for Identity {
-    type S = GridFn1D<f64>;
-    fn apply_into(
-        &self,
-        _tau: f64,
-        src: &GridFn1D<f64>,
-        dst: &mut GridFn1D<f64>,
-        _scratch: &mut ScratchPool<f64>,
-    ) -> Result<(), SemiflowError> {
-        dst.values.copy_from_slice(&src.values);
-        Ok(())
-    }
-    fn order(&self) -> u32 {
-        u32::MAX
-    }
-    fn growth(&self) -> Growth<f64> {
-        Growth::contraction()
-    }
-}
-
-/// `u′ = Cu` with `C = [[a, b], [b, a]]`, `a ± b = −1, −10⁶`; analytic Jacobian
-/// unless `fd`.
+/// `u′ = Cu + (cos t)(1, −1)·[forced]` with `C = [[a, b], [b, a]]`,
+/// `a ± b = −1, −10⁶` (the forcing drives only the slow mode); analytic `J = C`
+/// unless `fd` (`∂f/∂t` is never supplied: the W-method claim).
 struct StiffLinear {
     fd: bool,
+    forced: bool,
 }
 
 const A: f64 = (-1e6 - 1.0) / 2.0;
@@ -66,15 +55,16 @@ impl Kinetics<f64> for StiffLinear {
     }
     fn eval_batch(
         &self,
-        _t: f64,
+        t: f64,
         n: usize,
         _x: &[f64],
         u: &[f64],
         du: &mut [f64],
     ) -> Result<(), SemiflowError> {
+        let s = if self.forced { t.cos() } else { 0.0 };
         for i in 0..n {
-            du[i] = A * u[i] + B * u[n + i];
-            du[n + i] = B * u[i] + A * u[n + i];
+            du[i] = A * u[i] + B * u[n + i] + s;
+            du[n + i] = B * u[i] + A * u[n + i] - s;
         }
         Ok(())
     }
@@ -155,33 +145,6 @@ const ROBERTSON_T40: [f64; 3] = [
     0.284_163_745_745_829_87,
 ];
 
-/// Evolve `u0` (one value per species, uniform on 4 nodes) over `[0, t]` in `n`
-/// Strang steps; returns the per-species node-0 values.
-fn evolve(
-    kin: Box<dyn Kinetics<f64>>,
-    solver: ReactionSolver,
-    substeps: u32,
-    u0: &[f64],
-    (t, n): (f64, usize),
-) -> Result<Vec<f64>, SemiflowError> {
-    let grid = Grid1D::new(0.0, 1.0, 4).expect("grid");
-    let engines: Vec<SpeciesEngine<'static, f64, GridFn1D<f64>>> = u0
-        .iter()
-        .map(|_| Box::new(Identity) as SpeciesEngine<'static, f64, GridFn1D<f64>>)
-        .collect();
-    let rd = ReactionDiffusion::new(engines, kin)?
-        .with_reaction_solver(solver)
-        .with_reaction_substeps(substeps);
-    let fields = u0
-        .iter()
-        .map(|&v| GridFn1D::new(grid, vec![v; 4]).expect("field"))
-        .collect();
-    let src = Species::new(fields);
-    let mut dst = src.clone();
-    rd.evolve_into(0.0, t, n, &src, &mut dst, &mut ScratchPool::new())?;
-    Ok(dst.fields.iter().map(|f| f.values[0]).collect())
-}
-
 /// `e^{TC}u₀` in the eigenbasis `(1, 1)/√2`, `(1, −1)/√2`.
 fn linear_exact(u0: [f64; 2], t: f64) -> [f64; 2] {
     let (p, m) = ((u0[0] + u0[1]) / 2.0, (u0[0] - u0[1]) / 2.0);
@@ -189,16 +152,78 @@ fn linear_exact(u0: [f64; 2], t: f64) -> [f64; 2] {
     [ep + em, ep - em]
 }
 
-fn rel_sup(got: &[f64], want: &[f64]) -> f64 {
-    let scale = want.iter().fold(0.0_f64, |a, w| a.max(w.abs()));
-    got.iter()
-        .zip(want)
-        .fold(0.0_f64, |a, (g, w)| a.max((g - w).abs()))
-        / scale
+/// The forced system's exact solution: the slow mode solves `m′ = −m + cos t`.
+fn forced_exact(u0: [f64; 2], t: f64) -> [f64; 2] {
+    let p = (-1e6 * t).exp() * (u0[0] + u0[1]) / 2.0;
+    let m = (-t).exp() * (u0[0] - u0[1]) / 2.0 + (t.cos() + t.sin() - (-t).exp()) / 2.0;
+    [p + m, p - m]
 }
 
-fn ros(rtol: f64, atol: f64) -> ReactionSolver {
-    ReactionSolver::Rosenbrock(RosenbrockOptions::default().with_rtol(rtol).with_atol(atol))
+/// `u′ = Cu` with the NON-symmetric `C = [[−10⁶, 0], [999 999, −1]]` (eigenvalues
+/// `−10⁶`, `−1`); analytic Jacobian unless `fd`.
+struct SkewLinear {
+    fd: bool,
+}
+
+const SKEW: [f64; 4] = [-1e6, 0.0, 999_999.0, -1.0];
+
+impl Kinetics<f64> for SkewLinear {
+    fn species(&self) -> usize {
+        2
+    }
+    fn eval_batch(
+        &self,
+        _t: f64,
+        n: usize,
+        _x: &[f64],
+        u: &[f64],
+        du: &mut [f64],
+    ) -> Result<(), SemiflowError> {
+        for i in 0..n {
+            du[i] = SKEW[0] * u[i] + SKEW[1] * u[n + i];
+            du[n + i] = SKEW[2] * u[i] + SKEW[3] * u[n + i];
+        }
+        Ok(())
+    }
+    fn jacobian_batch(
+        &self,
+        _t: f64,
+        n: usize,
+        _x: &[f64],
+        _u: &[f64],
+        jac: &mut [f64],
+    ) -> Option<Result<(), SemiflowError>> {
+        if self.fd {
+            return None;
+        }
+        for (b, v) in SKEW.into_iter().enumerate() {
+            jac[b * n..(b + 1) * n].fill(v);
+        }
+        Some(Ok(()))
+    }
+}
+
+/// The stiff linear system (`forced` or not) over `T = 1` in `n` Strang steps.
+fn linear_run(forced: bool, solver: ReactionSolver, u0: &[f64], n: usize) -> Vec<f64> {
+    let kin = Box::new(StiffLinear { fd: false, forced });
+    evolve(kin, solver, 1, u0, (1.0, n)).expect("ros2")
+}
+
+/// Fixed-step slopes over `ns` and adaptive errors over `rtol ∈ {1e−4, 1e−6,
+/// 1e−8}` (as multiples of `rtol`) against `exact`.
+fn order_and_tolerance(forced: bool, ns: [usize; 3], exact: [f64; 2]) -> ([f64; 2], Vec<f64>) {
+    let u0 = [1.0, 0.3];
+    let errs: Vec<f64> = ns
+        .iter()
+        .map(|&n| rel_sup(&linear_run(forced, ros(0.5, 1e3), &u0, n), &exact))
+        .collect();
+    let slopes = [(errs[0] / errs[1]).log2(), (errs[1] / errs[2]).log2()];
+    let tol = [1e-4, 1e-6, 1e-8]
+        .iter()
+        .map(|&rtol| rel_sup(&linear_run(forced, ros(rtol, 1e-14), &u0, 1), &exact) / rtol)
+        .collect();
+    eprintln!("G_STIFF_KINETICS_LINEAR forced={forced}: errors {errs:?} slopes {slopes:?} err/rtol {tol:?}");
+    (slopes, tol)
 }
 
 #[test]
@@ -206,7 +231,10 @@ fn g_stiff_kinetics_linear() {
     let u0 = [1.0, 0.3];
     let exact = linear_exact(u0, 1.0);
     let rk4 = evolve(
-        Box::new(StiffLinear { fd: false }),
+        Box::new(StiffLinear {
+            fd: false,
+            forced: false,
+        }),
         ReactionSolver::Rk4,
         1,
         &u0,
@@ -214,38 +242,24 @@ fn g_stiff_kinetics_linear() {
     );
     eprintln!("G_STIFF_KINETICS_LINEAR rk4: {rk4:?}");
     let blown = rk4.as_ref().map_or(true, |v| rel_sup(v, &exact) > 1e6);
-    assert!(blown, "RK4 at hλ = −1e4 must blow up: {rk4:?}");
+    assert!(blown, "RK4 at hλ = −5e4/−1e5 must blow up: {rk4:?}");
     // Single ROS2 steps: every step accepted whole (rtol 0.5, atol 1e3).
-    let errs: Vec<f64> = [20, 40, 80]
-        .iter()
-        .map(|&n| {
-            let got = evolve(
-                Box::new(StiffLinear { fd: false }),
-                ros(0.5, 1e3),
-                1,
-                &u0,
-                (1.0, n),
-            )
-            .expect("ros2");
-            rel_sup(&got, &exact)
-        })
-        .collect();
-    let slopes = [(errs[0] / errs[1]).log2(), (errs[1] / errs[2]).log2()];
-    eprintln!("G_STIFF_KINETICS_LINEAR fixed-step errors {errs:?} slopes {slopes:?}");
-    assert!(slopes.iter().all(|s| (1.8..=2.2).contains(s)), "{slopes:?}");
-    for rtol in [1e-4, 1e-6, 1e-8] {
-        let got = evolve(
-            Box::new(StiffLinear { fd: false }),
-            ros(rtol, 1e-14),
-            1,
-            &u0,
-            (1.0, 1),
-        )
-        .expect("ros2");
-        let err = rel_sup(&got, &exact);
-        eprintln!("G_STIFF_KINETICS_LINEAR adaptive rtol={rtol:e}: err {err:.3e}");
-        assert!(err <= 10.0 * rtol, "rtol={rtol:e}: {err:e}");
+    for (forced, ns, want) in [
+        (false, [20, 40, 80], exact),
+        (true, [80, 160, 320], forced_exact(u0, 1.0)),
+    ] {
+        let (slopes, tol) = order_and_tolerance(forced, ns, want);
+        assert!(slopes.iter().all(|s| (1.8..=2.2).contains(s)), "{slopes:?}");
+        assert!(tol.iter().all(|&r| r <= 10.0), "forced={forced}: {tol:?}");
     }
+    // L-stability: the pure stiff mode after two whole steps at z = −5·10⁵.
+    let stiff = linear_run(false, ros(0.5, 1e3), &[1.0, 1.0], 1);
+    let damped = stiff.iter().fold(0.0_f64, |a, v| a.max(v.abs()));
+    eprintln!("G_STIFF_KINETICS_LINEAR stiff mode after 2 steps: {damped:.3e}");
+    assert!(
+        damped <= 1e-9,
+        "stiff mode not annihilated (L-stability): {damped:e}"
+    );
 }
 
 /// Central-difference check of `kin.jacobian_batch` at `n` random states.
@@ -314,26 +328,19 @@ fn g_stiff_kinetics_fd_jac() {
             "{name}"
         );
     }
-    let u0 = [1.0, 0.3];
     let run = |fd: bool| {
-        evolve(
-            Box::new(StiffLinear { fd }),
-            ros(1e-8, 1e-14),
-            1,
-            &u0,
-            (1.0, 1),
-        )
-        .expect("ros2")
+        let kin = Box::new(SkewLinear { fd });
+        evolve(kin, ros(1e-6, 1e-14), 1, &[1.0, 0.3], (1.0, 1)).expect("ros2")
     };
     let lin = rel_sup(&run(true), &run(false));
-    eprintln!("G_STIFF_KINETICS_FD_JAC linear: {lin:.3e}");
-    assert!(lin <= 1e-7, "{lin:e}");
+    eprintln!("G_STIFF_KINETICS_FD_JAC non-symmetric linear, fd vs analytic: {lin:.3e}");
+    assert!(lin <= 1e-12, "{lin:e}");
 }
 
 #[test]
 fn g_stiff_robertson() {
-    for (fd, rtols) in [(false, [1e-3, 1e-5, 1e-7]), (true, [1e-3, 1e-5, 1e-7])] {
-        for rtol in rtols {
+    for fd in [false, true] {
+        for rtol in [1e-3, 1e-5, 1e-7, 1e-8] {
             let got = evolve(
                 Box::new(Robertson { fd }),
                 ros(rtol, 1e-12),

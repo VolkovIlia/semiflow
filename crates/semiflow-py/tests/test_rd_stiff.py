@@ -65,6 +65,31 @@ def test_stiff_linear_rk4_blows_up_rosenbrock_does_not() -> None:
     assert np.max(np.abs(ros.values()[:, 0] - exact)) <= 1e-7
 
 
+def test_non_autonomous_forcing_and_nan_kinetics() -> None:
+    """Forcing on the slow mode (time enters stage 2); NaN kinetics fail at once."""
+    a, b = (-1e6 - 1.0) / 2.0, (-1e6 + 1.0) / 2.0
+
+    def forced(t: float, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        return np.stack([a * u[0] + b * u[1] + np.cos(t), b * u[0] + a * u[1] - np.cos(t)])
+
+    u0 = np.stack([np.ones(5), 0.3 * np.ones(5)])
+    rd = semiflow.ReactionDiffusion1D(0.0, 1.0, 5, u0, diffusivity=[0.0, 0.0], reaction=forced,
+                                      reaction_solver="rosenbrock", rtol=1e-6, atol=1e-14)
+    rd.evolve(1.0, n_steps=1)
+    p = np.exp(-1e6) * 0.65
+    m = np.exp(-1.0) * 0.35 + (np.cos(1.0) + np.sin(1.0) - np.exp(-1.0)) / 2.0
+    assert np.max(np.abs(rd.values()[:, 0] - np.array([p + m, p - m]))) <= 1e-5
+
+    def root(t: float, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        with np.errstate(invalid="ignore"):
+            return -np.sqrt(u)
+
+    bad = semiflow.ReactionDiffusion1D(0.0, 1.0, 5, -np.ones((1, 5)) * 1e-12, diffusivity=[0.0],
+                                       reaction=root, reaction_solver="rosenbrock")
+    with pytest.raises(semiflow.SemiflowError):
+        bad.evolve(1.0, n_steps=1)
+
+
 def test_builtin_model_with_rosenbrock_matches_rk4() -> None:
     n = 101
     x = np.linspace(-5.0, 5.0, n)

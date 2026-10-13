@@ -231,10 +231,13 @@ bit-identical is proven so by a 0-ULP gate and the unchanged `no_std` digests.
   order 2 for any Jacobian (a W-method), per-node `K×K` `LU`, adaptive step with an
   embedded error estimate (mixed `rtol`/`atol`), one batched kinetics call per stage.
   `Kinetics::jacobian_batch` (provided; analytic for the catalogue models, forward
-  differences otherwise). Robertson (200 nodes, `T = 40`): RK4 needs ≥ 40 000
-  substeps per half-step to stay finite (9.4 s); ROS2 reaches `6e−4` in 80 ms and
-  `6e−6` in 0.54 s. Gates `G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_FD_JAC`,
-  `G_STIFF_ROBERTSON`. RK4 stays the default, bit-identical; `dense_exp` moves
+  differences otherwise). Robertson (200 nodes, `T = 40`): RK4 needs ≈ 25 000
+  substeps per half-step to be accurate (4.3 s; NaN at ≤ 21 000); ROS2 reaches
+  `6e−4` in 68 ms and `6e−6` in 0.32 s. A non-finite `f`/`J` at an accepted state or
+  a stalled step size fails at once (`DomainViolation`) instead of exhausting
+  `max_steps`; `atol = 0` with a vanishing species is accepted. Gates
+  `G_STIFF_KINETICS_LINEAR` (incl. L-stability and non-autonomous order),
+  `G_STIFF_KINETICS_PER_NODE`, `G_STIFF_KINETICS_FD_JAC`, `G_STIFF_ROBERTSON`. RK4 stays the default, bit-identical; `dense_exp` moves
   verbatim to `dense_la.rs`.
 
 #### Added — adaptive Krylov φ / exponential actions (ADR-0211)

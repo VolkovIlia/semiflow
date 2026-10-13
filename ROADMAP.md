@@ -53,7 +53,7 @@ Done:
 
 - **Stiff kinetics (ADR-0212):** adaptive ROS2 reaction step for
   `ReactionDiffusion` (L-stable, analytic or finite-difference Jacobian): Robertson
-  9.4 s (smallest stable RK4) → 80 ms at `rtol = 1e−3`; Python
+  4.3 s (smallest accurate RK4, 25 000 substeps) → 68 ms at `rtol = 1e−3`; Python
   `reaction_solver="rosenbrock"`.
 
 Next:

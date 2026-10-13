@@ -290,7 +290,7 @@ u0 = np.stack([np.ones(8), np.zeros(8), np.zeros(8)])
 rd3 = semiflow.ReactionDiffusion1D(0, 1, 8, u0, diffusivity=[0.0, 0.0, 0.0],
                                    reaction=robertson, reaction_solver="rosenbrock",
                                    rtol=1e-5, atol=1e-12)
-rd3.evolve(40.0, n_steps=1)   # RK4 needs >= 40 000 substeps here to stay finite
+rd3.evolve(40.0, n_steps=1)   # RK4 needs ~25 000 substeps per half-step here (NaN at <= 21 000)
 assert abs(rd3.values()[0, 0] - 0.7158270687) < 1e-4
 ```
 

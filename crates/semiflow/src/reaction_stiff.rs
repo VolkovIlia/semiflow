@@ -10,7 +10,9 @@
 //! `max_{k,i} |e|/(atol + rtol·max(|u|, |u⁺|))`; a step is accepted at `≤ 1`, the
 //! next one is `h·clamp(0.9/√err, 0.2, 5)`. One step size for the whole field, so
 //! every stage is ONE batched kinetics call; the controller is pure arithmetic and
-//! the result reproducible bit for bit.
+//! the result reproducible bit for bit. A singular `W` or a non-finite stage is a
+//! rejection (`×0.2`); a non-finite `f(t, u)` or `J` at an accepted state, or a step
+//! below `16ε` of the half-step clock, is a `DomainViolation` (no step can fix it).
 
 use alloc::{vec, vec::Vec};
 
@@ -40,7 +42,8 @@ pub enum ReactionSolver {
 pub struct RosenbrockOptions {
     /// Relative tolerance `∈ (0, 1)`. Default `1e−6`.
     pub rtol: f64,
-    /// Absolute tolerance `≥ 0` (`> 0` when species can vanish). Default `1e−9`.
+    /// Absolute tolerance `≥ 0` (`0`: pure relative control; steps near a
+    /// vanishing species may then shrink). Default `1e−9`.
     pub atol: f64,
     /// Step cap per reaction half-step (accepted plus rejected). Default 100 000.
     pub max_steps: usize,
@@ -140,7 +143,9 @@ fn gamma<F: SemiflowFloat>() -> F {
 /// number of attempted steps.
 ///
 /// # Errors
-/// Any kinetics error; `ConvergenceFailed` after `max_steps` attempts.
+/// Any kinetics error; `DomainViolation` for a non-finite `f(t, u)` or `J` at an
+/// accepted state (no step size can repair it) or a step size that underflows the
+/// half-step clock; `ConvergenceFailed` after `max_steps` attempts.
 #[allow(clippy::too_many_arguments, clippy::many_single_char_names)] // Kinetics signature
 pub(crate) fn ros2_flow<F: SemiflowFloat>(
     kin: &dyn Kinetics<F>,
@@ -157,6 +162,7 @@ pub(crate) fn ros2_flow<F: SemiflowFloat>(
         let tc = t + elapsed;
         kin.eval_batch(tc, n, x, u, &mut b.f0)?;
         jacobian(kin, tc, n, x, u, b)?;
+        check_finite(&b.f0, &b.jac)?;
         let mut last = hs >= h - elapsed;
         loop {
             if steps >= opts.max_steps {
@@ -165,10 +171,15 @@ pub(crate) fn ros2_flow<F: SemiflowFloat>(
                     max_iter: opts.max_steps,
                 });
             }
-            steps += 1;
             if last {
                 hs = h - elapsed;
+            } else if stalled(hs, elapsed) {
+                return Err(SemiflowError::DomainViolation {
+                    what: "Rosenbrock: step size underflow (kinetics non-finite near the state, or tolerances unattainable)",
+                    value: hs.to_f64().unwrap_or(f64::NAN),
+                });
             }
+            steps += 1;
             let err = attempt(kin, opts, tc, hs, n, x, u, b)?;
             if err <= 1.0 {
                 u.copy_from_slice(&b.next);
@@ -181,6 +192,24 @@ pub(crate) fn ros2_flow<F: SemiflowFloat>(
         }
     }
     Ok(steps)
+}
+
+/// `f(t, u)` and `J` at an accepted state are finite (they do not depend on the
+/// step size, so a rejection could never repair them).
+fn check_finite<F: SemiflowFloat>(f0: &[F], jac: &[F]) -> Result<(), SemiflowError> {
+    match f0.iter().chain(jac).find(|v| !v.is_finite()) {
+        Some(bad) => Err(SemiflowError::DomainViolation {
+            what: "ReactionDiffusion: non-finite reaction result or Jacobian at an accepted state (Rosenbrock; kinetics left its domain?)",
+            value: bad.to_f64().unwrap_or(f64::NAN),
+        }),
+        None => Ok(()),
+    }
+}
+
+/// No usable progress on the half-step's LOCAL clock: `hs ≤ 16ε·elapsed` or
+/// `elapsed + hs == elapsed` (the final step, `h − elapsed`, is exempt).
+fn stalled<F: SemiflowFloat>(hs: F, elapsed: F) -> bool {
+    hs <= from_f64::<F>(16.0) * F::epsilon() * elapsed || elapsed + hs == elapsed
 }
 
 /// `clamp(0.9/√err, 0.2, 5)`; a non-finite `err` (a failed stage) gives `0.2`.
@@ -227,7 +256,9 @@ fn attempt<F: SemiflowFloat>(
         *nx = u[i] + hs * (w1 * k1 + w2 * k2);
         let e = (hs * half * (k1 + k2)).abs().to_f64().unwrap_or(f64::NAN);
         let scale = opts.atol + opts.rtol * u[i].abs().max(nx.abs()).to_f64().unwrap_or(f64::NAN);
-        let ratio = e / scale;
+        // A zero error contributes 0 even at a zero scale (`atol = 0` and a species
+        // that is exactly 0 before and after the step).
+        let ratio = if e == 0.0 { 0.0 } else { e / scale };
         err = if ratio.is_nan() || !nx.is_finite() {
             f64::INFINITY
         } else {

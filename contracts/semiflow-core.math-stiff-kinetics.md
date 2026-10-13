@@ -14,11 +14,15 @@ Stability function `R(z) = (1 + (1 − 2γ)z + (γ² − 2γ + ½)z²)/(1 − γ
 ## §69.2 — Step control (NORMATIVE)
 
 `e = h(k₁ + k₂)/2`, `err = max_{k,i} |e_{k,i}|/(atol + rtol·max(|u_{k,i}|, |u⁺_{k,i}|))`
-(`∞` if `W` is singular or any value is non-finite). Accept iff `err ≤ 1`; the next
+(a component with `e = 0` contributes 0, also at a zero scale; `∞` if `W` is singular
+or a stage value is non-finite). Accept iff `err ≤ 1`; the next
 step is `h·clamp(0.9/√err, 0.2, 5)` (`err = 0`: `×5`), a rejected step shrinks by
 `max(0.2, 0.9/√err)`. The first try of a half-step `[t, t + H]` is `H`; the last
 accepted step ends exactly at `t + H`. At most `max_steps` attempts, else
-`ConvergenceFailed`. `J` and `f(t, u)` are evaluated once per accepted state.
+`ConvergenceFailed`. `J` and `f(t, u)` are evaluated once per accepted state; a
+non-finite `f(t, u)` or `J` there is a `DomainViolation` (no retry: the `∞` rule
+applies to stage values only), and so is a non-final step `h ≤ 16ε·elapsed` on the
+half-step's local clock (no progress).
 
 ## §69.3 — Jacobian
 
@@ -28,4 +32,5 @@ u_{l,i}`.
 
 ## §69.4 — Gates
 
-`G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_FD_JAC`, `G_STIFF_ROBERTSON` (ADR-0212).
+`G_STIFF_KINETICS_LINEAR`, `G_STIFF_KINETICS_PER_NODE`, `G_STIFF_KINETICS_FD_JAC`,
+`G_STIFF_ROBERTSON` (ADR-0212).
