@@ -99,11 +99,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rust-src
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -130,11 +131,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -162,11 +164,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -193,11 +196,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -216,11 +220,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -241,11 +246,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -309,11 +315,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -339,11 +346,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -396,11 +404,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -431,11 +440,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -475,11 +485,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -507,11 +518,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -543,11 +555,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -581,11 +594,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
@@ -620,11 +634,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # target-cpu=native binaries are CPU-specific: key the cache by CPU model so a
+      # target-cpu=native binaries are CPU-specific: key the cache by CPU model AND its
+      # ISA flags (hosted runners sharing one model name differ in extensions) so a
       # cached target/ built on e.g. an AVX-512 runner is never restored onto one without it (SIGILL).
       - name: CPU fingerprint (cache key)
         id: cpu
-        run: echo "fp=$(grep -m1 'model name' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: echo "fp=$(grep -m2 -E '^(model name|flags)[[:space:]]*:' /proc/cpuinfo | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: Swatinem/rust-cache@v2
         with:
           key: cpu-${{ steps.cpu.outputs.fp }}
